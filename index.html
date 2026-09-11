@@ -51,6 +51,9 @@ html, body {
     width: 100%;
     height: 100%;
     background: #0f0f0f;
+    /* Kill horizontal overscroll/back-forward gestures */
+    overscroll-behavior-x: none;
+    overscroll-behavior: none;
     overflow: hidden;
     touch-action: pan-y;
 }
@@ -888,7 +891,10 @@ window.addEventListener("touchstart", (e) => {
     if (e.touches.length !== 1) return;
 
     const touch = e.touches[0];
-    if (!isPanelOpen && touch.clientX > 32) return;
+    // Stop the browser from grabbing the back-swipe if near the edge
+    if (!isPanelOpen && touch.clientX <= 32) {
+        e.preventDefault();
+    }
 
     startX = touch.clientX;
     startY = touch.clientY;
@@ -897,7 +903,7 @@ window.addEventListener("touchstart", (e) => {
     touchVelocity = 0;
     isTracking = true;
     isHorizontalGesture = null;
-}, { passive: true });
+}, { passive: false });
 
 window.addEventListener("touchmove", (e) => {
     if (!isTracking) return;
@@ -920,6 +926,9 @@ window.addEventListener("touchmove", (e) => {
 
     if (!isHorizontalGesture) return;
 
+    // Block native back-navigation while dragging the panel
+    e.preventDefault();
+
     const width = getPanelWidth();
     const baseOffset = isPanelOpen ? width : 0;
     const targetOffset = baseOffset + dx;
@@ -934,7 +943,7 @@ window.addEventListener("touchmove", (e) => {
 
     currentX = Math.max(0, Math.min(width, targetOffset));
     applyTransform(currentX, false);
-}, { passive: true });
+}, { passive: false });
 
 window.addEventListener("touchend", () => {
     if (!isTracking) return;
