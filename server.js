@@ -4,12 +4,27 @@ const path = require("url");
 
 const PORT = 8080;
 const TINYFISH_API_KEY = process.env.TINYFISH_API_KEY;
+const LOG_FILE = "./logs.txt";
 
 if (!TINYFISH_API_KEY) {
     console.error("ERROR: TINYFISH_API_KEY is not set.");
     console.error("Run:");
     console.error("export TINYFISH_API_KEY='your-key'");
     process.exit(1);
+}
+
+// Flush the log file on every server restart.
+fs.writeFileSync(LOG_FILE, `--- log started ${new Date().toISOString()} ---\n`);
+
+function logToFile(tag, data) {
+    const entry = {
+        timestamp: new Date().toISOString(),
+        tag,
+        ...data
+    };
+    fs.appendFile(LOG_FILE, JSON.stringify(entry) + "\n", (err) => {
+        if (err) console.error("[LOG WRITE ERROR]", err);
+    });
 }
 
 async function tinyfishSearch(args) {
@@ -76,6 +91,22 @@ const server = http.createServer(async (req, res) => {
         return res.end();
     }
 
+    // Client-side event logging (chat responses, errors, tool activity)
+    if (req.method === "POST" && req.url === "/api/log") {
+        try {
+            let body = "";
+            for await (const chunk of req) {
+                body += chunk;
+            }
+            const data = JSON.parse(body || "{}");
+            logToFile(data.tag || "CLIENT", data);
+            return sendJSON(res, 200, { ok: true });
+        } catch (error) {
+            console.error("[LOG ENDPOINT ERROR]", error);
+            return sendJSON(res, 500, { error: error.message });
+        }
+    }
+
     // TinyFish search proxy
     if (req.method === "POST" && req.url === "/api/search") {
 
@@ -89,14 +120,23 @@ const server = http.createServer(async (req, res) => {
             const args = JSON.parse(body || "{}");
 
             console.log("[SEARCH]", args.query);
+            logToFile("SEARCH_REQUEST", { query: args.query, args });
 
             const result = await tinyfishSearch(args);
+
+            logToFile("SEARCH_RESPONSE", {
+                query: args.query,
+                total_results: result?.total_results,
+                result_count: Array.isArray(result?.results) ? result.results.length : null,
+                raw: result
+            });
 
             return sendJSON(res, 200, result);
 
         } catch (error) {
 
             console.error("[SEARCH ERROR]", error);
+            logToFile("SEARCH_ERROR", { message: error.message });
 
             return sendJSON(res, 500, {
                 error: error.message
