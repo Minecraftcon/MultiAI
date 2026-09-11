@@ -1,1955 +1,665 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-
     <meta charset="UTF-8">
-
-    <meta
-        name="viewport"
-        content="width=device-width, initial-scale=1.0"
-    >
-
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MultiSearch AI</title>
-
 
     <!-- Puter -->
     <script src="https://js.puter.com/v2/"></script>
 
-
     <!-- Markdown -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-
 
     <!-- HTML sanitizer -->
     <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
 
-
     <!-- Syntax highlighting -->
-    <link
-        rel="stylesheet"
-        href="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/styles/github-dark.min.css"
-    >
-
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/styles/github-dark.min.css">
     <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/lib/common.min.js"></script>
 
-
     <!-- KaTeX -->
-    <link
-        rel="stylesheet"
-        href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css"
-    >
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/contrib/auto-render.min.js"></script>
 
-    <script
-        defer
-        src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js"
-    ></script>
-
-    <script
-        defer
-        src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/contrib/auto-render.min.js"
-    ></script>
-
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide"></script>
 
 <style>
-
 /* =========================================================
    GLOBAL
    ========================================================= */
-
 * {
     box-sizing: border-box;
 }
 
-html,
-body {
+html, body {
     margin: 0;
     width: 100%;
     height: 100%;
 }
 
 body {
-
     background: #0f0f0f;
-
     color: #eeeeee;
-
-    font-family:
-        system-ui,
-        -apple-system,
-        BlinkMacSystemFont,
-        "Segoe UI",
-        sans-serif;
-
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     display: flex;
     flex-direction: column;
-
     overflow: hidden;
 }
-
 
 /* =========================================================
    HEADER
    ========================================================= */
-
 header {
-
     height: 58px;
-
     flex-shrink: 0;
-
     display: flex;
-
     align-items: center;
-
     padding: 0 20px;
-
     border-bottom: 1px solid #292929;
-
     font-size: 18px;
-
     font-weight: 700;
 }
-
 
 /* =========================================================
    CHAT
    ========================================================= */
-
 #chat {
-
     flex: 1;
-
     overflow-y: auto;
-
-    padding:
-        24px
-        max(20px, calc((100% - 820px) / 2));
-
+    padding: 24px max(20px, calc((100% - 900px) / 2));
+    padding-bottom: 120px; /* Space for the floating input area */
     display: flex;
-
     flex-direction: column;
-
     gap: 20px;
-
     scroll-behavior: smooth;
 }
-
-
-/* scrollbar */
 
 #chat::-webkit-scrollbar {
     width: 7px;
 }
-
 #chat::-webkit-scrollbar-thumb {
     background: #333;
     border-radius: 10px;
 }
 
-
 /* =========================================================
    MESSAGE BASE
    ========================================================= */
-
 .message {
-
     line-height: 1.6;
-
     word-wrap: break-word;
-
     overflow-wrap: anywhere;
 }
 
-
-/* =========================================================
-   USER MESSAGE
-   ========================================================= */
-
 .user {
-
     align-self: flex-end;
-
     max-width: 80%;
-
-    padding:
-        11px
-        16px;
-
+    padding: 11px 16px;
     background: #303030;
-
     border-radius: 18px;
-
     white-space: pre-wrap;
 }
 
-
-/* =========================================================
-   AI MESSAGE
-   ========================================================= */
-
 .ai {
-
     align-self: stretch;
-
     width: 100%;
-
-    padding:
-        4px
-        0;
-
+    padding: 4px 0;
     background: transparent;
-
     font-size: 15.5px;
 }
 
+.ai p { margin: 0 0 16px; }
+.ai p:last-child { margin-bottom: 0; }
+.ai h1, .ai h2, .ai h3, .ai h4, .ai h5, .ai h6 { line-height: 1.3; font-weight: 700; }
+.ai h1 { font-size: 1.8em; margin: 28px 0 14px; }
+.ai h2 { font-size: 1.5em; margin: 26px 0 12px; }
+.ai h3 { font-size: 1.25em; margin: 22px 0 10px; }
+.ai h4 { font-size: 1.1em; margin: 20px 0 8px; }
+.ai h5, .ai h6 { font-size: 1em; margin: 18px 0 8px; }
+.ai strong { font-weight: 700; }
+.ai em { font-style: italic; }
+.ai del { opacity: .7; }
+.ai a { color: #8ab4f8; text-decoration: none; word-break: break-word; }
+.ai a:hover { text-decoration: underline; }
+.ai ul, .ai ol { margin: 8px 0 18px; padding-left: 28px; }
+.ai li { margin: 5px 0; padding-left: 3px; }
+.ai li > ul, .ai li > ol { margin: 5px 0; }
+.ai ul.contains-task-list { list-style: none; padding-left: 4px; }
+.ai li.task-list-item { list-style: none; }
+.ai input[type="checkbox"] { margin-right: 8px; accent-color: white; }
 
 /* =========================================================
-   AI PARAGRAPHS
+   INLINE CODE & CODE BLOCKS
    ========================================================= */
-
-.ai p {
-
-    margin:
-        0
-        0
-        16px;
-}
-
-.ai p:last-child {
-    margin-bottom: 0;
-}
-
-
-/* =========================================================
-   HEADINGS
-   ========================================================= */
-
-.ai h1,
-.ai h2,
-.ai h3,
-.ai h4,
-.ai h5,
-.ai h6 {
-
-    line-height: 1.3;
-
-    font-weight: 700;
-}
-
-.ai h1 {
-
-    font-size: 1.8em;
-
-    margin:
-        28px
-        0
-        14px;
-}
-
-.ai h2 {
-
-    font-size: 1.5em;
-
-    margin:
-        26px
-        0
-        12px;
-}
-
-.ai h3 {
-
-    font-size: 1.25em;
-
-    margin:
-        22px
-        0
-        10px;
-}
-
-.ai h4 {
-
-    font-size: 1.1em;
-
-    margin:
-        20px
-        0
-        8px;
-}
-
-.ai h5,
-.ai h6 {
-
-    font-size: 1em;
-
-    margin:
-        18px
-        0
-        8px;
-}
-
-
-/* =========================================================
-   TEXT
-   ========================================================= */
-
-.ai strong {
-    font-weight: 700;
-}
-
-.ai em {
-    font-style: italic;
-}
-
-.ai del {
-    opacity: .7;
-}
-
-
-/* =========================================================
-   LINKS
-   ========================================================= */
-
-.ai a {
-
-    color: #8ab4f8;
-
-    text-decoration: none;
-
-    word-break: break-word;
-}
-
-.ai a:hover {
-    text-decoration: underline;
-}
-
-
-/* =========================================================
-   LISTS
-   ========================================================= */
-
-.ai ul,
-.ai ol {
-
-    margin:
-        8px
-        0
-        18px;
-
-    padding-left: 28px;
-}
-
-.ai li {
-
-    margin:
-        5px
-        0;
-
-    padding-left: 3px;
-}
-
-.ai li > ul,
-.ai li > ol {
-
-    margin:
-        5px
-        0
-        5px;
-}
-
-
-/* =========================================================
-   TASK LISTS
-   ========================================================= */
-
-.ai ul.contains-task-list {
-
-    list-style: none;
-
-    padding-left: 4px;
-}
-
-.ai li.task-list-item {
-
-    list-style: none;
-}
-
-.ai input[type="checkbox"] {
-
-    margin-right: 8px;
-
-    accent-color: white;
-}
-
-
-/* =========================================================
-   INLINE CODE
-   ========================================================= */
-
 .ai :not(pre) > code {
-
     background: #242424;
-
-    border:
-        1px
-        solid
-        #353535;
-
-    padding:
-        2px
-        6px;
-
+    border: 1px solid #353535;
+    padding: 2px 6px;
     border-radius: 6px;
-
-    font-family:
-        ui-monospace,
-        SFMono-Regular,
-        Menlo,
-        Monaco,
-        Consolas,
-        monospace;
-
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     font-size: .9em;
 }
 
-
-/* =========================================================
-   CODE BLOCK
-   ========================================================= */
-
 .code-block {
-
-    margin:
-        18px
-        0;
-
-    border:
-        1px
-        solid
-        #303030;
-
+    margin: 18px 0;
+    border: 1px solid #303030;
     border-radius: 10px;
-
     overflow: hidden;
-
     background: #111;
 }
 
-
-/* code header */
-
 .code-header {
-
     min-height: 38px;
-
     display: flex;
-
     align-items: center;
-
     justify-content: space-between;
-
-    padding:
-        0
-        12px;
-
+    padding: 0 12px;
     background: #1b1b1b;
-
-    border-bottom:
-        1px
-        solid
-        #303030;
-
+    border-bottom: 1px solid #303030;
     color: #aaa;
-
     font-size: 12px;
 }
-
-
-/* code language */
 
 .code-language {
-
     opacity: .9;
-
-    font-family:
-        ui-monospace,
-        monospace;
+    font-family: ui-monospace, monospace;
 }
 
-
-/* copy button */
-
 .copy-code {
-
     width: auto;
-
     height: 28px;
-
-    padding:
-        0
-        9px;
-
-    border:
-        1px
-        solid
-        #444;
-
+    padding: 0 9px;
+    border: 1px solid #444;
     border-radius: 6px;
-
     background: #252525;
-
     color: #ddd;
-
     font-size: 12px;
-
     cursor: pointer;
 }
 
-.copy-code:hover {
-    background: #303030;
-}
-
-
-/* actual code */
+.copy-code:hover { background: #303030; }
 
 .code-block pre {
-
     margin: 0;
-
     padding: 16px;
-
     overflow-x: auto;
-
     font-size: 13px;
-
     line-height: 1.55;
 }
-
-.code-block pre::-webkit-scrollbar {
-    height: 6px;
-}
-
+.code-block pre::-webkit-scrollbar { height: 6px; }
 
 /* =========================================================
-   BLOCKQUOTE
+   BLOCKQUOTE, TABLES, HR, IMAGES
    ========================================================= */
-
 .ai blockquote {
-
-    margin:
-        16px
-        0;
-
-    padding:
-        4px
-        0
-        4px
-        16px;
-
-    border-left:
-        3px
-        solid
-        #555;
-
+    margin: 16px 0;
+    padding: 4px 0 4px 16px;
+    border-left: 3px solid #555;
     color: #bdbdbd;
 }
+.ai blockquote p { margin-bottom: 8px; }
 
-.ai blockquote p {
-    margin-bottom: 8px;
-}
+.ai .table-wrapper { width: 100%; overflow-x: auto; margin: 18px 0; }
+.ai table { width: 100%; border-collapse: collapse; border: 1px solid #333; font-size: 14px; }
+.ai th, .ai td { padding: 9px 12px; border: 1px solid #333; text-align: left; vertical-align: top; }
+.ai th { background: #202020; font-weight: 700; }
+.ai tr:nth-child(even) { background: #151515; }
 
+.ai hr { border: 0; border-top: 1px solid #333; margin: 26px 0; }
+.ai img { max-width: 100%; height: auto; border-radius: 10px; margin: 10px 0; }
 
-/* =========================================================
-   TABLES
-   ========================================================= */
-
-.ai .table-wrapper {
-
-    width: 100%;
-
-    overflow-x: auto;
-
-    margin:
-        18px
-        0;
-}
-
-.ai table {
-
-    width: 100%;
-
-    border-collapse: collapse;
-
-    border:
-        1px
-        solid
-        #333;
-
-    font-size: 14px;
-}
-
-.ai th,
-.ai td {
-
-    padding:
-        9px
-        12px;
-
-    border:
-        1px
-        solid
-        #333;
-
-    text-align: left;
-
-    vertical-align: top;
-}
-
-.ai th {
-
-    background: #202020;
-
-    font-weight: 700;
-}
-
-.ai tr:nth-child(even) {
-    background: #151515;
-}
-
-
-/* =========================================================
-   HORIZONTAL RULE
-   ========================================================= */
-
-.ai hr {
-
-    border: 0;
-
-    border-top:
-        1px
-        solid
-        #333;
-
-    margin:
-        26px
-        0;
-}
-
-
-/* =========================================================
-   IMAGES
-   ========================================================= */
-
-.ai img {
-
-    max-width: 100%;
-
-    height: auto;
-
-    border-radius: 10px;
-
-    margin:
-        10px
-        0;
-}
-
-
-/* =========================================================
-   KATEX / LATEX
-   ========================================================= */
-
-.ai .katex-display {
-
-    overflow-x: auto;
-
-    overflow-y: hidden;
-
-    padding:
-        8px
-        4px;
-
-    margin:
-        18px
-        0;
-}
-
-.ai .katex {
-
-    font-size: 1.05em;
-}
-
-
-/* =========================================================
-   TOOL STATUS
-   ========================================================= */
+.ai .katex-display { overflow-x: auto; overflow-y: hidden; padding: 8px 4px; margin: 18px 0; }
+.ai .katex { font-size: 1.05em; }
 
 .tool {
-
     align-self: stretch;
-
     color: #888;
-
     font-size: 13px;
-
-    padding:
-        2px
-        0;
-
+    padding: 2px 0;
     background: transparent;
 }
 
-
 /* =========================================================
-   INPUT
+   INPUT AREA & COMPOSER
    ========================================================= */
-
 #inputArea {
-
-    width: 100%;
-
-    flex-shrink: 0;
-
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
     display: flex;
-
-    align-items: flex-end;
-
-    gap: 10px;
-
-    padding:
-        12px
-        max(12px, calc((100% - 820px) / 2));
-
-    border-top:
-        1px
-        solid
-        #292929;
-
-    background: #0f0f0f;
+    justify-content: center;
+    padding: 16px 20px 24px;
+    pointer-events: none;
+    background: linear-gradient(to bottom, transparent 0%, #0f0f0f 40%, #0f0f0f 100%);
+    z-index: 10;
 }
 
-
-/* textarea */
+.composer {
+    pointer-events: auto;
+    width: min(900px, 100%);
+    display: flex;
+    align-items: flex-end;
+    gap: 10px;
+    padding: 8px 10px;
+    background: #1b1b1b;
+    border: 1px solid #333;
+    border-radius: 24px;
+    box-shadow: 0 8px 30px rgba(0,0,0,.45);
+}
 
 textarea {
-
     flex: 1;
-
-    min-height: 48px;
-
-    max-height: 150px;
-
     resize: none;
-
-    padding:
-        12px
-        14px;
-
-    border:
-        1px
-        solid
-        #333;
-
-    border-radius: 14px;
-
-    background: #1b1b1b;
-
+    min-height: 24px;
+    max-height: 150px;
+    padding: 8px 12px;
+    background: transparent;
+    border: none;
     color: white;
-
-    font:
-        inherit;
-
+    font-size: 15.5px;
     line-height: 1.4;
-
     outline: none;
+    font-family: inherit;
 }
-
-textarea:focus {
-
-    border-color: #555;
-}
-
-
-/* send */
 
 #send {
-
-    width: 80px;
-
-    height: 48px;
-
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     flex-shrink: 0;
-
-    border: 0;
-
-    border-radius: 14px;
-
+    border-radius: 50%;
+    border: none;
     background: white;
-
     color: black;
-
-    font-weight: 700;
-
     cursor: pointer;
+    margin-bottom: 2px;
 }
 
-#send:hover {
-    background: #ddd;
+#send:hover { background: #ddd; }
+#send:disabled { opacity: .5; cursor: default; }
+
+#send svg {
+    width: 18px;
+    height: 18px;
+    stroke-width: 2.5;
 }
-
-#send:disabled {
-
-    opacity: .5;
-
-    cursor: default;
-}
-
 
 /* =========================================================
    MOBILE
    ========================================================= */
-
 @media (max-width: 600px) {
-
-    #chat {
-
-        padding:
-            18px
-            14px;
-    }
-
-    #inputArea {
-
-        padding:
-            10px
-            12px;
-    }
-
-    .user {
-
-        max-width: 88%;
-    }
-
-    .ai {
-
-        font-size: 15px;
-    }
-
-    .code-block pre {
-
-        font-size: 12px;
-
-        padding: 12px;
-    }
-
-    #send {
-
-        width: 68px;
-    }
+    #chat { padding: 18px 14px; padding-bottom: 100px; }
+    #inputArea { padding: 10px 14px 16px; }
+    .user { max-width: 88%; }
+    .ai { font-size: 15px; }
+    .code-block pre { font-size: 12px; padding: 12px; }
 }
-
 </style>
-
 </head>
-
-
 <body>
-
 
 <header>
     MultiSearch AI
 </header>
 
-
 <div id="chat"></div>
 
-
 <div id="inputArea">
-
-    <textarea
-        id="input"
-        placeholder="Ask anything..."
-        rows="1"
-    ></textarea>
-
-    <button id="send">
-        Send
-    </button>
-
+    <div class="composer">
+        <textarea id="input" placeholder="Message AI..." rows="1"></textarea>
+        <button id="send">
+            <i data-lucide="arrow-up"></i>
+        </button>
+    </div>
 </div>
 
-
 <script>
+/* =========================================================
+   ELEMENTS & SETUP
+   ========================================================= */
+const chat = document.getElementById("chat");
+const input = document.getElementById("input");
+const sendButton = document.getElementById("send");
+
+// Render Lucide icons
+lucide.createIcons();
+
+// Auto-resize input
+input.addEventListener("input", () => {
+    input.style.height = "auto";
+    input.style.height = Math.min(input.scrollHeight, 150) + "px";
+});
 
 /* =========================================================
-   ELEMENTS
+   MODEL & LIMITS
    ========================================================= */
-
-const chat =
-    document.getElementById("chat");
-
-const input =
-    document.getElementById("input");
-
-const sendButton =
-    document.getElementById("send");
-
-
-/* =========================================================
-   MODEL
-   ========================================================= */
-
-const MODEL =
-    "dots-studio/dots-3-note-preview:free";
-
-
-/* =========================================================
-   LIMITS
-   ========================================================= */
-
+const MODEL = "dots-studio/dots-3-note-preview:free";
 const MAX_TOOL_ROUNDS = 8;
-
 const MAX_TOOLS_PER_ROUND = 10;
 
-
-/* =========================================================
-   CONVERSATION
-   ========================================================= */
-
-let messages = [
-
-    {
-        role: "system",
-
-        content: `
+let messages = [{
+    role: "system",
+    content: `
 You are a helpful AI assistant.
-
 You have access to a web_search tool.
-
-Use web_search whenever current, recent, changing,
-or externally verifiable information is needed.
-
+Use web_search whenever current, recent, changing, or externally verifiable information is needed.
 You may call the same tool multiple times.
-
 You may call multiple tools in one turn.
-
 Multiple tool calls are executed sequentially.
-
 After receiving search results, carefully evaluate them.
-
-If the information is incomplete, perform additional
-searches before answering.
-
+If the information is incomplete, perform additional searches before answering.
 Prefer primary and official sources when possible.
-
 Your responses may use rich Markdown.
-
-Use Markdown headings, lists, tables, blockquotes,
-code fences, and LaTeX when useful.
-
+Use Markdown headings, lists, tables, blockquotes, code fences, and LaTeX when useful.
 For mathematical expressions, use LaTeX.
-
-Inline math:
-$E = mc^2$
-
-Display math:
-$$
-\\int_0^1 x^2 dx = \\frac{1}{3}
-$$
-
-Do not claim to have searched the web unless the
-web_search tool was actually executed.
-        `.trim()
-    }
-
-];
-
+Inline math: $E = mc^2$
+Display math: $$\\int_0^1 x^2 dx = \\frac{1}{3}$$
+Do not claim to have searched the web unless the web_search tool was actually executed.
+    `.trim()
+}];
 
 /* =========================================================
-   MARKED CONFIG
+   MARKED CONFIG & RENDERER
    ========================================================= */
-
 marked.setOptions({
-
     gfm: true,
-
     breaks: true,
-
     pedantic: false
 });
 
-
-/* =========================================================
-   MARKDOWN RENDERER
-   ========================================================= */
-
-const renderer =
-    new marked.Renderer();
-
-
-/*
- * Fenced code blocks
- */
+const renderer = new marked.Renderer();
 
 renderer.code = function(code, language) {
-
-    const lang =
-        language || "";
-
-
+    const lang = language || "";
     let highlighted;
-
-
     try {
-
-        if (
-            lang &&
-            hljs.getLanguage(lang)
-        ) {
-
-            highlighted =
-                hljs.highlight(
-                    code,
-                    {
-                        language: lang
-                    }
-                ).value;
-
+        if (lang && hljs.getLanguage(lang)) {
+            highlighted = hljs.highlight(code, { language: lang }).value;
         } else {
-
-            highlighted =
-                hljs.highlightAuto(code).value;
+            highlighted = hljs.highlightAuto(code).value;
         }
-
     } catch {
-
-        highlighted =
-            escapeHTML(code);
+        highlighted = escapeHTML(code);
     }
-
-
-    const encoded =
-        encodeURIComponent(code);
-
-
+    const encoded = encodeURIComponent(code);
     return `
-
         <div class="code-block">
-
             <div class="code-header">
-
-                <span class="code-language">
-                    ${escapeHTML(lang || "code")}
-                </span>
-
-                <button
-                    class="copy-code"
-                    data-code="${encoded}"
-                    type="button"
-                >
-                    Copy
-                </button>
-
+                <span class="code-language">${escapeHTML(lang || "code")}</span>
+                <button class="copy-code" data-code="${encoded}" type="button">Copy</button>
             </div>
-
             <pre><code class="hljs ${lang ? "language-" + escapeHTML(lang) : ""}">${highlighted}</code></pre>
-
         </div>
-
     `;
 };
-
-
-/*
- * Tables get horizontal scrolling
- */
 
 renderer.table = function(header, body) {
-
     return `
-
         <div class="table-wrapper">
-
             <table>
-
-                <thead>
-                    ${header}
-                </thead>
-
-                <tbody>
-                    ${body}
-                </tbody>
-
+                <thead>${header}</thead>
+                <tbody>${body}</tbody>
             </table>
-
         </div>
-
     `;
 };
 
-
-marked.use({
-    renderer
-});
-
-
-/* =========================================================
-   ESCAPE HTML
-   ========================================================= */
+marked.use({ renderer });
 
 function escapeHTML(value) {
-
     return String(value)
-
         .replaceAll("&", "&amp;")
-
         .replaceAll("<", "&lt;")
-
         .replaceAll(">", "&gt;")
-
         .replaceAll('"', "&quot;")
-
         .replaceAll("'", "&#039;");
 }
-
 
 /* =========================================================
    RENDER AI
    ========================================================= */
-
 function renderAI(element, text) {
-
     let html;
-
     try {
-
-        html =
-            marked.parse(
-                text || ""
-            );
-
+        html = marked.parse(text || "");
     } catch (error) {
-
-        console.error(
-            "Markdown error:",
-            error
-        );
-
-        element.textContent =
-            text || "";
-
+        console.error("Markdown error:", error);
+        element.textContent = text || "";
         return;
     }
 
-
-    /*
-     * Sanitize generated HTML
-     */
-
-    html =
-        DOMPurify.sanitize(
-            html,
-            {
-                ADD_ATTR: [
-                    "target",
-                    "rel",
-                    "class",
-                    "data-code"
-                ]
-            }
-        );
-
-
+    html = DOMPurify.sanitize(html, {
+        ADD_ATTR: ["target", "rel", "class", "data-code"]
+    });
+    
     element.innerHTML = html;
 
+    element.querySelectorAll("a").forEach(link => {
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+    });
 
-    /*
-     * Open links safely
-     */
-
-    element
-        .querySelectorAll("a")
-        .forEach(link => {
-
-            link.target = "_blank";
-
-            link.rel =
-                "noopener noreferrer";
-        });
-
-
-    /*
-     * Copy buttons
-     */
-
-    element
-        .querySelectorAll(".copy-code")
-        .forEach(button => {
-
-            button.addEventListener(
-                "click",
-                async () => {
-
-                    try {
-
-                        const code =
-                            decodeURIComponent(
-                                button.dataset.code
-                            );
-
-                        await navigator
-                            .clipboard
-                            .writeText(code);
-
-                        const old =
-                            button.textContent;
-
-                        button.textContent =
-                            "Copied!";
-
-                        setTimeout(
-                            () => {
-                                button.textContent =
-                                    old;
-                            },
-                            1500
-                        );
-
-                    } catch (error) {
-
-                        console.error(
-                            "Copy failed:",
-                            error
-                        );
-                    }
-
-                }
-            );
-
-        });
-
-
-    /*
-     * Render LaTeX
-     */
-
-    if (
-        typeof renderMathInElement ===
-        "function"
-    ) {
-
-        renderMathInElement(
-            element,
-            {
-
-                delimiters: [
-
-                    {
-                        left: "$$",
-                        right: "$$",
-                        display: true
-                    },
-
-                    {
-                        left: "\\[",
-                        right: "\\]",
-                        display: true
-                    },
-
-                    {
-                        left: "$",
-                        right: "$",
-                        display: false
-                    },
-
-                    {
-                        left: "\\(",
-                        right: "\\)",
-                        display: false
-                    }
-
-                ],
-
-                throwOnError: false,
-
-                strict: false
-
+    element.querySelectorAll(".copy-code").forEach(button => {
+        button.addEventListener("click", async () => {
+            try {
+                const code = decodeURIComponent(button.dataset.code);
+                await navigator.clipboard.writeText(code);
+                const old = button.textContent;
+                button.textContent = "Copied!";
+                setTimeout(() => { button.textContent = old; }, 1500);
+            } catch (error) {
+                console.error("Copy failed:", error);
             }
-        );
+        });
+    });
+
+    if (typeof renderMathInElement === "function") {
+        renderMathInElement(element, {
+            delimiters: [
+                {left: "$$", right: "$$", display: true},
+                {left: "\\[", right: "\\]", display: true},
+                {left: "$", right: "$", display: false},
+                {left: "\\(", right: "\\)", display: false}
+            ],
+            throwOnError: false,
+            strict: false
+        });
     }
 
-
-    chat.scrollTop =
-        chat.scrollHeight;
+    chat.scrollTop = chat.scrollHeight;
 }
-
 
 /* =========================================================
    ADD MESSAGE
    ========================================================= */
-
 function addMessage(text, type) {
-
-    const div =
-        document.createElement("div");
-
-
-    div.className =
-        "message " + type;
-
+    const div = document.createElement("div");
+    div.className = "message " + type;
 
     if (type === "ai") {
-
-        renderAI(
-            div,
-            text
-        );
-
+        renderAI(div, text);
     } else {
-
-        div.textContent =
-            text;
+        div.textContent = text;
     }
 
-
     chat.appendChild(div);
-
-
-    chat.scrollTop =
-        chat.scrollHeight;
-
-
+    chat.scrollTop = chat.scrollHeight;
     return div;
 }
 
-
-/* =========================================================
-   THINKING STATUS
-   ========================================================= */
-
-function setThinking(
-    element,
-    text
-) {
-
-    element.textContent =
-        text;
-
-    chat.scrollTop =
-        chat.scrollHeight;
+function setThinking(element, text) {
+    element.textContent = text;
+    chat.scrollTop = chat.scrollHeight;
 }
-
 
 /* =========================================================
    TOOLS
    ========================================================= */
-
-const tools = [
-
-    {
-
-        type: "function",
-
-        function: {
-
-            name: "web_search",
-
-            description:
-                "Search the live web for current or externally verifiable information. " +
-                "Use multiple searches when different queries are useful. " +
-                "You may call this tool multiple times.",
-
-            parameters: {
-
-                type: "object",
-
-                properties: {
-
-                    query: {
-
-                        type: "string",
-
-                        description:
-                            "The web search query."
-                    },
-
-                    location: {
-
-                        type: "string",
-
-                        description:
-                            "Optional country code such as US, GB, IN."
-                    },
-
-                    language: {
-
-                        type: "string",
-
-                        description:
-                            "Optional language code such as en."
-                    },
-
-                    page: {
-
-                        type: "integer",
-
-                        description:
-                            "Search results page starting at 0.",
-
-                        minimum: 0,
-
-                        maximum: 10
-                    }
-
-                },
-
-                required: [
-                    "query"
-                ]
-            }
+const tools = [{
+    type: "function",
+    function: {
+        name: "web_search",
+        description: "Search the live web for current or externally verifiable information. Use multiple searches when different queries are useful. You may call this tool multiple times.",
+        parameters: {
+            type: "object",
+            properties: {
+                query: { type: "string", description: "The web search query." },
+                location: { type: "string", description: "Optional country code such as US, GB, IN." },
+                language: { type: "string", description: "Optional language code such as en." },
+                page: { type: "integer", description: "Search results page starting at 0.", minimum: 0, maximum: 10 }
+            },
+            required: ["query"]
         }
     }
+}];
 
-];
+async function executeTool(name, args) {
+    if (name !== "web_search") throw new Error("Unknown tool: " + name);
 
+    const response = await fetch("/api/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(args)
+    });
 
-/* =========================================================
-   EXECUTE TOOL
-   ========================================================= */
-
-async function executeTool(
-    name,
-    args
-) {
-
-    if (
-        name !==
-        "web_search"
-    ) {
-
-        throw new Error(
-            "Unknown tool: " + name
-        );
-    }
-
-
-    const response =
-        await fetch(
-            "/api/search",
-            {
-
-                method: "POST",
-
-                headers: {
-                    "Content-Type":
-                        "application/json"
-                },
-
-                body:
-                    JSON.stringify(args)
-            }
-        );
-
-
-    const data =
-        await response.json();
-
-
-    if (!response.ok) {
-
-        throw new Error(
-            data.error ||
-            "Search request failed"
-        );
-    }
-
-
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Search request failed");
     return data;
 }
 
-
-/* =========================================================
-   FORMAT SEARCH RESULTS
-   ========================================================= */
-
 function formatSearchResult(data) {
-
-    if (
-        !data ||
-        !Array.isArray(
-            data.results
-        )
-    ) {
-
-        return JSON.stringify(
-            data
-        );
-    }
-
-
+    if (!data || !Array.isArray(data.results)) return JSON.stringify(data);
     return JSON.stringify({
-
-        query:
-            data.query,
-
-        total_results:
-            data.total_results,
-
-        page:
-            data.page,
-
-        results:
-            data.results.map(
-                result => ({
-
-                    position:
-                        result.position,
-
-                    site_name:
-                        result.site_name,
-
-                    title:
-                        result.title,
-
-                    snippet:
-                        result.snippet,
-
-                    url:
-                        result.url
-                })
-            )
-
+        query: data.query,
+        total_results: data.total_results,
+        page: data.page,
+        results: data.results.map(result => ({
+            position: result.position,
+            site_name: result.site_name,
+            title: result.title,
+            snippet: result.snippet,
+            url: result.url
+        }))
     });
 }
 
-
-/* =========================================================
-   EXTRACT AI TEXT
-   ========================================================= */
-
 function extractText(response) {
-
-    const content =
-        response?.message?.content;
-
-
-    if (
-        typeof content ===
-        "string"
-    ) {
-
-        return content;
-    }
-
-
-    if (
-        Array.isArray(content)
-    ) {
-
-        return content
-
-            .map(
-                x =>
-                    x.text || ""
-            )
-
-            .join("");
-    }
-
-
-    if (
-        typeof response ===
-        "string"
-    ) {
-
-        return response;
-    }
-
-
-    if (
-        response?.text
-    ) {
-
-        return response.text;
-    }
-
-
+    const content = response?.message?.content;
+    if (typeof content === "string") return content;
+    if (Array.isArray(content)) return content.map(x => x.text || "").join("");
+    if (typeof response === "string") return response;
+    if (response?.text) return response.text;
     return "";
 }
-
 
 /* =========================================================
    AGENT LOOP
    ========================================================= */
+async function runAgent(userText, thinkingElement) {
+    messages.push({ role: "user", content: userText });
 
-async function runAgent(
-    userText,
-    thinkingElement
-) {
+    for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+        setThinking(thinkingElement, round === 0 ? "Thinking..." : `Thinking... (tool round ${round + 1})`);
+        
+        const response = await puter.ai.chat(messages, { model: MODEL, tools: tools });
+        const assistantMessage = response.message;
 
-    messages.push({
+        if (!assistantMessage) throw new Error("Puter returned no message");
 
-        role: "user",
+        messages.push(assistantMessage);
 
-        content:
-            userText
-    });
+        const toolCalls = assistantMessage.tool_calls || [];
 
-
-    for (
-        let round = 0;
-        round < MAX_TOOL_ROUNDS;
-        round++
-    ) {
-
-
-        setThinking(
-
-            thinkingElement,
-
-            round === 0
-                ? "Thinking..."
-                : `Thinking... (tool round ${round + 1})`
-        );
-
-
-        console.log(
-            `[AI] round ${round + 1}`
-        );
-
-
-        const response =
-            await puter.ai.chat(
-
-                messages,
-
-                {
-
-                    model:
-                        MODEL,
-
-                    tools:
-                        tools
-                }
-            );
-
-
-        console.log(
-            "[AI RESPONSE]",
-            response
-        );
-
-
-        const assistantMessage =
-            response.message;
-
-
-        if (!assistantMessage) {
-
-            throw new Error(
-                "Puter returned no message"
-            );
+        if (toolCalls.length === 0) {
+            const text = extractText(response);
+            return text.trim() || "The model returned an empty response.";
         }
 
+        const calls = toolCalls.slice(0, MAX_TOOLS_PER_ROUND);
 
-        /*
-         * Preserve assistant tool-call message
-         */
-
-        messages.push(
-            assistantMessage
-        );
-
-
-        const toolCalls =
-            assistantMessage.tool_calls ||
-            [];
-
-
-        /*
-         * Normal answer
-         */
-
-        if (
-            toolCalls.length === 0
-        ) {
-
-            const text =
-                extractText(
-                    response
-                );
-
-
-            return (
-                text.trim() ||
-                "The model returned an empty response."
-            );
-        }
-
-
-        /*
-         * Execute sequentially
-         */
-
-        const calls =
-            toolCalls.slice(
-                0,
-                MAX_TOOLS_PER_ROUND
-            );
-
-
-        for (
-            let i = 0;
-            i < calls.length;
-            i++
-        ) {
-
-
-            const call =
-                calls[i];
-
-
-            const toolName =
-                call.function?.name;
-
-
+        for (let i = 0; i < calls.length; i++) {
+            const call = calls[i];
+            const toolName = call.function?.name;
             let args = {};
 
-
             try {
-
-                args =
-                    JSON.parse(
-                        call.function?.arguments ||
-                        "{}"
-                    );
-
+                args = JSON.parse(call.function?.arguments || "{}");
             } catch {
-
                 args = {};
             }
 
-
-            const query =
-                args.query ||
-                toolName;
-
-
-            setThinking(
-
-                thinkingElement,
-
-                `Searching: ${query}`
-            );
-
-
-            addMessage(
-
-                `🔎 ${toolName}: ${JSON.stringify(args)}`,
-
-                "tool"
-            );
-
+            const query = args.query || toolName;
+            setThinking(thinkingElement, `Searching: ${query}`);
+            addMessage(`🔎 ${toolName}: ${JSON.stringify(args)}`, "tool");
 
             try {
-
-                /*
-                 * IMPORTANT:
-                 *
-                 * Await means the next search
-                 * does not start until this one
-                 * has finished.
-                 */
-
-                const result =
-                    await executeTool(
-                        toolName,
-                        args
-                    );
-
-
+                const result = await executeTool(toolName, args);
                 messages.push({
-
                     role: "tool",
-
-                    tool_call_id:
-                        call.id,
-
-                    content:
-                        formatSearchResult(
-                            result
-                        )
-
+                    tool_call_id: call.id,
+                    content: formatSearchResult(result)
                 });
-
-
             } catch (error) {
-
                 messages.push({
-
                     role: "tool",
-
-                    tool_call_id:
-                        call.id,
-
-                    content:
-                        JSON.stringify({
-
-                            error:
-                                error.message
-                        })
-
+                    tool_call_id: call.id,
+                    content: JSON.stringify({ error: error.message })
                 });
-
             }
-
         }
 
-
-        /*
-         * Tell model when call limit was reached
-         */
-
-        if (
-            toolCalls.length >
-            MAX_TOOLS_PER_ROUND
-        ) {
-
+        if (toolCalls.length > MAX_TOOLS_PER_ROUND) {
             messages.push({
-
                 role: "tool",
-
-                content:
-                    JSON.stringify({
-
-                        error:
-                            `Maximum of ${MAX_TOOLS_PER_ROUND} tool calls per round reached.`
-                    })
-
+                content: JSON.stringify({ error: `Maximum of ${MAX_TOOLS_PER_ROUND} tool calls per round reached.` })
             });
         }
-
     }
-
-
-    throw new Error(
-        "Maximum tool rounds reached."
-    );
+    throw new Error("Maximum tool rounds reached.");
 }
 
-
 /* =========================================================
-   SEND
+   SEND LOGIC
    ========================================================= */
-
 async function send() {
-
-    const text =
-        input.value.trim();
-
-
-    if (!text) {
-        return;
-    }
-
+    const text = input.value.trim();
+    if (!text) return;
 
     input.value = "";
+    input.style.height = "auto";
+    sendButton.disabled = true;
+    input.disabled = true;
 
-
-    sendButton.disabled =
-        true;
-
-    input.disabled =
-        true;
-
-
-    addMessage(
-        text,
-        "user"
-    );
-
-
-    const loading =
-        addMessage(
-            "Thinking...",
-            "ai"
-        );
-
+    addMessage(text, "user");
+    const loading = addMessage("Thinking...", "ai");
 
     try {
-
-        const answer =
-            await runAgent(
-                text,
-                loading
-            );
-
-
-        renderAI(
-            loading,
-            answer
-        );
-
-
+        const answer = await runAgent(text, loading);
+        renderAI(loading, answer);
     } catch (error) {
-
-        console.error(
-            error
-        );
-
-
-        loading.textContent =
-            "Error: " +
-            error.message;
+        console.error(error);
+        loading.textContent = "Error: " + error.message;
     }
 
-
-    sendButton.disabled =
-        false;
-
-    input.disabled =
-        false;
-
-
+    sendButton.disabled = false;
+    input.disabled = false;
     input.focus();
-
-
-    chat.scrollTop =
-        chat.scrollHeight;
+    chat.scrollTop = chat.scrollHeight;
 }
 
-
-/* =========================================================
-   SEND BUTTON
-   ========================================================= */
-
-sendButton.addEventListener(
-    "click",
-    send
-);
-
-
-/* =========================================================
-   ENTER
-   ========================================================= */
-
-input.addEventListener(
-    "keydown",
-    event => {
-
-        if (
-            event.key === "Enter" &&
-            !event.shiftKey
-        ) {
-
-            event.preventDefault();
-
-            send();
-        }
-
+sendButton.addEventListener("click", send);
+input.addEventListener("keydown", event => {
+    if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        send();
     }
-);
-
+});
 </script>
-
 </body>
 </html>
