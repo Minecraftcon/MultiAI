@@ -2,8 +2,13 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>MultiSearch AI</title>
+
+    <!-- Native PWA flags -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="mobile-web-app-capable" content="yes">
 
     <!-- Puter -->
     <script src="https://js.puter.com/v2/"></script>
@@ -29,7 +34,10 @@
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/contrib/auto-render.min.js"></script>
 
     <!-- Lucide Icons -->
-    <script src="https://unpkg.com/lucide"></script>
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+    <!-- Mermaid Diagrams -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
 
 <style>
 /* =========================================================
@@ -48,10 +56,10 @@
 
 html, body {
     margin: 0;
-    width: 100%;
-    height: 100%;
+    width: 100vw;
+    height: 100dvh;
+    min-height: 100dvh;
     background: #0f0f0f;
-    /* Kill horizontal overscroll/back-forward gestures */
     overscroll-behavior-x: none;
     overscroll-behavior: none;
     overflow: hidden;
@@ -74,18 +82,27 @@ body {
     50% { opacity: 0; }
 }
 
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
 /* =========================================================
    APP SHELL
    ========================================================= */
 #appShell {
     width: 100%;
-    height: 100%;
+    height: 100dvh;
     display: flex;
     flex-direction: column;
     position: relative;
     transform: translateX(0px);
     will-change: transform;
     background: #0f0f0f;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    perspective: 1000px;
+    -webkit-perspective: 1000px;
 }
 
 #appShell.animate-transition {
@@ -96,12 +113,14 @@ body {
    HEADER & MODEL SELECTOR
    ========================================================= */
 header {
-    height: 58px;
+    height: calc(58px + env(safe-area-inset-top, 0px));
+    padding-top: env(safe-area-inset-top, 0px);
     flex-shrink: 0;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0 20px;
+    padding-left: max(20px, env(safe-area-inset-left, 0px));
+    padding-right: max(20px, env(safe-area-inset-right, 0px));
     border-bottom: 1px solid #292929;
     font-size: 17px;
     font-weight: 700;
@@ -180,7 +199,7 @@ header {
 }
 
 /* =========================================================
-   SLIDE-IN SIDE PANEL
+   SLIDE-IN SIDE PANEL & CHAT ITEMS
    ========================================================= */
 #sidePanel {
     position: fixed;
@@ -188,6 +207,8 @@ header {
     left: 0;
     bottom: 0;
     width: var(--panel-width);
+    height: 100dvh;
+    padding-top: env(safe-area-inset-top, 0px);
     z-index: 40;
     display: flex;
     flex-direction: column;
@@ -195,6 +216,10 @@ header {
     border-right: 1px solid #292929;
     transform: translateX(-100%);
     will-change: transform;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    perspective: 1000px;
+    -webkit-perspective: 1000px;
 }
 
 #sidePanel.animate-transition {
@@ -214,13 +239,18 @@ header {
     letter-spacing: 0.01em;
 }
 
+.panel-top-actions {
+    padding: 12px 14px 4px;
+    flex-shrink: 0;
+}
+
 .panel-body {
     flex: 1;
     overflow-y: auto;
-    padding: 14px;
+    padding: 10px 14px;
 }
 
-.panel-body::-webkit-scrollbar { width: 6px; }
+.panel-body::-webkit-scrollbar { width: 5px; }
 .panel-body::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
 
 .panel-action {
@@ -228,12 +258,12 @@ header {
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 11px 14px;
+    padding: 10px 14px;
     background: #202020;
     border: 1px solid #333;
-    border-radius: 12px;
+    border-radius: 10px;
     color: #eee;
-    font-size: 14px;
+    font-size: 13.5px;
     font-weight: 600;
     font-family: inherit;
     cursor: pointer;
@@ -251,47 +281,131 @@ header {
 }
 
 .panel-section-title {
-    margin: 22px 0 10px;
+    margin: 16px 0 8px;
     padding: 0 4px;
-    font-size: 11.5px;
+    font-size: 11px;
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: #777;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
 }
 
-.history-list {
+.count-badge {
+    display: inline-block;
+    padding: 1px 6px;
+    background: #242424;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 600;
+    color: #888;
+}
+
+.chat-list {
     display: flex;
     flex-direction: column;
     gap: 4px;
 }
 
-.history-item {
-    width: 100%;
-    text-align: left;
+.chat-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
     padding: 9px 12px;
+    border-radius: 8px;
     background: transparent;
-    border: none;
-    border-radius: 9px;
-    color: #c9c9c9;
-    font-size: 13.5px;
-    font-family: inherit;
     cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease;
+    user-select: none;
+    border: 1px solid transparent;
+}
+
+.chat-item:hover {
+    background: #1f1f1f;
+    border-color: #2b2b2b;
+}
+
+.chat-item.active {
+    background: #262626;
+    border-color: #383838;
+}
+
+.chat-item-main {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1;
+}
+
+.chat-item-title {
+    font-size: 13px;
+    color: #bbb;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    transition: background 0.15s ease, color 0.15s ease;
+    line-height: 1.35;
 }
 
-.history-item:hover {
-    background: #232323;
+.chat-item.active .chat-item-title {
+    color: #ffffff;
+    font-weight: 500;
+}
+
+.chat-item-time {
+    font-size: 10.5px;
+    color: #666;
+    line-height: 1.2;
+    margin-top: 2px;
+}
+
+.chat-item-spinner {
+    width: 14px;
+    height: 14px;
+    border: 2px solid #555;
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    flex-shrink: 0;
+}
+
+.chat-item-del {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    color: #666;
+    cursor: pointer;
+    flex-shrink: 0;
+    padding: 0;
+    transition: color 0.15s, background 0.15s;
+}
+
+.chat-item:hover .chat-item-del {
+    display: flex;
+}
+
+.chat-item-del:hover {
+    background: #333;
     color: #fff;
 }
 
+.chat-item-del svg {
+    width: 12px;
+    height: 12px;
+}
+
 .history-empty {
-    padding: 8px 12px;
-    color: #666;
-    font-size: 13px;
+    padding: 24px 6px;
+    color: #555;
+    font-size: 12px;
+    text-align: center;
 }
 
 #backdrop {
@@ -300,7 +414,7 @@ header {
     z-index: 35;
     background: rgba(0, 0, 0, 0.6);
     opacity: 0;
-    pointer-events: none;
+    pointer-events: none !important;
     will-change: opacity;
 }
 
@@ -382,7 +496,7 @@ header {
 
 .activity-toggle .chevron {
     font-size: 10px;
-    width: 36px;
+    width: 16px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -429,10 +543,6 @@ header {
     bottom: 18px;
     width: 2px;
     background: #383838;
-    transition: top 0.7s cubic-bezier(0.16, 1, 0.3, 1),
-                bottom 0.7s cubic-bezier(0.16, 1, 0.3, 1),
-                height 0.7s cubic-bezier(0.16, 1, 0.3, 1),
-                opacity 0.5s ease;
 }
 
 .search-items-container:empty::before {
@@ -461,11 +571,50 @@ header {
     justify-content: center;
     flex-shrink: 0;
     color: #888;
+    position: relative;
 }
 
-.search-icon-circle svg {
-    width: 18px;
-    height: 18px;
+.search-icon-circle.has-timer-ring {
+    border-color: transparent;
+    color: #ffffff;
+}
+
+.search-icon-circle i svg,
+.search-icon-circle > svg:not(.timer-ring-svg) {
+    width: 17px;
+    height: 17px;
+    display: block;
+    position: relative;
+    z-index: 2;
+}
+
+.timer-ring-svg {
+    position: absolute;
+    inset: -1px;
+    width: 36px !important;
+    height: 36px !important;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.timer-ring-bg {
+    fill: none;
+    stroke: #383838;
+    stroke-width: 1.5;
+}
+
+.timer-ring-bar {
+    fill: none;
+    stroke: #ffffff;
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    stroke-dasharray: 108.39;
+    stroke-dashoffset: 108.39;
+}
+
+.timer-badge.timer-finished .timer-ring-bar {
+    stroke-dashoffset: 0;
+    stroke: #ffffff;
 }
 
 .search-label {
@@ -620,6 +769,58 @@ header {
 .code-bubble.view-preview pre { display: none; }
 .code-bubble.view-preview .code-preview-frame { display: block; }
 
+.mermaid-diagram-wrapper {
+    display: none;
+    width: 100%;
+    min-height: 100px;
+    padding: 16px 14px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    text-align: center;
+    background: #181818;
+}
+
+.mermaid-diagram-wrapper::-webkit-scrollbar { height: 5px; }
+.mermaid-diagram-wrapper::-webkit-scrollbar-thumb { background: #4a4a4a; border-radius: 10px; }
+
+.mermaid-target {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.mermaid-target svg {
+    max-width: 100% !important;
+    height: auto !important;
+    margin: 0 auto;
+}
+
+.code-bubble.view-diagram .mermaid-diagram-wrapper { display: block; }
+.code-bubble.view-diagram .mermaid-code-pre { display: none; }
+.code-bubble:not(.view-diagram) .mermaid-diagram-wrapper { display: none; }
+.code-bubble:not(.view-diagram) .mermaid-code-pre { display: block; }
+
+.mermaid-loading {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: #888;
+    font-size: 12px;
+    padding: 16px;
+}
+
+.mermaid-error {
+    color: #f87171;
+    font-size: 12px;
+    padding: 14px;
+    text-align: left;
+    font-family: inherit;
+    line-height: 1.4;
+    background: rgba(239, 68, 68, 0.08);
+    border-radius: 6px;
+}
+
 .code-copy-btn {
     display: inline-flex;
     align-items: center;
@@ -660,16 +861,39 @@ header {
    TABLES & MISC
    ========================================================= */
 .ai blockquote { margin: 16px 0; padding: 4px 0 4px 16px; border-left: 3px solid #555; color: #bdbdbd; }
+
 .table-wrapper {
-    overflow-x: auto;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto !important;
+    overflow-y: hidden;
     -webkit-overflow-scrolling: touch;
+    touch-action: pan-x pan-y !important;
     margin: 18px 0;
     border-radius: 8px;
+    display: block;
 }
+
 .table-wrapper::-webkit-scrollbar { height: 6px; }
 .table-wrapper::-webkit-scrollbar-thumb { background: #4a4a4a; border-radius: 10px; }
-.ai table { width: max-content; min-width: 100%; border-collapse: collapse; border: 1px solid #333; font-size: 14px; margin: 0; }
-.ai th, .ai td { padding: 9px 12px; border: 1px solid #333; text-align: left; white-space: nowrap; }
+
+.ai table {
+    width: max-content !important;
+    min-width: 100%;
+    border-collapse: collapse;
+    border: 1px solid #333;
+    font-size: 14px;
+    margin: 0;
+    touch-action: pan-x pan-y !important;
+}
+
+.ai th, .ai td {
+    padding: 9px 12px;
+    border: 1px solid #333;
+    text-align: left;
+    white-space: nowrap;
+}
+
 .ai th { background: #202020; font-weight: 700; }
 .ai tr:nth-child(even) { background: #151515; }
 .ai hr { border: 0; border-top: 1px solid #333; margin: 26px 0; }
@@ -681,17 +905,19 @@ header {
    ========================================================= */
 #inputArea {
     position: absolute;
-    bottom: 0; left: 0; right: 0;
+    bottom: 0; 
+    left: 0; 
+    right: 0;
     display: flex;
     justify-content: center;
-    padding: 16px 20px 24px;
+    padding: 16px 20px calc(24px + env(safe-area-inset-bottom, 0px));
     pointer-events: none;
     background: linear-gradient(to bottom, transparent 0%, #0f0f0f 40%, #0f0f0f 100%);
-    z-index: 10;
+    z-index: 50;
 }
 
 .composer {
-    pointer-events: auto;
+    pointer-events: auto !important;
     width: min(900px, 100%);
     display: flex;
     align-items: flex-end;
@@ -701,6 +927,8 @@ header {
     border: 1px solid #333;
     border-radius: 24px;
     box-shadow: 0 8px 30px rgba(0,0,0,.45);
+    position: relative;
+    z-index: 51;
 }
 
 textarea {
@@ -716,22 +944,47 @@ textarea {
     line-height: 1.4;
     outline: none;
     font-family: inherit;
+    pointer-events: auto !important;
+    user-select: text !important;
+    -webkit-user-select: text !important;
 }
 
 #send {
-    width: 36px; height: 36px;
-    display: flex; align-items: center; justify-content: center;
+    width: 36px; 
+    height: 36px;
+    display: flex; 
+    align-items: center; 
+    justify-content: center;
     flex-shrink: 0;
     border-radius: 50%;
     border: none;
-    background: white; color: black;
+    background: white; 
+    color: black;
     cursor: pointer;
     margin-bottom: 2px;
     transition: background 0.2s;
+    pointer-events: auto !important;
 }
 #send:hover { background: #ddd; }
 #send:disabled { opacity: .5; cursor: default; }
 #send svg { width: 18px; height: 18px; stroke-width: 2.5; }
+#send.generating {
+    background: #ffffff;
+    color: #000000;
+}
+#send.generating:hover {
+    background: #cccccc;
+}
+#send.generating svg {
+    width: 12px;
+    height: 12px;
+    fill: #000000;
+    stroke: none;
+}
+#send.generating svg rect {
+    rx: 3.5px;
+    ry: 3.5px;
+}
 
 /* =========================================================
    MOBILE
@@ -742,6 +995,137 @@ textarea {
     .user { max-width: 88%; }
     .composer { border-radius: 20px; }
 }
+
+/* =========================================================
+   RIGHT-CLICK CONTEXT MENU (MINIMAL POPUP)
+   ========================================================= */
+.context-menu {
+    position: fixed;
+    z-index: 1000;
+    background: #181818;
+    border: 1px solid #333333;
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6), 0 2px 6px rgba(0, 0, 0, 0.4);
+    padding: 4px;
+    min-width: 140px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    animation: ctxFadeIn 0.12s ease-out;
+    user-select: none;
+}
+
+@keyframes ctxFadeIn {
+    from { opacity: 0; transform: scale(0.96); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+.context-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 7px 10px;
+    border-radius: 6px;
+    background: transparent;
+    border: none;
+    color: #ccc;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.12s ease, color 0.12s ease;
+    width: 100%;
+}
+
+.context-menu-item:hover:not(:disabled) {
+    background: #282828;
+    color: #fff;
+}
+
+.context-menu-item:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.context-menu-item svg {
+    width: 14px;
+    height: 14px;
+    color: #888;
+    flex-shrink: 0;
+    transition: color 0.12s ease;
+}
+
+.context-menu-item:hover:not(:disabled) svg {
+    color: #fff;
+}
+
+/* =========================================================
+   MOBILE MESSAGE ACTIONS (POPUP UNDER MESSAGE)
+   ========================================================= */
+.mobile-msg-actions {
+    position: fixed;
+    z-index: 1000;
+    background: #181818;
+    border: 1px solid #333333;
+    border-radius: 20px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.65);
+    padding: 3px 5px;
+    display: none;
+    align-items: center;
+    gap: 4px;
+    animation: mobileActionsIn 0.12s ease-out;
+    user-select: none;
+}
+
+@keyframes mobileActionsIn {
+    from { opacity: 0; transform: translateY(-3px) scale(0.96); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.mobile-action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: transparent;
+    border: none;
+    color: #999999;
+    cursor: pointer;
+    padding: 0;
+    transition: background 0.12s ease, color 0.12s ease;
+    outline: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.mobile-action-btn:active {
+    background: #2a2a2a;
+    color: #ffffff;
+}
+
+.mobile-action-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+.mobile-action-btn svg {
+    width: 15px;
+    height: 15px;
+    stroke-width: 2.2;
+    transition: transform 0.15s ease;
+}
+
+.mobile-action-btn:active svg {
+    transform: scale(0.92);
+}
+
+@media (min-width: 769px) and (pointer: fine) {
+    .mobile-msg-actions {
+        display: none !important;
+    }
+}
 </style>
 </head>
 <body>
@@ -751,20 +1135,24 @@ textarea {
 <!-- ================= SIDE PANEL ================= -->
 <aside id="sidePanel" aria-hidden="true">
     <div class="panel-header">
-        <span>Menu</span>
+        <span>Conversations</span>
         <button id="panelClose" class="icon-btn" type="button" aria-label="Close panel">
-            <i data-lucide="x"></i>
+            <i data-lucide="panel-left"></i>
+        </button>
+    </div>
+
+    <div class="panel-top-actions">
+        <button id="newChat" class="panel-action" type="button">
+            <span>+ New chat</span>
         </button>
     </div>
 
     <div class="panel-body">
-        <button id="newChat" class="panel-action" type="button">
-            <i data-lucide="plus"></i>
-            <span>New chat</span>
-        </button>
-
-        <div class="panel-section-title">History</div>
-        <div id="historyList" class="history-list">
+        <div class="panel-section-title">
+            <span>Recent Chats</span>
+            <span id="chatCountBadge" class="count-badge">0</span>
+        </div>
+        <div id="chatList" class="chat-list">
             <div class="history-empty">No conversations yet</div>
         </div>
     </div>
@@ -782,9 +1170,11 @@ textarea {
 
         <select id="modelSelect" title="Select AI Model">
             <option value="dots-studio/dots-3-note-preview:free" selected>dots-3-note-preview (Free)</option>
+            <option value="openai/gpt-oss-120b:free">GPT OSS 120B (Free)</option>
+            <option value="openai/gpt-oss-20b:free">GPT OSS 20B (Free)</option>
+            <option value="poolside/laguna-s-2.1:free">Poolside Laguna S 2.1 (Free)</option>
+            <option value="meta-llama/llama-3.3-70b-instruct:free">Llama 3.3 70B (Free)</option>
             <option value="deepseek/deepseek-chat">DeepSeek V3</option>
-            <option value="deepseek/deepseek-r1">DeepSeek R1</option>
-            <option value="meta-llama/llama-3.3-70b-instruct">Llama 3.3 70B</option>
             <option value="gpt-4o-mini">GPT-4o Mini</option>
             <option value="claude-3-5-sonnet">Claude 3.5 Sonnet</option>
         </select>
@@ -795,21 +1185,87 @@ textarea {
     <div id="inputArea">
         <div class="composer">
             <textarea id="input" placeholder="Message AI..." rows="1"></textarea>
-            <button id="send">
+            <button id="send" type="button" aria-label="Send message">
                 <i data-lucide="arrow-up"></i>
             </button>
         </div>
     </div>
 </div>
 
+<!-- ================= RIGHT CLICK CONTEXT MENU ================= -->
+<div id="msgContextMenu" class="context-menu" style="display: none;">
+    <button type="button" class="context-menu-item" id="ctxCopyBtn">
+        <i data-lucide="copy"></i>
+        <span>Copy</span>
+    </button>
+    <button type="button" class="context-menu-item" id="ctxRegenerateBtn">
+        <i data-lucide="rotate-cw"></i>
+        <span>Regenerate</span>
+    </button>
+</div>
+
+<!-- ================= MOBILE MESSAGE ACTIONS (COPY & RETRY) ================= -->
+<div id="mobileMsgActions" class="mobile-msg-actions" style="display: none;">
+    <button type="button" class="mobile-action-btn" id="mobileCopyBtn" title="Copy" aria-label="Copy">
+        <i data-lucide="copy"></i>
+    </button>
+    <button type="button" class="mobile-action-btn" id="mobileRetryBtn" title="Regenerate" aria-label="Regenerate">
+        <i data-lucide="rotate-cw"></i>
+    </button>
+</div>
+
 <script>
 /* =========================================================
-   ELEMENTS & SETUP
+   ELEMENTS & CORE STATE (HOISTED GLOBALS)
    ========================================================= */
 const chat = document.getElementById("chat");
 const input = document.getElementById("input");
 const sendButton = document.getElementById("send");
 const modelSelect = document.getElementById("modelSelect");
+
+const panelToggle = document.getElementById("panelToggle");
+const panelClose = document.getElementById("panelClose");
+const backdrop = document.getElementById("backdrop");
+const sidePanel = document.getElementById("sidePanel");
+const appShell = document.getElementById("appShell");
+const newChatButton = document.getElementById("newChat");
+const chatList = document.getElementById("chatList");
+const chatCountBadge = document.getElementById("chatCountBadge");
+
+const msgContextMenu = document.getElementById("msgContextMenu");
+const ctxCopyBtn = document.getElementById("ctxCopyBtn");
+const ctxRegenerateBtn = document.getElementById("ctxRegenerateBtn");
+
+const mobileMsgActions = document.getElementById("mobileMsgActions");
+const mobileCopyBtn = document.getElementById("mobileCopyBtn");
+const mobileRetryBtn = document.getElementById("mobileRetryBtn");
+
+// Per-conversation running state registry: { [chatId]: { isGenerating: bool, abortController: AbortController, sleepResolve: fn } }
+const activeGenerations = {};
+
+let chatSessions = {};
+let currentChatId = null;
+
+const MAX_TOOL_ROUNDS = 50;
+const MAX_TOOLS_PER_ROUND = 10;
+
+const BASE_SYSTEM_PROMPT = `
+You are a helpful AI assistant with access to local shell task execution and web search.
+Use web_search whenever current, recent, or externally verifiable information is needed.
+To execute terminal commands, call run_task. You can inspect output, read files, or manage shell scripts.
+If a command is long-running, run_task returns an initial state. Use task_stdout to monitor it, task_send_input to pipe interactive text into standard input, and task_kill to terminate it.
+Use sleep if you need to pause and let background processes finish compilation, I/O, or network tasks before polling again.
+You may call multiple tools in one turn.
+Multiple tool calls are executed sequentially.
+Your responses may use rich Markdown headings, lists, tables, blockquotes, code fences, and LaTeX.
+You can generate flowcharts, sequence diagrams, and architecture maps using \`\`\`mermaid code blocks; they are automatically rendered into interactive visual diagrams.
+`.trim();
+
+let activeSystemPrompt = BASE_SYSTEM_PROMPT;
+let messages = [{
+    role: "system",
+    content: activeSystemPrompt
+}];
 
 lucide.createIcons();
 
@@ -819,31 +1275,51 @@ input.addEventListener("input", () => {
 });
 
 /* =========================================================
-   TOUCH GESTURE ENGINE & PANEL SLIDE
+   DELEGATED ACCORDION TOGGLE (Works for new & restored messages)
    ========================================================= */
-const panelToggle = document.getElementById("panelToggle");
-const panelClose = document.getElementById("panelClose");
-const backdrop = document.getElementById("backdrop");
-const sidePanel = document.getElementById("sidePanel");
-const appShell = document.getElementById("appShell");
-const newChatButton = document.getElementById("newChat");
-const historyList = document.getElementById("historyList");
+chat.addEventListener("click", (e) => {
+    const toggle = e.target.closest(".activity-toggle");
+    if (!toggle) return;
 
+    const wrapper = toggle.closest(".activity-wrapper");
+    if (!wrapper) return;
+
+    wrapper.classList.toggle("open");
+    const parentAi = wrapper.closest(".message.ai");
+    if (parentAi) {
+        parentAi.dataset.manuallyToggled = "true";
+    }
+    saveCurrentChatState();
+});
+
+/* =========================================================
+   PRODUCTION TOUCH GESTURE ENGINE (rAF Buffer + Slop Lock)
+   ========================================================= */
 let isPanelOpen = false;
-let startX = 0;
-let startY = 0;
-let currentX = 0;
+
+// Touch State
+let touchStartX = 0;
+let touchStartY = 0;
+let lastX = 0;
+let lastTime = 0;
+let velocityX = 0;
+
+// Gesture Flags
 let isTracking = false;
-let isHorizontalGesture = null;
-let lastTouchX = 0;
-let lastTouchTime = 0;
-let touchVelocity = 0;
+let isLocked = false;
+let isHorizontal = false;
+
+// Render Coordination via requestAnimationFrame
+let pendingX = 0;
+let rafId = null;
+
+const SLOP = 12; // 12px deadzone buffer: suppresses taps and separates vertical scroll
 
 function getPanelWidth() {
-    return sidePanel.getBoundingClientRect().width;
+    return sidePanel.getBoundingClientRect().width || 280;
 }
 
-function applyTransform(x, withAnimation = false) {
+function renderTransform(x, withAnimation = false) {
     const width = getPanelWidth();
     const clampedX = Math.max(0, Math.min(width, x));
     const progress = clampedX / width;
@@ -858,25 +1334,37 @@ function applyTransform(x, withAnimation = false) {
         backdrop.classList.remove("animate-transition");
     }
 
-    sidePanel.style.transform = `translateX(${clampedX - width}px)`;
-    appShell.style.transform = `translateX(${clampedX}px)`;
+    sidePanel.style.transform = `translate3d(${clampedX - width}px, 0, 0)`;
+    appShell.style.transform = `translate3d(${clampedX}px, 0, 0)`;
     backdrop.style.opacity = progress;
     backdrop.style.pointerEvents = progress > 0.05 ? "auto" : "none";
 }
 
+function requestRender(x) {
+    pendingX = x;
+    if (!rafId) {
+        rafId = requestAnimationFrame(() => {
+            renderTransform(pendingX, false);
+            rafId = null;
+        });
+    }
+}
+
 function openPanel(animated = true) {
-    const width = getPanelWidth();
+    if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
     isPanelOpen = true;
-    applyTransform(width, animated);
+    renderTransform(getPanelWidth(), animated);
     sidePanel.setAttribute("aria-hidden", "false");
     panelToggle.setAttribute("aria-expanded", "true");
 }
 
 function closePanel(animated = true) {
+    if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
     isPanelOpen = false;
-    applyTransform(0, animated);
+    renderTransform(0, animated);
     sidePanel.setAttribute("aria-hidden", "true");
     panelToggle.setAttribute("aria-expanded", "false");
+    backdrop.style.pointerEvents = "none";
 }
 
 function togglePanel() {
@@ -890,75 +1378,87 @@ backdrop.addEventListener("click", () => closePanel(true));
 window.addEventListener("touchstart", (e) => {
     if (e.touches.length !== 1) return;
 
-    const touch = e.touches[0];
-    // Stop the browser from grabbing the back-swipe if near the edge
-    if (!isPanelOpen && touch.clientX <= 32) {
-        e.preventDefault();
+    const target = e.target;
+    if (target.closest('button, a, input, textarea, select, pre, .table-wrapper, table, .mobile-msg-actions, .composer')) {
+        return;
     }
 
-    startX = touch.clientX;
-    startY = touch.clientY;
-    lastTouchX = touch.clientX;
-    lastTouchTime = Date.now();
-    touchVelocity = 0;
+    const t = e.touches[0];
+    touchStartX = t.clientX;
+    touchStartY = t.clientY;
+    lastX = t.clientX;
+    lastTime = performance.now();
+    velocityX = 0;
+
     isTracking = true;
-    isHorizontalGesture = null;
-}, { passive: false });
+    isLocked = false;
+    isHorizontal = false;
+}, { passive: true });
 
 window.addEventListener("touchmove", (e) => {
     if (!isTracking) return;
 
-    const touch = e.touches[0];
-    const dx = touch.clientX - startX;
-    const dy = touch.clientY - startY;
+    const t = e.touches[0];
+    const dx = t.clientX - touchStartX;
+    const dy = t.clientY - touchStartY;
+    const absX = Math.abs(dx);
+    const absY = Math.abs(dy);
 
-    if (isHorizontalGesture === null) {
-        if (Math.abs(dx) > 6 || Math.abs(dy) > 6) {
-            isHorizontalGesture = Math.abs(dx) > Math.abs(dy);
-            if (!isHorizontalGesture) {
-                isTracking = false;
-                return;
-            }
+    if (!isLocked) {
+        if (absX < SLOP && absY < SLOP) {
+            return;
+        }
+        isLocked = true;
+        if (absX > absY * 1.5) {
+            isHorizontal = true;
         } else {
+            isTracking = false;
             return;
         }
     }
 
-    if (!isHorizontalGesture) return;
+    if (!isHorizontal) return;
 
-    // Block native back-navigation while dragging the panel
-    e.preventDefault();
-
-    const width = getPanelWidth();
-    const baseOffset = isPanelOpen ? width : 0;
-    const targetOffset = baseOffset + dx;
-
-    const now = Date.now();
-    const dt = now - lastTouchTime;
-    if (dt > 0) {
-        touchVelocity = (touch.clientX - lastTouchX) / dt;
-        lastTouchX = touch.clientX;
-        lastTouchTime = now;
+    if (e.cancelable) {
+        e.preventDefault();
     }
 
-    currentX = Math.max(0, Math.min(width, targetOffset));
-    applyTransform(currentX, false);
+    const now = performance.now();
+    const dt = now - lastTime;
+    if (dt > 0) {
+        const instantV = (t.clientX - lastX) / dt;
+        velocityX = 0.6 * instantV + 0.4 * velocityX;
+        lastX = t.clientX;
+        lastTime = now;
+    }
+
+    const width = getPanelWidth();
+    const startOffset = isPanelOpen ? width : 0;
+    const currentX = Math.max(0, Math.min(width, startOffset + dx));
+
+    requestRender(currentX);
 }, { passive: false });
 
 window.addEventListener("touchend", () => {
-    if (!isTracking) return;
+    if (!isTracking || !isHorizontal) {
+        isTracking = false;
+        return;
+    }
     isTracking = false;
 
-    const width = getPanelWidth();
-    const isFlingRight = touchVelocity > 0.35;
-    const isFlingLeft = touchVelocity < -0.35;
+    if (rafId) {
+        cancelAnimationFrame(rafId);
+        rafId = null;
+    }
 
-    if (isFlingRight) {
+    const width = getPanelWidth();
+
+    if (velocityX > 0.3) {
         openPanel(true);
-    } else if (isFlingLeft) {
+    } else if (velocityX < -0.3) {
         closePanel(true);
     } else {
-        if (currentX > width * 0.45) {
+        if (pendingX > width * 0.45) {
             openPanel(true);
         } else {
             closePanel(true);
@@ -969,6 +1469,7 @@ window.addEventListener("touchend", () => {
 window.addEventListener("touchcancel", () => {
     if (!isTracking) return;
     isTracking = false;
+    if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
     isPanelOpen ? openPanel(true) : closePanel(true);
 });
 
@@ -979,67 +1480,319 @@ document.addEventListener("keydown", (event) => {
 });
 
 /* =========================================================
-   HISTORY
+   PERSISTENT CONVERSATION ENGINE (localStorage)
    ========================================================= */
-let historyItems = [];
+const CHATS_STORAGE_KEY = "multisearch_chats_v2";
+const ACTIVE_CHAT_KEY = "multisearch_active_id_v2";
 
-function renderHistory() {
-    if (!historyItems.length) {
-        historyList.innerHTML = '<div class="history-empty">No conversations yet</div>';
-        return;
+function loadStoredChats() {
+    try {
+        const raw = localStorage.getItem(CHATS_STORAGE_KEY);
+        chatSessions = raw ? JSON.parse(raw) : {};
+    } catch (e) {
+        chatSessions = {};
     }
+    currentChatId = localStorage.getItem(ACTIVE_CHAT_KEY);
+}
 
-    historyList.innerHTML = "";
+function saveStoredChats() {
+    try {
+        localStorage.setItem(CHATS_STORAGE_KEY, JSON.stringify(chatSessions));
+        if (currentChatId) {
+            localStorage.setItem(ACTIVE_CHAT_KEY, currentChatId);
+        } else {
+            localStorage.removeItem(ACTIVE_CHAT_KEY);
+        }
+    } catch (e) {
+        console.warn("Storage write error:", e);
+    }
+}
 
-    historyItems.forEach((text) => {
-        const button = document.createElement("button");
-        button.type = "button";
-        button.className = "history-item";
-        button.textContent = text;
-        button.title = text;
+function generateChatId() {
+    return "chat_" + Date.now() + "_" + Math.random().toString(36).substring(2, 7);
+}
 
-        button.addEventListener("click", () => {
-            input.value = text;
-            input.dispatchEvent(new Event("input"));
-            input.focus();
-            closePanel(true);
-        });
+function formatRelativeTime(ts) {
+    if (!ts) return "";
+    const diff = Math.floor((Date.now() - ts) / 1000);
+    if (diff < 60) return "Just now";
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+    if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
+    return new Date(ts).toLocaleDateString([], { month: "short", day: "numeric" });
+}
 
-        historyList.appendChild(button);
+function createNewChatSession(initialUserText = "") {
+    const id = generateChatId();
+    const raw = (initialUserText || "").trim();
+    const title = raw ? (raw.slice(0, 34) + (raw.length > 34 ? "..." : "")) : "Conversation";
+
+    chatSessions[id] = {
+        id,
+        title,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        model: modelSelect ? modelSelect.value : "dots-studio/dots-3-note-preview:free",
+        messages: [...messages],
+        chatHtml: chat.innerHTML
+    };
+    currentChatId = id;
+    saveStoredChats();
+    renderChatList();
+    return id;
+}
+
+function renderMessagesToDOM(msgList) {
+    chat.innerHTML = "";
+    if (!Array.isArray(msgList)) return;
+
+    msgList.forEach(m => {
+        if (!m || m.role === "system") return;
+
+        if (m.role === "user") {
+            const userDiv = document.createElement("div");
+            userDiv.className = "message user";
+            const text = typeof m.content === "string" ? m.content : extractText(m);
+            userDiv.textContent = text;
+            userDiv.dataset.rawText = text;
+            chat.appendChild(userDiv);
+        } else if (m.role === "assistant") {
+            const aiText = typeof m.content === "string" ? m.content : extractText(m);
+            if (!aiText && (!m.tool_calls || m.tool_calls.length === 0)) return;
+
+            const aiDiv = document.createElement("div");
+            aiDiv.className = "message ai";
+            aiDiv.dataset.rawText = aiText;
+
+            let parsed = "";
+            try {
+                parsed = marked.parse(aiText);
+            } catch (e) {
+                parsed = escapeHTML(aiText);
+            }
+            const sanitized = DOMPurify.sanitize(parsed, {
+                ADD_ATTR: ["target", "rel", "class", "data-code", "data-chart", "sandbox", "srcdoc"]
+            });
+
+            aiDiv.innerHTML = `
+                <div class="pre-search-content"></div>
+                <div class="activity-wrapper" style="display: none;"></div>
+                <div class="final-content">${sanitized}</div>
+            `;
+            chat.appendChild(aiDiv);
+        }
     });
 }
 
-function addHistory(text) {
-    historyItems.unshift(text);
-    if (historyItems.length > 50) historyItems.pop();
-    renderHistory();
+function renderChatList() {
+    if (!chatList) return;
+
+    const ids = Object.keys(chatSessions);
+    if (chatCountBadge) chatCountBadge.textContent = String(ids.length);
+
+    if (ids.length === 0) {
+        chatList.innerHTML = '<div class="history-empty">No conversations yet</div>';
+        return;
+    }
+
+    ids.sort((a, b) => (chatSessions[b].updatedAt || 0) - (chatSessions[a].updatedAt || 0));
+
+    chatList.innerHTML = "";
+    ids.forEach(id => {
+        const session = chatSessions[id];
+        const isActive = id === currentChatId;
+        const isRunning = Boolean(activeGenerations[id]?.isGenerating);
+
+        const item = document.createElement("div");
+        item.className = `chat-item ${isActive ? "active" : ""}`;
+        item.dataset.chatId = id;
+        item.setAttribute("role", "button");
+        item.setAttribute("tabindex", "0");
+
+        item.innerHTML = `
+            <div class="chat-item-main">
+                <span class="chat-item-title">${escapeHTML(session.title || "Untitled Chat")}</span>
+                <span class="chat-item-time">${formatRelativeTime(session.updatedAt)}</span>
+            </div>
+            ${isRunning ? '<div class="chat-item-spinner" title="Task running in background"></div>' : ''}
+            <button type="button" class="chat-item-del" title="Delete conversation" aria-label="Delete conversation">
+                <i data-lucide="x"></i>
+            </button>
+        `;
+
+        item.addEventListener("click", (e) => {
+            if (e.target.closest(".chat-item-del")) return;
+            if (id !== currentChatId) {
+                switchToChat(id);
+            }
+            closePanel(true);
+        });
+
+        item.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                if (id !== currentChatId) {
+                    switchToChat(id);
+                }
+                closePanel(true);
+            }
+        });
+
+        const delBtn = item.querySelector(".chat-item-del");
+        if (delBtn) {
+            delBtn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                deleteChatSession(id);
+            });
+        }
+
+        chatList.appendChild(item);
+    });
+
+    lucide.createIcons({ root: chatList });
+}
+
+function switchToChat(id) {
+    if (!chatSessions[id]) return;
+    if (typeof hideMobileActions === "function") {
+        hideMobileActions();
+    }
+
+    if (currentChatId && currentChatId !== id && chatSessions[currentChatId]) {
+        saveCurrentChatState();
+    }
+
+    currentChatId = id;
+    const session = chatSessions[id];
+
+    messages = (session.messages && session.messages.length > 0)
+        ? JSON.parse(JSON.stringify(session.messages))
+        : [{ role: "system", content: activeSystemPrompt }];
+
+    if (messages[0]?.role === "system") {
+        messages[0].content = activeSystemPrompt;
+    }
+
+    if (session.model && modelSelect) {
+        modelSelect.value = session.model;
+    }
+
+    chat.innerHTML = session.chatHtml || "";
+
+    chat.querySelectorAll(".message.user").forEach(msg => {
+        if (!msg.dataset.rawText) {
+            msg.dataset.rawText = msg.textContent.trim();
+        }
+    });
+
+    bindInteractiveCodeBlocks(chat);
+    renderMermaidInElement(chat);
+    wrapTablesForScroll(chat);
+    lucide.createIcons({ root: chat });
+
+    if (typeof renderMathInElement === "function") {
+        renderMathInElement(chat, {
+            delimiters: [
+                {left: "$$", right: "$$", display: true},
+                {left: "\\[", right: "\\]", display: true},
+                {left: "$", right: "$", display: false},
+                {left: "\\(", right: "\\)", display: false}
+            ],
+            throwOnError: false, strict: false
+        });
+    }
+
+    const isThisRunning = Boolean(activeGenerations[id]?.isGenerating);
+    updateSendButtonState(isThisRunning);
+
+    saveStoredChats();
+    renderChatList();
+    chat.scrollTop = chat.scrollHeight;
+}
+
+function deleteChatSession(id) {
+    if (!chatSessions[id]) return;
+
+    if (activeGenerations[id]) {
+        stopChatGeneration(id);
+    }
+
+    delete chatSessions[id];
+
+    if (currentChatId === id) {
+        currentChatId = null;
+        const remaining = Object.keys(chatSessions);
+        if (remaining.length > 0) {
+            remaining.sort((a, b) => (chatSessions[b].updatedAt || 0) - (chatSessions[a].updatedAt || 0));
+            switchToChat(remaining[0]);
+        } else {
+            chat.innerHTML = "";
+            messages = [{ role: "system", content: activeSystemPrompt }];
+            updateSendButtonState(false);
+            saveStoredChats();
+            renderChatList();
+        }
+    } else {
+        saveStoredChats();
+        renderChatList();
+    }
+}
+
+function saveCurrentChatState() {
+    if (!currentChatId || !chatSessions[currentChatId]) return;
+
+    const session = chatSessions[currentChatId];
+    session.chatHtml = chat.innerHTML;
+    if (messages && messages.length > 0) {
+        session.messages = JSON.parse(JSON.stringify(messages));
+    }
+    session.updatedAt = Date.now();
+    if (modelSelect) session.model = modelSelect.value;
+
+    if (!session.title || session.title === "Conversation") {
+        const firstUserMsg = session.messages.find(m => m.role === "user");
+        if (firstUserMsg && typeof firstUserMsg.content === "string") {
+            const rawTitle = firstUserMsg.content.trim();
+            session.title = rawTitle.slice(0, 34) + (rawTitle.length > 34 ? "..." : "");
+        }
+    }
+
+    saveStoredChats();
+    renderChatList();
+}
+
+if (modelSelect) {
+    modelSelect.addEventListener("change", () => {
+        if (currentChatId && chatSessions[currentChatId]) {
+            chatSessions[currentChatId].model = modelSelect.value;
+            saveStoredChats();
+        }
+    });
 }
 
 /* =========================================================
-   SYSTEM CONFIG & PROMPT
+   MERMAID & MARKED CONFIG
    ========================================================= */
-const MAX_TOOL_ROUNDS = 50;
-const MAX_TOOLS_PER_ROUND = 10;
+if (typeof mermaid !== "undefined") {
+    mermaid.initialize({
+        startOnLoad: false,
+        theme: "dark",
+        securityLevel: "loose",
+        fontFamily: "'JetBrains Mono', monospace",
+        themeVariables: {
+            darkMode: true,
+            background: "#181818",
+            primaryColor: "#2563eb",
+            primaryTextColor: "#f3f4f6",
+            primaryBorderColor: "#3b82f6",
+            lineColor: "#9ca3af",
+            secondaryColor: "#1e293b",
+            tertiaryColor: "#0f172a"
+        }
+    });
+}
 
-const SYSTEM_PROMPT = `
-You are a helpful AI assistant with access to local shell task execution and web search.
-Use web_search whenever current, recent, or externally verifiable information is needed.
-To execute terminal commands, call run_task. You can inspect output, read files, or manage shell scripts.
-If a command is long-running, run_task returns an initial state. Use task_stdout to monitor it, task_send_input to pipe interactive text into standard input, and task_kill to terminate it.
-Use sleep if you need to pause and let background processes finish compilation, I/O, or network tasks before polling again.
-You may call multiple tools in one turn.
-Multiple tool calls are executed sequentially.
-Your responses may use rich Markdown headings, lists, tables, blockquotes, code fences, and LaTeX.
-`.trim();
-
-let messages = [{
-    role: "system",
-    content: SYSTEM_PROMPT
-}];
-
-/* =========================================================
-   MARKED CONFIG & RENDERER
-   ========================================================= */
 marked.setOptions({ gfm: true, breaks: true, pedantic: false });
 const renderer = new marked.Renderer();
 
@@ -1070,6 +1823,7 @@ renderer.code = function(code, language) {
     const cleanLang = lang.toLowerCase();
     const isSingleLine = !rawCode.trim().includes("\n");
     const isPlayable = ["html", "xml", "svg"].includes(cleanLang);
+    const isMermaid = cleanLang === "mermaid";
 
     let highlighted;
     try {
@@ -1080,6 +1834,40 @@ renderer.code = function(code, language) {
         highlighted = escapeHTML(rawCode);
     }
     const encoded = encodeURIComponent(rawCode);
+
+    if (isMermaid) {
+        return `
+        <div class="code-container mermaid-container" data-code="${encoded}">
+            <div class="code-lang-header">
+                <div class="code-mode-pill">
+                    <button type="button" class="pill-btn active code-mode-diagram">
+                        <i data-lucide="git-merge"></i>
+                        <span>Chart</span>
+                    </button>
+                    <button type="button" class="pill-btn code-mode-code">
+                        <i data-lucide="code"></i>
+                        <span>Code</span>
+                    </button>
+                </div>
+                <span class="code-lang-label">mermaid</span>
+                <div class="code-lang-line"></div>
+            </div>
+            <div class="code-bubble view-diagram">
+                <div class="code-bubble-inner">
+                    <div class="mermaid-diagram-wrapper">
+                        <div class="mermaid-target" data-chart="${encoded}">
+                            <div class="mermaid-loading">Rendering chart...</div>
+                        </div>
+                    </div>
+                    <pre class="mermaid-code-pre"><code class="hljs language-mermaid">${highlighted}</code></pre>
+                    <button class="code-copy-btn" data-code="${encoded}" type="button" title="Copy code">
+                        <i data-lucide="copy"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+        `;
+    }
 
     return `
         <div class="code-container" data-code="${encoded}">
@@ -1139,13 +1927,6 @@ function createAIMessageShell() {
         <span class="blinking-cursor"></span>
     `;
 
-    const wrapper = div.querySelector(".activity-wrapper");
-    const toggle = div.querySelector(".activity-toggle");
-    toggle.addEventListener("click", () => {
-        wrapper.classList.toggle("open");
-        div.dataset.manuallyToggled = "true";
-    });
-
     chat.appendChild(div);
     chat.scrollTop = chat.scrollHeight;
     return div;
@@ -1173,7 +1954,7 @@ function addToolBadge(element, toolName, args) {
         detail = args.query || args.search || "web query";
     } else if (toolName === "run_task") {
         icon = "play";
-        label = "Managed task";
+        label = "Ran command";
         detail = args.command || "task command";
     } else if (toolName === "task_stdout") {
         icon = "file-text";
@@ -1189,14 +1970,24 @@ function addToolBadge(element, toolName, args) {
         detail = args.task_id || "process";
     } else if (toolName === "sleep") {
         icon = "clock";
-        label = "Slept for";
-        detail = `${args.seconds || 1}s cooldown`;
+        label = "Sleeping...";
+        detail = `${args.seconds || 1}s timer`;
     }
 
+    const isTimer = toolName === "sleep";
+    const isCommand = toolName === "run_task";
+    const hasRing = isTimer || isCommand;
+
     const item = document.createElement("div");
-    item.className = "search-badge-item";
+    item.className = "search-badge-item" + (hasRing ? " timer-badge" : "");
     item.innerHTML = `
-        <div class="search-icon-circle">
+        <div class="search-icon-circle ${hasRing ? 'has-timer-ring' : ''}">
+            ${hasRing ? `
+            <svg class="timer-ring-svg" viewBox="0 0 36 36">
+                <circle class="timer-ring-bg" cx="18" cy="18" r="17.25" />
+                <circle class="timer-ring-bar" cx="18" cy="18" r="17.25" transform="rotate(-90 18 18)" />
+            </svg>
+            ` : ''}
             <i data-lucide="${icon}"></i>
         </div>
         <div>
@@ -1208,6 +1999,7 @@ function addToolBadge(element, toolName, args) {
     searchContainer.appendChild(item);
     lucide.createIcons({ root: item });
     chat.scrollTop = chat.scrollHeight;
+    return item;
 }
 
 /* =========================================================
@@ -1218,14 +2010,29 @@ function bindInteractiveCodeBlocks(container) {
         if (block.dataset.bound) return;
         block.dataset.bound = "true";
 
-        const rawCode = decodeURIComponent(block.dataset.code || "");
         const bubble = block.querySelector(".code-bubble");
+        const rawCode = decodeURIComponent(block.dataset.code || "");
+        const diagramBtn = block.querySelector(".code-mode-diagram");
         const playBtn = block.querySelector(".code-mode-play");
         const codeBtn = block.querySelector(".code-mode-code");
         const iframe = block.querySelector(".code-preview-frame");
         const copyBtn = block.querySelector(".code-copy-btn");
 
-        if (playBtn && codeBtn && iframe) {
+        if (diagramBtn && codeBtn && bubble) {
+            diagramBtn.addEventListener("click", () => {
+                diagramBtn.classList.add("active");
+                codeBtn.classList.remove("active");
+                bubble.classList.add("view-diagram");
+            });
+
+            codeBtn.addEventListener("click", () => {
+                codeBtn.classList.add("active");
+                diagramBtn.classList.remove("active");
+                bubble.classList.remove("view-diagram");
+            });
+        }
+
+        if (playBtn && codeBtn && iframe && bubble) {
             playBtn.addEventListener("click", () => {
                 playBtn.classList.add("active");
                 codeBtn.classList.remove("active");
@@ -1261,6 +2068,32 @@ function bindInteractiveCodeBlocks(container) {
     });
 }
 
+let mermaidChartCounter = 0;
+
+async function renderMermaidInElement(container) {
+    if (typeof mermaid === "undefined") return;
+
+    const targets = container.querySelectorAll(".mermaid-target");
+    for (const target of targets) {
+        if (target.dataset.rendered === "true") continue;
+        target.dataset.rendered = "true";
+
+        const rawCode = decodeURIComponent(target.dataset.chart || "").trim();
+        if (!rawCode) continue;
+
+        const id = "mermaid-svg-" + (++mermaidChartCounter);
+        try {
+            const { svg } = await mermaid.render(id, rawCode);
+            target.innerHTML = svg;
+        } catch (err) {
+            console.error("Mermaid render error:", err);
+            const stray = document.getElementById("d" + id) || document.getElementById(id);
+            if (stray) stray.remove();
+            target.innerHTML = `<div class="mermaid-error">⚠️ Diagram syntax error: ${escapeHTML(err.message || err)}</div>`;
+        }
+    }
+}
+
 function updateAIStream(element, fullText, isDone, startTime, hasTools) {
     const activityWrapper = element.querySelector(".activity-wrapper");
     const activityLabel = element.querySelector(".activity-label");
@@ -1269,6 +2102,7 @@ function updateAIStream(element, fullText, isDone, startTime, hasTools) {
     const cursor = element.querySelector(".blinking-cursor");
 
     const answerText = fullText;
+    element.dataset.rawText = answerText;
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
 
     if (isDone) {
@@ -1289,7 +2123,7 @@ function updateAIStream(element, fullText, isDone, startTime, hasTools) {
         }
         
         const sanitized = DOMPurify.sanitize(parsed, { 
-            ADD_ATTR: ["target", "rel", "class", "data-code", "sandbox", "srcdoc"] 
+            ADD_ATTR: ["target", "rel", "class", "data-code", "data-chart", "sandbox", "srcdoc"] 
         });
 
         if (hasTools) {
@@ -1318,6 +2152,7 @@ function updateAIStream(element, fullText, isDone, startTime, hasTools) {
         });
 
         bindInteractiveCodeBlocks(element);
+        renderMermaidInElement(element);
 
         if (typeof renderMathInElement === "function") {
             renderMathInElement(element, {
@@ -1430,10 +2265,69 @@ const tools = [
     }
 ];
 
-async function executeTool(name, args) {
+async function executeTool(name, args, badgeEl, state) {
+    if (state.abortRequested) {
+        throw new Error("Generation stopped by user");
+    }
+
+    if (name === "run_task" && badgeEl) {
+        const cooldown = Math.max(1, parseInt(args.timeout, 10) || 1);
+        const ringBar = badgeEl.querySelector(".timer-ring-bar");
+        if (ringBar) {
+            ringBar.style.transition = "none";
+            ringBar.style.strokeDashoffset = "108.39";
+            void ringBar.getBoundingClientRect();
+            ringBar.style.transition = `stroke-dashoffset ${cooldown}s linear`;
+            ringBar.style.strokeDashoffset = "0";
+        }
+    }
+
     if (name === "sleep") {
         const delay = Math.max(1, parseInt(args.seconds, 10) || 1);
-        await new Promise(res => setTimeout(res, delay * 1000));
+        if (badgeEl) {
+            const ringBar = badgeEl.querySelector(".timer-ring-bar");
+            const labelEl = badgeEl.querySelector(".search-label");
+            const queryEl = badgeEl.querySelector(".search-query");
+
+            if (ringBar) {
+                ringBar.style.transition = "none";
+                ringBar.style.strokeDashoffset = "108.39";
+                void ringBar.getBoundingClientRect();
+                ringBar.style.transition = `stroke-dashoffset ${delay}s linear`;
+                ringBar.style.strokeDashoffset = "0";
+            }
+            if (labelEl) labelEl.textContent = "Sleeping...";
+            if (queryEl) queryEl.textContent = `${delay}s timer`;
+        }
+
+        await new Promise(res => {
+            let timeoutId = null;
+            const cleanup = () => {
+                if (timeoutId) clearTimeout(timeoutId);
+                state.sleepResolve = null;
+                res();
+            };
+            state.sleepResolve = cleanup;
+            timeoutId = setTimeout(cleanup, delay * 1000);
+        });
+
+        if (state.abortRequested) {
+            if (badgeEl) {
+                const labelEl = badgeEl.querySelector(".search-label");
+                if (labelEl) labelEl.textContent = "Stopped";
+                badgeEl.classList.add("timer-finished");
+            }
+            throw new Error("Generation stopped by user");
+        }
+
+        if (badgeEl) {
+            const labelEl = badgeEl.querySelector(".search-label");
+            const queryEl = badgeEl.querySelector(".search-query");
+            if (labelEl) labelEl.textContent = "Timer hit";
+            if (queryEl) queryEl.textContent = `${delay}s completed`;
+            badgeEl.classList.add("timer-finished");
+        }
+
         return { status: "timer_completed", seconds: delay };
     }
 
@@ -1460,11 +2354,24 @@ async function executeTool(name, args) {
         headers: { "Content-Type": "application/json" }
     };
 
+    if (state.abortController) {
+        opts.signal = state.abortController.signal;
+    }
+
     if (method === "POST" && name !== "task_kill") {
         opts.body = JSON.stringify(args);
     }
 
-    const response = await fetch(url, opts);
+    let response;
+    try {
+        response = await fetch(url, opts);
+    } catch (e) {
+        if (state.abortRequested || e.name === "AbortError") {
+            throw new Error("Generation stopped by user");
+        }
+        throw e;
+    }
+
     let data;
     const text = await response.text();
     try {
@@ -1476,6 +2383,11 @@ async function executeTool(name, args) {
     if (!response.ok) {
         throw new Error(data.error || "Tool call execution failed");
     }
+
+    if (name === "run_task" && badgeEl) {
+        badgeEl.classList.add("timer-finished");
+    }
+
     return data;
 }
 
@@ -1504,18 +2416,107 @@ function extractText(response) {
 }
 
 /* =========================================================
-   RELIABLE AGENT LOOP (50 Max Tool Rounds)
+   PER-CHAT GENERATION STATE & CONTROLLER
    ========================================================= */
-async function runAgent(userText, currentAIMessage) {
-    messages.push({ role: "user", content: userText });
-    const selectedModel = modelSelect.value;
+function updateSendButtonState(active) {
+    if (active) {
+        sendButton.classList.add("generating");
+        sendButton.title = "Stop generation";
+        sendButton.setAttribute("aria-label", "Stop generation");
+        sendButton.innerHTML = '<i data-lucide="square"></i>';
+        lucide.createIcons({ root: sendButton });
+        sendButton.disabled = false;
+        input.disabled = true;
+        modelSelect.disabled = true;
+    } else {
+        sendButton.classList.remove("generating");
+        sendButton.title = "Send message";
+        sendButton.setAttribute("aria-label", "Send message");
+        sendButton.innerHTML = '<i data-lucide="arrow-up"></i>';
+        lucide.createIcons({ root: sendButton });
+        sendButton.disabled = false;
+        input.disabled = false;
+        modelSelect.disabled = false;
+        input.focus();
+    }
+}
+
+function stopChatGeneration(chatId) {
+    const state = activeGenerations[chatId];
+    if (!state || !state.isGenerating) return;
+
+    state.abortRequested = true;
+    logEvent("STOP_REQUESTED_BY_USER", { chatId });
+
+    if (state.abortController) {
+        try {
+            state.abortController.abort();
+        } catch (e) {}
+    }
+
+    if (typeof state.sleepResolve === "function") {
+        state.sleepResolve();
+        state.sleepResolve = null;
+    }
+}
+
+function finalizeStopped(element, startTime, hasTools) {
+    logEvent("GENERATION_STOPPED_BY_USER", { elapsed: ((Date.now() - startTime) / 1000).toFixed(1) });
+    const cursor = element.querySelector(".blinking-cursor");
+    if (cursor) cursor.remove();
+
+    const finalContent = element.querySelector(".final-content");
+    const preContent = element.querySelector(".pre-search-content");
+    const activityWrapper = element.querySelector(".activity-wrapper");
+    const activityLabel = element.querySelector(".activity-label");
+
+    if (activityLabel) {
+        activityLabel.textContent = `Stopped after ${((Date.now() - startTime) / 1000).toFixed(1)}s`;
+    }
+    if (activityWrapper && activityWrapper.classList.contains("open") && !element.dataset.manuallyToggled) {
+        activityWrapper.classList.remove("open");
+    }
+
+    const targetContent = hasTools ? finalContent : (preContent || finalContent);
+    if (targetContent) {
+        const text = targetContent.innerHTML.trim();
+        if (!text) {
+            targetContent.innerHTML = "<em>(Generation stopped)</em>";
+        } else {
+            targetContent.innerHTML += "<p><em>(Generation stopped)</em></p>";
+        }
+    }
+    element.dataset.rawText = (targetContent?.innerText || targetContent?.textContent || "").trim();
+    chat.scrollTop = chat.scrollHeight;
+}
+
+/* =========================================================
+   ASYNCHRONOUS AGENT RUNNER (Decoupled per Chat Session)
+   ========================================================= */
+async function runAgent(userText, currentAIMessage, chatId) {
+    const state = activeGenerations[chatId];
+    if (!state || state.abortRequested) {
+        finalizeStopped(currentAIMessage, Date.now(), false);
+        return;
+    }
+
+    const session = chatSessions[chatId];
+    if (!session) return;
+
+    session.messages.push({ role: "user", content: userText });
+    const selectedModel = session.model || modelSelect.value;
     const overallStartTime = Date.now();
     let hasRunTools = false;
     let emptyRetryUsed = false;
 
-    logEvent("REQUEST_START", { model: selectedModel, userText });
+    logEvent("REQUEST_START", { chatId, model: selectedModel, userText });
 
     for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+        if (state.abortRequested) {
+            finalizeStopped(currentAIMessage, overallStartTime, hasRunTools);
+            return;
+        }
+
         const activityLabel = currentAIMessage.querySelector(".activity-label");
         if (activityLabel) {
             activityLabel.textContent = round === 0 ? "Working..." : `Working... (reasoning round ${round + 1})`;
@@ -1523,10 +2524,23 @@ async function runAgent(userText, currentAIMessage) {
 
         let response;
         try {
-            response = await puter.ai.chat(messages, { model: selectedModel, tools: tools });
+            if (state.abortRequested) {
+                finalizeStopped(currentAIMessage, overallStartTime, hasRunTools);
+                return;
+            }
+            response = await puter.ai.chat(session.messages, { model: selectedModel, tools: tools });
         } catch (err) {
+            if (state.abortRequested || err.message === "Generation stopped by user") {
+                finalizeStopped(currentAIMessage, overallStartTime, hasRunTools);
+                return;
+            }
             logEvent("CHAT_CALL_ERROR", { round, model: selectedModel, error: String(err && err.message || err) });
             throw err;
+        }
+
+        if (state.abortRequested) {
+            finalizeStopped(currentAIMessage, overallStartTime, hasRunTools);
+            return;
         }
 
         const assistantMessage = response?.message;
@@ -1535,18 +2549,17 @@ async function runAgent(userText, currentAIMessage) {
             throw new Error("Puter returned no message");
         }
 
-        messages.push(assistantMessage);
+        session.messages.push(assistantMessage);
 
         const toolCalls = assistantMessage.tool_calls || [];
         const roundText = extractText(response);
 
         logEvent("ROUND_COMPLETE", {
             round,
+            chatId,
             model: selectedModel,
             roundTextLength: roundText.length,
-            roundTextPreview: roundText.slice(0, 300),
-            toolCallCount: toolCalls.length,
-            toolCalls: toolCalls.map(tc => ({ name: tc.function?.name, arguments: tc.function?.arguments }))
+            toolCallCount: toolCalls.length
         });
 
         if (toolCalls.length === 0) {
@@ -1555,7 +2568,7 @@ async function runAgent(userText, currentAIMessage) {
             if (!emptyRetryUsed && !hasRunTools && finalDisplay.length === 0) {
                 emptyRetryUsed = true;
                 logEvent("EMPTY_REPLY_RETRY", { model: selectedModel, userText, round });
-                messages.push({
+                session.messages.push({
                     role: "system",
                     content: "Your previous reply was empty. Provide an immediate direct answer or perform the required tool action."
                 });
@@ -1563,12 +2576,11 @@ async function runAgent(userText, currentAIMessage) {
             }
 
             logEvent("REQUEST_FINAL", {
+                chatId,
                 model: selectedModel,
                 userText,
                 hasRunTools,
                 finalTextLength: finalDisplay.length,
-                finalText: finalDisplay,
-                isEmpty: finalDisplay.length === 0,
                 elapsedSeconds: ((Date.now() - overallStartTime) / 1000).toFixed(1)
             });
             updateAIStream(currentAIMessage, finalDisplay, true, overallStartTime, hasRunTools);
@@ -1579,6 +2591,11 @@ async function runAgent(userText, currentAIMessage) {
         const calls = toolCalls.slice(0, MAX_TOOLS_PER_ROUND);
 
         for (let i = 0; i < calls.length; i++) {
+            if (state.abortRequested) {
+                finalizeStopped(currentAIMessage, overallStartTime, hasRunTools);
+                return;
+            }
+
             const call = calls[i];
             const toolName = call.function?.name;
             let args = {};
@@ -1589,20 +2606,28 @@ async function runAgent(userText, currentAIMessage) {
                 args = {};
             }
 
-            addToolBadge(currentAIMessage, toolName, args);
+            const badgeEl = addToolBadge(currentAIMessage, toolName, args);
 
             try {
-                const result = await executeTool(toolName, args);
+                const result = await executeTool(toolName, args, badgeEl, state);
+                if (state.abortRequested) {
+                    finalizeStopped(currentAIMessage, overallStartTime, hasRunTools);
+                    return;
+                }
                 logEvent("TOOL_RESULT", { toolName, args, resultPreview: JSON.stringify(result).slice(0, 500) });
-                messages.push({
+                session.messages.push({
                     role: "tool",
                     tool_call_id: call.id,
                     name: toolName,
                     content: formatToolResult(result)
                 });
             } catch (error) {
+                if (state.abortRequested || error.message === "Generation stopped by user") {
+                    finalizeStopped(currentAIMessage, overallStartTime, hasRunTools);
+                    return;
+                }
                 logEvent("TOOL_ERROR", { toolName, args, error: String(error && error.message || error) });
-                messages.push({
+                session.messages.push({
                     role: "tool",
                     tool_call_id: call.id,
                     name: toolName,
@@ -1611,12 +2636,22 @@ async function runAgent(userText, currentAIMessage) {
             }
         }
 
+        if (state.abortRequested) {
+            finalizeStopped(currentAIMessage, overallStartTime, hasRunTools);
+            return;
+        }
+
         if (toolCalls.length > MAX_TOOLS_PER_ROUND) {
-            messages.push({
+            session.messages.push({
                 role: "tool",
                 content: JSON.stringify({ error: `Maximum of ${MAX_TOOLS_PER_ROUND} tool calls per round reached.` })
             });
         }
+    }
+
+    if (state.abortRequested) {
+        finalizeStopped(currentAIMessage, overallStartTime, hasRunTools);
+        return;
     }
 
     logEvent("MAX_TOOL_ROUNDS_REACHED", { model: selectedModel, userText });
@@ -1624,66 +2659,523 @@ async function runAgent(userText, currentAIMessage) {
 }
 
 /* =========================================================
-   NEW CHAT
+   SEND LOGIC & DRAWER ACTIONS
    ========================================================= */
-newChatButton.addEventListener("click", () => {
-    chat.innerHTML = "";
-    messages = [{ role: "system", content: SYSTEM_PROMPT }];
-    historyItems = [];
-    renderHistory();
-    input.value = "";
-    input.style.height = "auto";
-    input.focus();
-    closePanel(true);
-});
+if (newChatButton) {
+    newChatButton.addEventListener("click", () => {
+        if (typeof hideMobileActions === "function") {
+            hideMobileActions();
+        }
+        if (currentChatId && chatSessions[currentChatId]) {
+            saveCurrentChatState();
+        }
+        currentChatId = null;
+        localStorage.removeItem(ACTIVE_CHAT_KEY);
+        chat.innerHTML = "";
+        messages = [{ role: "system", content: activeSystemPrompt }];
+        updateSendButtonState(false);
+        renderChatList();
+        input.value = "";
+        input.style.height = "auto";
+        input.focus();
+        closePanel(true);
+    });
+}
 
-/* =========================================================
-   SEND LOGIC
-   ========================================================= */
 async function send() {
+    if (typeof hideMobileActions === "function") {
+        hideMobileActions();
+    }
+
+    if (currentChatId && activeGenerations[currentChatId]?.isGenerating) {
+        stopChatGeneration(currentChatId);
+        return;
+    }
+
     const text = input.value.trim();
     if (!text) return;
 
     input.value = "";
     input.style.height = "auto";
-    sendButton.disabled = true;
-    input.disabled = true;
-    modelSelect.disabled = true;
 
     const userDiv = document.createElement("div");
     userDiv.className = "message user";
     userDiv.textContent = text;
+    userDiv.dataset.rawText = text;
     chat.appendChild(userDiv);
     chat.scrollTop = chat.scrollHeight;
 
-    addHistory(text);
+    let targetChatId = currentChatId;
+    if (!targetChatId || !chatSessions[targetChatId]) {
+        targetChatId = createNewChatSession(text);
+    } else {
+        saveCurrentChatState();
+    }
+
+    const targetSession = chatSessions[targetChatId];
+    targetSession.chatHtml = chat.innerHTML;
+
+    activeGenerations[targetChatId] = {
+        isGenerating: true,
+        abortRequested: false,
+        abortController: new AbortController(),
+        sleepResolve: null
+    };
+
+    updateSendButtonState(true);
+    renderChatList();
 
     const currentAIMessage = createAIMessageShell();
 
     try {
-        await runAgent(text, currentAIMessage);
+        await runAgent(text, currentAIMessage, targetChatId);
     } catch (error) {
-        console.error(error);
-        logEvent("SEND_FATAL_ERROR", { userText: text, model: modelSelect.value, error: String(error && error.message || error), stack: error && error.stack });
-        currentAIMessage.querySelector(".final-content").textContent = "Error: " + error.message;
-        const cursor = currentAIMessage.querySelector(".blinking-cursor");
-        if (cursor) cursor.remove();
-    }
+        const state = activeGenerations[targetChatId];
+        if (!state?.abortRequested && error.message !== "Generation stopped by user") {
+            console.error(error);
+            logEvent("SEND_FATAL_ERROR", { userText: text, error: String(error && error.message || error) });
+            currentAIMessage.querySelector(".final-content").textContent = "Error: " + error.message;
+            const cursor = currentAIMessage.querySelector(".blinking-cursor");
+            if (cursor) cursor.remove();
+        }
+    } finally {
+        if (targetSession) {
+            targetSession.chatHtml = (currentChatId === targetChatId) ? chat.innerHTML : targetSession.chatHtml;
+        }
+        delete activeGenerations[targetChatId];
 
-    sendButton.disabled = false;
-    input.disabled = false;
-    modelSelect.disabled = false;
-    input.focus();
-    chat.scrollTop = chat.scrollHeight;
+        if (currentChatId === targetChatId) {
+            updateSendButtonState(false);
+            chat.scrollTop = chat.scrollHeight;
+        }
+
+        saveStoredChats();
+        renderChatList();
+    }
 }
 
-sendButton.addEventListener("click", send);
+sendButton.addEventListener("click", () => {
+    send();
+});
+
 input.addEventListener("keydown", event => {
     if (event.key === "Enter" && !event.shiftKey) {
         event.preventDefault();
         send();
     }
 });
+
+/* =========================================================
+   RIGHT-CLICK CONTEXT MENU (COPY & REGENERATE)
+   ========================================================= */
+let contextMenuTargetEl = null;
+let contextMenuTargetText = "";
+
+function hideContextMenu() {
+    if (msgContextMenu && msgContextMenu.style.display !== "none") {
+        msgContextMenu.style.display = "none";
+        contextMenuTargetEl = null;
+        contextMenuTargetText = "";
+    }
+}
+
+async function copyTextToClipboard(text) {
+    if (!text && text !== "0") return false;
+    let copied = false;
+
+    if (navigator.clipboard && window.isSecureContext) {
+        try {
+            await navigator.clipboard.writeText(text);
+            copied = true;
+        } catch (e) {
+            console.warn("navigator.clipboard.writeText failed, using fallback:", e);
+        }
+    }
+
+    if (copied) return true;
+
+    try {
+        const textarea = document.createElement("textarea");
+        textarea.value = text;
+        textarea.setAttribute("readonly", "");
+        textarea.style.position = "fixed";
+        textarea.style.left = "-9999px";
+        textarea.style.top = "-9999px";
+        textarea.style.opacity = "0";
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        textarea.setSelectionRange(0, textarea.value.length);
+        copied = document.execCommand("copy");
+        document.body.removeChild(textarea);
+        return copied;
+    } catch (err) {
+        console.error("execCommand fallback error:", err);
+        return false;
+    }
+}
+
+function getMessageTextToCopy(msgEl) {
+    if (!msgEl) return "";
+    if (msgEl.dataset.rawText) {
+        return msgEl.dataset.rawText;
+    }
+    if (msgEl.classList.contains("user")) {
+        return msgEl.textContent.trim();
+    }
+
+    const finalEl = msgEl.querySelector(".final-content");
+    if (finalEl) {
+        const clone = finalEl.cloneNode(true);
+        clone.querySelectorAll(".code-copy-btn, .code-mode-pill, .code-lang-line").forEach(el => el.remove());
+        return (clone.innerText || clone.textContent).trim();
+    }
+    return msgEl.innerText.trim();
+}
+
+if (chat && msgContextMenu) {
+    chat.addEventListener("contextmenu", (e) => {
+        const msgEl = e.target.closest(".message");
+        if (!msgEl) return;
+
+        e.preventDefault();
+        contextMenuTargetEl = msgEl;
+        contextMenuTargetText = getMessageTextToCopy(msgEl);
+
+        msgContextMenu.style.display = "flex";
+        lucide.createIcons({ root: msgContextMenu });
+
+        const isBusy = Boolean(currentChatId && activeGenerations[currentChatId]?.isGenerating);
+        if (ctxRegenerateBtn) {
+            ctxRegenerateBtn.disabled = isBusy;
+        }
+
+        const menuRect = msgContextMenu.getBoundingClientRect();
+        const menuWidth = menuRect.width || 140;
+        const menuHeight = menuRect.height || 74;
+
+        let posX = e.clientX;
+        let posY = e.clientY;
+
+        if (posX + menuWidth > window.innerWidth) {
+            posX = window.innerWidth - menuWidth - 8;
+        }
+        if (posY + menuHeight > window.innerHeight) {
+            posY = window.innerHeight - menuHeight - 8;
+        }
+
+        msgContextMenu.style.left = `${Math.max(8, posX)}px`;
+        msgContextMenu.style.top = `${Math.max(8, posY)}px`;
+    });
+}
+
+document.addEventListener("pointerdown", (e) => {
+    if (msgContextMenu && msgContextMenu.style.display !== "none") {
+        if (!msgContextMenu.contains(e.target)) {
+            hideContextMenu();
+        }
+    }
+});
+
+chat.addEventListener("scroll", () => {
+    hideContextMenu();
+    hideMobileActions();
+});
+
+document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+        hideContextMenu();
+        hideMobileActions();
+    }
+});
+
+if (ctxCopyBtn) {
+    ctxCopyBtn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        const textToCopy = contextMenuTargetText || (contextMenuTargetEl ? getMessageTextToCopy(contextMenuTargetEl) : "");
+        const success = await copyTextToClipboard(textToCopy);
+
+        ctxCopyBtn.innerHTML = success 
+            ? '<i data-lucide="check"></i><span>Copied</span>' 
+            : '<i data-lucide="copy"></i><span>Failed</span>';
+        lucide.createIcons({ root: ctxCopyBtn });
+
+        setTimeout(() => {
+            ctxCopyBtn.innerHTML = '<i data-lucide="copy"></i><span>Copy</span>';
+            lucide.createIcons({ root: ctxCopyBtn });
+            hideContextMenu();
+        }, 500);
+    });
+}
+
+async function regenerateFromMessage(target) {
+    const isBusy = Boolean(currentChatId && activeGenerations[currentChatId]?.isGenerating);
+    if (!target || isBusy || !currentChatId) return;
+
+    let userPrompt = "";
+    let userEl = null;
+
+    if (target.classList.contains("user")) {
+        userEl = target;
+        userPrompt = userEl.textContent.trim();
+    } else {
+        let prev = target.previousElementSibling;
+        while (prev && !prev.classList.contains("user")) {
+            prev = prev.previousElementSibling;
+        }
+        if (prev) {
+            userEl = prev;
+            userPrompt = userEl.textContent.trim();
+        }
+    }
+
+    if (!userEl || !userPrompt) return;
+
+    const allUserEls = Array.from(chat.querySelectorAll(".message.user"));
+    const userIndex = allUserEls.indexOf(userEl);
+    if (userIndex === -1) return;
+
+    const session = chatSessions[currentChatId];
+    if (!session) return;
+
+    let count = -1;
+    let msgIndex = -1;
+    for (let i = 0; i < session.messages.length; i++) {
+        if (session.messages[i].role === "user") {
+            count++;
+            if (count === userIndex) {
+                msgIndex = i;
+                break;
+            }
+        }
+    }
+
+    if (msgIndex !== -1) {
+        session.messages = session.messages.slice(0, msgIndex);
+    }
+
+    while (userEl.nextElementSibling) {
+        userEl.nextElementSibling.remove();
+    }
+
+    userEl.remove();
+
+    input.value = userPrompt;
+    await send();
+}
+
+if (ctxRegenerateBtn) {
+    ctxRegenerateBtn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        const isBusy = Boolean(currentChatId && activeGenerations[currentChatId]?.isGenerating);
+        if (!contextMenuTargetEl || isBusy) {
+            hideContextMenu();
+            return;
+        }
+
+        const target = contextMenuTargetEl;
+        hideContextMenu();
+        await regenerateFromMessage(target);
+    });
+}
+
+/* =========================================================
+   MOBILE MESSAGE ACTIONS (POPUP UNDER MESSAGE: COPY & RETRY)
+   ========================================================= */
+let mobileActionsTargetEl = null;
+
+function isMobileDevice() {
+    return window.matchMedia("(max-width: 768px)").matches || 
+           (window.matchMedia("(pointer: coarse)").matches && window.innerWidth <= 1024);
+}
+
+function hideMobileActions() {
+    if (mobileMsgActions && mobileMsgActions.style.display !== "none") {
+        mobileMsgActions.style.display = "none";
+        mobileActionsTargetEl = null;
+    }
+}
+
+function showMobileActions(msgEl) {
+    if (!msgEl || !mobileMsgActions) return;
+    mobileActionsTargetEl = msgEl;
+
+    const isBusy = Boolean(currentChatId && activeGenerations[currentChatId]?.isGenerating);
+
+    if (mobileCopyBtn) {
+        mobileCopyBtn.innerHTML = '<i data-lucide="copy"></i>';
+    }
+    if (mobileRetryBtn) {
+        mobileRetryBtn.innerHTML = '<i data-lucide="rotate-cw"></i>';
+        mobileRetryBtn.disabled = isBusy;
+    }
+
+    mobileMsgActions.style.display = "inline-flex";
+    lucide.createIcons({ root: mobileMsgActions });
+
+    const rect = msgEl.getBoundingClientRect();
+    const actionsRect = mobileMsgActions.getBoundingClientRect();
+    const actionsWidth = actionsRect.width || 76;
+    const actionsHeight = actionsRect.height || 36;
+
+    let top = rect.bottom + 6;
+    let left = rect.left;
+
+    if (msgEl.classList.contains("user")) {
+        left = rect.right - actionsWidth;
+    } else {
+        left = rect.left + 4;
+    }
+
+    const minLeft = 12;
+    const maxLeft = window.innerWidth - actionsWidth - 12;
+    left = Math.max(minLeft, Math.min(maxLeft, left));
+
+    const composerEl = document.getElementById("inputArea");
+    const bottomLimit = composerEl ? composerEl.getBoundingClientRect().top - 8 : window.innerHeight - 70;
+
+    if (top + actionsHeight > bottomLimit) {
+        top = Math.max(60, rect.top - actionsHeight - 6);
+    }
+
+    mobileMsgActions.style.left = `${left}px`;
+    mobileMsgActions.style.top = `${top}px`;
+}
+
+if (chat) {
+    chat.addEventListener("click", (e) => {
+        if (!isMobileDevice()) return;
+
+        if (e.target.closest("button, a, input, textarea, select, .activity-toggle, .code-copy-btn, .code-mode-pill, .table-wrapper")) {
+            return;
+        }
+
+        const msgEl = e.target.closest(".message");
+        if (!msgEl) {
+            hideMobileActions();
+            return;
+        }
+
+        if (mobileActionsTargetEl === msgEl && mobileMsgActions.style.display !== "none") {
+            hideMobileActions();
+        } else {
+            showMobileActions(msgEl);
+        }
+    });
+}
+
+document.addEventListener("pointerdown", (e) => {
+    if (mobileMsgActions && mobileMsgActions.style.display !== "none") {
+        if (!mobileMsgActions.contains(e.target) && !e.target.closest(".message")) {
+            hideMobileActions();
+        }
+    }
+});
+
+if (mobileCopyBtn) {
+    mobileCopyBtn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        if (!mobileActionsTargetEl) return;
+
+        const textToCopy = getMessageTextToCopy(mobileActionsTargetEl);
+        const success = await copyTextToClipboard(textToCopy);
+
+        mobileCopyBtn.innerHTML = success 
+            ? '<i data-lucide="check"></i>' 
+            : '<i data-lucide="x"></i>';
+        lucide.createIcons({ root: mobileCopyBtn });
+
+        setTimeout(() => {
+            mobileCopyBtn.innerHTML = '<i data-lucide="copy"></i>';
+            lucide.createIcons({ root: mobileCopyBtn });
+            hideMobileActions();
+        }, 500);
+    });
+}
+
+if (mobileRetryBtn) {
+    mobileRetryBtn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        if (!mobileActionsTargetEl || isGenerating) {
+            hideMobileActions();
+            return;
+        }
+
+        const target = mobileActionsTargetEl;
+        hideMobileActions();
+        await regenerateFromMessage(target);
+    });
+}
+
+/* =========================================================
+   APPLICATION BOOTSTRAP (SAFE ORDERING)
+   ========================================================= */
+async function initSystemEnvironment() {
+    try {
+        const res = await fetch("/api/system-info");
+        if (!res.ok) return;
+        const info = await res.json();
+
+        let envPrompt = `\n\n[HOST SYSTEM ENVIRONMENT]\n`;
+        envPrompt += `- Operating System: ${info.osName} (${info.arch})\n`;
+        envPrompt += `- Terminal Shell: ${info.shellName}\n`;
+        envPrompt += `- Working Directory: ${info.cwd}\n`;
+        if (info.username) envPrompt += `- Current User: ${info.username}\n`;
+
+        if (Array.isArray(info.instructions) && info.instructions.length > 0) {
+            envPrompt += `\n[TERMINAL & SHELL INSTRUCTIONS FOR THIS SYSTEM]:\n`;
+            info.instructions.forEach(ins => {
+                envPrompt += `- ${ins}\n`;
+            });
+        }
+
+        activeSystemPrompt = BASE_SYSTEM_PROMPT + "\n" + envPrompt;
+        if (messages.length > 0 && messages[0].role === "system") {
+            messages[0].content = activeSystemPrompt;
+        }
+        if (currentChatId && chatSessions[currentChatId]) {
+            if (chatSessions[currentChatId].messages[0]?.role === "system") {
+                chatSessions[currentChatId].messages[0].content = activeSystemPrompt;
+            }
+        }
+    } catch (e) {
+        console.warn("Could not fetch system info:", e);
+    }
+}
+
+function initChatSessions() {
+    loadStoredChats();
+    let hasCleaned = false;
+    for (const id of Object.keys(chatSessions)) {
+        const sess = chatSessions[id];
+        const hasUserMsg = sess.messages && sess.messages.some(m => m.role === "user");
+        if (!hasUserMsg && (!sess.chatHtml || !sess.chatHtml.trim())) {
+            delete chatSessions[id];
+            hasCleaned = true;
+        }
+    }
+    if (hasCleaned) {
+        saveStoredChats();
+    }
+
+    const storedIds = Object.keys(chatSessions);
+    if (storedIds.length > 0) {
+        const targetId = (currentChatId && chatSessions[currentChatId]) ? currentChatId : (
+            storedIds.sort((a, b) => (chatSessions[b].updatedAt || 0) - (chatSessions[a].updatedAt || 0)),
+            storedIds[0]
+        );
+        currentChatId = null;
+        switchToChat(targetId);
+    } else {
+        currentChatId = null;
+        chat.innerHTML = "";
+        messages = [{ role: "system", content: activeSystemPrompt }];
+        renderChatList();
+    }
+}
+
+initSystemEnvironment();
+initChatSessions();
 </script>
 </body>
 </html>

@@ -1,15 +1,96 @@
 const http = require("http");
 const fs = require("fs");
 const path = require("url");
-const { spawn } = require("child_process");
+const os = require("os");
+const { spawn, exec } = require("child_process");
+
+function getSystemInfo() {
+    const platform = os.platform();
+    const isTermux = Boolean(
+        process.env.TERMUX_VERSION ||
+        process.env.PREFIX?.includes("com.termux") ||
+        (platform === "linux" && fs.existsSync("/data/data/com.termux"))
+    );
+    const isWindows = platform === "win32";
+    const isMac = platform === "darwin";
+    const isLinux = platform === "linux" && !isTermux;
+
+    let osName = "Unknown";
+    let shellName = "sh";
+    let instructions = [];
+
+    if (isWindows) {
+        osName = `Windows (${os.type()} ${os.release()})`;
+        shellName = "cmd.exe (Command Prompt) / PowerShell";
+        instructions = [
+            "Operating system is WINDOWS. Terminal executes via cmd.exe by default.",
+            "Use native Windows commands instead of Unix commands:",
+            "  - Directory listing: 'dir' or 'dir /b' (not 'ls')",
+            "  - File viewing: 'type <filename>' (not 'cat')",
+            "  - Find executable / command path: 'where <name>' (not 'which')",
+            "  - Search in file text: 'findstr /s /i \"pattern\" *' (not 'grep')",
+            "  - Print current directory: 'cd' with no arguments (not 'pwd')",
+            "  - Copy / Move: 'copy' and 'move' (not 'cp' / 'mv')",
+            "  - Delete: 'del /f /q <file>' and 'rmdir /s /q <dir>' (not 'rm -rf')",
+            "  - Environment variables: '%VAR%' (e.g. %USERPROFILE%, %TEMP%, %PATH%)",
+            "Command chaining with '&&' and '||' works in cmd.exe.",
+            "To execute PowerShell commands, use: powershell -NoProfile -Command \"<cmd>\"",
+            "File paths use backslashes '\\' or forward slashes '/'. Avoid Unix-only binaries unless installed.",
+            "NOTE: Any 'com.termux' directory name in the file path is solely a folder on the Windows filesystem (an export); you are running directly on native Windows."
+        ];
+    } else if (isTermux) {
+        osName = `Android Termux (${os.arch()})`;
+        shellName = "bash / sh (Termux)";
+        instructions = [
+            "Operating system is ANDROID running inside a TERMUX environment.",
+            "Shell is standard Bash/sh.",
+            "Package management: use 'pkg install <pkg>' or 'apt install <pkg>'.",
+            "Termux home is /data/data/com.termux/files/home.",
+            "Storage access: /sdcard or ~/storage (if permissions granted).",
+            "Use standard Unix commands: ls, cat, grep, pwd, curl, find, etc.",
+            "Hardware is mobile ARM; conserve memory and avoid heavy build loops."
+        ];
+    } else if (isMac) {
+        osName = `macOS (${os.release()}, ${os.arch()})`;
+        shellName = "zsh / bash";
+        instructions = [
+            "Operating system is macOS (Darwin).",
+            "Shell is zsh/bash. Standard BSD Unix tools available: ls, cat, grep, curl, open, etc.",
+            "Package manager is typically Homebrew ('brew')."
+        ];
+    } else if (isLinux) {
+        osName = `Linux (${os.release()}, ${os.arch()})`;
+        shellName = "bash / sh";
+        instructions = [
+            "Operating system is Linux.",
+            "Shell is Bash/sh. Use standard GNU/Linux commands: ls, cat, grep, pwd, which, curl, etc.",
+            "Package manager: apt, dnf, pacman, etc. depending on distro."
+        ];
+    }
+
+    return {
+        platform,
+        osName,
+        arch: os.arch(),
+        shellName,
+        hostname: os.hostname(),
+        username: os.userInfo ? os.userInfo().username : "user",
+        homedir: os.homedir(),
+        cwd: process.cwd(),
+        isTermux,
+        isWindows,
+        isMac,
+        isLinux,
+        instructions
+    };
+}
 
 const PORT = 8080;
 const TINYFISH_API_KEY = process.env.TINYFISH_API_KEY;
 const LOG_FILE = "./logs.txt";
 
 if (!TINYFISH_API_KEY) {
-    console.error("ERROR: TINYFISH_API_KEY is not set.");
-    process.exit(1);
+    console.warn("[WARNING] TINYFISH_API_KEY is not set. Web search (/api/search) will be unavailable until configured.");
 }
 
 fs.writeFileSync(LOG_FILE, `--- log started ${new Date().toISOString()} ---\n`);
@@ -25,11 +106,14 @@ function logToFile(tag, data) {
 // Python Task Server Process Supervisor
 // ---------------------------------------------------------
 const pythonCmd = process.platform === "win32" ? "python" : "python3";
-const pythonProcess = spawn(pythonCmd, ["./task_server.py"], {
+const taskScript = (process.platform === "win32" && fs.existsSync("./task_server_windows.py"))
+    ? "./task_server_windows.py"
+    : "./task_server.py";
+const pythonProcess = spawn(pythonCmd, [taskScript], {
     stdio: ["pipe", "pipe", "pipe"]
 });
 
-console.log(`[PROCESS] Started task_server.py with PID: ${pythonProcess.pid}`);
+console.log(`[PROCESS] Started ${taskScript} with PID: ${pythonProcess.pid}`);
 
 pythonProcess.stdout.on("data", (data) => {
     const text = data.toString().trim();
@@ -81,6 +165,9 @@ process.on("uncaughtException", (err) => {
 // HTTP API & Routing
 // ---------------------------------------------------------
 async function tinyfishSearch(args) {
+    if (!TINYFISH_API_KEY) {
+        throw new Error("TINYFISH_API_KEY is not set in the server environment. Web search is unavailable.");
+    }
     const query = String(args.query || "").trim();
     if (!query) throw new Error("Search query is empty");
     const url = new URL("https://api.search.tinyfish.ai");
@@ -113,6 +200,10 @@ const server = http.createServer(async (req, res) => {
             "Access-Control-Allow-Headers": "Content-Type"
         });
         return res.end();
+    }
+
+    if (req.method === "GET" && req.url === "/api/system-info") {
+        return sendJSON(res, 200, getSystemInfo());
     }
 
     if (req.method === "POST" && req.url === "/api/log") {
@@ -183,5 +274,6 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
-    console.log(`Node Server running at http://localhost:${PORT}`);
+  console.log(`Node Server running at http://localhost:${PORT}`);
+  exec(`xdg-open http://localhost:${PORT}`);
 });
