@@ -520,8 +520,8 @@ const server = http.createServer(async (req, res) => {
                 return sendJSON(res, 400, { error: `API key for provider '${provider.name}' (${provider.api_key_env}) is not set.` });
             }
 
-            const providerKeyOrType = provider.type || provider.name || providerId;
-            const providerHandler = resolveProvider(providerKeyOrType);
+            const providerKey = providerId || provider.name || provider.type;
+            const providerHandler = resolveProvider(providerKey);
 
             const chatResult = await providerHandler.handleChat({
                 model,
