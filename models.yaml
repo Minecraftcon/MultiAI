@@ -88,7 +88,7 @@ providers:
     type: "openai_compatible"
     api_key_env: "OPEN_ROUTER"
     base_url: "https://openrouter.ai/api/v1"
-    default_max_tokens: 4096
+    default_max_tokens: 2048
     models:
       - id: "deepseek/deepseek-v4.1-flash"
         name: "DeepSeek V4.1 Flash (1M Context)"

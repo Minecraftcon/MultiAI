@@ -238,6 +238,8 @@ export async function loadAvailableModels() {
 
         if (state.currentChatId && state.chatSessions[state.currentChatId]) {
             state.chatSessions[state.currentChatId].model = modelSelect.value;
+            const prov = modelSelect.selectedOptions?.[0]?.dataset?.provider;
+            if (prov) state.chatSessions[state.currentChatId].provider = prov;
         }
     } catch (e) {
         console.warn("[MODELS] Failed to load models from server:", e);
@@ -277,6 +279,8 @@ export function initSidePanel() {
         modelSelect.addEventListener("change", () => {
             if (state.currentChatId && state.chatSessions[state.currentChatId]) {
                 state.chatSessions[state.currentChatId].model = modelSelect.value;
+                const prov = modelSelect.selectedOptions?.[0]?.dataset?.provider;
+                if (prov) state.chatSessions[state.currentChatId].provider = prov;
                 saveStoredChats();
             }
         });

@@ -5,6 +5,7 @@ const url = require("url");
 const os = require("os");
 const { spawn, exec } = require("child_process");
 const YAML = require("yaml");
+const { resolveProvider } = require("./providers");
 
 function getEnvKey(keyName) {
     if (!keyName) return null;
@@ -519,211 +520,25 @@ const server = http.createServer(async (req, res) => {
                 return sendJSON(res, 400, { error: `API key for provider '${provider.name}' (${provider.api_key_env}) is not set.` });
             }
 
-            const modelMeta = (provider.models || []).find(m => m.id === model);
-            const supportsTools = modelMeta ? (modelMeta.supports_tools !== false) : true;
-            const supportsVision = modelMeta ? Boolean(modelMeta.supports_vision) : false;
-            const normalizedMessages = normalizeMessages(messages, supportsTools, supportsVision);
+            const providerKeyOrType = provider.type || provider.name || providerId;
+            const providerHandler = resolveProvider(providerKeyOrType);
 
-            // 1. Google Gemini
-            if (provider.type === "gemini") {
-                const systemParts = [];
-                const contents = [];
+            const chatResult = await providerHandler.handleChat({
+                model,
+                apiKey,
+                providerConfig: provider,
+                messages,
+                tools,
+                tool_choice
+            });
 
-                for (const msg of normalizedMessages) {
-                    if (msg.role === "system") {
-                        systemParts.push({ text: msg.content });
-                    } else if (msg.role === "user") {
-                        const userParts = [];
-                        if (Array.isArray(msg.content)) {
-                            for (const part of msg.content) {
-                                if (part.type === "text" && part.text) {
-                                    userParts.push({ text: part.text });
-                                } else if (part.type === "image_url" && part.image_url?.url) {
-                                    const url = part.image_url.url;
-                                    const match = url.match(/^data:([^;]+);base64,(.+)$/);
-                                    if (match) {
-                                        userParts.push({
-                                            inlineData: {
-                                                mimeType: match[1],
-                                                data: match[2]
-                                            }
-                                        });
-                                    }
-                                }
-                            }
-                        } else if (typeof msg.content === "string") {
-                            userParts.push({ text: msg.content });
-                        }
-                        if (userParts.length === 0) userParts.push({ text: " " });
-                        contents.push({ role: "user", parts: userParts });
-                    } else if (msg.role === "assistant") {
-                        const parts = [];
-                        if (msg.tool_calls && Array.isArray(msg.tool_calls)) {
-                            for (const tc of msg.tool_calls) {
-                                let args = {};
-                                try {
-                                    args = typeof tc.function?.arguments === "string" ? JSON.parse(tc.function.arguments || "{}") : (tc.function?.arguments || {});
-                                } catch (e) {
-                                    args = {};
-                                }
-                                parts.push({
-                                    functionCall: {
-                                        name: tc.function?.name || "",
-                                        args
-                                    }
-                                });
-                            }
-                        }
-                        if (msg.content) {
-                            parts.unshift({ text: msg.content });
-                        }
-                        if (parts.length > 0) {
-                            contents.push({ role: "model", parts });
-                        }
-                    } else if (msg.role === "tool") {
-                        const toolName = msg.name || "tool";
-                        contents.push({
-                            role: "user",
-                            parts: [{
-                                functionResponse: {
-                                    name: toolName,
-                                    response: {
-                                        name: toolName,
-                                        content: msg.content
-                                    }
-                                }
-                            }]
-                        });
-                    }
-                }
-
-                const payload = { contents };
-                if (systemParts.length > 0) {
-                    payload.systemInstruction = { parts: systemParts };
-                }
-                if (supportsTools && tools && tools.length > 0 && tool_choice !== "none") {
-                    payload.tools = [{
-                        functionDeclarations: tools.map(t => ({
-                            name: t.function.name,
-                            description: t.function.description || "",
-                            parameters: t.function.parameters || { type: "object" }
-                        }))
-                    }];
-                }
-
-                const endpoint = `${provider.endpoint || "https://generativelanguage.googleapis.com/v1beta/models"}/${model}:generateContent?key=${apiKey}`;
-                const apiRes = await fetch(endpoint, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(payload)
-                });
-
-                const resText = await apiRes.text();
-                if (!apiRes.ok) {
-                    return sendJSON(res, apiRes.status, { error: `Gemini API error (${apiRes.status}): ${resText}` });
-                }
-
-                const geminiData = JSON.parse(resText);
-                const candidate = geminiData.candidates?.[0];
-                const parts = candidate?.content?.parts || [];
-                let text = "";
-                const toolCalls = [];
-
-                const nonThoughtParts = parts.filter(p => p.text && !p.thought);
-                const textParts = nonThoughtParts.length > 0 ? nonThoughtParts : (parts.some(p => p.functionCall) ? [] : parts.filter(p => p.text));
-                for (const part of textParts) {
-                    text += part.text;
-                }
-
-                for (const part of parts) {
-                    if (part.functionCall) {
-                        toolCalls.push({
-                            id: part.functionCall.id || ("call_" + Math.random().toString(36).substring(2, 10)),
-                            type: "function",
-                            function: {
-                                name: part.functionCall.name,
-                                arguments: JSON.stringify(part.functionCall.args || {})
-                            }
-                        });
-                    }
-                }
-
-                return sendJSON(res, 200, {
-                    message: formatAssistantResponse({
-                        content: text,
-                        tool_calls: toolCalls
-                    })
-                });
+            if (chatResult.status !== 200) {
+                return sendJSON(res, chatResult.status || 500, { error: chatResult.error || "Provider error" });
             }
 
-            // 2. Cohere v2
-            if (provider.type === "cohere") {
-                const payload = {
-                    model,
-                    messages: normalizedMessages
-                };
-                if (supportsTools && tools && tools.length > 0 && tool_choice !== "none") {
-                    payload.tools = tools;
-                }
-
-                const endpoint = `${provider.base_url || "https://api.cohere.com/v2"}/chat`;
-                const apiRes = await fetch(endpoint, {
-                    method: "POST",
-                    headers: {
-                        "Authorization": `Bearer ${apiKey}`,
-                        "Content-Type": "application/json"
-                    },
-                    body: JSON.stringify(payload)
-                });
-
-                const resText = await apiRes.text();
-                if (!apiRes.ok) {
-                    return sendJSON(res, apiRes.status, { error: `Cohere API error (${apiRes.status}): ${resText}` });
-                }
-
-                const cohereData = JSON.parse(resText);
-                return sendJSON(res, 200, {
-                    message: formatAssistantResponse(cohereData.message)
-                });
-            }
-
-            // 3. OpenAI-Compatible (Groq, OpenRouter, NVIDIA, Mistral)
-            if (provider.type === "openai_compatible") {
-                const payload = {
-                    model,
-                    messages: normalizedMessages
-                };
-                if (provider.default_max_tokens) {
-                    payload.max_tokens = provider.default_max_tokens;
-                }
-                if (supportsTools && tools && tools.length > 0 && tool_choice !== "none") {
-                    payload.tools = tools;
-                    if (tool_choice) payload.tool_choice = tool_choice;
-                }
-
-                const endpoint = `${provider.base_url}/chat/completions`;
-                const apiRes = await fetch(endpoint, {
-                    method: "POST",
-                    headers: {
-                        "Authorization": `Bearer ${apiKey}`,
-                        "Content-Type": "application/json"
-                    },
-                    body: JSON.stringify(payload)
-                });
-
-                const resText = await apiRes.text();
-                if (!apiRes.ok) {
-                    return sendJSON(res, apiRes.status, { error: `${provider.name} error (${apiRes.status}): ${resText}` });
-                }
-
-                const openAIData = JSON.parse(resText);
-                const choice = openAIData.choices?.[0];
-                return sendJSON(res, 200, {
-                    message: formatAssistantResponse(choice?.message)
-                });
-            }
-
-            return sendJSON(res, 400, { error: `Unsupported provider type '${provider.type}'` });
+            return sendJSON(res, 200, {
+                message: chatResult.message
+            });
         } catch (error) {
             console.error("[CHAT API ERROR]", error);
             return sendJSON(res, 500, { error: error.message });
