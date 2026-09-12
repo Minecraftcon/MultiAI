@@ -63,12 +63,17 @@ class GoogleProvider extends BaseProvider {
                         } catch (e) {
                             args = {};
                         }
-                        parts.push({
+                        const fcPart = {
                             functionCall: {
                                 name: tc.function?.name || "",
                                 args
                             }
-                        });
+                        };
+                        const thoughtSig = tc.thoughtSignature || tc.thought_signature || tc.function?.thoughtSignature || tc.function?.thought_signature;
+                        if (thoughtSig) {
+                            fcPart.thoughtSignature = thoughtSig;
+                        }
+                        parts.push(fcPart);
                     }
                 }
                 if (msg.content) {
@@ -125,14 +130,19 @@ class GoogleProvider extends BaseProvider {
 
         for (const part of parts) {
             if (part.functionCall) {
-                toolCalls.push({
+                const thoughtSig = part.thoughtSignature || part.thought_signature || part.functionCall?.thoughtSignature || part.functionCall?.thought_signature || null;
+                const toolCall = {
                     id: part.functionCall.id || ("call_" + Math.random().toString(36).substring(2, 10)),
                     type: "function",
                     function: {
                         name: part.functionCall.name,
                         arguments: JSON.stringify(part.functionCall.args || {})
                     }
-                });
+                };
+                if (thoughtSig) {
+                    toolCall.thoughtSignature = thoughtSig;
+                }
+                toolCalls.push(toolCall);
             }
         }
 

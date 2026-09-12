@@ -88,16 +88,23 @@ class BaseProvider {
                     return {
                         role: "assistant",
                         content: typeof msg.content === "string" ? msg.content : null,
-                        tool_calls: msg.tool_calls.map(tc => ({
-                            id: String(tc.id || ("call_" + Math.random().toString(36).substring(2, 9))),
-                            type: "function",
-                            function: {
-                                name: String(tc.function?.name || ""),
-                                arguments: typeof tc.function?.arguments === "string"
-                                    ? tc.function.arguments
-                                    : JSON.stringify(tc.function?.arguments || {})
+                        tool_calls: msg.tool_calls.map(tc => {
+                            const call = {
+                                id: String(tc.id || ("call_" + Math.random().toString(36).substring(2, 9))),
+                                type: "function",
+                                function: {
+                                    name: String(tc.function?.name || ""),
+                                    arguments: typeof tc.function?.arguments === "string"
+                                        ? tc.function.arguments
+                                        : JSON.stringify(tc.function?.arguments || {})
+                                }
+                            };
+                            const sig = tc.thoughtSignature || tc.thought_signature || tc.function?.thoughtSignature || tc.function?.thought_signature;
+                            if (sig) {
+                                call.thoughtSignature = sig;
                             }
-                        }))
+                            return call;
+                        })
                     };
                 } else {
                     const toolNames = msg.tool_calls.map(tc => tc.function?.name).filter(Boolean).join(", ");
@@ -124,13 +131,13 @@ class BaseProvider {
             } else {
                 return {
                     role: "user",
-                    content: `[Tool Result]: ${typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content)}`
+                    content: `[Tool Result: ${msg.name || "action"}]:\n${typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content)}`
                 };
             }
         }
 
         return {
-            role: "user",
+            role,
             content: typeof msg.content === "string" ? msg.content : String(msg.content || "")
         };
     }
@@ -150,16 +157,23 @@ class BaseProvider {
         };
 
         if (resp.tool_calls && Array.isArray(resp.tool_calls) && resp.tool_calls.length > 0) {
-            out.tool_calls = resp.tool_calls.map(tc => ({
-                id: String(tc.id || ("call_" + Math.random().toString(36).substring(2, 9))),
-                type: "function",
-                function: {
-                    name: String(tc.function?.name || ""),
-                    arguments: typeof tc.function?.arguments === "string"
-                        ? tc.function.arguments
-                        : JSON.stringify(tc.function?.arguments || {})
+            out.tool_calls = resp.tool_calls.map(tc => {
+                const call = {
+                    id: String(tc.id || ("call_" + Math.random().toString(36).substring(2, 9))),
+                    type: "function",
+                    function: {
+                        name: String(tc.function?.name || ""),
+                        arguments: typeof tc.function?.arguments === "string"
+                            ? tc.function.arguments
+                            : JSON.stringify(tc.function?.arguments || {})
+                    }
+                };
+                const sig = tc.thoughtSignature || tc.thought_signature || tc.function?.thoughtSignature || tc.function?.thought_signature;
+                if (sig) {
+                    call.thoughtSignature = sig;
                 }
-            }));
+                return call;
+            });
         }
 
         return out;
