@@ -1,0 +1,200 @@
+/* =========================================================
+   CHAT CONTAINER, MESSAGES & TYPOGRAPHY
+   ========================================================= */
+#chat {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px max(20px, calc((100% - 900px) / 2));
+    padding-bottom: 120px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    scroll-behavior: smooth;
+}
+
+#chat::-webkit-scrollbar { width: 7px; }
+#chat::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
+
+.message {
+    line-height: 1.6;
+    word-wrap: break-word;
+    overflow-wrap: anywhere;
+    animation: popIn 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+.user {
+    align-self: flex-end;
+    max-width: 80%;
+    padding: 11px 16px;
+    background: var(--bubble-bg);
+    border-radius: 18px;
+    white-space: normal;
+}
+
+.user-bubble-content {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+/* 1. Document attachments on top of prompt bubble */
+.msg-bubble-docs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.msg-doc-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 6px 12px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 12px;
+    font-size: 12.5px;
+    color: #e5e5e5;
+    max-width: 260px;
+}
+
+.msg-doc-pill svg {
+    width: 15px;
+    height: 15px;
+    color: #60a5fa;
+    flex-shrink: 0;
+}
+
+.msg-doc-name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-weight: 500;
+}
+
+.msg-doc-size {
+    color: #999;
+    font-size: 11px;
+    flex-shrink: 0;
+}
+
+/* 2. Image previews directly under documents */
+.msg-bubble-images {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.msg-img-card {
+    position: relative;
+    min-width: 80px;
+    min-height: 80px;
+    width: fit-content;
+    max-width: 280px;
+    max-height: 220px;
+    border-radius: 14px;
+    overflow: hidden;
+    cursor: pointer;
+    background: #1e1e1e;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+    transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.msg-img-card:hover {
+    transform: scale(1.02);
+    border-color: rgba(255, 255, 255, 0.35);
+}
+
+.msg-img-card img {
+    display: block;
+    min-width: 80px;
+    min-height: 80px;
+    max-width: 280px;
+    max-height: 220px;
+    object-fit: cover;
+    border-radius: 13px;
+}
+
+/* 3. Prompt text below attachments */
+.msg-bubble-text {
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.ai {
+    align-self: stretch;
+    width: 100%;
+    padding: 4px 0;
+    background: transparent;
+    font-size: 15.5px;
+}
+
+.pre-search-content, .final-content {
+    display: block;
+}
+
+.pre-search-content:empty {
+    display: none;
+}
+
+.blinking-cursor {
+    display: inline-block;
+    width: 7px;
+    height: 16px;
+    background-color: #ddd;
+    vertical-align: middle;
+    margin-left: 4px;
+    animation: blink 1s step-end infinite;
+}
+
+/* Typography inside AI answers */
+.ai p { margin: 0 0 16px; }
+.ai p:last-child { margin-bottom: 0; }
+.ai h1, .ai h2, .ai h3, .ai h4, .ai h5, .ai h6 { line-height: 1.3; font-weight: 700; }
+.ai h1 { font-size: 1.8em; margin: 28px 0 14px; }
+.ai h2 { font-size: 1.5em; margin: 26px 0 12px; }
+.ai h3 { font-size: 1.25em; margin: 22px 0 10px; }
+.ai h4 { font-size: 1.1em; margin: 20px 0 8px; }
+.ai a { color: #8ab4f8; text-decoration: none; }
+.ai a:hover { text-decoration: underline; }
+.ai ul, .ai ol { margin: 8px 0 18px; padding-left: 28px; }
+.ai li { margin: 5px 0; padding-left: 3px; }
+.ai blockquote { margin: 16px 0; padding: 4px 0 4px 16px; border-left: 3px solid #555; color: #bdbdbd; }
+
+.table-wrapper {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto !important;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x pan-y !important;
+    margin: 18px 0;
+    border-radius: 8px;
+    display: block;
+}
+
+.table-wrapper::-webkit-scrollbar { height: 6px; }
+.table-wrapper::-webkit-scrollbar-thumb { background: #4a4a4a; border-radius: 10px; }
+
+.ai table {
+    width: max-content !important;
+    min-width: 100%;
+    border-collapse: collapse;
+    border: 1px solid #333;
+    font-size: 14px;
+    margin: 0;
+    touch-action: pan-x pan-y !important;
+}
+
+.ai th, .ai td {
+    padding: 9px 12px;
+    border: 1px solid #333;
+    text-align: left;
+    white-space: nowrap;
+}
+
+.ai th { background: #202020; font-weight: 700; }
+.ai tr:nth-child(even) { background: #151515; }
+.ai hr { border: 0; border-top: 1px solid #333; margin: 26px 0; }
+.ai img { max-width: 100%; border-radius: 10px; margin: 10px 0; }
+.ai .katex-display { overflow-x: auto; padding: 8px 4px; margin: 18px 0; }

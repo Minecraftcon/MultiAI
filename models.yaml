@@ -1,0 +1,235 @@
+# MultiAI Model Configuration
+# API keys are referenced by environment variable names (defined in ~/.bashrc or system environment)
+# Backend resolves keys securely on the server and never exposes them to the client.
+
+providers:
+  gemini:
+    name: "Google Gemini & Gemma"
+    type: "gemini"
+    api_key_env: "GEMINI_API_KEY"
+    endpoint: "https://generativelanguage.googleapis.com/v1beta/models"
+    models:
+      - id: "gemini-2.5-flash"
+        name: "Gemini 2.5 Flash (Fast & Capable)"
+        default: true
+        supports_tools: true
+        supports_vision: true
+      - id: "gemini-flash-latest"
+        name: "Gemini Flash Latest"
+        supports_tools: true
+        supports_vision: true
+      - id: "gemini-2.5-flash-lite"
+        name: "Gemini 2.5 Flash-Lite (High Speed)"
+        supports_tools: true
+        supports_vision: true
+      - id: "gemini-3.5-flash"
+        name: "Gemini 3.5 Flash"
+        supports_tools: true
+        supports_vision: true
+      - id: "gemini-3.7-flash"
+        name: "Gemini 3.7 Flash"
+        supports_tools: true
+        supports_vision: true
+      - id: "gemini-3.8-flash"
+        name: "Gemini 3.8 Flash"
+        supports_tools: true
+        supports_vision: true
+      - id: "gemini-3-flash-preview"
+        name: "Gemini 3 Flash Preview"
+        supports_tools: true
+        supports_vision: true
+      - id: "gemini-pro-latest"
+        name: "Gemini Pro Latest (Reasoning)"
+        supports_tools: true
+        supports_vision: true
+      - id: "gemma-4-26b-a4b-it"
+        name: "Gemma 4 26B IT (Google Open Weights)"
+        supports_tools: true
+        supports_vision: true
+      - id: "gemma-4-31b-it"
+        name: "Gemma 4 31B IT (Google Open Weights)"
+        supports_tools: true
+        supports_vision: false
+
+  groq:
+    name: "Groq Cloud"
+    type: "openai_compatible"
+    api_key_env: "API_KEY"
+    base_url: "https://api.groq.com/openai/v1"
+    default_max_tokens: 800
+    models:
+      - id: "qwen/qwen3.8-27b"
+        name: "Qwen 3.8 27B (Groq Ultra-Fast)"
+        supports_tools: true
+        supports_vision: false
+      - id: "qwen/qwen3.6-27b"
+        name: "Qwen 3.6 27B (Groq Fast)"
+        supports_tools: true
+        supports_vision: false
+      - id: "openai/gpt-oss-120b"
+        name: "GPT-OSS 120B (Groq)"
+        supports_tools: true
+        supports_vision: false
+      - id: "openai/gpt-oss-20b"
+        name: "GPT-OSS 20B (Groq)"
+        supports_tools: true
+        supports_vision: false
+      - id: "groq/compound"
+        name: "Groq Compound (Multi-Agent)"
+        supports_tools: true
+        supports_vision: false
+      - id: "groq/compound-mini"
+        name: "Groq Compound Mini"
+        supports_tools: true
+        supports_vision: false
+
+  openrouter:
+    name: "OpenRouter"
+    type: "openai_compatible"
+    api_key_env: "OPEN_ROUTER"
+    base_url: "https://openrouter.ai/api/v1"
+    default_max_tokens: 4096
+    models:
+      - id: "deepseek/deepseek-v4.1-flash"
+        name: "DeepSeek V4.1 Flash (1M Context)"
+        supports_tools: true
+        supports_vision: false
+      - id: "deepseek/deepseek-v4-pro-0813"
+        name: "DeepSeek V4 Pro"
+        supports_tools: true
+        supports_vision: false
+      - id: "qwen/qwen3.8-27b"
+        name: "Qwen 3.8 27B"
+        supports_tools: true
+        supports_vision: false
+      - id: "google/gemma-4-26b-a4b-it:free"
+        name: "Gemma 4 26B IT (Free)"
+        supports_tools: true
+        supports_vision: false
+      - id: "google/gemma-4-31b-it:free"
+        name: "Gemma 4 31B IT (Free)"
+        supports_tools: true
+        supports_vision: false
+      - id: "anthropic/claude-3.7-sonnet"
+        name: "Claude 3.7 Sonnet"
+        supports_tools: true
+        supports_vision: true
+      - id: "meta-llama/llama-3.3-70b-instruct"
+        name: "Llama 3.3 70B Instruct"
+        supports_tools: true
+        supports_vision: false
+
+  cohere:
+    name: "Cohere"
+    type: "cohere"
+    api_key_env: "COHERE_API_KEY"
+    base_url: "https://api.cohere.com/v2"
+    models:
+      - id: "command-a-plus-05-2026"
+        name: "Command A+ (05-2026)"
+        supports_tools: true
+        supports_vision: false
+      - id: "command-a-03-2025"
+        name: "Command A (03-2025)"
+        supports_tools: true
+        supports_vision: false
+      - id: "command-a-vision-07-2025"
+        name: "Command A Vision"
+        supports_tools: true
+        supports_vision: true
+      - id: "command-r-plus-08-2024"
+        name: "Command R+ (08-2024)"
+        supports_tools: true
+        supports_vision: false
+      - id: "c4ai-aya-vision-32b"
+        name: "Aya Vision 32B (Multimodal)"
+        supports_tools: false
+        supports_vision: true
+      - id: "c4ai-aya-expanse-32b"
+        name: "Aya Expanse 32B (Multilingual)"
+        supports_tools: false
+        supports_vision: false
+
+  nvidia:
+    name: "NVIDIA NIM"
+    type: "openai_compatible"
+    api_key_env: "NVIDIA_API_KEY"
+    base_url: "https://integrate.api.nvidia.com/v1"
+    models:
+      - id: "deepseek-ai/deepseek-v4-flash-0731"
+        name: "DeepSeek V4 Flash"
+        supports_tools: true
+        supports_vision: false
+      - id: "deepseek-ai/deepseek-v4-pro-0813"
+        name: "DeepSeek V4 Pro"
+        supports_tools: true
+        supports_vision: false
+      - id: "google/gemma-4-31b-it"
+        name: "Gemma 4 31B IT (NVIDIA NIM)"
+        supports_tools: true
+        supports_vision: false
+      - id: "google/gemma-3-12b-it"
+        name: "Gemma 3 12B IT"
+        supports_tools: true
+        supports_vision: false
+      - id: "nvidia/llama-3.1-nemotron-70b-instruct"
+        name: "Nemotron 70B Instruct"
+        supports_tools: true
+        supports_vision: false
+      - id: "meta/llama-3.2-11b-vision-instruct"
+        name: "Llama 3.2 11B Vision Instruct"
+        supports_tools: true
+        supports_vision: true
+
+  mistral:
+    name: "Mistral AI"
+    type: "openai_compatible"
+    api_key_env: "MISTRAL_API_KEY"
+    base_url: "https://api.mistral.ai/v1"
+    models:
+      - id: "mistral-large-latest"
+        name: "Mistral Large Latest"
+        supports_tools: true
+        supports_vision: false
+      - id: "codestral-latest"
+        name: "Codestral Latest (Coding Specialist)"
+        supports_tools: true
+        supports_vision: false
+      - id: "mistral-small-latest"
+        name: "Mistral Small Latest"
+        supports_tools: true
+        supports_vision: false
+
+  puter:
+    name: "Puter Free Models"
+    type: "puter"
+    api_key_env: null
+    models:
+      - id: "gpt-4o"
+        name: "GPT-4o"
+        supports_tools: true
+        supports_vision: true
+      - id: "gpt-4o-mini"
+        name: "GPT-4o Mini"
+        supports_tools: true
+        supports_vision: true
+      - id: "claude-3-7-sonnet"
+        name: "Claude 3.7 Sonnet"
+        supports_tools: true
+        supports_vision: true
+      - id: "claude-3-5-sonnet"
+        name: "Claude 3.5 Sonnet"
+        supports_tools: true
+        supports_vision: true
+      - id: "dots-studio/dots-3-note-preview:free"
+        name: "dots-3-note-preview (Free)"
+        supports_tools: true
+        supports_vision: false
+      - id: "deepseek-reasoner"
+        name: "DeepSeek Reasoner R1"
+        supports_tools: true
+        supports_vision: false
+      - id: "deepseek-chat"
+        name: "DeepSeek Chat V3"
+        supports_tools: true
+        supports_vision: false

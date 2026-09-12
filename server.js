@@ -1,8 +1,176 @@
 const http = require("http");
 const fs = require("fs");
-const path = require("url");
+const path = require("path");
+const url = require("url");
 const os = require("os");
 const { spawn, exec } = require("child_process");
+const YAML = require("yaml");
+
+function getEnvKey(keyName) {
+    if (!keyName) return null;
+    if (process.env[keyName]) return process.env[keyName];
+    try {
+        const bashrcPath = path.join(os.homedir(), ".bashrc");
+        if (fs.existsSync(bashrcPath)) {
+            const content = fs.readFileSync(bashrcPath, "utf8");
+            const match = content.match(new RegExp(`export\\s+${keyName}=["']?([^"'\\r\\n]+)["']?`));
+            if (match && match[1]) {
+                process.env[keyName] = match[1].trim();
+                return process.env[keyName];
+            }
+        }
+    } catch (e) {
+        // ignore
+    }
+    return null;
+}
+
+function loadModelsConfig() {
+    try {
+        const yamlPath = path.join(__dirname, "models.yaml");
+        if (fs.existsSync(yamlPath)) {
+            const fileContent = fs.readFileSync(yamlPath, "utf8");
+            return YAML.parse(fileContent) || { providers: {} };
+        }
+    } catch (e) {
+        console.error("[MODELS] Error loading models.yaml:", e.message);
+    }
+    return { providers: {} };
+}
+
+// ---------------------------------------------------------
+// Universal Chat Message Normalization Layer
+// ---------------------------------------------------------
+function normalizeMessage(msg, supportsTools = true, supportsVision = true) {
+    if (!msg || typeof msg !== "object") return null;
+    const role = msg.role;
+
+    if (role === "system") {
+        return {
+            role: "system",
+            content: typeof msg.content === "string" ? msg.content : String(msg.content || "")
+        };
+    }
+
+    if (role === "user") {
+        if (Array.isArray(msg.content)) {
+            if (supportsVision) {
+                const parts = [];
+                for (const part of msg.content) {
+                    if (part.type === "text") {
+                        parts.push({ type: "text", text: String(part.text || "") });
+                    } else if (part.type === "image_url" && part.image_url?.url) {
+                        parts.push({
+                            type: "image_url",
+                            image_url: { url: String(part.image_url.url) }
+                        });
+                    }
+                }
+                return { role: "user", content: parts };
+            } else {
+                let text = "";
+                let imgCount = 0;
+                for (const part of msg.content) {
+                    if (part.type === "text") text += (part.text || "") + " ";
+                    if (part.type === "image_url") imgCount++;
+                }
+                if (imgCount > 0) {
+                    text += `\n[Note: ${imgCount} image(s) attached, but model is text-only]`;
+                }
+                return { role: "user", content: text.trim() };
+            }
+        }
+        return {
+            role: "user",
+            content: typeof msg.content === "string" ? msg.content : String(msg.content || "")
+        };
+    }
+
+    if (role === "assistant") {
+        const hasToolCalls = msg.tool_calls && Array.isArray(msg.tool_calls) && msg.tool_calls.length > 0;
+        if (hasToolCalls) {
+            if (supportsTools) {
+                return {
+                    role: "assistant",
+                    content: typeof msg.content === "string" ? msg.content : null,
+                    tool_calls: msg.tool_calls.map(tc => ({
+                        id: String(tc.id || ("call_" + Math.random().toString(36).substring(2, 9))),
+                        type: "function",
+                        function: {
+                            name: String(tc.function?.name || ""),
+                            arguments: typeof tc.function?.arguments === "string"
+                                ? tc.function.arguments
+                                : JSON.stringify(tc.function?.arguments || {})
+                        }
+                    }))
+                };
+            } else {
+                const toolNames = msg.tool_calls.map(tc => tc.function?.name).filter(Boolean).join(", ");
+                return {
+                    role: "assistant",
+                    content: msg.content || (toolNames ? `[Action taken: ${toolNames}]` : "[Action taken]")
+                };
+            }
+        }
+        return {
+            role: "assistant",
+            content: typeof msg.content === "string" ? msg.content : String(msg.content || "")
+        };
+    }
+
+    if (role === "tool") {
+        if (supportsTools) {
+            return {
+                role: "tool",
+                name: msg.name ? String(msg.name) : undefined,
+                tool_call_id: String(msg.tool_call_id || ""),
+                content: typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content)
+            };
+        } else {
+            return {
+                role: "user",
+                content: `[Tool Result]: ${typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content)}`
+            };
+        }
+    }
+
+    return {
+        role: "user",
+        content: typeof msg.content === "string" ? msg.content : String(msg.content || "")
+    };
+}
+
+function normalizeMessages(messages, supportsTools = true, supportsVision = true) {
+    if (!Array.isArray(messages)) return [];
+    return messages.map(m => normalizeMessage(m, supportsTools, supportsVision)).filter(Boolean);
+}
+
+function formatAssistantResponse(rawMessage) {
+    if (!rawMessage || typeof rawMessage !== "object") {
+        return { role: "assistant", content: "" };
+    }
+    const clean = {
+        role: "assistant",
+        content: typeof rawMessage.content === "string"
+            ? rawMessage.content
+            : (Array.isArray(rawMessage.content) ? rawMessage.content.map(c => c.text || "").join("") : (rawMessage.content || ""))
+    };
+    if (rawMessage.tool_calls && Array.isArray(rawMessage.tool_calls) && rawMessage.tool_calls.length > 0) {
+        clean.tool_calls = rawMessage.tool_calls.map(tc => ({
+            id: String(tc.id || ("call_" + Math.random().toString(36).substring(2, 9))),
+            type: "function",
+            function: {
+                name: String(tc.function?.name || ""),
+                arguments: typeof tc.function?.arguments === "string"
+                    ? tc.function.arguments
+                    : JSON.stringify(tc.function?.arguments || {})
+            }
+        }));
+    }
+    return clean;
+}
+
+
 
 function getSystemInfo() {
     const platform = os.platform();
@@ -182,6 +350,33 @@ async function tinyfishSearch(args) {
     return JSON.parse(text);
 }
 
+async function tinyfishFetch(args) {
+    if (!TINYFISH_API_KEY) {
+        throw new Error("TINYFISH_API_KEY is not set in the server environment. Web fetch is unavailable.");
+    }
+    let urls = [];
+    if (Array.isArray(args.urls)) {
+        urls = args.urls.map(u => String(u || "").trim()).filter(Boolean);
+    } else if (typeof args.url === "string" && args.url.trim()) {
+        urls = [args.url.trim()];
+    }
+    if (urls.length === 0) throw new Error("No URL(s) provided to fetch");
+    if (urls.length > 10) urls = urls.slice(0, 10);
+
+    const format = (args.format === "html" || args.format === "json") ? args.format : "markdown";
+    const response = await fetch("https://api.fetch.tinyfish.ai", {
+        method: "POST",
+        headers: {
+            "X-API-Key": TINYFISH_API_KEY,
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ urls, format })
+    });
+    const text = await response.text();
+    if (!response.ok) throw new Error(`TinyFish Fetch HTTP ${response.status}: ${text}`);
+    return JSON.parse(text);
+}
+
 function sendJSON(res, status, data) {
     const body = JSON.stringify(data);
     res.writeHead(status, {
@@ -202,7 +397,11 @@ const server = http.createServer(async (req, res) => {
         return res.end();
     }
 
-    if (req.method === "GET" && req.url === "/api/system-info") {
+    if ((req.method === "GET" || req.method === "HEAD") && req.url === "/api/system-info") {
+        if (req.method === "HEAD") {
+            res.writeHead(200, { "Content-Type": "application/json" });
+            return res.end();
+        }
         return sendJSON(res, 200, getSystemInfo());
     }
 
@@ -251,19 +450,339 @@ const server = http.createServer(async (req, res) => {
         }
     }
 
-    if (req.method === "GET") {
-        let file = req.url === "/" ? "/index.html" : req.url;
-        if (file.includes("..")) {
+    if (req.method === "POST" && req.url === "/api/fetch") {
+        try {
+            let body = "";
+            for await (const chunk of req) body += chunk;
+            const args = JSON.parse(body || "{}");
+            const result = await tinyfishFetch(args);
+            return sendJSON(res, 200, result);
+        } catch (error) {
+            return sendJSON(res, 500, { error: error.message });
+        }
+    }
+
+    if ((req.method === "GET" || req.method === "HEAD") && req.url === "/api/models") {
+        if (req.method === "HEAD") {
+            res.writeHead(200, { "Content-Type": "application/json" });
+            return res.end();
+        }
+        const config = loadModelsConfig();
+        const resultProviders = [];
+        for (const [providerId, provider] of Object.entries(config.providers || {})) {
+            const key = provider.api_key_env ? getEnvKey(provider.api_key_env) : null;
+            const isAvailable = !provider.api_key_env || Boolean(key);
+            resultProviders.push({
+                id: providerId,
+                name: provider.name || providerId,
+                type: provider.type,
+                available: isAvailable,
+                has_key: Boolean(key),
+                models: (provider.models || []).map(m => ({
+                    id: m.id,
+                    name: m.name || m.id,
+                    default: Boolean(m.default),
+                    supports_tools: m.supports_tools !== false,
+                    supports_vision: Boolean(m.supports_vision),
+                    provider: providerId
+                }))
+            });
+        }
+        return sendJSON(res, 200, { providers: resultProviders });
+    }
+
+    if (req.method === "POST" && req.url === "/api/chat") {
+        try {
+            let body = "";
+            for await (const chunk of req) body += chunk;
+            const data = JSON.parse(body || "{}");
+            const { model, messages, tools, tool_choice } = data;
+            let providerId = data.provider;
+
+            const config = loadModelsConfig();
+            if (!providerId) {
+                for (const [pId, pData] of Object.entries(config.providers || {})) {
+                    if ((pData.models || []).some(m => m.id === model)) {
+                        providerId = pId;
+                        break;
+                    }
+                }
+            }
+
+            const provider = config.providers?.[providerId];
+            if (!provider) {
+                return sendJSON(res, 400, { error: `Unknown provider or model '${model}'` });
+            }
+
+            const apiKey = provider.api_key_env ? getEnvKey(provider.api_key_env) : null;
+            if (provider.api_key_env && !apiKey) {
+                return sendJSON(res, 400, { error: `API key for provider '${provider.name}' (${provider.api_key_env}) is not set.` });
+            }
+
+            const modelMeta = (provider.models || []).find(m => m.id === model);
+            const supportsTools = modelMeta ? (modelMeta.supports_tools !== false) : true;
+            const supportsVision = modelMeta ? Boolean(modelMeta.supports_vision) : false;
+            const normalizedMessages = normalizeMessages(messages, supportsTools, supportsVision);
+
+            // 1. Google Gemini
+            if (provider.type === "gemini") {
+                const systemParts = [];
+                const contents = [];
+
+                for (const msg of normalizedMessages) {
+                    if (msg.role === "system") {
+                        systemParts.push({ text: msg.content });
+                    } else if (msg.role === "user") {
+                        const userParts = [];
+                        if (Array.isArray(msg.content)) {
+                            for (const part of msg.content) {
+                                if (part.type === "text" && part.text) {
+                                    userParts.push({ text: part.text });
+                                } else if (part.type === "image_url" && part.image_url?.url) {
+                                    const url = part.image_url.url;
+                                    const match = url.match(/^data:([^;]+);base64,(.+)$/);
+                                    if (match) {
+                                        userParts.push({
+                                            inlineData: {
+                                                mimeType: match[1],
+                                                data: match[2]
+                                            }
+                                        });
+                                    }
+                                }
+                            }
+                        } else if (typeof msg.content === "string") {
+                            userParts.push({ text: msg.content });
+                        }
+                        if (userParts.length === 0) userParts.push({ text: " " });
+                        contents.push({ role: "user", parts: userParts });
+                    } else if (msg.role === "assistant") {
+                        const parts = [];
+                        if (msg.tool_calls && Array.isArray(msg.tool_calls)) {
+                            for (const tc of msg.tool_calls) {
+                                let args = {};
+                                try {
+                                    args = typeof tc.function?.arguments === "string" ? JSON.parse(tc.function.arguments || "{}") : (tc.function?.arguments || {});
+                                } catch (e) {
+                                    args = {};
+                                }
+                                parts.push({
+                                    functionCall: {
+                                        name: tc.function?.name || "",
+                                        args
+                                    }
+                                });
+                            }
+                        }
+                        if (msg.content) {
+                            parts.unshift({ text: msg.content });
+                        }
+                        if (parts.length > 0) {
+                            contents.push({ role: "model", parts });
+                        }
+                    } else if (msg.role === "tool") {
+                        const toolName = msg.name || "tool";
+                        contents.push({
+                            role: "user",
+                            parts: [{
+                                functionResponse: {
+                                    name: toolName,
+                                    response: {
+                                        name: toolName,
+                                        content: msg.content
+                                    }
+                                }
+                            }]
+                        });
+                    }
+                }
+
+                const payload = { contents };
+                if (systemParts.length > 0) {
+                    payload.systemInstruction = { parts: systemParts };
+                }
+                if (supportsTools && tools && tools.length > 0 && tool_choice !== "none") {
+                    payload.tools = [{
+                        functionDeclarations: tools.map(t => ({
+                            name: t.function.name,
+                            description: t.function.description || "",
+                            parameters: t.function.parameters || { type: "object" }
+                        }))
+                    }];
+                }
+
+                const endpoint = `${provider.endpoint || "https://generativelanguage.googleapis.com/v1beta/models"}/${model}:generateContent?key=${apiKey}`;
+                const apiRes = await fetch(endpoint, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload)
+                });
+
+                const resText = await apiRes.text();
+                if (!apiRes.ok) {
+                    return sendJSON(res, apiRes.status, { error: `Gemini API error (${apiRes.status}): ${resText}` });
+                }
+
+                const geminiData = JSON.parse(resText);
+                const candidate = geminiData.candidates?.[0];
+                const parts = candidate?.content?.parts || [];
+                let text = "";
+                const toolCalls = [];
+
+                const nonThoughtParts = parts.filter(p => p.text && !p.thought);
+                const textParts = nonThoughtParts.length > 0 ? nonThoughtParts : (parts.some(p => p.functionCall) ? [] : parts.filter(p => p.text));
+                for (const part of textParts) {
+                    text += part.text;
+                }
+
+                for (const part of parts) {
+                    if (part.functionCall) {
+                        toolCalls.push({
+                            id: part.functionCall.id || ("call_" + Math.random().toString(36).substring(2, 10)),
+                            type: "function",
+                            function: {
+                                name: part.functionCall.name,
+                                arguments: JSON.stringify(part.functionCall.args || {})
+                            }
+                        });
+                    }
+                }
+
+                return sendJSON(res, 200, {
+                    message: formatAssistantResponse({
+                        content: text,
+                        tool_calls: toolCalls
+                    })
+                });
+            }
+
+            // 2. Cohere v2
+            if (provider.type === "cohere") {
+                const payload = {
+                    model,
+                    messages: normalizedMessages
+                };
+                if (supportsTools && tools && tools.length > 0 && tool_choice !== "none") {
+                    payload.tools = tools;
+                }
+
+                const endpoint = `${provider.base_url || "https://api.cohere.com/v2"}/chat`;
+                const apiRes = await fetch(endpoint, {
+                    method: "POST",
+                    headers: {
+                        "Authorization": `Bearer ${apiKey}`,
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                const resText = await apiRes.text();
+                if (!apiRes.ok) {
+                    return sendJSON(res, apiRes.status, { error: `Cohere API error (${apiRes.status}): ${resText}` });
+                }
+
+                const cohereData = JSON.parse(resText);
+                return sendJSON(res, 200, {
+                    message: formatAssistantResponse(cohereData.message)
+                });
+            }
+
+            // 3. OpenAI-Compatible (Groq, OpenRouter, NVIDIA, Mistral)
+            if (provider.type === "openai_compatible") {
+                const payload = {
+                    model,
+                    messages: normalizedMessages
+                };
+                if (provider.default_max_tokens) {
+                    payload.max_tokens = provider.default_max_tokens;
+                }
+                if (supportsTools && tools && tools.length > 0 && tool_choice !== "none") {
+                    payload.tools = tools;
+                    if (tool_choice) payload.tool_choice = tool_choice;
+                }
+
+                const endpoint = `${provider.base_url}/chat/completions`;
+                const apiRes = await fetch(endpoint, {
+                    method: "POST",
+                    headers: {
+                        "Authorization": `Bearer ${apiKey}`,
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                const resText = await apiRes.text();
+                if (!apiRes.ok) {
+                    return sendJSON(res, apiRes.status, { error: `${provider.name} error (${apiRes.status}): ${resText}` });
+                }
+
+                const openAIData = JSON.parse(resText);
+                const choice = openAIData.choices?.[0];
+                return sendJSON(res, 200, {
+                    message: formatAssistantResponse(choice?.message)
+                });
+            }
+
+            return sendJSON(res, 400, { error: `Unsupported provider type '${provider.type}'` });
+        } catch (error) {
+            console.error("[CHAT API ERROR]", error);
+            return sendJSON(res, 500, { error: error.message });
+        }
+    }
+
+
+    if (req.method === "GET" || req.method === "HEAD") {
+        let reqPath = req.url.split("?")[0];
+        if (reqPath.startsWith("/MultiAI-MODular")) {
+            reqPath = reqPath.slice("/MultiAI-MODular".length);
+            if (!reqPath.startsWith("/")) reqPath = "/" + reqPath;
+        }
+        if (reqPath.includes("..")) {
             res.writeHead(400);
             return res.end("Bad request");
         }
-        fs.readFile("." + file, (err, data) => {
+
+        let filePath = "";
+        if (reqPath === "/" || reqPath === "/index.html" || reqPath === "/modular") {
+            filePath = "./MultiAI-MODular/index.html";
+        } else if (reqPath.startsWith("/styles/") || reqPath.startsWith("/src/")) {
+            filePath = "./MultiAI-MODular" + reqPath;
+        } else if (fs.existsSync("." + reqPath) && !fs.statSync("." + reqPath).isDirectory()) {
+            filePath = "." + reqPath;
+        } else if (fs.existsSync("./MultiAI-MODular" + reqPath) && !fs.statSync("./MultiAI-MODular" + reqPath).isDirectory()) {
+            filePath = "./MultiAI-MODular" + reqPath;
+        } else {
+            filePath = "./MultiAI-MODular/index.html";
+        }
+
+        fs.readFile(filePath, (err, data) => {
             if (err) {
                 res.writeHead(404);
                 return res.end("Not found");
             }
-            const type = file.endsWith(".html") ? "text/html" : file.endsWith(".js") ? "text/javascript" : file.endsWith(".css") ? "text/css" : "application/octet-stream";
-            res.writeHead(200, { "Content-Type": type });
+            const ext = filePath.split(".").pop().toLowerCase();
+            const mimeTypes = {
+                html: "text/html",
+                js: "text/javascript",
+                mjs: "text/javascript",
+                css: "text/css",
+                json: "application/json",
+                svg: "image/svg+xml",
+                png: "image/png",
+                jpg: "image/jpeg",
+                ico: "image/x-icon"
+            };
+            const type = mimeTypes[ext] || "application/octet-stream";
+            res.writeHead(200, { 
+                "Content-Type": type,
+                "Content-Length": Buffer.byteLength(data),
+                "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0"
+            });
+            if (req.method === "HEAD") {
+                return res.end();
+            }
             res.end(data);
         });
         return;

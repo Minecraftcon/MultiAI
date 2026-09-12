@@ -1,0 +1,692 @@
+/* =========================================================
+   INPUT AREA, COMPOSER, STAGED ATTACHMENTS & BOTTOM SHEET
+   ========================================================= */
+#inputArea {
+    position: absolute;
+    bottom: 0; 
+    left: 0; 
+    right: 0;
+    display: flex;
+    justify-content: center;
+    padding: 16px 20px calc(24px + env(safe-area-inset-bottom, 0px));
+    pointer-events: none;
+    background: linear-gradient(to bottom, transparent 0%, #0f0f0f 40%, #0f0f0f 100%);
+    z-index: 50;
+}
+
+.composer {
+    pointer-events: auto !important;
+    width: min(900px, 100%);
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    padding: 8px 12px;
+    background: #1b1b1b;
+    border: 1px solid #333;
+    border-radius: 24px;
+    box-shadow: 0 8px 30px rgba(0,0,0,.45);
+    position: relative;
+    z-index: 51;
+    transition: border-color 0.15s ease;
+}
+
+.composer:focus-within {
+    border-color: #4f4f4f;
+}
+
+/* Plus Attachment Button on the Left */
+.attach-btn {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    border-radius: 50%;
+    border: 1px solid #333;
+    background: #242424;
+    color: #ccc;
+    cursor: pointer;
+    margin-bottom: 2px;
+    transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;
+}
+
+.attach-btn:hover {
+    background: #2e2e2e;
+    color: #fff;
+    border-color: #444;
+}
+
+.attach-btn:active {
+    transform: scale(0.94);
+}
+
+.attach-btn svg {
+    width: 19px;
+    height: 19px;
+    stroke-width: 2.2;
+}
+
+/* Center column with staged files strip and input */
+.composer-main-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    gap: 4px;
+}
+
+/* Staged Attachment Preview Strip */
+.staged-attachments-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 6px 8px 2px;
+    max-height: 130px;
+    overflow-y: auto;
+}
+
+.staged-att-item {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+}
+
+.staged-img-preview {
+    position: relative;
+    width: 52px;
+    height: 52px;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid #444;
+    background: #111;
+}
+
+.staged-img-preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.staged-doc-preview {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    background: #242424;
+    border: 1px solid #3a3a3a;
+    border-radius: 12px;
+    font-size: 12px;
+    color: #eee;
+    max-width: 210px;
+}
+
+.staged-doc-preview svg {
+    width: 15px;
+    height: 15px;
+    color: #8ab4f8;
+    flex-shrink: 0;
+}
+
+.staged-doc-name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.staged-doc-size {
+    color: #888;
+    font-size: 11px;
+    flex-shrink: 0;
+}
+
+.staged-att-del {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #333;
+    border: 1px solid #555;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 0;
+    transition: background 0.15s;
+    z-index: 2;
+}
+
+.staged-att-del:hover {
+    background: #e53935;
+    border-color: #f44336;
+}
+
+.staged-att-del svg {
+    width: 10px;
+    height: 10px;
+}
+
+/* Textarea input */
+textarea {
+    flex: 1;
+    resize: none;
+    min-height: 24px;
+    max-height: 150px;
+    padding: 6px 8px;
+    background: transparent;
+    border: none;
+    color: white;
+    font-size: 15.5px;
+    line-height: 1.4;
+    outline: none;
+    font-family: inherit;
+    pointer-events: auto !important;
+    user-select: text !important;
+    -webkit-user-select: text !important;
+}
+
+/* Send button */
+#send {
+    width: 36px; 
+    height: 36px;
+    display: flex; 
+    align-items: center; 
+    justify-content: center;
+    flex-shrink: 0;
+    border-radius: 50%;
+    border: none;
+    background: white; 
+    color: black;
+    cursor: pointer;
+    margin-bottom: 2px;
+    transition: background 0.2s, transform 0.15s;
+    pointer-events: auto !important;
+}
+
+#send:hover { background: #ddd; }
+#send:active { transform: scale(0.94); }
+#send:disabled { opacity: .5; cursor: default; }
+#send svg { width: 18px; height: 18px; stroke-width: 2.5; }
+
+#send.generating {
+    background: #ffffff;
+    color: #000000;
+}
+#send.generating:hover {
+    background: #cccccc;
+}
+#send.generating svg {
+    width: 12px;
+    height: 12px;
+    fill: #000000;
+    stroke: none;
+}
+#send.generating svg rect {
+    rx: 3.5px;
+    ry: 3.5px;
+}
+
+/* =========================================================
+   BOTTOM SHEET ATTACHMENT DRAWER (SLIDE UP FROM BOTTOM)
+   ========================================================= */
+.attach-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    z-index: 90;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.attach-backdrop.active {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.attach-sheet {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    max-width: 680px;
+    margin: 0 auto;
+    height: min(50vh, 390px);
+    max-height: 50vh;
+    background: #171717;
+    border-top: 1px solid #333;
+    border-top-left-radius: 24px;
+    border-top-right-radius: 24px;
+    box-shadow: 0 -12px 48px rgba(0, 0, 0, 0.6);
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    transform: translate3d(0, 100%, 0);
+    will-change: transform;
+    transition: transform 0.3s cubic-bezier(0.2, 0.9, 0.3, 1);
+    padding-bottom: env(safe-area-inset-bottom, 12px);
+    user-select: none;
+}
+
+.attach-sheet.active {
+    transform: translate3d(0, 0, 0);
+}
+
+.attach-sheet.animate-transition {
+    transition: transform 0.28s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+/* Top drag handle */
+.sheet-handle-bar {
+    width: 100%;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: grab;
+    touch-action: none;
+    flex-shrink: 0;
+}
+
+.sheet-drag-handle {
+    width: 44px;
+    height: 5px;
+    background: #444;
+    border-radius: 10px;
+    transition: background 0.15s;
+}
+
+.sheet-handle-bar:active .sheet-drag-handle {
+    background: #666;
+}
+
+/* Header */
+.sheet-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 2px 20px 14px;
+    font-size: 15px;
+    font-weight: 700;
+    color: #eee;
+    border-bottom: 1px solid #282828;
+    flex-shrink: 0;
+}
+
+/* Action Cards Grid */
+.sheet-actions-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px;
+    padding: 20px;
+    flex: 1;
+    align-content: start;
+}
+
+.sheet-action-card {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 16px;
+    background: #202020;
+    border: 1px solid #333;
+    border-radius: 16px;
+    color: #eee;
+    cursor: pointer;
+    font-family: inherit;
+    text-align: left;
+    transition: background 0.15s ease, border-color 0.15s ease, transform 0.12s ease;
+}
+
+.sheet-action-card:hover {
+    background: #272727;
+    border-color: #4a4a4a;
+    transform: translateY(-2px);
+}
+
+.sheet-action-card:active {
+    transform: scale(0.97);
+}
+
+.sheet-action-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    flex-shrink: 0;
+}
+
+.sheet-action-icon.image-icon-bg {
+    background: linear-gradient(135deg, #2563eb, #3b82f6);
+}
+
+.sheet-action-icon.doc-icon-bg {
+    background: linear-gradient(135deg, #059669, #10b981);
+}
+
+.sheet-action-icon svg {
+    width: 22px;
+    height: 22px;
+}
+
+.sheet-action-text {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.sheet-action-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: #fff;
+}
+
+.sheet-action-desc {
+    font-size: 12px;
+    color: #999;
+}
+
+/* App Toast Notification */
+.app-toast {
+    position: fixed;
+    top: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-20px);
+    background: #252525;
+    border: 1px solid #444;
+    color: #f1f1f1;
+    padding: 12px 20px;
+    border-radius: 12px;
+    font-size: 13.5px;
+    font-weight: 500;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+    z-index: 200;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease, transform 0.25s ease;
+    max-width: 90vw;
+    text-align: center;
+}
+
+.app-toast.show {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateX(-50%) translateY(0);
+}
+
+.highlight-pulse {
+    animation: pulseBorder 1.5s ease-in-out infinite;
+}
+
+@keyframes pulseBorder {
+    0%, 100% { border-color: #383838; }
+    50% { border-color: #3b82f6; box-shadow: 0 0 10px rgba(59, 130, 246, 0.4); }
+}
+
+/* Image Lightbox */
+.image-lightbox {
+    position: fixed;
+    inset: 0;
+    z-index: 300;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+}
+
+.image-lightbox.active {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.lightbox-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.88);
+    backdrop-filter: blur(8px);
+}
+
+.lightbox-container {
+    position: relative;
+    max-width: 92vw;
+    max-height: 90vh;
+    z-index: 301;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.lightbox-container img {
+    max-width: 100%;
+    max-height: 85vh;
+    border-radius: 12px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.8);
+    object-fit: contain;
+}
+
+.lightbox-close {
+    position: absolute;
+    top: -42px;
+    right: 0;
+    background: rgba(255,255,255,0.15);
+    border: none;
+    color: #fff;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.lightbox-close:hover {
+    background: rgba(255,255,255,0.3);
+}
+
+/* Drag over body highlight */
+body.drag-over .composer {
+    border-color: #3b82f6;
+    box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
+}
+
+/* =========================================================
+   ERROR RECOVERY POPUP (SLIDE IN FROM RIGHT OVER CHATBOX)
+   ========================================================= */
+.error-recovery-popup {
+    position: fixed;
+    bottom: 86px;
+    right: 24px;
+    z-index: 9999;
+    width: min(380px, calc(100vw - 32px));
+    background: #1e1e1e;
+    border: 1px solid #333333;
+    border-radius: 16px;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.8), 0 4px 16px rgba(0, 0, 0, 0.5);
+    padding: 16px 18px;
+    display: flex;
+    flex-direction: column;
+    transform: translate3d(140%, 0, 0);
+    opacity: 0;
+    pointer-events: none;
+    transition: transform 0.32s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.22s ease;
+    user-select: none;
+}
+
+.error-recovery-popup.active {
+    transform: translate3d(0, 0, 0);
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.recovery-popup-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.recovery-popup-title-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.recovery-alert-icon {
+    width: 17px;
+    height: 17px;
+    color: #888888;
+    flex-shrink: 0;
+}
+
+.recovery-popup-title {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: #f5f5f5;
+    letter-spacing: -0.01em;
+}
+
+.recovery-close-btn {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: transparent;
+    border: none;
+    color: #777;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    transition: background 0.15s, color 0.15s;
+}
+
+.recovery-close-btn:hover {
+    background: #2a2a2a;
+    color: #eee;
+}
+
+.recovery-close-btn svg {
+    width: 15px;
+    height: 15px;
+}
+
+.recovery-popup-body {
+    font-size: 13px;
+    color: #999999;
+    line-height: 1.45;
+    margin: 8px 0 16px;
+}
+
+.recovery-popup-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.recovery-btn {
+    font-family: inherit;
+    border-radius: 10px;
+    padding: 7px 16px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.15s ease, transform 0.12s ease, color 0.15s ease;
+}
+
+.recovery-btn-cancel {
+    background: #2a2a2a;
+    color: #bbb;
+    border: 1px solid #383838;
+    font-weight: 500;
+}
+
+.recovery-btn-cancel:hover {
+    background: #333333;
+    color: #fff;
+}
+
+.recovery-btn-continue {
+    background: #ffffff;
+    color: #000000;
+    border: none;
+    font-weight: 600;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+.recovery-btn-continue:hover {
+    background: #ececec;
+    transform: translateY(-1px);
+}
+
+.recovery-btn-continue:active {
+    transform: scale(0.97);
+}
+
+@media (max-width: 600px) {
+    .error-recovery-popup {
+        bottom: 78px;
+        right: 12px;
+        left: 12px;
+        width: auto;
+        max-width: calc(100vw - 24px);
+    }
+}
+
+/* Intercepted in-chat error card (minimal monochrome) */
+.ai-error-notice {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 12px 14px;
+    background: #1e1e1e;
+    border: 1px solid #333333;
+    border-radius: 12px;
+    margin-top: 6px;
+}
+
+.ai-error-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #e5e5e5;
+    letter-spacing: -0.01em;
+}
+
+.ai-error-badge svg {
+    width: 15px;
+    height: 15px;
+    color: #888888;
+}
+
+.ai-error-text {
+    font-size: 13px;
+    color: #999999;
+    line-height: 1.5;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .error-recovery-popup {
+        transition: opacity 0.15s ease !important;
+        transform: none !important;
+    }
+    .error-recovery-popup:not(.active) {
+        display: none !important;
+    }
+}

@@ -1,0 +1,192 @@
+/* =========================================================
+   ACTIVITY ACCORDION & REASONING BADGES
+   ========================================================= */
+.activity-wrapper {
+    display: none;
+    margin-bottom: 14px;
+}
+
+.activity-toggle {
+    cursor: pointer;
+    color: #999;
+    font-size: 13.5px;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    user-select: none;
+    background: transparent;
+    border: none;
+    padding: 4px 0;
+    font-family: inherit;
+    transition: color 0.2s ease;
+}
+
+.activity-toggle:hover {
+    color: #ddd;
+}
+
+.activity-toggle .chevron {
+    font-size: 10px;
+    width: 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.activity-wrapper.open .activity-toggle .chevron {
+    transform: rotate(90deg);
+}
+
+.activity-collapse {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.activity-wrapper.open .activity-collapse {
+    grid-template-rows: 1fr;
+}
+
+.activity-overflow {
+    overflow: hidden;
+}
+
+.activity-content {
+    margin: 8px 0 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.search-items-container {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.search-items-container::before {
+    content: "";
+    position: absolute;
+    left: 17px;
+    top: 18px;
+    bottom: 18px;
+    width: 2px;
+    background: #383838;
+}
+
+.search-items-container:empty::before {
+    opacity: 0;
+}
+
+.search-badge-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 13.5px;
+    line-height: 1.4;
+    animation: popIn 0.4s ease;
+    position: relative;
+    z-index: 1;
+}
+
+.search-badge-item.clickable-badge {
+    cursor: pointer;
+    user-select: none;
+}
+
+.search-badge-item.clickable-badge:hover .search-query {
+    color: #ffffff;
+    text-decoration: underline;
+}
+
+.badge-expand-chevron {
+    font-size: 9px;
+    display: inline-block;
+    color: #666;
+    margin-left: 6px;
+    transition: transform 0.2s ease, color 0.2s ease;
+    vertical-align: middle;
+}
+
+.search-badge-item.open .badge-expand-chevron {
+    transform: rotate(90deg);
+    color: #bbb;
+}
+
+/* Icons & Progress Ring */
+.search-icon-circle {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: #242424;
+    border: 1px solid #383838;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    color: #888;
+    position: relative;
+    transition: color 0.25s ease, border-color 0.25s ease;
+}
+
+.search-icon-circle.has-timer-ring {
+    border-color: transparent;
+    color: #ffffff;
+}
+
+.timer-badge.timer-finished .search-icon-circle {
+    color: #888 !important;
+    border-color: #383838 !important;
+}
+
+.search-icon-circle i svg,
+.search-icon-circle > svg:not(.timer-ring-svg) {
+    width: 17px;
+    height: 17px;
+    display: block;
+    position: relative;
+    z-index: 2;
+}
+
+.timer-ring-svg {
+    position: absolute;
+    inset: -1px;
+    width: 36px !important;
+    height: 36px !important;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.timer-ring-bg {
+    fill: none;
+    stroke: #383838;
+    stroke-width: 1.5;
+}
+
+.timer-ring-bar {
+    fill: none;
+    stroke: #ffffff;
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    stroke-dasharray: 108.39;
+    stroke-dashoffset: 108.39;
+    transition: stroke 0.3s ease;
+}
+
+.timer-badge.timer-finished .timer-ring-bar {
+    stroke-dashoffset: 0;
+    stroke: #383838 !important;
+}
+
+.search-label {
+    color: #777;
+    margin-right: 4px;
+}
+
+.search-query {
+    color: #ddd;
+    font-weight: 500;
+}
