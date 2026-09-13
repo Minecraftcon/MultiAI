@@ -17,7 +17,7 @@
     <!-- UI Font -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 
     <!-- Markdown -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
@@ -64,26 +64,75 @@
 
 <!-- ================= SIDE PANEL ================= -->
 <aside id="sidePanel" aria-hidden="true">
+    <!-- Panel Header: MultiAI Title & Collapse Button (No glowing badge as requested) -->
     <div class="panel-header">
-        <span>Conversations</span>
-        <button id="panelClose" class="icon-btn" type="button" aria-label="Close panel">
-            <i data-lucide="panel-left"></i>
-        </button>
-    </div>
-
-    <div class="panel-top-actions">
-        <button id="newChat" class="panel-action" type="button">
-            <span>+ New chat</span>
-        </button>
-    </div>
-
-    <div class="panel-body">
-        <div class="panel-section-title">
-            <span>Recent Chats</span>
-            <span id="chatCountBadge" class="count-badge">0</span>
+        <div class="panel-brand">
+            <span class="panel-brand-title">MultiAI</span>
         </div>
+        <button id="panelClose" class="icon-btn panel-close-btn" type="button" aria-label="Close panel" title="Close panel">
+            <i data-lucide="panel-left-close"></i>
+        </button>
+    </div>
+
+    <!-- Quick Navigation Actions -->
+    <div class="panel-nav">
+        <button id="newChat" class="panel-nav-btn" type="button" title="Start a new chat">
+            <i data-lucide="square-pen"></i>
+            <span>New Chat</span>
+        </button>
+        <button id="newVoiceBtn" class="panel-nav-btn" type="button" title="Start voice conversation">
+            <i data-lucide="audio-lines"></i>
+            <span>New Voice Chat</span>
+        </button>
+        <button id="newImageBtn" class="panel-nav-btn" type="button" title="Generate an image">
+            <i data-lucide="image"></i>
+            <span>New Image</span>
+        </button>
+    </div>
+
+    <!-- Chats Section -->
+    <div class="panel-body">
+        <div class="panel-section-header">
+            <span class="panel-section-label">Chats</span>
+            <div class="panel-section-actions">
+                <button id="panelSearchToggle" class="panel-sub-btn" type="button" title="Search chats" aria-label="Search chats">
+                    <i data-lucide="search"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Search Bar (Togglable / Filter) -->
+        <div id="panelSearchRow" class="panel-search-row" style="display: none;">
+            <div class="panel-search-wrapper">
+                <i data-lucide="search" class="search-input-icon"></i>
+                <input type="text" id="panelSearchInput" placeholder="Filter chats..." autocomplete="off">
+                <button type="button" id="panelSearchClear" class="panel-search-clear" aria-label="Clear search">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+        </div>
+
         <div id="chatList" class="chat-list">
             <div class="history-empty">No conversations yet</div>
+        </div>
+    </div>
+
+    <!-- Footer: Settings & Branding -->
+    <div class="panel-footer">
+        <button id="panelSettingsBtn" class="panel-footer-btn" type="button" aria-label="Settings and more">
+            <div class="panel-footer-left">
+                <i data-lucide="settings"></i>
+                <span>Settings & More</span>
+            </div>
+            <div class="panel-footer-badge">
+                <span>Free</span>
+                <i data-lucide="check"></i>
+            </div>
+        </button>
+        <div class="panel-footer-sub">
+            <span>MultiAI Modular</span>
+            <span class="panel-footer-dot">•</span>
+            <span class="panel-footer-version">v2.0</span>
         </div>
     </div>
 </aside>
@@ -92,10 +141,9 @@
 <div id="appShell">
     <header>
         <div class="header-left">
-            <button id="panelToggle" class="icon-btn" type="button" aria-label="Open panel" aria-expanded="false">
-                <i data-lucide="menu"></i>
+            <button id="panelToggle" class="icon-btn" type="button" aria-label="Open panel" aria-expanded="false" title="Open panel">
+                <i data-lucide="panel-left"></i>
             </button>
-            <span>MultiSearch AI</span>
         </div>
 
         <select id="modelSelect" title="Select AI Model">
@@ -219,6 +267,81 @@
         <button id="errorRecoveryContinue" type="button" class="recovery-btn recovery-btn-continue">
             Continue
         </button>
+    </div>
+</div>
+<!-- ================= CHAT ITEM CONTEXT MENU (POPUP FOR ...) ================= -->
+<div id="chatItemMenu" class="context-menu chat-item-popover" style="display: none;">
+    <button type="button" class="context-menu-item" id="chatRenameBtn">
+        <i data-lucide="pencil"></i>
+        <span>Rename</span>
+    </button>
+    <div class="context-menu-divider"></div>
+    <button type="button" class="context-menu-item danger" id="chatDeleteBtn">
+        <i data-lucide="trash-2"></i>
+        <span>Delete</span>
+    </button>
+</div>
+
+<!-- ================= SETTINGS MODAL ================= -->
+<div id="settingsBackdrop" class="settings-backdrop" style="display: none;"></div>
+<div id="settingsModal" class="settings-modal" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+    <div class="settings-modal-header">
+        <div class="settings-modal-title-group">
+            <i data-lucide="sliders-horizontal"></i>
+            <span id="settingsTitle">Settings</span>
+        </div>
+        <button id="settingsCloseBtn" type="button" class="icon-btn" aria-label="Close settings">
+            <i data-lucide="x"></i>
+        </button>
+    </div>
+    <div class="settings-modal-body">
+        <div class="settings-group">
+            <label for="cfgStartupLLM" class="settings-label">Default Startup Model</label>
+            <select id="cfgStartupLLM" class="settings-select"></select>
+        </div>
+
+        <div class="settings-group">
+            <label for="cfgImageProvider" class="settings-label">Default Image Provider</label>
+            <select id="cfgImageProvider" class="settings-select">
+                <option value="pollinations">Pollinations.AI (Free, No Key)</option>
+                <option value="openai_image">OpenAI DALL-E (API Key)</option>
+            </select>
+        </div>
+
+        <div class="settings-group">
+            <label for="cfgImageRatio" class="settings-label">Default Image Aspect Ratio</label>
+            <select id="cfgImageRatio" class="settings-select">
+                <option value="1:1">1:1 Square</option>
+                <option value="16:9">16:9 Landscape</option>
+                <option value="9:16">9:16 Portrait</option>
+                <option value="4:3">4:3 Standard</option>
+                <option value="3:2">3:2 Classic</option>
+            </select>
+        </div>
+
+        <div class="settings-group">
+            <label for="cfgTheme" class="settings-label">Appearance Theme</label>
+            <select id="cfgTheme" class="settings-select">
+                <option value="dark">Dark (Obsidian)</option>
+                <option value="light">Light</option>
+                <option value="system">System Default</option>
+            </select>
+        </div>
+
+        <div class="settings-toggle-group">
+            <label class="settings-toggle-label">
+                <input type="checkbox" id="cfgRecordHistory" checked>
+                <span>Record Chat History</span>
+            </label>
+            <label class="settings-toggle-label">
+                <input type="checkbox" id="cfgRecordDate" checked>
+                <span>Record Timestamps & Dates</span>
+            </label>
+        </div>
+    </div>
+    <div class="settings-modal-footer">
+        <button type="button" id="settingsCancelBtn" class="settings-btn settings-btn-cancel">Cancel</button>
+        <button type="button" id="settingsSaveBtn" class="settings-btn settings-btn-save">Save Changes</button>
     </div>
 </div>
 

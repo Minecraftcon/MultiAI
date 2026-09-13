@@ -25,106 +25,118 @@ if (typeof mermaid !== "undefined") {
 }
 
 // Configure Marked
-marked.setOptions({ gfm: true, breaks: true, pedantic: false });
-const markedRenderer = new marked.Renderer();
+let markedRenderer = null;
+if (typeof marked !== "undefined") {
+    marked.setOptions({ gfm: true, breaks: true, pedantic: false });
+    markedRenderer = new marked.Renderer();
+}
 
-markedRenderer.code = function(code, language) {
-    const rawCode = typeof code === "object" ? code.text : code;
-    const rawLang = (typeof code === "object" ? code.lang : language) || "";
+if (markedRenderer) {
+    markedRenderer.code = function(code, language) {
+        const rawCode = typeof code === "object" ? code.text : code;
+        const rawLang = (typeof code === "object" ? code.lang : language) || "";
 
-    const lang = rawLang.trim();
-    const cleanLang = lang.toLowerCase();
-    const isSingleLine = !rawCode.trim().includes("\n");
-    const isPlayable = ["html", "xml", "svg"].includes(cleanLang);
-    const isMermaid = cleanLang === "mermaid";
+        const lang = rawLang.trim();
+        const cleanLang = lang.toLowerCase();
+        const isSingleLine = !rawCode.trim().includes("\n");
+        const isPlayable = ["html", "xml", "svg"].includes(cleanLang);
+        const isMermaid = cleanLang === "mermaid";
 
-    let highlighted;
-    try {
-        highlighted = (lang && hljs.getLanguage(lang)) 
-            ? hljs.highlight(rawCode, { language: lang }).value 
-            : hljs.highlightAuto(rawCode).value;
-    } catch {
-        highlighted = escapeHTML(rawCode);
-    }
-    const encoded = encodeURIComponent(rawCode);
+        let highlighted;
+        try {
+            highlighted = (lang && typeof hljs !== "undefined" && hljs.getLanguage(lang)) 
+                ? hljs.highlight(rawCode, { language: lang }).value 
+                : (typeof hljs !== "undefined" ? hljs.highlightAuto(rawCode).value : escapeHTML(rawCode));
+        } catch {
+            highlighted = escapeHTML(rawCode);
+        }
+        const encoded = encodeURIComponent(rawCode);
 
-    if (isMermaid) {
-        return `
-        <div class="code-container mermaid-container" data-code="${encoded}">
-            <div class="code-lang-header">
-                <div class="code-mode-pill">
-                    <button type="button" class="pill-btn active code-mode-diagram">
-                        <i data-lucide="git-merge"></i>
-                        <span>Chart</span>
-                    </button>
-                    <button type="button" class="pill-btn code-mode-code">
-                        <i data-lucide="code"></i>
-                        <span>Code</span>
-                    </button>
-                </div>
-                <span class="code-lang-label">mermaid</span>
-                <div class="code-lang-line"></div>
-            </div>
-            <div class="code-bubble view-diagram">
-                <div class="code-bubble-inner">
-                    <div class="mermaid-diagram-wrapper">
-                        <div class="mermaid-target" data-chart="${encoded}">
-                            <div class="mermaid-loading">Rendering chart...</div>
-                        </div>
+        if (isMermaid) {
+            return `
+            <div class="code-container mermaid-container" data-code="${encoded}">
+                <div class="code-lang-header">
+                    <div class="code-mode-pill">
+                        <button type="button" class="pill-btn active code-mode-diagram">
+                            <i data-lucide="git-merge"></i>
+                            <span>Chart</span>
+                        </button>
+                        <button type="button" class="pill-btn code-mode-code">
+                            <i data-lucide="code"></i>
+                            <span>Code</span>
+                        </button>
                     </div>
-                    <pre class="mermaid-code-pre"><code class="hljs language-mermaid">${highlighted}</code></pre>
-                    <button class="code-copy-btn" data-code="${encoded}" type="button" title="Copy code">
-                        <i data-lucide="copy"></i>
-                    </button>
+                    <span class="code-lang-label">mermaid</span>
+                    <div class="code-lang-line"></div>
+                </div>
+                <div class="code-bubble view-diagram">
+                    <div class="code-bubble-inner">
+                        <div class="mermaid-diagram-wrapper">
+                            <div class="mermaid-target" data-chart="${encoded}">
+                                <div class="mermaid-loading">Rendering chart...</div>
+                            </div>
+                        </div>
+                        <pre class="mermaid-code-pre"><code class="hljs language-mermaid">${highlighted}</code></pre>
+                        <button class="code-copy-btn" data-code="${encoded}" type="button" title="Copy code">
+                            <i data-lucide="copy"></i>
+                        </button>
+                    </div>
                 </div>
             </div>
-        </div>
+            `;
+        }
+
+        return `
+            <div class="code-container" data-code="${encoded}">
+                <div class="code-lang-header">
+                    ${isPlayable ? `
+                    <div class="code-mode-pill">
+                        <button type="button" class="pill-btn active code-mode-code">
+                            <i data-lucide="code"></i>
+                            <span>Code</span>
+                        </button>
+                        <button type="button" class="pill-btn code-mode-play">
+                            <i data-lucide="play"></i>
+                            <span>Play</span>
+                        </button>
+                    </div>
+                    ` : ''}
+                    ${lang ? `<span class="code-lang-label">${escapeHTML(lang)}</span>` : ''}
+                    <div class="code-lang-line"></div>
+                </div>
+                <div class="code-bubble ${isSingleLine ? 'single-line' : ''}">
+                    <div class="code-bubble-inner">
+                        <pre><code class="hljs ${lang ? 'language-' + escapeHTML(lang) : ''}">${highlighted}</code></pre>
+                        ${isPlayable ? `<iframe class="code-preview-frame" sandbox="allow-scripts allow-modals"></iframe>` : ''}
+                        <button class="code-copy-btn" data-code="${encoded}" type="button" title="Copy code">
+                            <i data-lucide="copy"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
         `;
-    }
+    };
 
-    return `
-        <div class="code-container" data-code="${encoded}">
-            <div class="code-lang-header">
-                ${isPlayable ? `
-                <div class="code-mode-pill">
-                    <button type="button" class="pill-btn active code-mode-code">
-                        <i data-lucide="code"></i>
-                        <span>Code</span>
-                    </button>
-                    <button type="button" class="pill-btn code-mode-play">
-                        <i data-lucide="play"></i>
-                        <span>Play</span>
-                    </button>
-                </div>
-                ` : ''}
-                ${lang ? `<span class="code-lang-label">${escapeHTML(lang)}</span>` : ''}
-                <div class="code-lang-line"></div>
-            </div>
-            <div class="code-bubble ${isSingleLine ? 'single-line' : ''}">
-                <div class="code-bubble-inner">
-                    <pre><code class="hljs ${lang ? 'language-' + escapeHTML(lang) : ''}">${highlighted}</code></pre>
-                    ${isPlayable ? `<iframe class="code-preview-frame" sandbox="allow-scripts allow-modals"></iframe>` : ''}
-                    <button class="code-copy-btn" data-code="${encoded}" type="button" title="Copy code">
-                        <i data-lucide="copy"></i>
-                    </button>
-                </div>
-            </div>
-        </div>
-    `;
-};
-
-marked.use({ renderer: markedRenderer });
+    marked.use({ renderer: markedRenderer });
+}
 
 export function parseMarkdown(text) {
     let parsed = "";
-    try {
-        parsed = marked.parse(text);
-    } catch (e) {
+    if (typeof marked !== "undefined" && typeof marked.parse === "function") {
+        try {
+            parsed = marked.parse(text);
+        } catch (e) {
+            parsed = escapeHTML(text);
+        }
+    } else {
         parsed = escapeHTML(text);
     }
-    return DOMPurify.sanitize(parsed, {
-        ADD_ATTR: ["target", "rel", "class", "data-code", "data-chart", "sandbox", "srcdoc"]
-    });
+    if (typeof DOMPurify !== "undefined" && typeof DOMPurify.sanitize === "function") {
+        return DOMPurify.sanitize(parsed, {
+            ADD_ATTR: ["target", "rel", "class", "data-code", "data-chart", "sandbox", "srcdoc"]
+        });
+    }
+    return parsed;
 }
 
 export function bindInteractiveCodeBlocks(container) {
