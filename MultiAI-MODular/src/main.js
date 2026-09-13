@@ -51,10 +51,10 @@ function initChatSessions() {
 // Global bootstrap with readyState guard
 function bootstrap() {
     renderIcons();
+    initComposer();
     initGestures();
     initSidePanel();
     initChatDelegation();
-    initComposer();
     initContextMenu();
     initBottomSheet();
     initErrorRecovery();

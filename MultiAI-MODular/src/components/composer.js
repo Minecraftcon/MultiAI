@@ -12,7 +12,9 @@ import { renderChatList, isModelVisionCapable } from "./side-panel.js";
 import { showToast } from "./bottom-sheet.js";
 import { showErrorRecoveryPopup } from "./error-recovery.js";
 import { escapeHTML } from "../utils/dom.js";
+import { chatbox } from "./chatbox.js";
 
+export { chatbox };
 export let stagedAttachments = [];
 
 function formatFileSize(bytes) {
@@ -86,13 +88,15 @@ export function renderStagedAttachments() {
     if (stagedAttachments.length === 0) {
         strip.innerHTML = "";
         strip.style.display = "none";
+        chatbox.setHasAttachments(false);
         return;
     }
 
     strip.style.display = "flex";
     strip.innerHTML = "";
+    chatbox.setHasAttachments(true);
 
-    stagedAttachments.forEach((att, index) => {
+    stagedAttachments.forEach((att) => {
         const item = document.createElement("div");
         item.className = "staged-att-item";
 
@@ -100,7 +104,7 @@ export function renderStagedAttachments() {
             item.innerHTML = `
                 <div class="staged-img-preview">
                     <img src="${att.dataUrl}" alt="${att.name}">
-                    <button type="button" class="staged-att-del" data-idx="${index}" title="Remove image">
+                    <button type="button" class="staged-att-del" title="Remove image">
                         <i data-lucide="x"></i>
                     </button>
                 </div>
@@ -111,7 +115,7 @@ export function renderStagedAttachments() {
                     <i data-lucide="file-text"></i>
                     <span class="staged-doc-name" title="${att.name}">${att.name}</span>
                     <span class="staged-doc-size">${formatFileSize(att.size)}</span>
-                    <button type="button" class="staged-att-del" data-idx="${index}" title="Remove file">
+                    <button type="button" class="staged-att-del" title="Remove file">
                         <i data-lucide="x"></i>
                     </button>
                 </div>
@@ -122,7 +126,10 @@ export function renderStagedAttachments() {
         if (delBtn) {
             delBtn.addEventListener("click", (e) => {
                 e.stopPropagation();
-                stagedAttachments.splice(index, 1);
+                const curIdx = stagedAttachments.indexOf(att);
+                if (curIdx !== -1) {
+                    stagedAttachments.splice(curIdx, 1);
+                }
                 renderStagedAttachments();
             });
         }
@@ -208,34 +215,7 @@ export async function addDocumentFiles(files) {
 }
 
 export function updateSendButtonState(active) {
-    const sendButton = document.getElementById("send");
-    const input = document.getElementById("input");
-    const modelSelect = document.getElementById("modelSelect");
-    const attachBtn = document.getElementById("attachSheetBtn");
-    if (!sendButton || !input) return;
-
-    if (active) {
-        sendButton.classList.add("generating");
-        sendButton.title = "Stop generation";
-        sendButton.setAttribute("aria-label", "Stop generation");
-        sendButton.innerHTML = '<i data-lucide="square"></i>';
-        renderIcons(sendButton);
-        sendButton.disabled = false;
-        input.disabled = true;
-        if (modelSelect) modelSelect.disabled = true;
-        if (attachBtn) attachBtn.disabled = true;
-    } else {
-        sendButton.classList.remove("generating");
-        sendButton.title = "Send message";
-        sendButton.setAttribute("aria-label", "Send message");
-        sendButton.innerHTML = '<i data-lucide="arrow-up"></i>';
-        renderIcons(sendButton);
-        sendButton.disabled = false;
-        input.disabled = false;
-        if (modelSelect) modelSelect.disabled = false;
-        if (attachBtn) attachBtn.disabled = false;
-        input.focus();
-    }
+    chatbox.setGenerating(active);
 }
 
 export function stopChatGeneration(chatId) {
@@ -277,8 +257,7 @@ export async function send() {
     stagedAttachments = [];
     renderStagedAttachments();
 
-    input.value = "";
-    input.style.height = "auto";
+    chatbox.clearInput();
 
     // -------------------------------------------------------------
     // RENDER USER MESSAGE BUBBLE:
@@ -440,8 +419,15 @@ export function openImageLightbox(src) {
 }
 
 export function initComposer() {
-    const input = document.getElementById("input");
-    const sendButton = document.getElementById("send");
+    const inputArea = document.getElementById("inputArea");
+    if (inputArea) {
+        chatbox.mount(inputArea);
+    }
+
+    chatbox.onSend(() => {
+        send();
+    });
+
     const imageInput = document.getElementById("imageInput");
     const docInput = document.getElementById("docInput");
 
@@ -459,20 +445,9 @@ export function initComposer() {
         });
     }
 
+    // Clipboard paste handling (e.g. screenshots)
+    const input = document.getElementById("input");
     if (input) {
-        input.addEventListener("input", () => {
-            input.style.height = "auto";
-            input.style.height = Math.min(input.scrollHeight, 150) + "px";
-        });
-
-        input.addEventListener("keydown", (event) => {
-            if (event.key === "Enter" && !event.shiftKey) {
-                event.preventDefault();
-                send();
-            }
-        });
-
-        // Clipboard paste handling (e.g. screenshots)
         input.addEventListener("paste", (e) => {
             const items = Array.from(e.clipboardData?.items || []);
             const imageItems = items.filter(item => item.type && item.type.startsWith("image/"));
@@ -485,14 +460,7 @@ export function initComposer() {
         });
     }
 
-    if (sendButton) {
-        sendButton.addEventListener("click", () => {
-            send();
-        });
-    }
-
     // Drag and Drop support
-    const dropZone = document.body;
     let dragCounter = 0;
 
     window.addEventListener("dragenter", (e) => {

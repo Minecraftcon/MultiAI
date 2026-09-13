@@ -8,7 +8,7 @@
     }
     #chat { 
         padding: 18px 14px; 
-        padding-bottom: 100px; 
+        padding-bottom: max(220px, 50vh); 
     }
     .user { 
         max-width: 88%; 

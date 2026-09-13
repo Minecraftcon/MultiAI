@@ -92,6 +92,23 @@
     z-index: 1;
 }
 
+.search-badge-item.has-multiline {
+    align-items: flex-start;
+}
+
+.search-badge-item.has-multiline > div:last-child {
+    padding-top: 8px;
+}
+
+.search-query.is-multiline {
+    white-space: pre-wrap;
+    display: inline-block;
+    vertical-align: top;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 12px;
+    line-height: 1.45;
+}
+
 .search-badge-item.clickable-badge {
     cursor: pointer;
     user-select: none;

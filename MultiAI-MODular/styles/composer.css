@@ -14,27 +14,48 @@
     z-index: 50;
 }
 
-.composer {
+:root {
+    /* Enable smooth interpolation between intrinsic and fixed sizing */
+    interpolate-size: allow-keywords;
+}
+
+.composer,
+.composer-dock {
     pointer-events: auto !important;
     width: min(900px, 100%);
     display: flex;
-    align-items: flex-end;
+    align-items: center;
     gap: 8px;
     padding: 8px 12px;
     background: #1b1b1b;
     border: 1px solid #333;
     border-radius: 24px;
-    box-shadow: 0 8px 30px rgba(0,0,0,.45);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
     position: relative;
     z-index: 51;
-    transition: border-color 0.15s ease;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
 }
 
-.composer:focus-within {
+.composer:focus-within,
+.composer-dock:focus-within {
     border-color: #4f4f4f;
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.65);
+    background: #1e1e1e;
 }
 
-/* Plus Attachment Button on the Left */
+/* Compact mode: Perfect vertical centering across all elements */
+.composer-dock.composer-compact {
+    align-items: center;
+}
+
+/* Expanded mode: Anchors buttons to the bottom as the top grows upward */
+.composer-dock.composer-expanded {
+    align-items: flex-end;
+}
+
+/* Plus Attachment Button on the Left - Original fixed 36x36 size */
 .attach-btn {
     width: 36px;
     height: 36px;
@@ -47,8 +68,8 @@
     background: #242424;
     color: #ccc;
     cursor: pointer;
-    margin-bottom: 2px;
-    transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;
+    margin: 0;
+    transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease, border-color 0.15s ease;
 }
 
 .attach-btn:hover {
@@ -67,13 +88,175 @@
     stroke-width: 2.2;
 }
 
-/* Center column with staged files strip and input */
+/* Center column with staged files strip and input - expands upwards */
 .composer-main-col {
     flex: 1;
     display: flex;
     flex-direction: column;
     min-width: 0;
     gap: 4px;
+    justify-content: center;
+}
+
+.composer-dock.composer-expanded .composer-main-col {
+    justify-content: flex-end;
+}
+
+/* Staged Attachment Preview Strip */
+.staged-attachments-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 4px 6px 4px;
+    max-height: 130px;
+    overflow-y: auto;
+    animation: stageSlideDown 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes stageSlideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-6px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Textarea input - seamlessly centered in compact mode, expands upward smoothly */
+.composer-textarea {
+    flex: none;
+    width: 100%;
+    resize: none;
+    min-height: 24px;
+    height: 24px;
+    max-height: 180px;
+    padding: 0 8px;
+    line-height: 24px;
+    background: transparent;
+    border: none;
+    color: #ffffff;
+    font-size: 15px;
+    outline: none;
+    font-family: inherit;
+    pointer-events: auto !important;
+    user-select: text !important;
+    -webkit-user-select: text !important;
+    box-sizing: border-box;
+    overflow-y: hidden;
+    vertical-align: middle;
+    transition: height 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.composer-dock.composer-expanded .composer-textarea {
+    padding: 4px 8px;
+    line-height: 1.45;
+}
+
+.composer-textarea::placeholder {
+    color: #666;
+    font-weight: 400;
+}
+
+/* Right Actions Container: Clear and Send buttons */
+.composer-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+    margin: 0;
+}
+
+/* Discard / Clear Button */
+.composer-clear-btn {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: #282828;
+    border: 1px solid #383838;
+    color: #888;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 0;
+    transition: background 0.15s, color 0.15s, transform 0.15s;
+    flex-shrink: 0;
+}
+
+.composer-clear-btn:hover {
+    background: #363636;
+    color: #fff;
+}
+
+.composer-clear-btn:active {
+    transform: scale(0.92);
+}
+
+.composer-clear-btn svg {
+    width: 12px;
+    height: 12px;
+}
+
+/* Morphing Send / Stop Button - Original fixed 36x36 size and position */
+.composer-send-btn,
+#send {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    border-radius: 50%;
+    border: none;
+    background: #ffffff;
+    color: #000000;
+    cursor: pointer;
+    margin: 0;
+    transition: background 0.2s ease, transform 0.15s ease, opacity 0.15s ease;
+    pointer-events: auto !important;
+}
+
+.composer-send-btn:hover,
+#send:hover {
+    background: #eaeaea;
+    transform: scale(1.04);
+}
+
+.composer-send-btn:active,
+#send:active {
+    transform: scale(0.94);
+}
+
+.composer-send-btn:disabled,
+#send:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+.composer-send-btn svg,
+#send svg {
+    width: 18px;
+    height: 18px;
+    stroke-width: 2.5;
+}
+
+.composer-send-btn.generating,
+#send.generating {
+    background: #ffffff;
+    color: #000000;
+}
+
+/* Reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+    .composer,
+    .composer-dock,
+    .composer-textarea,
+    .staged-attachments-strip {
+        transition: none !important;
+        animation: none !important;
+    }
 }
 
 /* Staged Attachment Preview Strip */
@@ -171,65 +354,7 @@
     height: 10px;
 }
 
-/* Textarea input */
-textarea {
-    flex: 1;
-    resize: none;
-    min-height: 24px;
-    max-height: 150px;
-    padding: 6px 8px;
-    background: transparent;
-    border: none;
-    color: white;
-    font-size: 15.5px;
-    line-height: 1.4;
-    outline: none;
-    font-family: inherit;
-    pointer-events: auto !important;
-    user-select: text !important;
-    -webkit-user-select: text !important;
-}
 
-/* Send button */
-#send {
-    width: 36px; 
-    height: 36px;
-    display: flex; 
-    align-items: center; 
-    justify-content: center;
-    flex-shrink: 0;
-    border-radius: 50%;
-    border: none;
-    background: white; 
-    color: black;
-    cursor: pointer;
-    margin-bottom: 2px;
-    transition: background 0.2s, transform 0.15s;
-    pointer-events: auto !important;
-}
-
-#send:hover { background: #ddd; }
-#send:active { transform: scale(0.94); }
-#send:disabled { opacity: .5; cursor: default; }
-#send svg { width: 18px; height: 18px; stroke-width: 2.5; }
-
-#send.generating {
-    background: #ffffff;
-    color: #000000;
-}
-#send.generating:hover {
-    background: #cccccc;
-}
-#send.generating svg {
-    width: 12px;
-    height: 12px;
-    fill: #000000;
-    stroke: none;
-}
-#send.generating svg rect {
-    rx: 3.5px;
-    ry: 3.5px;
-}
 
 /* =========================================================
    BOTTOM SHEET ATTACHMENT DRAWER (SLIDE UP FROM BOTTOM)

@@ -89,8 +89,14 @@ export function addToolBadge(element, toolName, args) {
     const isCommand = toolName === "run_task";
     const hasRing = isTimer || isCommand;
 
+    const detailLines = String(detail || "").split("\n");
+    const isDetailMulti = detailLines.length > 3;
+    const compactDetail = isDetailMulti
+        ? detailLines.slice(0, 3).join("\n") + "\n..."
+        : detail;
+
     const item = document.createElement("div");
-    item.className = "search-badge-item" + (hasRing ? " timer-badge" : "") + (isCommandTask ? " clickable-badge" : "");
+    item.className = "search-badge-item" + (hasRing ? " timer-badge" : "") + (isCommandTask ? " clickable-badge" : "") + (isDetailMulti ? " has-multiline" : "");
     item.innerHTML = `
         <div class="search-icon-circle ${hasRing ? 'has-timer-ring' : ''}">
             ${hasRing ? `
@@ -103,7 +109,7 @@ export function addToolBadge(element, toolName, args) {
         </div>
         <div>
             <span class="search-label">${label}</span>
-            <span class="search-query">${escapeHTML(detail)}</span>
+            <span class="search-query ${detailLines.length > 1 ? 'is-multiline' : ''}" data-full="${escapeHTML(detail)}" data-compact="${escapeHTML(compactDetail)}">${escapeHTML(compactDetail)}</span>
             ${isCommandTask ? '<span class="badge-expand-chevron">▶</span>' : ''}
         </div>
     `;
@@ -115,11 +121,16 @@ export function addToolBadge(element, toolName, args) {
         collapseDiv.className = "badge-collapse";
         
         const displayCmd = args.command || args.input_string || (Array.isArray(args.urls) ? args.urls.join("\n") : args.url) || `Task: ${args.task_id}`;
+        const cmdLines = String(displayCmd || "").split("\n");
+        const isCmdMulti = cmdLines.length > 3;
+        const compactCmd = isCmdMulti
+            ? cmdLines.slice(0, 3).join("\n") + "\n..."
+            : displayCmd;
         
         collapseDiv.innerHTML = `
             <div class="badge-collapse-inner">
                 <div class="command-output-box">
-                    <pre><div class="command-output-cmd">${escapeHTML(displayCmd)}</div><hr class="command-output-sep"><div class="command-output-res"></div></pre>
+                    <pre><div class="command-output-cmd ${isCmdMulti ? 'is-compact' : ''}" data-full="${escapeHTML(displayCmd)}" data-compact="${escapeHTML(compactCmd)}"><div class="command-cmd-text">${escapeHTML(compactCmd)}</div>${isCmdMulti ? `<div class="cmd-toggle-row"><button type="button" class="cmd-compact-toggle" aria-expanded="false"><span class="cmd-toggle-label">Expand</span> <span class="cmd-toggle-lines">(${cmdLines.length} lines)</span></button></div>` : ''}</div><hr class="command-output-sep"><div class="command-output-res"></div></pre>
                 </div>
             </div>
         `;
@@ -233,6 +244,36 @@ export function initChatDelegation() {
                 const parentAi = wrapper.closest(".message.ai");
                 if (parentAi) {
                     parentAi.dataset.manuallyToggled = "true";
+                }
+                saveCurrentChatState();
+            }
+            return;
+        }
+
+        const cmdToggle = e.target.closest(".cmd-compact-toggle");
+        if (cmdToggle) {
+            e.stopPropagation();
+            const cmdBox = cmdToggle.closest(".command-output-cmd");
+            if (cmdBox) {
+                const isExpanded = cmdBox.classList.contains("is-expanded");
+                const textEl = cmdBox.querySelector(".command-cmd-text");
+                const labelEl = cmdToggle.querySelector(".cmd-toggle-label");
+                const linesEl = cmdToggle.querySelector(".cmd-toggle-lines");
+
+                if (isExpanded) {
+                    cmdBox.classList.remove("is-expanded");
+                    cmdBox.classList.add("is-compact");
+                    if (textEl) textEl.textContent = cmdBox.dataset.compact || "";
+                    if (labelEl) labelEl.textContent = "Expand";
+                    if (linesEl) linesEl.style.display = "";
+                    cmdToggle.setAttribute("aria-expanded", "false");
+                } else {
+                    cmdBox.classList.remove("is-compact");
+                    cmdBox.classList.add("is-expanded");
+                    if (textEl) textEl.textContent = cmdBox.dataset.full || "";
+                    if (labelEl) labelEl.textContent = "Collapse";
+                    if (linesEl) linesEl.style.display = "none";
+                    cmdToggle.setAttribute("aria-expanded", "true");
                 }
                 saveCurrentChatState();
             }
