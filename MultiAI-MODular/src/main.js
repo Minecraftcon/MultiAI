@@ -48,8 +48,35 @@ function initChatSessions() {
     }
 }
 
+async function initConfig() {
+    try {
+        const res = await fetch("/api/config");
+        if (res.ok) {
+            const data = await res.json();
+            state.config = data || {};
+
+            const defaultLLM = state.config.General?.DefaultStartupLLM;
+            const modelSelect = document.getElementById("modelSelect");
+            if (defaultLLM && modelSelect && !state.currentChatId) {
+                const hasOption = Array.from(modelSelect.options).some(o => o.value === defaultLLM);
+                if (hasOption) {
+                    modelSelect.value = defaultLLM;
+                }
+            }
+
+            // Apply theme if configured
+            const theme = state.config.UI?.Theme;
+            if (theme && theme !== "system") {
+                document.documentElement.setAttribute("data-theme", theme);
+            }
+        }
+    } catch (e) {
+        console.warn("[CONFIG] Could not load /api/config:", e);
+    }
+}
+
 // Global bootstrap with readyState guard
-function bootstrap() {
+async function bootstrap() {
     renderIcons();
     initComposer();
     initGestures();
@@ -59,6 +86,7 @@ function bootstrap() {
     initBottomSheet();
     initErrorRecovery();
 
+    await initConfig();
     initSystemEnvironment();
     initChatSessions();
 }

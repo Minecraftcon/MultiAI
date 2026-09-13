@@ -15,6 +15,7 @@ export function loadStoredChats() {
 }
 
 export function saveStoredChats() {
+    if (state.config?.General?.RecordChatHistory === false) return;
     try {
         localStorage.setItem(CHATS_STORAGE_KEY, JSON.stringify(state.chatSessions));
         if (state.currentChatId) {
@@ -38,18 +39,21 @@ export function createNewChatSession(initialUserText = "") {
     const id = generateChatId();
     const raw = (initialUserText || "").trim();
     const title = raw ? (raw.slice(0, 34) + (raw.length > 34 ? "..." : "")) : "Conversation";
+    const defaultModel = state.config?.General?.DefaultStartupLLM || "gemini-2.5-flash";
 
     state.chatSessions[id] = {
         id,
         title,
         createdAt: Date.now(),
         updatedAt: Date.now(),
-        model: modelSelect ? modelSelect.value : "gemini-2.5-flash",
+        model: modelSelect ? modelSelect.value : defaultModel,
         messages: [...state.messages],
         chatHtml: chat ? chat.innerHTML : ""
     };
     state.currentChatId = id;
-    saveStoredChats();
+    if (state.config?.General?.RecordChatHistory !== false) {
+        saveStoredChats();
+    }
     return id;
 }
 

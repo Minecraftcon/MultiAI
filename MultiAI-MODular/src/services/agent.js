@@ -231,8 +231,9 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
 
     logEvent("REQUEST_START", { chatId, model: selectedModel, userText, isFirstUserTurn });
 
+    const maxRounds = state.config?.Agent?.MaxToolRounds || MAX_TOOL_ROUNDS;
     try {
-        for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+        for (let round = 0; round < maxRounds; round++) {
             if (genState.abortRequested) {
                 finalizeStopped(currentAIMessage, overallStartTime, hasRunTools);
                 return;

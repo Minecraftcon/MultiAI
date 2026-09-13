@@ -4,6 +4,7 @@
 import { BASE_SYSTEM_PROMPT } from "./config.js";
 
 export const state = {
+    config: {},
     chatSessions: {},
     currentChatId: null,
     activeGenerations: {},

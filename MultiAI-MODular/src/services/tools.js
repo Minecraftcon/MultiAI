@@ -1,6 +1,7 @@
 /* =========================================================
    TOOL DEFINITIONS & HTTP EXECUTION
    ========================================================= */
+import { state } from "../state.js";
 
 export const tools = [
     {
@@ -282,6 +283,21 @@ export async function executeTool(name, args, badgeEl, genState) {
         throw new Error("Generation stopped by user");
     }
 
+    // Check if tool category is disabled in config.ini
+    const toolsConfig = state.config?.Tools || {};
+    if (toolsConfig.EnableTerminal === false && (name === "run_task" || name.startsWith("task_") || name === "idle")) {
+        throw new Error("Terminal execution is disabled in config.ini");
+    }
+    if (toolsConfig.EnableWebSearch === false && (name === "web_search" || name === "fetch_web_content")) {
+        throw new Error("Web search is disabled in config.ini");
+    }
+    if (toolsConfig.EnableImageGeneration === false && name === "generate_image") {
+        throw new Error("Image generation is disabled in config.ini");
+    }
+    if (toolsConfig.EnableFileOperations === false && (name === "read_file" || name === "write_file")) {
+        throw new Error("File operations are disabled in config.ini");
+    }
+
     if (name === "run_task" && badgeEl) {
         const cooldown = Math.max(1, parseInt(args.timeout, 10) || 1);
         const ringBar = badgeEl.querySelector(".timer-ring-bar");
@@ -382,6 +398,15 @@ export async function executeTool(name, args, badgeEl, genState) {
         url = "/api/file/write";
     } else if (name === "generate_image") {
         url = "/api/image/generate";
+        if (!args.aspect_ratio && state.config?.General?.DefaultImageAspectRatio) {
+            args.aspect_ratio = state.config.General.DefaultImageAspectRatio;
+        }
+        if (!args.provider && state.config?.General?.DefaultImageProvider) {
+            args.provider = state.config.General.DefaultImageProvider;
+        }
+        if (!args.model && state.config?.General?.DefaultImageModel) {
+            args.model = state.config.General.DefaultImageModel;
+        }
     } else {
         throw new Error("Unknown tool: " + name);
     }

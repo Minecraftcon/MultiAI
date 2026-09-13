@@ -6,6 +6,7 @@ const os = require("os");
 const { spawn, exec } = require("child_process");
 const YAML = require("yaml");
 const { resolveProvider, resolveImageProvider } = require("./providers");
+const { getConfig, saveConfig } = require("./config_manager");
 
 function getEnvKey(keyName) {
     if (!keyName) return null;
@@ -254,18 +255,27 @@ function getSystemInfo() {
     };
 }
 
-const PORT = 8080;
+const appConfig = getConfig();
+const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : (appConfig.General?.Port || 8080);
+const HOST = process.env.HOST || appConfig.General?.Host || "0.0.0.0";
 const TINYFISH_API_KEY = process.env.TINYFISH_API_KEY;
-const LOG_FILE = "./logs.txt";
+const LOG_FILE = appConfig.General?.LogFile || "./logs.txt";
 
 if (!TINYFISH_API_KEY) {
     console.warn("[WARNING] TINYFISH_API_KEY is not set. Web search (/api/search) will be unavailable until configured.");
 }
 
-fs.writeFileSync(LOG_FILE, `--- log started ${new Date().toISOString()} ---\n`);
+try {
+    fs.writeFileSync(LOG_FILE, `--- log started ${new Date().toISOString()} ---\n`);
+} catch (_) {}
 
 function logToFile(tag, data) {
-    const entry = { timestamp: new Date().toISOString(), tag, ...data };
+    const cfg = getConfig();
+    const entry = {
+        ...(cfg.General?.RecordDate !== false ? { timestamp: new Date().toISOString() } : {}),
+        tag,
+        ...data
+    };
     fs.appendFile(LOG_FILE, JSON.stringify(entry) + "\n", (err) => {
         if (err) console.error("[LOG WRITE ERROR]", err);
     });
@@ -837,7 +847,8 @@ const server = http.createServer(async (req, res) => {
                 return sendJSON(res, 400, { error: "Parameter 'prompt' is required for image generation." });
             }
 
-            const targetProviderKey = provider || model || "pollinations";
+            const defaultImageProvider = getConfig().General?.DefaultImageProvider || "pollinations";
+            const targetProviderKey = provider || model || defaultImageProvider;
             const imageHandler = resolveImageProvider(targetProviderKey);
 
             let apiKey = null;
@@ -902,6 +913,26 @@ const server = http.createServer(async (req, res) => {
             });
         }
         return sendJSON(res, 200, { providers: resultProviders });
+    }
+
+    if ((req.method === "GET" || req.method === "HEAD") && req.url === "/api/config") {
+        if (req.method === "HEAD") {
+            res.writeHead(200, { "Content-Type": "application/json" });
+            return res.end();
+        }
+        return sendJSON(res, 200, getConfig());
+    }
+
+    if (req.method === "POST" && req.url === "/api/config") {
+        try {
+            let body = "";
+            for await (const chunk of req) body += chunk;
+            const updates = JSON.parse(body || "{}");
+            const updated = saveConfig(updates);
+            return sendJSON(res, 200, { success: true, config: updated });
+        } catch (err) {
+            return sendJSON(res, 500, { error: err.message });
+        }
     }
 
     if (req.method === "POST" && req.url === "/api/chat") {
@@ -1019,7 +1050,7 @@ const server = http.createServer(async (req, res) => {
     res.end("Not found");
 });
 
-server.listen(PORT, () => {
-  console.log(`Node Server running at http://localhost:${PORT}`);
-  exec(`xdg-open http://localhost:${PORT}`);
+server.listen(PORT, HOST, () => {
+  const hostDisplay = HOST === "0.0.0.0" ? "localhost" : HOST;
+  console.log(`Node Server running at http://${hostDisplay}:${PORT}`);
 });

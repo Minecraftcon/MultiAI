@@ -250,11 +250,26 @@ class ProcessSupervisor:
 
         print(f"{GREEN}[MultiAI] All servers stopped cleanly. Goodbye!{RESET}\n", flush=True)
 
+import configparser
+
+def get_config_port(default_port=8080):
+    try:
+        cfg = configparser.ConfigParser()
+        ini_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.ini")
+        if os.path.exists(ini_path):
+            cfg.read(ini_path)
+            if "General" in cfg and "Port" in cfg["General"]:
+                return int(cfg["General"]["Port"])
+    except Exception:
+        pass
+    return default_port
+
 def main():
+    configured_port = get_config_port(8080)
     parser = argparse.ArgumentParser(description="MultiAI Universal Starter & Supervisor")
     parser.add_argument("--check-only", action="store_true", help="Run setup check and exit without starting servers")
     parser.add_argument("--no-browser", action="store_true", help="Do not open browser automatically")
-    parser.add_argument("--port", type=int, default=8080, help="Web server port (default: 8080)")
+    parser.add_argument("--port", type=int, default=configured_port, help=f"Web server port (default: {configured_port})")
     args = parser.parse_args()
 
     root_dir = os.path.dirname(os.path.abspath(__file__))
