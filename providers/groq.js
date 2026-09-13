@@ -23,6 +23,24 @@ class GroqProvider extends BaseProvider {
         return baseUrl.endsWith("/chat/completions") ? baseUrl : `${baseUrl.replace(/\/+$/, "")}/chat/completions`;
     }
 
+    normalizeMessage(msg, supportsTools = true, supportsVision = false) {
+        const normalized = super.normalizeMessage(msg, supportsTools, supportsVision);
+        if (!normalized) return null;
+
+        // Groq-specific system prompt adaptation:
+        // When native tools are enabled on Groq, phrases like "Return your response with a JSON object at the start"
+        // cause models to emit a function call for tool 'JSON', which Groq's validator rejects with HTTP 400.
+        // We rephrase this to "Start your text with: {"chatname": ...}" so the model returns standard text JSON
+        // matching what the frontend expects without triggering an invalid tool call.
+        if (normalized.role === "system" && typeof normalized.content === "string") {
+            normalized.content = normalized.content.replace(
+                /Return your response with a JSON object at the start:\s*\{"chatname":\s*"Short Topic Title"\}\s*followed immediately by your normal response\./i,
+                'Start your text with: {"chatname": "Short Topic Title"}\nfollowed immediately by your normal response. (Do not invoke any tools for the title).'
+            );
+        }
+        return normalized;
+    }
+
     buildToolSystemPrompt(tools) {
         if (!tools || tools.length === 0) return "";
         let prompt = `\n\nWhen you need to execute a tool, you MUST respond ONLY with a JSON object in this format:

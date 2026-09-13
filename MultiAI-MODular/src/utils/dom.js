@@ -81,19 +81,6 @@ export function extractChatTitleAndContent(rawText) {
     if (!rawText) return { title: null, content: rawText };
     const trimmed = rawText.trim();
 
-    // 0. Try regex match for [TITLE: Short Topic Title] or <!-- title: Short Topic Title -->
-    const bracketMatch = trimmed.match(/^(?:\[(?:TITLE|chatname|topic):\s*([^\]\r\n]+)\]|<!--\s*(?:title|chatname):\s*([^\r\n]+?)\s*-->)\s*/i);
-    if (bracketMatch) {
-        const title = (bracketMatch[1] || bracketMatch[2] || "").trim();
-        const cleanContent = trimmed.slice(bracketMatch[0].length).trim();
-        if (title) {
-            return {
-                title,
-                content: cleanContent
-            };
-        }
-    }
-
     // 1. Try parsing full response as a JSON object
     try {
         const parsed = JSON.parse(trimmed);
