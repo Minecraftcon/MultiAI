@@ -153,6 +153,54 @@ def input_task_endpoint(task_id):
 def kill_task_endpoint(task_id):
     return jsonify(manager.kill_task(task_id))
 
+@app.route('/api/task/idle', methods=['POST'])
+def idle_endpoint():
+    data = request.json or {}
+    seconds = max(0.1, min(300.0, float(data.get('seconds', 5))))
+    task_id = data.get('task_id')
+    wake_on = data.get('wake_on', 'exit')
+    reason = data.get('reason', '')
+
+    start_time = time.time()
+    end_time = start_time + seconds
+
+    if task_id and task_id in manager.tasks:
+        process = manager.tasks[task_id]['process']
+        q = manager.tasks[task_id]['queue']
+
+        while time.time() < end_time:
+            if wake_on in ('exit', 'any') and process.poll() is not None:
+                time.sleep(0.02)
+                output = manager.get_output(task_id)
+                output['status'] = 'task_completed'
+                output['elapsed_seconds'] = round(time.time() - start_time, 2)
+                output['reason'] = reason
+                return jsonify(output)
+
+            if wake_on in ('output', 'any') and not q.empty():
+                time.sleep(0.02)
+                output = manager.get_output(task_id)
+                output['status'] = 'task_output'
+                output['elapsed_seconds'] = round(time.time() - start_time, 2)
+                output['reason'] = reason
+                return jsonify(output)
+
+            time.sleep(0.04)
+
+        output = manager.get_output(task_id)
+        output['status'] = 'timer_expired'
+        output['elapsed_seconds'] = round(time.time() - start_time, 2)
+        output['reason'] = reason
+        return jsonify(output)
+    else:
+        # Standalone timer cooldown
+        time.sleep(seconds)
+        return jsonify({
+            'status': 'timer_expired',
+            'elapsed_seconds': round(time.time() - start_time, 2),
+            'reason': reason
+        })
+
 if __name__ == '__main__':
     # Run the Python backend silently on port 5000
     app.run(port=5000)

@@ -114,6 +114,140 @@ export const tools = [
                 required: ["seconds"]
             }
         }
+    },
+    {
+        type: "function",
+        function: {
+            name: "read_file",
+            description: "Inspect, read, or view file content and metadata. Supports line range pagination with line numbers, metadata inspection, and media/binary viewing.",
+            parameters: {
+                type: "object",
+                properties: {
+                    path: {
+                        type: "string",
+                        description: "Relative or absolute file or directory path"
+                    },
+                    action: {
+                        type: "string",
+                        enum: ["read", "info", "view"],
+                        description: "'read' (default: text content with line numbers), 'info' (metadata, size, line count, permissions), 'view' (for images, pdfs, binary)"
+                    },
+                    start_line: {
+                        type: "integer",
+                        description: "1-indexed starting line number for reading (default: 1)"
+                    },
+                    end_line: {
+                        type: "integer",
+                        description: "1-indexed ending line number for reading (default: start_line + 400)"
+                    },
+                    numbered: {
+                        type: "boolean",
+                        description: "Whether to prefix line numbers (e.g. '1 | content'). Default: true"
+                    }
+                },
+                required: ["path"]
+            }
+        }
+    },
+    {
+        type: "function",
+        function: {
+            name: "write_file",
+            description: "Create, overwrite, replace text, inject lines, or execute batched/nested atomic file modifications.",
+            parameters: {
+                type: "object",
+                properties: {
+                    path: {
+                        type: "string",
+                        description: "Relative or absolute target file path"
+                    },
+                    action: {
+                        type: "string",
+                        enum: ["write", "replace", "inject", "batch"],
+                        description: "'write' (overwrite/create), 'replace' (search and replace exact text), 'inject' (insert at line number), 'batch' (run array of nested operations)"
+                    },
+                    content: {
+                        type: "string",
+                        description: "Content to write (for 'write') or content to insert (for 'inject')"
+                    },
+                    target: {
+                        type: "string",
+                        description: "Exact text string to find and replace (for 'replace')"
+                    },
+                    replacement: {
+                        type: "string",
+                        description: "Replacement text string (for 'replace')"
+                    },
+                    line: {
+                        type: "integer",
+                        description: "Target line number for 'inject' (1-indexed. 1 = prepend, -1 = append, N = insert after line N)"
+                    },
+                    start_line: {
+                        type: "integer",
+                        description: "Optional starting line constraint for 'replace'"
+                    },
+                    end_line: {
+                        type: "integer",
+                        description: "Optional ending line constraint for 'replace'"
+                    },
+                    all: {
+                        type: "boolean",
+                        description: "If true, replaces all occurrences. If false, ensures target is unique. Default: false"
+                    },
+                    overwrite: {
+                        type: "boolean",
+                        description: "For 'write': whether to allow overwriting an existing file. Default: true"
+                    },
+                    operations: {
+                        type: "array",
+                        description: "For 'batch': list of nested edit operations to execute atomically in sequence",
+                        items: {
+                            type: "object",
+                            properties: {
+                                action: { type: "string", enum: ["replace", "inject", "write"] },
+                                target: { type: "string" },
+                                replacement: { type: "string" },
+                                content: { type: "string" },
+                                line: { type: "integer" },
+                                start_line: { type: "integer" },
+                                end_line: { type: "integer" },
+                                all: { type: "boolean" }
+                            }
+                        }
+                    }
+                },
+                required: ["path"]
+            }
+        }
+    },
+    {
+        type: "function",
+        function: {
+            name: "idle",
+            description: "Pause execution for a duration or wait until an active background task completes / produces output without wasting timer time.",
+            parameters: {
+                type: "object",
+                properties: {
+                    seconds: {
+                        type: "integer",
+                        description: "Maximum seconds to wait (1 to 300, default: 5)"
+                    },
+                    task_id: {
+                        type: "string",
+                        description: "Optional background task ID to monitor for early exit or new output"
+                    },
+                    wake_on: {
+                        type: "string",
+                        enum: ["exit", "output", "timer"],
+                        description: "'exit' (wakes as soon as task finishes or times out), 'output' (wakes on new output), 'timer' (unconditional wait)"
+                    },
+                    reason: {
+                        type: "string",
+                        description: "Optional description for why the agent is waiting (displayed in UI)"
+                    }
+                }
+            }
+        }
     }
 ];
 
@@ -124,6 +258,18 @@ export async function executeTool(name, args, badgeEl, genState) {
 
     if (name === "run_task" && badgeEl) {
         const cooldown = Math.max(1, parseInt(args.timeout, 10) || 1);
+        const ringBar = badgeEl.querySelector(".timer-ring-bar");
+        if (ringBar) {
+            ringBar.style.transition = "none";
+            ringBar.style.strokeDashoffset = "108.39";
+            void ringBar.getBoundingClientRect();
+            ringBar.style.transition = `stroke-dashoffset ${cooldown}s linear`;
+            ringBar.style.strokeDashoffset = "0";
+        }
+    }
+
+    if (name === "idle" && badgeEl) {
+        const cooldown = Math.max(1, parseInt(args.seconds, 10) || 5);
         const ringBar = badgeEl.querySelector(".timer-ring-bar");
         if (ringBar) {
             ringBar.style.transition = "none";
@@ -202,6 +348,12 @@ export async function executeTool(name, args, badgeEl, genState) {
         url = `/api/task/input/${encodeURIComponent(args.task_id)}`;
     } else if (name === "task_kill") {
         url = `/api/task/kill/${encodeURIComponent(args.task_id)}`;
+    } else if (name === "idle") {
+        url = "/api/task/idle";
+    } else if (name === "read_file") {
+        url = "/api/file/read";
+    } else if (name === "write_file") {
+        url = "/api/file/write";
     } else {
         throw new Error("Unknown tool: " + name);
     }
@@ -238,26 +390,56 @@ export async function executeTool(name, args, badgeEl, genState) {
     }
 
     if (!response.ok) {
-        if (name === "run_task" && badgeEl) {
+        if ((name === "run_task" || name === "idle") && badgeEl) {
             badgeEl.classList.add("timer-finished");
         }
         throw new Error(data.error || "Tool call execution failed");
     }
 
-    if (name === "run_task" && badgeEl) {
+    if ((name === "run_task" || name === "idle") && badgeEl) {
         const ringBar = badgeEl.querySelector(".timer-ring-bar");
         if (ringBar) {
             ringBar.style.transition = "stroke-dashoffset 0.15s ease, stroke 0.3s ease";
             ringBar.style.strokeDashoffset = "0";
         }
         badgeEl.classList.add("timer-finished");
+
+        if (name === "idle") {
+            const labelEl = badgeEl.querySelector(".search-label");
+            const queryEl = badgeEl.querySelector(".search-query");
+            if (data.status === "task_completed") {
+                if (labelEl) labelEl.textContent = "Task completed";
+                if (queryEl) queryEl.textContent = `${data.task_id || "task"} exited in ${data.elapsed_seconds}s (code: ${data.exit_code ?? 0})`;
+            } else if (data.status === "task_output") {
+                if (labelEl) labelEl.textContent = "Task output";
+                if (queryEl) queryEl.textContent = `${data.task_id || "task"} emitted output in ${data.elapsed_seconds}s`;
+            } else {
+                if (labelEl) labelEl.textContent = "Timer hit";
+                if (queryEl) queryEl.textContent = `${data.elapsed_seconds || args.seconds || 5}s cooldown completed`;
+            }
+        }
     }
 
     if (badgeEl && badgeEl._collapseDiv) {
         const resEl = badgeEl._collapseDiv.querySelector(".command-output-res");
         if (resEl) {
             let outText = "";
-            if (data.stdout || data.stderr) {
+            if (name === "read_file") {
+                if (data.action === "view" && data.type === "image") {
+                    outText = `[Image View: ${data.path} (${data.mime}, ${data.human_size})]\n${data.markdown || ""}`;
+                } else if (data.action === "info") {
+                    outText = JSON.stringify(data, null, 2);
+                } else {
+                    outText = data.content || (data.entries ? JSON.stringify(data.entries, null, 2) : "");
+                }
+            } else if (name === "write_file") {
+                outText = data.message || JSON.stringify(data, null, 2);
+            } else if (name === "idle") {
+                outText = `[Idle Result: ${data.status}] Elapsed: ${data.elapsed_seconds}s${data.exit_code !== undefined ? ` (Exit code: ${data.exit_code})` : ""}`;
+                if (data.stdout || data.stderr) {
+                    outText += "\n\n" + (data.stdout || "") + (data.stderr ? ("\n" + data.stderr) : "");
+                }
+            } else if (data.stdout || data.stderr) {
                 outText = (data.stdout || "") + (data.stderr ? ("\n" + data.stderr) : "");
             } else if (data.status) {
                 outText = data.status;

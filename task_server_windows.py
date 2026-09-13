@@ -322,6 +322,48 @@ class WindowsTaskHTTPHandler(BaseHTTPRequestHandler):
             status_code = 404 if "not found" in res.get("error", "") else 200
             return self._send_json(status_code, res)
 
+        elif path == "/api/task/idle":
+            seconds = max(0.1, min(300.0, float(data.get("seconds", 5))))
+            task_id = data.get("task_id")
+            wake_on = data.get("wake_on", "exit")
+            reason = data.get("reason", "")
+            start_time = time.time()
+            end_time = start_time + seconds
+
+            if task_id and task_id in manager.tasks:
+                task = manager.tasks[task_id]
+                process = task["process"]
+                q = task["queue"]
+                while time.time() < end_time:
+                    if wake_on in ("exit", "any") and process.poll() is not None:
+                        time.sleep(0.02)
+                        output = manager.get_output(task_id)
+                        output["status"] = "task_completed"
+                        output["elapsed_seconds"] = round(time.time() - start_time, 2)
+                        output["reason"] = reason
+                        return self._send_json(200, output)
+                    if wake_on in ("output", "any") and not q.empty():
+                        time.sleep(0.02)
+                        output = manager.get_output(task_id)
+                        output["status"] = "task_output"
+                        output["elapsed_seconds"] = round(time.time() - start_time, 2)
+                        output["reason"] = reason
+                        return self._send_json(200, output)
+                    time.sleep(0.04)
+
+                output = manager.get_output(task_id)
+                output["status"] = "timer_expired"
+                output["elapsed_seconds"] = round(time.time() - start_time, 2)
+                output["reason"] = reason
+                return self._send_json(200, output)
+            else:
+                time.sleep(seconds)
+                return self._send_json(200, {
+                    "status": "timer_expired",
+                    "elapsed_seconds": round(time.time() - start_time, 2),
+                    "reason": reason
+                })
+
         else:
             return self._send_json(404, {"error": "Endpoint not found"})
 
@@ -370,6 +412,50 @@ if HAS_FLASK:
     @flask_app.route("/api/task/kill/<task_id>", methods=["POST"])
     def flask_kill_task(task_id):
         return jsonify(manager.kill_task(task_id))
+
+    @flask_app.route("/api/task/idle", methods=["POST"])
+    def flask_idle_task():
+        data = request.json or {}
+        seconds = max(0.1, min(300.0, float(data.get("seconds", 5))))
+        task_id = data.get("task_id")
+        wake_on = data.get("wake_on", "exit")
+        reason = data.get("reason", "")
+        start_time = time.time()
+        end_time = start_time + seconds
+
+        if task_id and task_id in manager.tasks:
+            task = manager.tasks[task_id]
+            process = task["process"]
+            q = task["queue"]
+            while time.time() < end_time:
+                if wake_on in ("exit", "any") and process.poll() is not None:
+                    time.sleep(0.02)
+                    output = manager.get_output(task_id)
+                    output["status"] = "task_completed"
+                    output["elapsed_seconds"] = round(time.time() - start_time, 2)
+                    output["reason"] = reason
+                    return jsonify(output)
+                if wake_on in ("output", "any") and not q.empty():
+                    time.sleep(0.02)
+                    output = manager.get_output(task_id)
+                    output["status"] = "task_output"
+                    output["elapsed_seconds"] = round(time.time() - start_time, 2)
+                    output["reason"] = reason
+                    return jsonify(output)
+                time.sleep(0.04)
+
+            output = manager.get_output(task_id)
+            output["status"] = "timer_expired"
+            output["elapsed_seconds"] = round(time.time() - start_time, 2)
+            output["reason"] = reason
+            return jsonify(output)
+        else:
+            time.sleep(seconds)
+            return jsonify({
+                "status": "timer_expired",
+                "elapsed_seconds": round(time.time() - start_time, 2),
+                "reason": reason
+            })
 
 
 # ---------------------------------------------------------------------------

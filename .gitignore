@@ -6,3 +6,4 @@ logs.txt
 *.log
 .env
 .env.*
+scratch/

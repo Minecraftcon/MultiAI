@@ -378,6 +378,345 @@ async function tinyfishFetch(args) {
     return JSON.parse(text);
 }
 
+function formatBytes(bytes) {
+    if (!bytes || bytes <= 0) return "0 B";
+    const k = 1024;
+    const sizes = ["B", "KB", "MB", "GB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
+}
+
+function getMimeType(ext) {
+    const map = {
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".webp": "image/webp",
+        ".gif": "image/gif",
+        ".svg": "image/svg+xml",
+        ".bmp": "image/bmp",
+        ".ico": "image/x-icon",
+        ".pdf": "application/pdf",
+        ".json": "application/json",
+        ".txt": "text/plain",
+        ".md": "text/markdown",
+        ".js": "text/javascript",
+        ".ts": "text/typescript",
+        ".html": "text/html",
+        ".css": "text/css"
+    };
+    return map[ext.toLowerCase()] || "application/octet-stream";
+}
+
+function resolveSafePath(inputPath) {
+    const raw = String(inputPath || "").trim();
+    if (!raw) throw new Error("Path parameter is empty or missing");
+    return path.isAbsolute(raw) ? path.normalize(raw) : path.resolve(process.cwd(), raw);
+}
+
+async function handleFileRead(args) {
+    const targetPath = resolveSafePath(args.path);
+    if (!fs.existsSync(targetPath)) {
+        throw new Error(`File or directory not found: ${args.path}`);
+    }
+
+    const stat = await fs.promises.stat(targetPath);
+    const action = args.action || "read";
+
+    if (action === "info") {
+        if (stat.isDirectory()) {
+            const entries = await fs.promises.readdir(targetPath, { withFileTypes: true });
+            return {
+                path: args.path,
+                resolved_path: targetPath,
+                exists: true,
+                is_dir: true,
+                is_file: false,
+                size_bytes: stat.size,
+                human_size: formatBytes(stat.size),
+                entry_count: entries.length,
+                entries: entries.slice(0, 100).map(e => ({ name: e.name, type: e.isDirectory() ? "directory" : "file" })),
+                modified_time: stat.mtime
+            };
+        }
+        let lineCount = 0;
+        try {
+            const raw = await fs.promises.readFile(targetPath, "utf-8");
+            lineCount = raw.split("\n").length;
+        } catch {
+            lineCount = null;
+        }
+        return {
+            path: args.path,
+            resolved_path: targetPath,
+            exists: true,
+            is_dir: false,
+            is_file: true,
+            size_bytes: stat.size,
+            human_size: formatBytes(stat.size),
+            line_count: lineCount,
+            mime_type: getMimeType(path.extname(targetPath)),
+            modified_time: stat.mtime
+        };
+    }
+
+    if (action === "view") {
+        const ext = path.extname(targetPath).toLowerCase();
+        const isImg = [".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg", ".bmp", ".ico", ".avif"].includes(ext);
+        if (isImg) {
+            const buf = await fs.promises.readFile(targetPath);
+            const mime = getMimeType(ext);
+            if (stat.size <= 4 * 1024 * 1024) {
+                const dataUrl = `data:${mime};base64,${buf.toString("base64")}`;
+                return {
+                    path: args.path,
+                    resolved_path: targetPath,
+                    action: "view",
+                    type: "image",
+                    mime,
+                    size_bytes: stat.size,
+                    human_size: formatBytes(stat.size),
+                    data_url: dataUrl,
+                    markdown: `![${path.basename(targetPath)}](${dataUrl})`
+                };
+            } else {
+                return {
+                    path: args.path,
+                    resolved_path: targetPath,
+                    action: "view",
+                    type: "image",
+                    mime,
+                    size_bytes: stat.size,
+                    human_size: formatBytes(stat.size),
+                    message: "Image exceeds 4MB inline viewing limit"
+                };
+            }
+        }
+        if (ext === ".pdf") {
+            return {
+                path: args.path,
+                resolved_path: targetPath,
+                action: "view",
+                type: "pdf",
+                size_bytes: stat.size,
+                human_size: formatBytes(stat.size),
+                message: `PDF Document (${formatBytes(stat.size)})`
+            };
+        }
+    }
+
+    // Default: action === "read"
+    if (stat.isDirectory()) {
+        const entries = await fs.promises.readdir(targetPath, { withFileTypes: true });
+        return {
+            path: args.path,
+            resolved_path: targetPath,
+            is_dir: true,
+            entry_count: entries.length,
+            content: entries.map(e => `${e.isDirectory() ? "[DIR] " : "      "}${e.name}`).join("\n")
+        };
+    }
+
+    const raw = await fs.promises.readFile(targetPath, "utf-8");
+    const lines = raw.split("\n");
+    const totalLines = lines.length;
+    const startLine = Math.max(1, parseInt(args.start_line, 10) || 1);
+    const endLine = args.end_line ? Math.min(totalLines, Math.max(startLine, parseInt(args.end_line, 10))) : Math.min(totalLines, startLine + 400 - 1);
+    const isNumbered = args.numbered !== false;
+
+    const sliced = lines.slice(startLine - 1, endLine);
+    const content = sliced.map((line, idx) => isNumbered ? `${String(startLine + idx).padStart(5, " ")} | ${line}` : line).join("\n");
+
+    return {
+        path: args.path,
+        resolved_path: targetPath,
+        content,
+        start_line: startLine,
+        end_line: endLine,
+        total_lines: totalLines,
+        is_truncated: (startLine > 1 || endLine < totalLines)
+    };
+}
+
+async function handleFileWrite(args) {
+    const targetPath = resolveSafePath(args.path);
+    await fs.promises.mkdir(path.dirname(targetPath), { recursive: true });
+
+    let action = args.action;
+    if (!action) {
+        if (Array.isArray(args.operations)) action = "batch";
+        else if (args.target !== undefined) action = "replace";
+        else if (args.line !== undefined) action = "inject";
+        else action = "write";
+    }
+
+    const writeAtomic = async (filePath, text) => {
+        const tmpPath = filePath + ".tmp." + Math.random().toString(36).substring(2, 9);
+        await fs.promises.writeFile(tmpPath, text, "utf-8");
+        await fs.promises.rename(tmpPath, filePath);
+    };
+
+    if (action === "write") {
+        if (fs.existsSync(targetPath) && args.overwrite === false) {
+            throw new Error(`File already exists: ${args.path} and overwrite is false`);
+        }
+        const textToWrite = args.content ?? "";
+        await writeAtomic(targetPath, textToWrite);
+        return {
+            success: true,
+            path: args.path,
+            resolved_path: targetPath,
+            action: "write",
+            bytes_written: Buffer.byteLength(textToWrite),
+            status: "success",
+            message: `Successfully wrote file: ${args.path}`
+        };
+    }
+
+    if (action === "replace") {
+        if (!fs.existsSync(targetPath)) {
+            throw new Error(`File not found for replacement: ${args.path}`);
+        }
+        const current = await fs.promises.readFile(targetPath, "utf-8");
+        const target = args.target;
+        if (target === undefined || target === null) {
+            throw new Error("Missing 'target' string to replace");
+        }
+        const replacement = args.replacement ?? "";
+
+        // If line constraints are provided
+        if (args.start_line || args.end_line) {
+            const lines = current.split("\n");
+            const s = Math.max(1, parseInt(args.start_line, 10) || 1) - 1;
+            const e = args.end_line ? Math.min(lines.length, parseInt(args.end_line, 10)) : lines.length;
+            const chunk = lines.slice(s, e).join("\n");
+            const count = chunk.split(target).length - 1;
+            if (count === 0) {
+                throw new Error(`Target string not found within lines ${s + 1}-${e} of ${args.path}.`);
+            }
+            if (count > 1 && !args.all) {
+                throw new Error(`Found ${count} occurrences of target string within lines ${s + 1}-${e} of ${args.path}. Specify 'all: true' or provide more context.`);
+            }
+            const replacedChunk = args.all ? chunk.replaceAll(target, replacement) : chunk.replace(target, replacement);
+            const newContent = [lines.slice(0, s).join("\n"), replacedChunk, lines.slice(e).join("\n")].filter(Boolean).join("\n");
+            await writeAtomic(targetPath, newContent);
+            return {
+                success: true,
+                path: args.path,
+                resolved_path: targetPath,
+                action: "replace",
+                matches: count,
+                occurrences_replaced: args.all ? count : 1,
+                status: "success",
+                message: `Successfully replaced text in ${args.path} (lines ${s + 1}-${e})`
+            };
+        } else {
+            const count = current.split(target).length - 1;
+            if (count === 0) {
+                throw new Error(`Target string not found in ${args.path}. Please verify the exact text to replace.`);
+            }
+            if (count > 1 && !args.all) {
+                throw new Error(`Found ${count} occurrences of target string in ${args.path}. Specify 'all: true' or provide more surrounding context to make the match unique.`);
+            }
+            const newContent = args.all ? current.replaceAll(target, replacement) : current.replace(target, replacement);
+            await writeAtomic(targetPath, newContent);
+            return {
+                success: true,
+                path: args.path,
+                resolved_path: targetPath,
+                action: "replace",
+                matches: count,
+                occurrences_replaced: args.all ? count : 1,
+                status: "success",
+                message: `Successfully replaced ${args.all ? count : 1} occurrence(s) in ${args.path}`
+            };
+        }
+    }
+
+    if (action === "inject") {
+        if (!fs.existsSync(targetPath)) {
+            throw new Error(`File not found for line injection: ${args.path}`);
+        }
+        const current = await fs.promises.readFile(targetPath, "utf-8");
+        const lines = current.split("\n");
+        const targetLine = parseInt(args.line, 10);
+        const injectContent = String(args.content ?? "");
+
+        if (isNaN(targetLine) || targetLine < 0 || targetLine >= lines.length) {
+            lines.push(injectContent);
+        } else if (targetLine <= 1) {
+            lines.unshift(injectContent);
+        } else {
+            lines.splice(targetLine, 0, injectContent);
+        }
+        await writeAtomic(targetPath, lines.join("\n"));
+        return {
+            success: true,
+            path: args.path,
+            resolved_path: targetPath,
+            action: "inject",
+            line_injected: targetLine,
+            status: "success",
+            message: `Successfully injected content at line ${targetLine} in ${args.path}`
+        };
+    }
+
+    if (action === "batch") {
+        if (!fs.existsSync(targetPath)) {
+            throw new Error(`File not found for batch operations: ${args.path}`);
+        }
+        const ops = Array.isArray(args.operations) ? args.operations : [];
+        if (ops.length === 0) {
+            throw new Error("No operations provided for batch action");
+        }
+        let current = await fs.promises.readFile(targetPath, "utf-8");
+
+        for (let i = 0; i < ops.length; i++) {
+            const op = ops[i];
+            const opAction = op.action || (op.target !== undefined ? "replace" : (op.line !== undefined ? "inject" : "write"));
+
+            if (opAction === "replace") {
+                const target = op.target;
+                if (target === undefined || target === null) throw new Error(`Batch operation #${i + 1}: Missing 'target' string`);
+                const replacement = op.replacement ?? "";
+                const count = current.split(target).length - 1;
+                if (count === 0) throw new Error(`Batch operation #${i + 1}: Target string not found in ${args.path}`);
+                if (count > 1 && !op.all) throw new Error(`Batch operation #${i + 1}: Found ${count} occurrences of target string in ${args.path}. Specify 'all: true' or provide more surrounding context.`);
+                current = op.all ? current.replaceAll(target, replacement) : current.replace(target, replacement);
+            } else if (opAction === "inject") {
+                const lines = current.split("\n");
+                const targetLine = parseInt(op.line, 10);
+                const injectContent = String(op.content ?? "");
+                if (isNaN(targetLine) || targetLine < 0 || targetLine >= lines.length) {
+                    lines.push(injectContent);
+                } else if (targetLine <= 1) {
+                    lines.unshift(injectContent);
+                } else {
+                    lines.splice(targetLine, 0, injectContent);
+                }
+                current = lines.join("\n");
+            } else if (opAction === "write") {
+                current = op.content ?? "";
+            } else {
+                throw new Error(`Batch operation #${i + 1}: Unsupported action '${opAction}'`);
+            }
+        }
+
+        await writeAtomic(targetPath, current);
+        return {
+            success: true,
+            path: args.path,
+            resolved_path: targetPath,
+            action: "batch",
+            operations_applied: ops.length,
+            status: "success",
+            message: `Successfully applied ${ops.length} batch operations to ${args.path}`
+        };
+    }
+
+    throw new Error(`Unknown action: '${action}' for write_file`);
+}
+
 function sendJSON(res, status, data) {
     const body = JSON.stringify(data);
     res.writeHead(status, {
@@ -457,6 +796,30 @@ const server = http.createServer(async (req, res) => {
             for await (const chunk of req) body += chunk;
             const args = JSON.parse(body || "{}");
             const result = await tinyfishFetch(args);
+            return sendJSON(res, 200, result);
+        } catch (error) {
+            return sendJSON(res, 500, { error: error.message });
+        }
+    }
+
+    if (req.method === "POST" && req.url === "/api/file/read") {
+        try {
+            let body = "";
+            for await (const chunk of req) body += chunk;
+            const args = JSON.parse(body || "{}");
+            const result = await handleFileRead(args);
+            return sendJSON(res, 200, result);
+        } catch (error) {
+            return sendJSON(res, 500, { error: error.message });
+        }
+    }
+
+    if (req.method === "POST" && req.url === "/api/file/write") {
+        try {
+            let body = "";
+            for await (const chunk of req) body += chunk;
+            const args = JSON.parse(body || "{}");
+            const result = await handleFileWrite(args);
             return sendJSON(res, 200, result);
         } catch (error) {
             return sendJSON(res, 500, { error: error.message });
