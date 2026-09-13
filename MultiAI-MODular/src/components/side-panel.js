@@ -2,7 +2,7 @@
    SIDE PANEL & CHAT HISTORY COMPONENT (DUCK.AI INSPIRED)
    ========================================================= */
 import { state } from "../state.js";
-import { escapeHTML, formatRelativeTime, wrapTablesForScroll } from "../utils/dom.js";
+import { escapeHTML, formatChatDate, wrapTablesForScroll } from "../utils/dom.js";
 import { renderIcons } from "../utils/icons.js";
 import { saveStoredChats, saveCurrentChatState } from "../services/storage.js";
 import { closePanel } from "./gestures.js";
@@ -12,6 +12,47 @@ import { updateSendButtonState, stopChatGeneration } from "./composer.js";
 
 let currentSearchFilter = "";
 let activeMenuChatId = null;
+
+export function setPanelSearchMode(enabled) {
+    const sidePanel = document.getElementById("sidePanel");
+    const searchBar = document.getElementById("panelSearchBar");
+    const searchInput = document.getElementById("panelSearchInput");
+    const searchToggle = document.getElementById("panelSearchToggle");
+    if (!sidePanel) return;
+
+    const performUpdate = () => {
+        if (enabled) {
+            sidePanel.classList.add("search-active");
+            if (searchBar) searchBar.setAttribute("aria-hidden", "false");
+        } else {
+            sidePanel.classList.remove("search-active");
+            if (searchBar) searchBar.setAttribute("aria-hidden", "true");
+            if (searchInput) searchInput.value = "";
+            currentSearchFilter = "";
+            renderChatList();
+        }
+    };
+
+    if (document.startViewTransition) {
+        const transition = document.startViewTransition(() => {
+            performUpdate();
+        });
+        transition.finished.finally(() => {
+            if (enabled) {
+                searchInput?.focus();
+            } else {
+                searchToggle?.focus();
+            }
+        });
+    } else {
+        performUpdate();
+        if (enabled) {
+            searchInput?.focus();
+        } else {
+            searchToggle?.focus();
+        }
+    }
+}
 
 export function renderChatList(filterQuery = currentSearchFilter) {
     const chatList = document.getElementById("chatList");
@@ -42,6 +83,7 @@ export function renderChatList(filterQuery = currentSearchFilter) {
         const session = state.chatSessions[id];
         const isActive = id === state.currentChatId;
         const isRunning = Boolean(state.activeGenerations[id]?.isGenerating);
+        const dateStr = formatChatDate(session.updatedAt || session.createdAt);
 
         const item = document.createElement("div");
         item.className = `chat-item ${isActive ? "active" : ""}`;
@@ -53,6 +95,7 @@ export function renderChatList(filterQuery = currentSearchFilter) {
             <div class="chat-item-main">
                 <span class="chat-item-title">${escapeHTML(session.title || "Untitled Chat")}</span>
             </div>
+            ${dateStr ? `<span class="chat-item-date">${escapeHTML(dateStr)}</span>` : ''}
             ${isRunning ? '<div class="chat-item-spinner" title="Task running in background"></div>' : ''}
             <button type="button" class="chat-item-more-btn" title="Options" aria-label="Conversation options">
                 <i data-lucide="more-horizontal"></i>
@@ -331,10 +374,10 @@ export function initSidePanel() {
     const input = document.getElementById("input");
 
     // Search Controls
+    const sidePanel = document.getElementById("sidePanel");
     const panelSearchToggle = document.getElementById("panelSearchToggle");
-    const panelSearchRow = document.getElementById("panelSearchRow");
+    const panelSearchClose = document.getElementById("panelSearchClose");
     const panelSearchInput = document.getElementById("panelSearchInput");
-    const panelSearchClear = document.getElementById("panelSearchClear");
 
     // Context Popover Controls
     const chatRenameBtn = document.getElementById("chatRenameBtn");
@@ -417,33 +460,31 @@ export function initSidePanel() {
         });
     }
 
-    // 4. Search Filter
-    if (panelSearchToggle && panelSearchRow && panelSearchInput) {
+    // 4. Smooth Panel Search Mode
+    if (panelSearchToggle) {
         panelSearchToggle.addEventListener("click", () => {
-            const isVisible = panelSearchRow.style.display !== "none";
-            if (isVisible) {
-                panelSearchRow.style.display = "none";
-                panelSearchInput.value = "";
-                currentSearchFilter = "";
-                renderChatList();
-            } else {
-                panelSearchRow.style.display = "block";
-                panelSearchInput.focus();
-            }
+            const isActive = sidePanel?.classList.contains("search-active");
+            setPanelSearchMode(!isActive);
         });
+    }
 
+    if (panelSearchClose) {
+        panelSearchClose.addEventListener("click", () => {
+            setPanelSearchMode(false);
+        });
+    }
+
+    if (panelSearchInput) {
         panelSearchInput.addEventListener("input", () => {
             currentSearchFilter = panelSearchInput.value.trim().toLowerCase();
             renderChatList(currentSearchFilter);
         });
-    }
 
-    if (panelSearchClear && panelSearchRow && panelSearchInput) {
-        panelSearchClear.addEventListener("click", () => {
-            panelSearchInput.value = "";
-            currentSearchFilter = "";
-            panelSearchRow.style.display = "none";
-            renderChatList();
+        panelSearchInput.addEventListener("keydown", (e) => {
+            if (e.key === "Escape") {
+                e.preventDefault();
+                setPanelSearchMode(false);
+            }
         });
     }
 

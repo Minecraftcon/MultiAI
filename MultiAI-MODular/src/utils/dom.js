@@ -24,6 +24,17 @@ export function formatRelativeTime(ts) {
     return new Date(ts).toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
+export function formatChatDate(ts) {
+    if (!ts) return "";
+    const d = new Date(ts);
+    if (isNaN(d.getTime())) return "";
+    const now = new Date();
+    if (d.getFullYear() === now.getFullYear()) {
+        return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    }
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "2-digit" });
+}
+
 export function wrapTablesForScroll(container) {
     container.querySelectorAll("table").forEach(table => {
         if (table.parentElement && table.parentElement.classList.contains("table-wrapper")) return;

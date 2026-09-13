@@ -63,51 +63,54 @@
 <div id="backdrop"></div>
 
 <!-- ================= SIDE PANEL ================= -->
-<aside id="sidePanel" aria-hidden="true">
-    <!-- Panel Header: MultiAI Title & Collapse Button (No glowing badge as requested) -->
-    <div class="panel-header">
-        <div class="panel-brand">
-            <span class="panel-brand-title">MultiAI</span>
+<aside id="sidePanel" class="side-panel" aria-hidden="true">
+    <!-- Search View Mode Bar (Revealed smoothly when in search mode) -->
+    <div id="panelSearchBar" class="panel-search-bar" aria-hidden="true">
+        <div class="panel-search-pill">
+            <i data-lucide="search" class="search-pill-icon"></i>
+            <input type="text" id="panelSearchInput" class="panel-search-pill-input" placeholder="Search chats" autocomplete="off" spellcheck="false" aria-label="Search chats">
         </div>
-        <button id="panelClose" class="icon-btn panel-close-btn" type="button" aria-label="Close panel" title="Close panel">
-            <i data-lucide="panel-left-close"></i>
+        <button id="panelSearchClose" class="panel-search-close-btn" type="button" aria-label="Exit search" title="Close search">
+            <i data-lucide="x"></i>
         </button>
     </div>
 
-    <!-- Quick Navigation Actions -->
-    <div class="panel-nav">
-        <button id="newChat" class="panel-nav-btn" type="button" title="Start a new chat">
-            <i data-lucide="square-pen"></i>
-            <span>New Chat</span>
-        </button>
-        <button id="newVoiceBtn" class="panel-nav-btn" type="button" title="Start voice conversation">
-            <i data-lucide="audio-lines"></i>
-            <span>New Voice Chat</span>
-        </button>
-        <button id="newImageBtn" class="panel-nav-btn" type="button" title="Generate an image">
-            <i data-lucide="image"></i>
-            <span>New Image</span>
-        </button>
+    <!-- Normal Panel View: Header & Navigation -->
+    <div id="panelNormalView" class="panel-normal-view">
+        <!-- Panel Header: MultiAI Title & Collapse Button -->
+        <div class="panel-header">
+            <div class="panel-brand">
+                <span class="panel-brand-title">MultiAI</span>
+            </div>
+            <button id="panelClose" class="icon-btn panel-close-btn" type="button" aria-label="Close panel" title="Close panel">
+                <i data-lucide="panel-left-close"></i>
+            </button>
+        </div>
+
+        <!-- Quick Navigation Actions -->
+        <div class="panel-nav">
+            <button id="newChat" class="panel-nav-btn" type="button" title="Start a new chat">
+                <i data-lucide="square-pen"></i>
+                <span>New Chat</span>
+            </button>
+            <button id="newVoiceBtn" class="panel-nav-btn" type="button" title="Start voice conversation">
+                <i data-lucide="audio-lines"></i>
+                <span>New Voice Chat</span>
+            </button>
+            <button id="newImageBtn" class="panel-nav-btn" type="button" title="Generate an image">
+                <i data-lucide="image"></i>
+                <span>New Image</span>
+            </button>
+        </div>
     </div>
 
     <!-- Chats Section -->
     <div class="panel-body">
-        <div class="panel-section-header">
+        <div id="panelSectionHeader" class="panel-section-header">
             <span class="panel-section-label">Chats</span>
             <div class="panel-section-actions">
                 <button id="panelSearchToggle" class="panel-sub-btn" type="button" title="Search chats" aria-label="Search chats">
                     <i data-lucide="search"></i>
-                </button>
-            </div>
-        </div>
-
-        <!-- Search Bar (Togglable / Filter) -->
-        <div id="panelSearchRow" class="panel-search-row" style="display: none;">
-            <div class="panel-search-wrapper">
-                <i data-lucide="search" class="search-input-icon"></i>
-                <input type="text" id="panelSearchInput" placeholder="Filter chats..." autocomplete="off">
-                <button type="button" id="panelSearchClear" class="panel-search-clear" aria-label="Clear search">
-                    <i data-lucide="x"></i>
                 </button>
             </div>
         </div>

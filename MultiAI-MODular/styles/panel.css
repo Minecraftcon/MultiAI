@@ -141,12 +141,155 @@
 .panel-body::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 10px; }
 .panel-body::-webkit-scrollbar-thumb:hover { background: #383838; }
 
+/* Normal View Wrapper (Smoothly collapses when in search mode) */
+.panel-normal-view {
+    display: flex;
+    flex-direction: column;
+    max-height: 250px;
+    opacity: 1;
+    overflow: hidden;
+    transform: translateY(0);
+    transition: max-height 0.28s cubic-bezier(0.2, 0.9, 0.3, 1),
+                opacity 0.22s ease,
+                transform 0.24s cubic-bezier(0.2, 0.9, 0.3, 1);
+    view-transition-name: panel-normal-view;
+    flex-shrink: 0;
+}
+
+#sidePanel.search-active .panel-normal-view,
+.side-panel.search-active .panel-normal-view {
+    max-height: 0;
+    opacity: 0;
+    transform: translateY(-10px);
+    pointer-events: none;
+}
+
+/* Dedicated Search Mode Bar (Revealed smoothly at top of panel) */
+.panel-search-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 12px;
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    pointer-events: none;
+    transform: translateY(-8px);
+    transition: max-height 0.28s cubic-bezier(0.2, 0.9, 0.3, 1),
+                opacity 0.22s ease,
+                transform 0.24s cubic-bezier(0.2, 0.9, 0.3, 1),
+                padding 0.28s cubic-bezier(0.2, 0.9, 0.3, 1);
+    view-transition-name: panel-search-bar;
+    flex-shrink: 0;
+}
+
+#sidePanel.search-active .panel-search-bar,
+.side-panel.search-active .panel-search-bar {
+    max-height: 64px;
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0);
+    padding: 14px 12px 6px;
+}
+
+.panel-search-pill {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: #202020;
+    border: 1px solid #333333;
+    border-radius: 9999px;
+    height: 38px;
+    padding: 0 14px;
+    transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.panel-search-pill:focus-within {
+    border-color: #555555;
+    background: #252525;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.search-pill-icon {
+    width: 16px;
+    height: 16px;
+    color: #888888;
+    stroke-width: 2.2px;
+    flex-shrink: 0;
+}
+
+.panel-search-pill-input {
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: #ffffff;
+    font-size: 13.5px;
+    font-family: inherit;
+    line-height: 1;
+}
+
+.panel-search-pill-input::placeholder {
+    color: #888888;
+    font-weight: 400;
+}
+
+.panel-search-close-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: #999999;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: color 0.15s ease, background 0.15s ease, transform 0.1s ease;
+}
+
+.panel-search-close-btn:hover {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.panel-search-close-btn:active {
+    transform: scale(0.95);
+}
+
+.panel-search-close-btn svg {
+    width: 18px;
+    height: 18px;
+    stroke-width: 2px;
+}
+
 .panel-section-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
     padding: 14px 10px 6px 10px;
     margin-top: 4px;
+    max-height: 50px;
+    opacity: 1;
+    overflow: hidden;
+    transition: max-height 0.24s cubic-bezier(0.2, 0.9, 0.3, 1),
+                opacity 0.18s ease,
+                padding 0.24s cubic-bezier(0.2, 0.9, 0.3, 1),
+                margin 0.24s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+#sidePanel.search-active .panel-section-header,
+.side-panel.search-active .panel-section-header {
+    max-height: 0;
+    opacity: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    margin-top: 0;
+    pointer-events: none;
 }
 
 .panel-section-label {
@@ -180,67 +323,6 @@
     height: 15px;
 }
 
-/* Search Row */
-.panel-search-row {
-    padding: 4px 6px 8px;
-}
-
-.panel-search-wrapper {
-    position: relative;
-    display: flex;
-    align-items: center;
-    width: 100%;
-}
-
-.search-input-icon {
-    position: absolute;
-    left: 9px;
-    width: 13px;
-    height: 13px;
-    color: #666;
-    pointer-events: none;
-}
-
-#panelSearchInput {
-    width: 100%;
-    height: 30px;
-    background: #1c1c1c;
-    border: 1px solid #303030;
-    border-radius: 7px;
-    color: #eee;
-    font-size: 12px;
-    padding: 0 26px 0 28px;
-    outline: none;
-    font-family: inherit;
-    transition: border-color 0.15s ease, background 0.15s ease;
-}
-
-#panelSearchInput:focus {
-    border-color: #555555;
-    background: #222222;
-}
-
-.panel-search-clear {
-    position: absolute;
-    right: 6px;
-    width: 18px;
-    height: 18px;
-    border-radius: 4px;
-    background: transparent;
-    border: none;
-    color: #777;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    padding: 0;
-}
-
-.panel-search-clear svg {
-    width: 12px;
-    height: 12px;
-}
-
 /* Chat Items */
 .chat-list {
     display: flex;
@@ -253,7 +335,7 @@
     align-items: center;
     justify-content: space-between;
     gap: 8px;
-    padding: 8px 10px;
+    padding: 8px 12px;
     border-radius: 8px;
     background: transparent;
     cursor: pointer;
@@ -269,7 +351,7 @@
 }
 
 .chat-item.active {
-    background: #252525;
+    background: #2b2b2b;
     border-color: rgba(255, 255, 255, 0.08);
 }
 
@@ -281,22 +363,37 @@
 }
 
 .chat-item-title {
-    font-size: 13px;
-    color: #a3a3a3;
+    font-size: 13.5px;
+    color: #e0e0e0;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     line-height: 1.35;
-    font-weight: 400;
+    font-weight: 500;
 }
 
 .chat-item:hover .chat-item-title {
-    color: #e5e5e5;
+    color: #ffffff;
 }
 
 .chat-item.active .chat-item-title {
     color: #ffffff;
-    font-weight: 500;
+    font-weight: 600;
+}
+
+.chat-item-date {
+    font-size: 11.5px;
+    color: #777777;
+    flex-shrink: 0;
+    margin-left: 8px;
+    font-variant-numeric: tabular-nums;
+    font-weight: 400;
+    transition: color 0.15s ease;
+}
+
+.chat-item:hover .chat-item-date,
+.chat-item.active .chat-item-date {
+    color: #999999;
 }
 
 .chat-item-spinner {
@@ -313,11 +410,11 @@
     display: none;
     align-items: center;
     justify-content: center;
-    width: 24px;
-    height: 24px;
+    width: 22px;
+    height: 22px;
     background: transparent;
     border: none;
-    border-radius: 6px;
+    border-radius: 4px;
     color: #888888;
     cursor: pointer;
     flex-shrink: 0;
@@ -325,8 +422,7 @@
     transition: color 0.15s, background 0.15s;
 }
 
-.chat-item:hover .chat-item-more-btn,
-.chat-item.active .chat-item-more-btn {
+.chat-item:hover .chat-item-more-btn {
     display: inline-flex;
 }
 
@@ -338,6 +434,26 @@
 .chat-item-more-btn svg {
     width: 15px;
     height: 15px;
+}
+
+/* Modern Web Guidance: View Transitions & Reduced Motion */
+::view-transition-group(panel-search-bar),
+::view-transition-group(panel-normal-view) {
+    animation-duration: 0.28s;
+    animation-timing-function: cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    ::view-transition-group(*),
+    ::view-transition-old(*),
+    ::view-transition-new(*) {
+        animation: none !important;
+    }
+    .panel-normal-view,
+    .panel-search-bar,
+    .panel-section-header {
+        transition: none !important;
+    }
 }
 
 .history-empty {
