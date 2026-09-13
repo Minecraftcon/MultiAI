@@ -9,9 +9,9 @@ import { renderChatList, modelProviderMap } from "../components/side-panel.js";
 
 const TITLE_SYSTEM_PROMPT = `\n\n[CONVERSATION TITLE GENERATION]:
 This is the first message of this conversation. You must generate a short, descriptive topic title for this chat (2 to 5 words, max 30 characters).
-Return your response with a JSON object at the start:
-{"chatname": "Short Topic Title"}
-followed immediately by your normal response.`;
+Output the title on the very first line of your response in this exact format:
+[TITLE: Short Topic Title]
+followed immediately by your normal response. Do not use any tool or function call for the title.`;
 
 export function sanitizeMessage(msg) {
     if (!msg || typeof msg !== "object") return null;

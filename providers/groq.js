@@ -134,31 +134,38 @@ Available tools:`;
     extractCallsFromObject(obj) {
         if (!obj || typeof obj !== "object") return [];
         
+        const invalidNames = new Set(["json", "none", "null", "undefined", "object", "string", "tool"]);
+
         // Single call: { tool: "...", arguments: { ... } } or { name: "...", arguments: { ... } }
         if ((obj.tool || obj.name) && (obj.arguments || obj.args || obj.parameters)) {
-            return [{
-                id: "call_" + Math.random().toString(36).substring(2, 9),
-                type: "function",
-                function: {
-                    name: String(obj.tool || obj.name),
-                    arguments: JSON.stringify(obj.arguments || obj.args || obj.parameters || {})
-                }
-            }];
+            const toolName = String(obj.tool || obj.name).trim();
+            if (toolName && !invalidNames.has(toolName.toLowerCase())) {
+                return [{
+                    id: "call_" + Math.random().toString(36).substring(2, 9),
+                    type: "function",
+                    function: {
+                        name: toolName,
+                        arguments: JSON.stringify(obj.arguments || obj.args || obj.parameters || {})
+                    }
+                }];
+            }
         }
 
         // Multi-call array: { tool_calls: [ ... ] }
         if (Array.isArray(obj.tool_calls) && obj.tool_calls.length > 0) {
             return obj.tool_calls.map(tc => {
                 const fn = tc.function || tc;
+                const toolName = String(fn.name || fn.tool || "").trim();
+                if (!toolName || invalidNames.has(toolName.toLowerCase())) return null;
                 return {
                     id: String(tc.id || ("call_" + Math.random().toString(36).substring(2, 9))),
                     type: "function",
                     function: {
-                        name: String(fn.name || fn.tool || ""),
+                        name: toolName,
                         arguments: JSON.stringify(fn.arguments || fn.args || fn.parameters || {})
                     }
                 };
-            });
+            }).filter(Boolean);
         }
 
         return [];
@@ -250,9 +257,19 @@ Available tools:`;
             options: { ...options, forceEmulatedTools: isEmulated }
         });
 
-        // If Groq rejects with 'tool calling is not supported with this model', automatically retry in emulated mode
-        if (res.status === 400 && typeof res.error === "string" && res.error.includes("tool calling") && !isEmulated) {
-            console.log(`[GROQ PROVIDER] Model '${model}' does not support native tools. Retrying with emulated tool calling...`);
+        // If Groq rejects with tool calling unsupported or tool call validation failure, automatically retry in emulated mode
+        const errStr = typeof res.error === "string" ? res.error : JSON.stringify(res.error || "");
+        const isToolError = res.status === 400 && (
+            errStr.includes("tool calling") ||
+            errStr.includes("Tool call validation failed") ||
+            errStr.includes("tool_use_failed") ||
+            errStr.includes("attempted to call tool") ||
+            errStr.includes("Failed to parse tool call") ||
+            errStr.includes("not in request.tools")
+        );
+
+        if (isToolError && !isEmulated) {
+            console.log(`[GROQ PROVIDER] Model '${model}' failed native tool validation (${errStr}). Automatically retrying with emulated tool calling...`);
             return super.handleChat({
                 model,
                 apiKey,
