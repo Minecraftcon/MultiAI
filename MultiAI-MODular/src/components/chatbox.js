@@ -9,6 +9,7 @@
        butter-smooth transition.
    ========================================================= */
 import { renderIcons } from "../utils/icons.js";
+import { isMobileBrowser } from "../utils/dom.js";
 
 class ChatBoxComponent {
     constructor() {
@@ -47,6 +48,7 @@ class ChatBoxComponent {
                     placeholder="Message AI..." 
                     rows="1" 
                     aria-label="Message AI"
+                    enterkeyhint="enter"
                     autocomplete="off"
                     autocorrect="on"
                     spellcheck="true"></textarea>
@@ -105,12 +107,25 @@ class ChatBoxComponent {
             this.isComposing = false;
         });
 
-        // Safe Enter to submit; Shift+Enter creates a newline and smoothly expands the top
+        // Safe Enter handling:
+        // On mobile browsers: Enter never sends; it inserts a newline instead.
+        // On desktop browsers: Enter sends, Shift+Enter inserts a newline.
         this.inputEl.addEventListener("keydown", (e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
+            if (e.key === "Enter") {
                 if (this.isComposing || e.isComposing) return;
-                e.preventDefault();
-                this.triggerSend();
+
+                if (isMobileBrowser()) {
+                    // Mobile browsers: do NOT send on Enter.
+                    // Allow the native textarea action to insert a newline.
+                    // The 'input' event will fire immediately after to resize and expand the chatbox.
+                    return;
+                }
+
+                // Desktop browsers: Enter sends, Shift+Enter creates a newline
+                if (!e.shiftKey) {
+                    e.preventDefault();
+                    this.triggerSend();
+                }
             } else if (e.key === "Escape") {
                 if (this.inputEl.value) {
                     e.preventDefault();

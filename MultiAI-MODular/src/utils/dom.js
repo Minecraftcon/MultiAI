@@ -39,6 +39,30 @@ export function isMobileDevice() {
            (window.matchMedia("(pointer: coarse)").matches && window.innerWidth <= 1024);
 }
 
+/**
+ * Detects if the client is running on a mobile browser.
+ * Checks navigator.userAgentData.mobile, user agent strings, and pointer capabilities.
+ */
+export function isMobileBrowser() {
+    if (typeof navigator !== "undefined") {
+        if (navigator.userAgentData && typeof navigator.userAgentData.mobile === "boolean") {
+            if (navigator.userAgentData.mobile) return true;
+        }
+        const ua = navigator.userAgent || navigator.vendor || "";
+        if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(ua)) {
+            return true;
+        }
+    }
+    if (typeof window !== "undefined" && window.matchMedia) {
+        const isCoarse = window.matchMedia("(pointer: coarse)").matches;
+        const isFine = window.matchMedia("(pointer: fine)").matches;
+        if (isCoarse && !isFine) {
+            return true;
+        }
+    }
+    return false;
+}
+
 export function extractText(response) {
     const content = response?.message?.content;
     if (typeof content === "string") return content;
