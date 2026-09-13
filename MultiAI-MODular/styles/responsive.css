@@ -3,7 +3,7 @@
    ========================================================= */
 @media (max-width: 600px) {
     header { 
-        padding: 0 14px; 
+        padding: 0 max(14px, env(safe-area-inset-right, 0px)) 0 max(14px, env(safe-area-inset-left, 0px)); 
         font-size: 16px; 
     }
     #chat { 
@@ -16,6 +16,8 @@
     .composer,
     .composer-dock { 
         border-radius: 20px;
+        margin-left: auto;
+        margin-right: auto;
         /* Mobile GPU acceleration: bypass expensive multi-pass blur on mobile GPUs */
         backdrop-filter: none !important;
         -webkit-backdrop-filter: none !important;
@@ -24,8 +26,9 @@
         will-change: transform;
     }
     #inputArea {
-        padding: 10px 12px calc(14px + env(safe-area-inset-bottom, 0px));
+        padding: 10px max(12px, env(safe-area-inset-right, 0px)) calc(14px + env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px));
         transform: translateZ(0);
+        box-sizing: border-box;
     }
     .bottom-sheet {
         transform: translate3d(0, 100%, 0);

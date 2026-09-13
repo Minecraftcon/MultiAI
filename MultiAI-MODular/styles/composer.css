@@ -8,10 +8,11 @@
     right: 0;
     display: flex;
     justify-content: center;
-    padding: 16px 20px calc(24px + env(safe-area-inset-bottom, 0px));
+    padding: 16px max(20px, env(safe-area-inset-right, 0px)) calc(24px + env(safe-area-inset-bottom, 0px)) max(20px, env(safe-area-inset-left, 0px));
     pointer-events: none;
     background: linear-gradient(to bottom, transparent 0%, #0f0f0f 40%, #0f0f0f 100%);
     z-index: 50;
+    box-sizing: border-box;
 }
 
 :root {
@@ -23,6 +24,8 @@
 .composer-dock {
     pointer-events: auto !important;
     width: min(900px, 100%);
+    margin-left: auto;
+    margin-right: auto;
     display: flex;
     flex-direction: column;
     padding: 8px 12px;

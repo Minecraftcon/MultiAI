@@ -89,6 +89,9 @@ header {
     padding: 6px 12px;
     font-size: 13.5px;
     font-weight: 500;
+    max-width: min(240px, 58vw);
+    text-overflow: ellipsis;
+    white-space: nowrap;
     outline: none;
     cursor: pointer;
     transition: border-color 0.15s ease, background 0.15s ease;
