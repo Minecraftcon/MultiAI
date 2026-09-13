@@ -5,7 +5,7 @@ const url = require("url");
 const os = require("os");
 const { spawn, exec } = require("child_process");
 const YAML = require("yaml");
-const { resolveProvider } = require("./providers");
+const { resolveProvider, resolveImageProvider } = require("./providers");
 
 function getEnvKey(keyName) {
     if (!keyName) return null;
@@ -822,6 +822,55 @@ const server = http.createServer(async (req, res) => {
             const result = await handleFileWrite(args);
             return sendJSON(res, 200, result);
         } catch (error) {
+            return sendJSON(res, 500, { error: error.message });
+        }
+    }
+
+    if (req.method === "POST" && req.url === "/api/image/generate") {
+        try {
+            let body = "";
+            for await (const chunk of req) body += chunk;
+            const data = JSON.parse(body || "{}");
+            const { prompt, model, provider, aspect_ratio, width, height, seed, negative_prompt } = data;
+
+            if (!prompt || typeof prompt !== "string" || !prompt.trim()) {
+                return sendJSON(res, 400, { error: "Parameter 'prompt' is required for image generation." });
+            }
+
+            const targetProviderKey = provider || model || "pollinations";
+            const imageHandler = resolveImageProvider(targetProviderKey);
+
+            let apiKey = null;
+            if (targetProviderKey.toLowerCase().includes("openai") || targetProviderKey.toLowerCase().includes("dall")) {
+                apiKey = getEnvKey("OPENAI_API_KEY") || getEnvKey("OPENAI_KEY");
+                if (!apiKey) {
+                    console.warn("[IMAGE API] OpenAI API key not found for DALL-E. Falling back to Pollinations AI...");
+                    const fallbackHandler = resolveImageProvider("pollinations");
+                    const result = await fallbackHandler.generateImage({
+                        prompt: prompt.trim(),
+                        model: "flux",
+                        aspectRatio: aspect_ratio || "1:1",
+                        width,
+                        height,
+                        options: { seed, negative_prompt }
+                    });
+                    return sendJSON(res, 200, result);
+                }
+            }
+
+            const result = await imageHandler.generateImage({
+                prompt: prompt.trim(),
+                model,
+                aspectRatio: aspect_ratio || "1:1",
+                width,
+                height,
+                apiKey,
+                options: { seed, negative_prompt }
+            });
+
+            return sendJSON(res, 200, result);
+        } catch (error) {
+            console.error("[IMAGE API ERROR]", error);
             return sendJSON(res, 500, { error: error.message });
         }
     }

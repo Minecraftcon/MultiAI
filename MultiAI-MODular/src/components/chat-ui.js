@@ -101,6 +101,11 @@ export function addToolBadge(element, toolName, args) {
         label = act === "replace" ? "Replaced text" : (act === "inject" ? "Injected into file" : (act === "batch" ? "Batch modified" : "Wrote file"));
         detail = args.path || "file";
         isCommandTask = true;
+    } else if (toolName === "generate_image") {
+        icon = "image";
+        label = "Generated image";
+        detail = args.prompt || "image generation";
+        isCommandTask = true;
     }
 
     const isTimer = toolName === "sleep" || toolName === "idle";

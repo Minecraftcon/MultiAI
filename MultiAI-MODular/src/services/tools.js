@@ -248,6 +248,32 @@ export const tools = [
                 }
             }
         }
+    },
+    {
+        type: "function",
+        function: {
+            name: "generate_image",
+            description: "Generate an image from a detailed visual text prompt. Use this whenever the user asks to draw, generate, visualize, or create an image or artwork.",
+            parameters: {
+                type: "object",
+                properties: {
+                    prompt: {
+                        type: "string",
+                        description: "Detailed visual description of the image: scene, characters, setting, art style, lighting, camera angle, and colors."
+                    },
+                    aspect_ratio: {
+                        type: "string",
+                        enum: ["1:1", "16:9", "9:16", "4:3", "3:2"],
+                        description: "Aspect ratio of the generated image (default: '1:1')"
+                    },
+                    model: {
+                        type: "string",
+                        description: "Optional model/engine: 'flux' (default, high quality), 'turbo' (ultra-fast), or 'dall-e-3'"
+                    }
+                },
+                required: ["prompt"]
+            }
+        }
     }
 ];
 
@@ -354,6 +380,8 @@ export async function executeTool(name, args, badgeEl, genState) {
         url = "/api/file/read";
     } else if (name === "write_file") {
         url = "/api/file/write";
+    } else if (name === "generate_image") {
+        url = "/api/image/generate";
     } else {
         throw new Error("Unknown tool: " + name);
     }
@@ -434,6 +462,25 @@ export async function executeTool(name, args, badgeEl, genState) {
                 }
             } else if (name === "write_file") {
                 outText = data.message || JSON.stringify(data, null, 2);
+            } else if (name === "generate_image") {
+                outText = `[Image Generated: ${data.model || "flux"} (${data.dimensions?.width || 1024}x${data.dimensions?.height || 1024})]\n${data.markdown || `![](${data.url})`}\nDirect URL: ${data.url}`;
+                if (data.url) {
+                    let imgPreview = badgeEl._collapseDiv.querySelector(".tool-image-preview");
+                    if (!imgPreview) {
+                        imgPreview = document.createElement("img");
+                        imgPreview.className = "tool-image-preview";
+                        imgPreview.style.maxWidth = "100%";
+                        imgPreview.style.maxHeight = "320px";
+                        imgPreview.style.borderRadius = "8px";
+                        imgPreview.style.marginTop = "10px";
+                        imgPreview.style.display = "block";
+                        imgPreview.style.objectFit = "contain";
+                        imgPreview.style.boxShadow = "0 4px 12px rgba(0,0,0,0.15)";
+                        badgeEl._collapseDiv.appendChild(imgPreview);
+                    }
+                    imgPreview.src = data.url;
+                    imgPreview.alt = data.prompt || "Generated image";
+                }
             } else if (name === "idle") {
                 outText = `[Idle Result: ${data.status}] Elapsed: ${data.elapsed_seconds}s${data.exit_code !== undefined ? ` (Exit code: ${data.exit_code})` : ""}`;
                 if (data.stdout || data.stderr) {
