@@ -116,86 +116,64 @@ export function renderStagedAttachments() {
     const images = stagedAttachments.filter(a => a.type === "image");
     const docs = stagedAttachments.filter(a => a.type === "document");
 
-    const wrapper = document.createElement("div");
-    wrapper.className = "staged-groups-wrapper";
+    const row = document.createElement("div");
+    row.className = "staged-items-row";
 
-    if (images.length > 0) {
-        const imgGroup = document.createElement("div");
-        imgGroup.className = "staged-group images-group";
-        imgGroup.innerHTML = `
-            <div class="staged-group-tag image-tag">
-                <i data-lucide="image"></i>
-                <span>Images (${images.length})</span>
-            </div>
-            <div class="staged-items-row image-row"></div>
-        `;
-        const row = imgGroup.querySelector(".staged-items-row");
-        images.forEach(att => {
-            const item = document.createElement("div");
-            item.className = "staged-att-item staged-image-item";
-            item.innerHTML = `
-                <div class="staged-img-preview" title="Click to preview ${escapeHTML(att.name)}">
+    // 1. Render images starting right from the left corner over the plus button
+    images.forEach(att => {
+        const item = document.createElement("div");
+        item.className = "staged-att-item staged-image-item";
+        item.innerHTML = `
+            <div class="staged-img-preview" title="Click to preview ${escapeHTML(att.name)}">
+                <div class="staged-img-thumb">
                     <img src="${att.dataUrl}" alt="${escapeHTML(att.name)}">
                     <div class="staged-img-badge">${formatFileSize(att.size)}</div>
-                    <button type="button" class="staged-att-del" title="Remove image">
-                        <i data-lucide="x"></i>
-                    </button>
                 </div>
-            `;
-            const previewEl = item.querySelector(".staged-img-preview");
-            if (previewEl) {
-                previewEl.addEventListener("click", (e) => {
-                    if (e.target.closest(".staged-att-del")) return;
-                    openImageLightbox(att.dataUrl);
-                });
-            }
-            item.querySelector(".staged-att-del")?.addEventListener("click", (e) => {
-                e.stopPropagation();
-                const idx = stagedAttachments.indexOf(att);
-                if (idx !== -1) stagedAttachments.splice(idx, 1);
-                renderStagedAttachments();
-            });
-            row.appendChild(item);
-        });
-        wrapper.appendChild(imgGroup);
-    }
-
-    if (docs.length > 0) {
-        const docGroup = document.createElement("div");
-        docGroup.className = "staged-group docs-group";
-        docGroup.innerHTML = `
-            <div class="staged-group-tag doc-tag">
-                <i data-lucide="file-text"></i>
-                <span>Documents (${docs.length})</span>
             </div>
-            <div class="staged-items-row doc-row"></div>
+            <button type="button" class="staged-att-del" title="Remove image" aria-label="Remove image">
+                <i data-lucide="x"></i>
+            </button>
         `;
-        const row = docGroup.querySelector(".staged-items-row");
-        docs.forEach(att => {
-            const item = document.createElement("div");
-            item.className = "staged-att-item staged-doc-item";
-            item.innerHTML = `
-                <div class="staged-doc-preview">
-                    <i data-lucide="file-text"></i>
-                    <span class="staged-doc-name" title="${escapeHTML(att.name)}">${escapeHTML(att.name)}</span>
-                    <span class="staged-doc-size">${formatFileSize(att.size)}</span>
-                    <button type="button" class="staged-att-del" title="Remove file">
-                        <i data-lucide="x"></i>
-                    </button>
-                </div>
-            `;
-            item.querySelector(".staged-att-del")?.addEventListener("click", (e) => {
-                e.stopPropagation();
-                const idx = stagedAttachments.indexOf(att);
-                if (idx !== -1) stagedAttachments.splice(idx, 1);
-                renderStagedAttachments();
+        const previewEl = item.querySelector(".staged-img-preview");
+        if (previewEl) {
+            previewEl.addEventListener("click", (e) => {
+                if (e.target.closest(".staged-att-del")) return;
+                openImageLightbox(att.dataUrl);
             });
-            row.appendChild(item);
+        }
+        item.querySelector(".staged-att-del")?.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const idx = stagedAttachments.indexOf(att);
+            if (idx !== -1) stagedAttachments.splice(idx, 1);
+            renderStagedAttachments();
         });
-        wrapper.appendChild(docGroup);
-    }
+        row.appendChild(item);
+    });
 
-    strip.appendChild(wrapper);
+    // 2. Render documents cleanly in the same horizontal row (no tag clutter)
+    docs.forEach(att => {
+        const item = document.createElement("div");
+        item.className = "staged-att-item staged-doc-item";
+        item.innerHTML = `
+            <div class="staged-doc-preview" title="${escapeHTML(att.name)}">
+                <i data-lucide="file-text"></i>
+                <span class="staged-doc-name">${escapeHTML(att.name)}</span>
+                <span class="staged-doc-size">${formatFileSize(att.size)}</span>
+            </div>
+            <button type="button" class="staged-att-del" title="Remove file" aria-label="Remove file">
+                <i data-lucide="x"></i>
+            </button>
+        `;
+        item.querySelector(".staged-att-del")?.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const idx = stagedAttachments.indexOf(att);
+            if (idx !== -1) stagedAttachments.splice(idx, 1);
+            renderStagedAttachments();
+        });
+        row.appendChild(item);
+    });
+
+    strip.appendChild(row);
     renderIcons(strip);
 }
 

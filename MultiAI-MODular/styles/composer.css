@@ -24,8 +24,7 @@
     pointer-events: auto !important;
     width: min(900px, 100%);
     display: flex;
-    align-items: center;
-    gap: 8px;
+    flex-direction: column;
     padding: 8px 12px;
     background: #1b1b1b;
     border: 1px solid #333;
@@ -38,6 +37,13 @@
     transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
 }
 
+.composer-input-row {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    gap: 8px;
+}
+
 .composer:focus-within,
 .composer-dock:focus-within {
     border-color: #4f4f4f;
@@ -45,13 +51,13 @@
     background: #1e1e1e;
 }
 
-/* Compact mode: Perfect vertical centering across all elements */
-.composer-dock.composer-compact {
+/* Compact mode: Perfect vertical centering across input row */
+.composer-dock.composer-compact .composer-input-row {
     align-items: center;
 }
 
 /* Expanded mode: Anchors buttons to the bottom as the top grows upward */
-.composer-dock.composer-expanded {
+.composer-dock.composer-expanded .composer-input-row {
     align-items: flex-end;
 }
 
@@ -100,17 +106,6 @@
 
 .composer-dock.composer-expanded .composer-main-col {
     justify-content: flex-end;
-}
-
-/* Staged Attachment Preview Strip */
-.staged-attachments-strip {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    padding: 4px 6px 4px;
-    max-height: 130px;
-    overflow-y: auto;
-    animation: stageSlideDown 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 @keyframes stageSlideDown {
@@ -259,66 +254,25 @@
     }
 }
 
-/* Staged Attachment Preview Strip */
+/* Staged Attachment Preview Strip (Placed at the top of composer-dock, starting from corner over plus button) */
 .staged-attachments-strip {
     display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    padding: 6px 8px 2px;
-    max-height: 130px;
-    overflow-y: auto;
-}
-
-.staged-groups-wrapper {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    width: 100%;
-}
-
-.staged-group {
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-}
-
-.staged-group-tag {
-    display: inline-flex;
     align-items: center;
-    gap: 5px;
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.03em;
-    text-transform: uppercase;
-    color: #888;
-    padding-left: 2px;
-}
-
-.staged-group-tag.image-tag {
-    color: #4ade80;
-}
-
-.staged-group-tag.image-tag svg {
-    width: 12px;
-    height: 12px;
-    stroke: #4ade80;
-}
-
-.staged-group-tag.doc-tag {
-    color: #60a5fa;
-}
-
-.staged-group-tag.doc-tag svg {
-    width: 12px;
-    height: 12px;
-    stroke: #60a5fa;
+    width: 100%;
+    padding: 2px 2px 6px 2px;
+    max-height: 140px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    animation: stageSlideDown 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 .staged-items-row {
     display: flex;
     align-items: center;
-    gap: 8px;
-    overflow-x: auto;
+    gap: 10px;
+    width: 100%;
+    padding-top: 5px;
+    padding-right: 6px;
     padding-bottom: 2px;
 }
 
@@ -329,21 +283,38 @@
     flex-shrink: 0;
 }
 
+.staged-image-item {
+    padding: 4px 5px 0 0;
+}
+
 .staged-img-preview {
     position: relative;
     width: 54px;
     height: 54px;
-    border-radius: 10px;
-    overflow: hidden;
-    border: 1px solid #444;
-    background: #111;
     cursor: pointer;
-    transition: border-color 0.15s ease, transform 0.15s ease;
+    transition: transform 0.15s ease;
 }
 
 .staged-img-preview:hover {
-    border-color: #666;
     transform: scale(1.03);
+}
+
+.staged-img-thumb {
+    width: 100%;
+    height: 100%;
+    border-radius: 11px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: #141416;
+    position: relative;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+.staged-img-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
 }
 
 .staged-img-badge {
@@ -351,21 +322,19 @@
     bottom: 2px;
     left: 2px;
     right: 2px;
-    background: rgba(0, 0, 0, 0.75);
+    background: rgba(0, 0, 0, 0.78);
     border-radius: 4px;
     font-size: 9px;
     font-weight: 500;
-    color: #ddd;
+    color: #e0e0e0;
     text-align: center;
     padding: 1px 0;
     pointer-events: none;
+    letter-spacing: 0.02em;
 }
 
-.staged-img-preview img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
+.staged-doc-item {
+    padding: 4px 5px 0 0;
 }
 
 .staged-doc-preview {
@@ -373,13 +342,14 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 6px 10px;
-    background: #242424;
-    border: 1px solid #3a3a3a;
+    padding: 6px 12px;
+    background: #242426;
+    border: 1px solid rgba(255, 255, 255, 0.14);
     border-radius: 12px;
     font-size: 12px;
     color: #eee;
-    max-width: 210px;
+    max-width: 220px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 .staged-doc-preview svg {
@@ -401,33 +371,38 @@
     flex-shrink: 0;
 }
 
+/* Remove button: positioned over the top-right corner of the item, NEVER cut off! */
 .staged-att-del {
     position: absolute;
-    top: -4px;
-    right: -4px;
+    top: 0;
+    right: 0;
     width: 18px;
     height: 18px;
     border-radius: 50%;
-    background: #333;
-    border: 1px solid #555;
-    color: #fff;
+    background: #2b2b2e;
+    border: 1.5px solid #1b1b1b;
+    color: #eee;
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
     padding: 0;
-    transition: background 0.15s;
-    z-index: 2;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.55);
+    transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease, color 0.15s ease;
+    z-index: 10;
 }
 
 .staged-att-del:hover {
-    background: #e53935;
-    border-color: #f44336;
+    background: #ef4444;
+    border-color: #ef4444;
+    color: #ffffff;
+    transform: scale(1.12);
 }
 
 .staged-att-del svg {
     width: 10px;
     height: 10px;
+    stroke-width: 2.5;
 }
 
 

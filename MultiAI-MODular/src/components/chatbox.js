@@ -34,34 +34,39 @@ class ChatBoxComponent {
     renderTemplate() {
         return `
         <div class="composer-dock composer composer-compact" id="chatboxDock">
-            <!-- Left: Plus Attachment Button (Original 36x36 size, bottom-aligned) -->
-            <button id="attachSheetBtn" type="button" class="icon-btn attach-btn" aria-label="Add attachments" title="Add attachments">
-                <i data-lucide="plus"></i>
-            </button>
+            <!-- Top: Staged Attachments Strip (Spanning from the left corner over the plus button) -->
+            <div id="stagedAttachments" class="staged-attachments-strip" style="display: none;"></div>
 
-            <!-- Center: Main column with staged attachments preview & auto-expanding textarea -->
-            <div class="composer-main-col">
-                <div id="stagedAttachments" class="staged-attachments-strip" style="display: none;"></div>
-                <textarea 
-                    id="input" 
-                    class="composer-textarea" 
-                    placeholder="Message AI..." 
-                    rows="1" 
-                    aria-label="Message AI"
-                    enterkeyhint="enter"
-                    autocomplete="off"
-                    autocorrect="on"
-                    spellcheck="true"></textarea>
-            </div>
+            <!-- Bottom: Main input row -->
+            <div class="composer-input-row">
+                <!-- Left: Plus Attachment Button (Original 36x36 size, bottom-aligned) -->
+                <button id="attachSheetBtn" type="button" class="icon-btn attach-btn" aria-label="Add attachments" title="Add attachments">
+                    <i data-lucide="plus"></i>
+                </button>
 
-            <!-- Right: Actions with Clear and Send Button (Original 36x36 size, bottom-aligned) -->
-            <div class="composer-actions">
-                <button type="button" class="composer-clear-btn" id="composerClearBtn" title="Clear text" aria-label="Clear text" style="display: none;">
-                    <i data-lucide="x"></i>
-                </button>
-                <button id="send" type="button" class="composer-send-btn" aria-label="Send message" title="Send message">
-                    <i data-lucide="arrow-up"></i>
-                </button>
+                <!-- Center: Main column with auto-expanding textarea -->
+                <div class="composer-main-col">
+                    <textarea 
+                        id="input" 
+                        class="composer-textarea" 
+                        placeholder="Message AI..." 
+                        rows="1" 
+                        aria-label="Message AI"
+                        enterkeyhint="enter"
+                        autocomplete="off"
+                        autocorrect="on"
+                        spellcheck="true"></textarea>
+                </div>
+
+                <!-- Right: Actions with Clear and Send Button (Original 36x36 size, bottom-aligned) -->
+                <div class="composer-actions">
+                    <button type="button" class="composer-clear-btn" id="composerClearBtn" title="Clear text" aria-label="Clear text" style="display: none;">
+                        <i data-lucide="x"></i>
+                    </button>
+                    <button id="send" type="button" class="composer-send-btn" aria-label="Send message" title="Send message">
+                        <i data-lucide="arrow-up"></i>
+                    </button>
+                </div>
             </div>
         </div>
         `;
