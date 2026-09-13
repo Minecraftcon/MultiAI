@@ -55,6 +55,7 @@ Available tools:`;
             prompt += `\n- ${fn.name}(${paramKeys}): ${fn.description || "No description"}`;
         }
 
+        prompt += `\nIMPORTANT: Do NOT emit raw function calling tokens or API tool calls; write only standard text with the \`\`\`json code block above.`;
         prompt += `\nIf you do not need to call any tools (or after you receive the tool output), respond normally with helpful conversational text.`;
         return prompt;
     }
@@ -81,7 +82,7 @@ Available tools:`;
 
         // --- EMULATED TOOL CALLING MODE ---
         // Groq rejects payload.tools for compound models, so we inject tool descriptions into system prompt
-        const normalized = this.normalizeMessages(messages, false, supportsVision);
+        const normalized = this.normalizeMessages(messages, true, supportsVision);
         const formattedMessages = [];
         let systemPromptInjected = false;
         const toolPrompt = (supportsTools && tools && tools.length > 0 && tool_choice !== "none")
@@ -149,47 +150,73 @@ Available tools:`;
         return payload;
     }
 
-    extractCallsFromObject(obj) {
-        if (!obj || typeof obj !== "object") return [];
-        
+    extractCallsFromObject(obj, tools = []) {
+        if (!obj) return [];
+
         const invalidNames = new Set(["json", "none", "null", "undefined", "object", "string", "tool"]);
 
-        // Single call: { tool: "...", arguments: { ... } } or { name: "...", arguments: { ... } }
-        if ((obj.tool || obj.name) && (obj.arguments || obj.args || obj.parameters)) {
-            const toolName = String(obj.tool || obj.name).trim();
-            if (toolName && !invalidNames.has(toolName.toLowerCase())) {
-                return [{
-                    id: "call_" + Math.random().toString(36).substring(2, 9),
-                    type: "function",
-                    function: {
-                        name: toolName,
-                        arguments: JSON.stringify(obj.arguments || obj.args || obj.parameters || {})
-                    }
-                }];
+        const resolveToolName = (name) => {
+            if (!name) return "";
+            const raw = String(name).trim();
+            if (!raw || invalidNames.has(raw.toLowerCase())) return "";
+            if (tools && tools.length > 0) {
+                const knownNames = tools.map(t => t.function?.name || t.name).filter(Boolean);
+                if (knownNames.includes(raw)) return raw;
+                const dotClean = raw.includes(".") ? raw.split(".").pop() : raw;
+                if (knownNames.includes(dotClean)) return dotClean;
+                const colonClean = raw.includes(":") ? raw.split(":").pop() : raw;
+                if (knownNames.includes(colonClean)) return colonClean;
             }
+            if (raw.includes(".")) return raw.split(".").pop();
+            if (raw.includes(":")) return raw.split(":").pop();
+            return raw;
+        };
+
+        // If array of call objects
+        if (Array.isArray(obj)) {
+            return obj.flatMap(item => this.extractCallsFromObject(item, tools));
         }
 
-        // Multi-call array: { tool_calls: [ ... ] }
+        if (typeof obj !== "object") return [];
+
+        // Multi-call array property: { tool_calls: [ ... ] }
         if (Array.isArray(obj.tool_calls) && obj.tool_calls.length > 0) {
             return obj.tool_calls.map(tc => {
                 const fn = tc.function || tc;
-                const toolName = String(fn.name || fn.tool || "").trim();
+                const toolName = resolveToolName(fn.name || fn.tool || "");
                 if (!toolName || invalidNames.has(toolName.toLowerCase())) return null;
+                const rawArgs = fn.arguments !== undefined ? fn.arguments : (fn.args !== undefined ? fn.args : fn.parameters);
                 return {
                     id: String(tc.id || ("call_" + Math.random().toString(36).substring(2, 9))),
                     type: "function",
                     function: {
                         name: toolName,
-                        arguments: JSON.stringify(fn.arguments || fn.args || fn.parameters || {})
+                        arguments: typeof rawArgs === "string" ? rawArgs : JSON.stringify(rawArgs || {})
                     }
                 };
             }).filter(Boolean);
         }
 
+        // Single call: { tool: "...", arguments: { ... } } or { name: "...", arguments: { ... } }
+        if ((obj.tool || obj.name) && (obj.arguments !== undefined || obj.args !== undefined || obj.parameters !== undefined)) {
+            const toolName = resolveToolName(obj.tool || obj.name);
+            if (toolName && !invalidNames.has(toolName.toLowerCase())) {
+                const rawArgs = obj.arguments !== undefined ? obj.arguments : (obj.args !== undefined ? obj.args : obj.parameters);
+                return [{
+                    id: "call_" + Math.random().toString(36).substring(2, 9),
+                    type: "function",
+                    function: {
+                        name: toolName,
+                        arguments: typeof rawArgs === "string" ? rawArgs : JSON.stringify(rawArgs || {})
+                    }
+                }];
+            }
+        }
+
         return [];
     }
 
-    extractToolCallsFromContent(text) {
+    extractToolCallsFromContent(text, tools = []) {
         if (!text || typeof text !== "string") return { text: "", toolCalls: [] };
         const toolCalls = [];
         let cleanedText = text;
@@ -201,7 +228,7 @@ Available tools:`;
             const rawJson = match[1].trim();
             try {
                 const parsed = JSON.parse(rawJson);
-                const calls = this.extractCallsFromObject(parsed);
+                const calls = this.extractCallsFromObject(parsed, tools);
                 if (calls.length > 0) {
                     toolCalls.push(...calls);
                     cleanedText = cleanedText.replace(match[0], "").trim();
@@ -209,7 +236,21 @@ Available tools:`;
             } catch (_) {}
         }
 
-        // Check for raw top-level or embedded JSON if no fenced block matched
+        // Check for XML-style tool calls e.g. <tool_call> ... </tool_call> or <tool> ... </tool>
+        const xmlRegex = /<(?:tool_call|tool)>([\s\S]*?)<\/(?:tool_call|tool)>/gi;
+        while ((match = xmlRegex.exec(text)) !== null) {
+            const raw = match[1].trim();
+            try {
+                const parsed = JSON.parse(raw);
+                const calls = this.extractCallsFromObject(parsed, tools);
+                if (calls.length > 0) {
+                    toolCalls.push(...calls);
+                    cleanedText = cleanedText.replace(match[0], "").trim();
+                }
+            } catch (_) {}
+        }
+
+        // Check for raw top-level or embedded JSON if no fenced or XML block matched
         if (toolCalls.length === 0) {
             const braceStart = text.indexOf("{");
             const braceEnd = text.lastIndexOf("}");
@@ -217,7 +258,7 @@ Available tools:`;
                 const candidate = text.slice(braceStart, braceEnd + 1).trim();
                 try {
                     const parsed = JSON.parse(candidate);
-                    const calls = this.extractCallsFromObject(parsed);
+                    const calls = this.extractCallsFromObject(parsed, tools);
                     if (calls.length > 0) {
                         toolCalls.push(...calls);
                         cleanedText = (text.slice(0, braceStart) + text.slice(braceEnd + 1)).trim();
@@ -229,7 +270,7 @@ Available tools:`;
         return { text: cleanedText, toolCalls };
     }
 
-    parseResponse(data) {
+    parseResponse(data, tools = []) {
         const choice = data?.choices?.[0];
         if (!choice) return { message: { role: "assistant", content: "" } };
 
@@ -244,7 +285,17 @@ Available tools:`;
 
         // Otherwise, inspect content for emulated tool call JSON
         const rawContent = msg.content || "";
-        const { text, toolCalls } = this.extractToolCallsFromContent(rawContent);
+        const activeTools = (tools && tools.length > 0) ? tools : (this._lastTools || []);
+        let { text, toolCalls } = this.extractToolCallsFromContent(rawContent, activeTools);
+
+        // If no tool calls found in content, also inspect reasoning (frequently used by Groq compound models)
+        if (toolCalls.length === 0 && typeof msg.reasoning === "string" && msg.reasoning.trim()) {
+            const reasoningExt = this.extractToolCallsFromContent(msg.reasoning, activeTools);
+            if (reasoningExt.toolCalls.length > 0) {
+                toolCalls = reasoningExt.toolCalls;
+                if (!text) text = reasoningExt.text;
+            }
+        }
 
         if (toolCalls.length > 0) {
             return {
@@ -256,12 +307,22 @@ Available tools:`;
             };
         }
 
+        if (!text && typeof msg.reasoning === "string" && msg.reasoning.trim()) {
+            return {
+                message: {
+                    role: "assistant",
+                    content: msg.reasoning.trim()
+                }
+            };
+        }
+
         return {
             message: this.formatAssistantResponse(msg)
         };
     }
 
     async handleChat({ model, apiKey, providerConfig = {}, messages, tools, tool_choice, options = {} }) {
+        this._lastTools = tools;
         const isEmulated = options.forceEmulatedTools || this.isEmulatedToolModel(model, providerConfig);
 
         // Attempt primary request
@@ -275,28 +336,65 @@ Available tools:`;
             options: { ...options, forceEmulatedTools: isEmulated }
         });
 
-        // If Groq rejects with tool calling unsupported or tool call validation failure, automatically retry in emulated mode
-        const errStr = typeof res.error === "string" ? res.error : JSON.stringify(res.error || "");
-        const isToolError = res.status === 400 && (
-            errStr.includes("tool calling") ||
-            errStr.includes("Tool call validation failed") ||
-            errStr.includes("tool_use_failed") ||
-            errStr.includes("attempted to call tool") ||
-            errStr.includes("Failed to parse tool call") ||
-            errStr.includes("not in request.tools")
-        );
+        if (res.status === 400) {
+            const errStr = typeof res.error === "string" ? res.error : JSON.stringify(res.error || "");
 
-        if (isToolError && !isEmulated) {
-            console.log(`[GROQ PROVIDER] Model '${model}' failed native tool validation (${errStr}). Automatically retrying with emulated tool calling...`);
-            return super.handleChat({
-                model,
-                apiKey,
-                providerConfig,
-                messages,
-                tools,
-                tool_choice,
-                options: { ...options, forceEmulatedTools: true }
-            });
+            // 1. Recover tool call if Groq intercepted model generation with 'failed_generation'
+            let failedGen = null;
+            try {
+                const jsonMatch = errStr.match(/\{[\s\S]*"error"[\s\S]*\}/);
+                if (jsonMatch) {
+                    const parsedErr = JSON.parse(jsonMatch[0]);
+                    failedGen = parsedErr.error?.failed_generation;
+                }
+            } catch (_) {}
+
+            if (failedGen) {
+                let recoveredCalls = [];
+                try {
+                    const parsedObj = typeof failedGen === "string" ? JSON.parse(failedGen) : failedGen;
+                    recoveredCalls = this.extractCallsFromObject(parsedObj, tools);
+                } catch (_) {
+                    const ext = this.extractToolCallsFromContent(failedGen, tools);
+                    recoveredCalls = ext.toolCalls;
+                }
+
+                if (recoveredCalls.length > 0) {
+                    console.log(`[GROQ PROVIDER] Model '${model}' triggered tool interception (${errStr.slice(0, 150)}...). Recovered ${recoveredCalls.length} tool call(s) successfully.`);
+                    return {
+                        status: 200,
+                        message: {
+                            role: "assistant",
+                            content: "",
+                            tool_calls: recoveredCalls
+                        }
+                    };
+                }
+            }
+
+            // 2. If no tool call recovered from failed_generation, check if it was a tool-related error and retry in emulated mode
+            const isToolError = (
+                errStr.includes("tool calling") ||
+                errStr.includes("Tool call validation failed") ||
+                errStr.includes("tool_use_failed") ||
+                errStr.includes("attempted to call tool") ||
+                errStr.includes("Failed to parse tool call") ||
+                errStr.includes("not in request.tools") ||
+                errStr.includes("Tool choice is none")
+            );
+
+            if (isToolError && !isEmulated) {
+                console.log(`[GROQ PROVIDER] Model '${model}' failed native tool validation (${errStr.slice(0, 150)}...). Automatically retrying with emulated tool calling...`);
+                return this.handleChat({
+                    model,
+                    apiKey,
+                    providerConfig,
+                    messages,
+                    tools,
+                    tool_choice,
+                    options: { ...options, forceEmulatedTools: true }
+                });
+            }
         }
 
         return res;
