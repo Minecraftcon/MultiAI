@@ -287,9 +287,11 @@ export function initChatDelegation() {
             return;
         }
 
-        const imgCard = e.target.closest(".msg-img-card");
-        if (imgCard) {
-            const fullImg = imgCard.dataset.fullImg || imgCard.querySelector("img")?.src;
+        const imgTarget = e.target.closest(".msg-img-card") || 
+                          (e.target.tagName === "IMG" && e.target.closest(".message") && !e.target.closest(".activity-item, .search-badge-item"));
+        if (imgTarget) {
+            const imgEl = imgTarget.tagName === "IMG" ? imgTarget : imgTarget.querySelector("img");
+            const fullImg = imgTarget.dataset?.fullImg || imgEl?.src;
             if (fullImg) {
                 let lb = document.getElementById("imageLightbox");
                 if (!lb) {

@@ -17,6 +17,14 @@ import { chatbox } from "./chatbox.js";
 export { chatbox };
 export let stagedAttachments = [];
 
+export function isImageFile(file) {
+    if (!file) return false;
+    const type = (file.type || "").toLowerCase();
+    if (type.startsWith("image/")) return true;
+    const name = (file.name || "").toLowerCase();
+    return /\.(png|jpe?g|webp|gif|svg|bmp|ico|heic|heif|avif|tiff?)$/i.test(name);
+}
+
 function formatFileSize(bytes) {
     if (!bytes || bytes <= 0) return "0 B";
     const k = 1024;
@@ -27,6 +35,15 @@ function formatFileSize(bytes) {
 
 function downscaleImage(file, maxDim = 1600, minDim = 64, quality = 0.85) {
     return new Promise((resolve) => {
+        // If SVG or GIF, preserve vector / animation data directly
+        if (file.type === "image/svg+xml" || file.type === "image/gif" || file.name.match(/\.(svg|gif)$/i)) {
+            const reader = new FileReader();
+            reader.onload = (e) => resolve({ dataUrl: e.target.result, width: 0, height: 0 });
+            reader.onerror = () => resolve({ dataUrl: "", width: 0, height: 0 });
+            reader.readAsDataURL(file);
+            return;
+        }
+
         const reader = new FileReader();
         reader.onload = (e) => {
             const img = new Image();
@@ -37,8 +54,7 @@ function downscaleImage(file, maxDim = 1600, minDim = 64, quality = 0.85) {
                     return;
                 }
 
-                // AI vision models (like Gemini) reject images smaller than ~32x32px.
-                // If the image is tiny, upscale it on a canvas to at least minDim.
+                // AI vision models reject tiny images under ~32x32px.
                 if (width < minDim || height < minDim) {
                     const scale = Math.max(minDim / width, minDim / height);
                     const targetW = Math.round(width * scale);
@@ -47,7 +63,7 @@ function downscaleImage(file, maxDim = 1600, minDim = 64, quality = 0.85) {
                     canvas.width = targetW;
                     canvas.height = targetH;
                     const ctx = canvas.getContext("2d");
-                    ctx.imageSmoothingEnabled = false; // keep pixel/icon art sharp
+                    ctx.imageSmoothingEnabled = false;
                     ctx.drawImage(img, 0, 0, targetW, targetH);
                     const dataUrl = canvas.toDataURL("image/png");
                     resolve({ dataUrl, width: targetW, height: targetH });
@@ -71,7 +87,8 @@ function downscaleImage(file, maxDim = 1600, minDim = 64, quality = 0.85) {
                 canvas.height = height;
                 const ctx = canvas.getContext("2d");
                 ctx.drawImage(img, 0, 0, width, height);
-                const dataUrl = canvas.toDataURL("image/jpeg", quality);
+                const isPng = file.type === "image/png" || file.name.match(/\.png$/i);
+                const dataUrl = isPng ? canvas.toDataURL("image/png") : canvas.toDataURL("image/jpeg", quality);
                 resolve({ dataUrl, width, height });
             };
             img.onerror = () => resolve({ dataUrl: e.target.result, width: 0, height: 0 });
@@ -96,74 +113,141 @@ export function renderStagedAttachments() {
     strip.innerHTML = "";
     chatbox.setHasAttachments(true);
 
-    stagedAttachments.forEach((att) => {
-        const item = document.createElement("div");
-        item.className = "staged-att-item";
+    const images = stagedAttachments.filter(a => a.type === "image");
+    const docs = stagedAttachments.filter(a => a.type === "document");
 
-        if (att.type === "image") {
+    const wrapper = document.createElement("div");
+    wrapper.className = "staged-groups-wrapper";
+
+    if (images.length > 0) {
+        const imgGroup = document.createElement("div");
+        imgGroup.className = "staged-group images-group";
+        imgGroup.innerHTML = `
+            <div class="staged-group-tag image-tag">
+                <i data-lucide="image"></i>
+                <span>Images (${images.length})</span>
+            </div>
+            <div class="staged-items-row image-row"></div>
+        `;
+        const row = imgGroup.querySelector(".staged-items-row");
+        images.forEach(att => {
+            const item = document.createElement("div");
+            item.className = "staged-att-item staged-image-item";
             item.innerHTML = `
-                <div class="staged-img-preview">
-                    <img src="${att.dataUrl}" alt="${att.name}">
+                <div class="staged-img-preview" title="Click to preview ${escapeHTML(att.name)}">
+                    <img src="${att.dataUrl}" alt="${escapeHTML(att.name)}">
+                    <div class="staged-img-badge">${formatFileSize(att.size)}</div>
                     <button type="button" class="staged-att-del" title="Remove image">
                         <i data-lucide="x"></i>
                     </button>
                 </div>
             `;
-        } else {
+            const previewEl = item.querySelector(".staged-img-preview");
+            if (previewEl) {
+                previewEl.addEventListener("click", (e) => {
+                    if (e.target.closest(".staged-att-del")) return;
+                    openImageLightbox(att.dataUrl);
+                });
+            }
+            item.querySelector(".staged-att-del")?.addEventListener("click", (e) => {
+                e.stopPropagation();
+                const idx = stagedAttachments.indexOf(att);
+                if (idx !== -1) stagedAttachments.splice(idx, 1);
+                renderStagedAttachments();
+            });
+            row.appendChild(item);
+        });
+        wrapper.appendChild(imgGroup);
+    }
+
+    if (docs.length > 0) {
+        const docGroup = document.createElement("div");
+        docGroup.className = "staged-group docs-group";
+        docGroup.innerHTML = `
+            <div class="staged-group-tag doc-tag">
+                <i data-lucide="file-text"></i>
+                <span>Documents (${docs.length})</span>
+            </div>
+            <div class="staged-items-row doc-row"></div>
+        `;
+        const row = docGroup.querySelector(".staged-items-row");
+        docs.forEach(att => {
+            const item = document.createElement("div");
+            item.className = "staged-att-item staged-doc-item";
             item.innerHTML = `
                 <div class="staged-doc-preview">
                     <i data-lucide="file-text"></i>
-                    <span class="staged-doc-name" title="${att.name}">${att.name}</span>
+                    <span class="staged-doc-name" title="${escapeHTML(att.name)}">${escapeHTML(att.name)}</span>
                     <span class="staged-doc-size">${formatFileSize(att.size)}</span>
                     <button type="button" class="staged-att-del" title="Remove file">
                         <i data-lucide="x"></i>
                     </button>
                 </div>
             `;
-        }
-
-        const delBtn = item.querySelector(".staged-att-del");
-        if (delBtn) {
-            delBtn.addEventListener("click", (e) => {
+            item.querySelector(".staged-att-del")?.addEventListener("click", (e) => {
                 e.stopPropagation();
-                const curIdx = stagedAttachments.indexOf(att);
-                if (curIdx !== -1) {
-                    stagedAttachments.splice(curIdx, 1);
-                }
+                const idx = stagedAttachments.indexOf(att);
+                if (idx !== -1) stagedAttachments.splice(idx, 1);
                 renderStagedAttachments();
             });
-        }
+            row.appendChild(item);
+        });
+        wrapper.appendChild(docGroup);
+    }
 
-        strip.appendChild(item);
-    });
-
+    strip.appendChild(wrapper);
     renderIcons(strip);
 }
 
 export async function addImageFiles(files) {
     if (!files || files.length === 0) return;
+
+    const actualImages = [];
+    const actualDocs = [];
+
+    for (const file of files) {
+        if (isImageFile(file)) {
+            actualImages.push(file);
+        } else {
+            actualDocs.push(file);
+        }
+    }
+
+    if (actualDocs.length > 0) {
+        await addDocumentFiles(actualDocs);
+    }
+    if (actualImages.length === 0) return;
+
     const modelSelect = document.getElementById("modelSelect");
     const curModel = modelSelect ? modelSelect.value : "";
 
     if (!isModelVisionCapable(curModel)) {
-        showToast("The selected model is text-only. Please choose a vision model (e.g. Gemini 2.5 Flash, GPT-4o, Claude 3.5, or Llama 3.2 Vision) to attach images.");
-        if (modelSelect) {
-            modelSelect.classList.add("highlight-pulse");
-            setTimeout(() => modelSelect.classList.remove("highlight-pulse"), 2000);
+        const visionOpt = Array.from(modelSelect?.options || []).find(opt => isModelVisionCapable(opt.value));
+        if (visionOpt && modelSelect) {
+            modelSelect.value = visionOpt.value;
+            if (state.currentChatId && state.chatSessions[state.currentChatId]) {
+                state.chatSessions[state.currentChatId].model = visionOpt.value;
+            }
+            showToast(`Switched to ${visionOpt.textContent.replace(/\s*\[Vision\]\s*/i, "").trim()} for image vision support.`);
+        } else {
+            showToast("Selected model is text-only. Please select a vision model (e.g. Gemini 2.5 Flash) to attach images.");
         }
-        return;
     }
 
-    for (const file of files) {
-        if (!file.type.startsWith("image/")) continue;
-        const { dataUrl } = await downscaleImage(file);
-        stagedAttachments.push({
-            type: "image",
-            name: file.name,
-            size: file.size,
-            mimeType: file.type || "image/jpeg",
-            dataUrl
-        });
+    for (const file of actualImages) {
+        try {
+            const { dataUrl } = await downscaleImage(file);
+            if (!dataUrl) continue;
+            stagedAttachments.push({
+                type: "image",
+                name: file.name,
+                size: file.size,
+                mimeType: file.type || (file.name.match(/\.png$/i) ? "image/png" : "image/jpeg"),
+                dataUrl
+            });
+        } catch (e) {
+            console.error("[IMAGE] Error processing image file:", file.name, e);
+        }
     }
 
     renderStagedAttachments();
@@ -172,7 +256,24 @@ export async function addImageFiles(files) {
 export async function addDocumentFiles(files) {
     if (!files || files.length === 0) return;
 
+    const actualImages = [];
+    const actualDocs = [];
+
     for (const file of files) {
+        if (isImageFile(file)) {
+            actualImages.push(file);
+        } else {
+            actualDocs.push(file);
+        }
+    }
+
+    // Automatically route images to the image handler so they never get sent as text documents
+    if (actualImages.length > 0) {
+        await addImageFiles(actualImages);
+    }
+    if (actualDocs.length === 0) return;
+
+    for (const file of actualDocs) {
         const isTextBased = file.type.startsWith("text/") || 
             file.name.match(/\.(txt|md|json|csv|py|js|html|css|yaml|yml|xml|sh|ts|jsx|tsx|sql|c|cpp|h)$/i);
 
@@ -445,20 +546,26 @@ export function initComposer() {
         });
     }
 
-    // Clipboard paste handling (e.g. screenshots)
-    const input = document.getElementById("input");
-    if (input) {
-        input.addEventListener("paste", (e) => {
-            const items = Array.from(e.clipboardData?.items || []);
-            const imageItems = items.filter(item => item.type && item.type.startsWith("image/"));
-            if (imageItems.length > 0) {
-                const files = imageItems.map(item => item.getAsFile()).filter(Boolean);
-                if (files.length > 0) {
-                    addImageFiles(files);
-                }
+    // Clipboard paste handling (e.g. screenshots & images)
+    window.addEventListener("paste", (e) => {
+        const target = e.target;
+        if (target && target.tagName === "INPUT" && target.id !== "input") return;
+
+        const items = Array.from(e.clipboardData?.items || []);
+        const files = [];
+        for (const item of items) {
+            if (item.kind === "file") {
+                const f = item.getAsFile();
+                if (f) files.push(f);
             }
-        });
-    }
+        }
+        if (files.length > 0) {
+            const imgFiles = files.filter(isImageFile);
+            const docFiles = files.filter(f => !isImageFile(f));
+            if (imgFiles.length > 0) addImageFiles(imgFiles);
+            if (docFiles.length > 0) addDocumentFiles(docFiles);
+        }
+    });
 
     // Drag and Drop support
     let dragCounter = 0;
@@ -490,8 +597,8 @@ export function initComposer() {
 
         const files = Array.from(e.dataTransfer?.files || []);
         if (files.length > 0) {
-            const imgFiles = files.filter(f => f.type.startsWith("image/"));
-            const docFiles = files.filter(f => !f.type.startsWith("image/"));
+            const imgFiles = files.filter(isImageFile);
+            const docFiles = files.filter(f => !isImageFile(f));
             if (imgFiles.length > 0) addImageFiles(imgFiles);
             if (docFiles.length > 0) addDocumentFiles(docFiles);
         }
