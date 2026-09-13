@@ -3,6 +3,7 @@
    ========================================================= */
 * {
     box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
 }
 
 html, body {
@@ -11,14 +12,21 @@ html, body {
     height: 100dvh;
     min-height: 100dvh;
     background: #0f0f0f;
-    overscroll-behavior-x: none;
     overscroll-behavior: none;
     overflow: hidden;
     touch-action: pan-y;
+    -webkit-text-size-adjust: 100%;
 }
 
 body {
     color: #eeeeee;
     font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     letter-spacing: -0.01em;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+}
+
+button, a, input, textarea, select, [role="button"] {
+    touch-action: manipulation;
 }

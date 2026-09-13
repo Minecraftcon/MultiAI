@@ -576,7 +576,7 @@ export function initContextMenu() {
             hideContextMenu();
             hideChatItemContextMenu();
             hideMobileActions();
-        });
+        }, { passive: true });
 
         chat.addEventListener("click", (e) => {
             if (!isMobileDevice()) return;

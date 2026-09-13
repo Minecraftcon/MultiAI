@@ -91,6 +91,8 @@
     margin: 0;
     padding: 10px 14px;
     overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
     font-size: 13.5px;
     line-height: 1.5;
     flex: 1;
