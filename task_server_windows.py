@@ -294,7 +294,18 @@ class WindowsTaskHTTPHandler(BaseHTTPRequestHandler):
                 return self._send_json(400, {"error": "No command provided"})
 
             task_id = manager.run_task(command, shell_override=shell_override)
-            time.sleep(timeout_secs)
+            
+            # Wait until process finishes with an exit code OR timeout expires
+            cooldown = max(0.05, float(timeout_secs))
+            end_time = time.time() + cooldown
+            process = manager.tasks[task_id]['process']
+
+            while time.time() < end_time:
+                if process.poll() is not None:
+                    time.sleep(0.02)
+                    break
+                time.sleep(0.03)
+
             output = manager.get_output(task_id)
             return self._send_json(200, output)
 
@@ -332,7 +343,18 @@ if HAS_FLASK:
             return jsonify({"error": "No command provided"}), 400
 
         task_id = manager.run_task(command, shell_override=shell_override)
-        time.sleep(timeout_secs)
+        
+        # Wait until process finishes with an exit code OR timeout expires
+        cooldown = max(0.05, float(timeout_secs))
+        end_time = time.time() + cooldown
+        process = manager.tasks[task_id]['process']
+
+        while time.time() < end_time:
+            if process.poll() is not None:
+                time.sleep(0.02)
+                break
+            time.sleep(0.03)
+
         output = manager.get_output(task_id)
         return jsonify(output)
 

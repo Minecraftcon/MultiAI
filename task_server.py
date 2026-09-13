@@ -123,7 +123,20 @@ def run_task_endpoint():
         return jsonify({"error": "No command provided"}), 400
         
     task_id = manager.run_task(command)
-    time.sleep(timeout_secs)  # The cooldown check you requested!
+    
+    # Wait until process finishes with an exit code OR timeout expires
+    cooldown = max(0.05, float(timeout_secs))
+    end_time = time.time() + cooldown
+    process = manager.tasks[task_id]['process']
+
+    while time.time() < end_time:
+        if process.poll() is not None:
+            # Process exited with a returncode before timeout!
+            # Brief yield to let output queue threads flush
+            time.sleep(0.02)
+            break
+        time.sleep(0.03)
+
     output = manager.get_output(task_id)
     return jsonify(output)
 

@@ -238,10 +238,18 @@ export async function executeTool(name, args, badgeEl, genState) {
     }
 
     if (!response.ok) {
+        if (name === "run_task" && badgeEl) {
+            badgeEl.classList.add("timer-finished");
+        }
         throw new Error(data.error || "Tool call execution failed");
     }
 
     if (name === "run_task" && badgeEl) {
+        const ringBar = badgeEl.querySelector(".timer-ring-bar");
+        if (ringBar) {
+            ringBar.style.transition = "stroke-dashoffset 0.15s ease, stroke 0.3s ease";
+            ringBar.style.strokeDashoffset = "0";
+        }
         badgeEl.classList.add("timer-finished");
     }
 
