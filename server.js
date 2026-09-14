@@ -849,14 +849,15 @@ const server = http.createServer(async (req, res) => {
 
             const defaultImageProvider = getConfig().General?.DefaultImageProvider || "pollinations";
             const targetProviderKey = provider || model || defaultImageProvider;
-            const imageHandler = resolveImageProvider(targetProviderKey);
+            const { resolveImageProvider: getImgProvider } = require("./providers");
+            const imageHandler = getImgProvider(targetProviderKey);
 
             let apiKey = null;
             if (targetProviderKey.toLowerCase().includes("openai") || targetProviderKey.toLowerCase().includes("dall")) {
                 apiKey = getEnvKey("OPENAI_API_KEY") || getEnvKey("OPENAI_KEY");
                 if (!apiKey) {
                     console.warn("[IMAGE API] OpenAI API key not found for DALL-E. Falling back to Pollinations AI...");
-                    const fallbackHandler = resolveImageProvider("pollinations");
+                    const fallbackHandler = getImgProvider("pollinations");
                     const result = await fallbackHandler.generateImage({
                         prompt: prompt.trim(),
                         model: "flux",

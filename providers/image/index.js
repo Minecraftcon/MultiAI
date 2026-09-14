@@ -46,6 +46,9 @@ loadAllImageProviders();
  * Defaults to PollinationsImageProvider for zero-configuration, high-speed generation.
  */
 function resolveImageProvider(identifier) {
+    try {
+        loadAllImageProviders();
+    } catch (_) {}
     const PollinationsClass = registeredImageProviders.find(p => p.id === "pollinations") || BaseImageProvider;
     if (!identifier) return new PollinationsClass();
 
