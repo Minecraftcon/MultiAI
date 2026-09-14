@@ -407,6 +407,9 @@ export async function executeTool(name, args, badgeEl, genState) {
         if (!args.model && state.config?.General?.DefaultImageModel) {
             args.model = state.config.General.DefaultImageModel;
         }
+        if (!args.chatId && state.currentChatId) {
+            args.chatId = state.currentChatId;
+        }
     } else {
         throw new Error("Unknown tool: " + name);
     }

@@ -7,6 +7,7 @@ const { spawn, exec } = require("child_process");
 const YAML = require("yaml");
 const { resolveProvider, resolveImageProvider } = require("./providers");
 const { getConfig, saveConfig } = require("./config_manager");
+const conversationsManager = require("./conversations_manager");
 
 function getEnvKey(keyName) {
     if (!keyName) return null;
@@ -247,6 +248,8 @@ function getSystemInfo() {
         username: os.userInfo ? os.userInfo().username : "user",
         homedir: os.homedir(),
         cwd: process.cwd(),
+        storageRoot: conversationsManager.getStorageRoot(),
+        conversationsRoot: conversationsManager.getConversationsRoot(),
         isTermux,
         isWindows,
         isMac,
@@ -755,6 +758,78 @@ const server = http.createServer(async (req, res) => {
         return sendJSON(res, 200, getSystemInfo());
     }
 
+    // -------------------------------------------------------------
+    // Persistent Chat & Workspace Endpoints ($HOME/.MuktiAI)
+    // -------------------------------------------------------------
+    if (req.method === "GET" && req.url === "/api/chats") {
+        try {
+            const chats = conversationsManager.listChats();
+            return sendJSON(res, 200, { success: true, chats });
+        } catch (err) {
+            return sendJSON(res, 500, { error: err.message });
+        }
+    }
+
+    if (req.method === "GET" && req.url.startsWith("/api/chats/")) {
+        const chatId = req.url.slice("/api/chats/".length).split("?")[0];
+        if (!chatId) {
+            return sendJSON(res, 400, { error: "Chat ID is required." });
+        }
+        try {
+            const data = conversationsManager.getChat(chatId);
+            if (!data) {
+                return sendJSON(res, 404, { error: `Chat '${chatId}' not found.` });
+            }
+            return sendJSON(res, 200, { success: true, ...data });
+        } catch (err) {
+            return sendJSON(res, 500, { error: err.message });
+        }
+    }
+
+    if (req.method === "POST" && req.url === "/api/chats/session") {
+        try {
+            let body = "";
+            for await (const chunk of req) body += chunk;
+            const data = JSON.parse(body || "{}");
+            const { chatId, date } = data;
+            if (!chatId) {
+                return sendJSON(res, 400, { error: "Parameter 'chatId' is required." });
+            }
+            const workspace = conversationsManager.ensureChatWorkspace(chatId, date);
+            return sendJSON(res, 200, { success: true, workspace });
+        } catch (err) {
+            return sendJSON(res, 500, { error: err.message });
+        }
+    }
+
+    if (req.method === "POST" && req.url === "/api/chats/save") {
+        try {
+            let body = "";
+            for await (const chunk of req) body += chunk;
+            const chatSession = JSON.parse(body || "{}");
+            if (!chatSession || !chatSession.id) {
+                return sendJSON(res, 400, { error: "Valid chat session with 'id' is required." });
+            }
+            const workspace = conversationsManager.saveChat(chatSession);
+            return sendJSON(res, 200, { success: true, workspace });
+        } catch (err) {
+            return sendJSON(res, 500, { error: err.message });
+        }
+    }
+
+    if (req.method === "DELETE" && req.url.startsWith("/api/chats/")) {
+        const chatId = req.url.slice("/api/chats/".length).split("?")[0];
+        if (!chatId) {
+            return sendJSON(res, 400, { error: "Chat ID is required." });
+        }
+        try {
+            const deleted = conversationsManager.deleteChat(chatId);
+            return sendJSON(res, 200, { success: true, deleted });
+        } catch (err) {
+            return sendJSON(res, 500, { error: err.message });
+        }
+    }
+
     if (req.method === "POST" && req.url === "/api/log") {
         try {
             let body = "";
@@ -879,6 +954,21 @@ const server = http.createServer(async (req, res) => {
                 apiKey,
                 options: { seed, negative_prompt }
             });
+
+            const activeChatId = data.chatId || data.chat_id;
+            if (activeChatId && result.url && result.url.startsWith("/generated_images/")) {
+                try {
+                    const localImgPath = path.join(process.cwd(), result.url.slice(1));
+                    if (fs.existsSync(localImgPath)) {
+                        const filename = path.basename(localImgPath);
+                        const ws = conversationsManager.ensureChatWorkspace(activeChatId);
+                        fs.copyFileSync(localImgPath, path.join(ws.imagesDir, filename));
+                        result.chatImagePath = path.join(ws.imagesDir, filename);
+                    }
+                } catch (e) {
+                    console.warn(`[IMAGE API] Failed to copy image to chat ${activeChatId}:`, e.message);
+                }
+            }
 
             return sendJSON(res, 200, result);
         } catch (error) {

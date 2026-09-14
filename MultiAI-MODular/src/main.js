@@ -2,6 +2,7 @@
    APPLICATION BOOTSTRAP & LIFECYCLE CONTROLLER
    ========================================================= */
 import { state } from "./state.js";
+window.state = state;
 import { initSystemEnvironment } from "./services/system.js";
 import { loadStoredChats, saveStoredChats } from "./services/storage.js";
 import { initGestures } from "./components/gestures.js";

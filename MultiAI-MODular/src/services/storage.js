@@ -1,8 +1,50 @@
 /* =========================================================
-   LOCAL STORAGE & CONVERSATION PERSISTENCE
+   LOCAL STORAGE & DISK CONVERSATION PERSISTENCE
+   Manages $HOME/.MuktiAI/conversations/{Date}/chats/{id}/
    ========================================================= */
 import { CHATS_STORAGE_KEY, ACTIVE_CHAT_KEY } from "../config.js";
 import { state } from "../state.js";
+import { syncActiveWorkspacePrompt } from "./system.js";
+
+/**
+ * Initializes/ensures the disk workspace for a chat session:
+ * $HOME/.MuktiAI/conversations/{Date}/chats/{id}/
+ *                                            /scratch
+ *                                            /images
+ */
+export async function initChatWorkspace(chatId, createdAt) {
+    if (!chatId) return null;
+    let dateStr = null;
+    if (createdAt) {
+        const d = new Date(createdAt);
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, "0");
+        const dd = String(d.getDate()).padStart(2, "0");
+        dateStr = `${yyyy}-${mm}-${dd}`;
+    }
+
+    try {
+        const res = await fetch("/api/chats/session", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ chatId, date: dateStr })
+        });
+        if (!res.ok) return null;
+        const data = await res.json();
+        if (data.workspace) {
+            if (state.chatSessions[chatId]) {
+                state.chatSessions[chatId].workspace = data.workspace;
+            }
+            if (state.currentChatId === chatId) {
+                syncActiveWorkspacePrompt(data.workspace);
+            }
+            return data.workspace;
+        }
+    } catch (e) {
+        console.warn("[STORAGE] Could not initialize chat workspace on disk:", e.message);
+    }
+    return null;
+}
 
 export function loadStoredChats() {
     try {
@@ -12,6 +54,59 @@ export function loadStoredChats() {
         state.chatSessions = {};
     }
     state.currentChatId = localStorage.getItem(ACTIVE_CHAT_KEY);
+
+    // Sync active workspace prompt if current chat has workspace
+    if (state.currentChatId && state.chatSessions[state.currentChatId]) {
+        const sess = state.chatSessions[state.currentChatId];
+        if (sess.workspace) {
+            syncActiveWorkspacePrompt(sess.workspace);
+        } else {
+            initChatWorkspace(state.currentChatId, sess.createdAt);
+        }
+    }
+
+    // Asynchronously fetch persistent chats from backend disk
+    syncFromBackendDisk();
+}
+
+/**
+ * Asynchronously synchronizes chats from $HOME/.MuktiAI/conversations/
+ */
+export async function syncFromBackendDisk() {
+    try {
+        const res = await fetch("/api/chats");
+        if (!res.ok) return;
+        const data = await res.json();
+        if (Array.isArray(data.chats) && data.chats.length > 0) {
+            let changed = false;
+            for (const diskChat of data.chats) {
+                if (!diskChat || !diskChat.id) continue;
+                const existing = state.chatSessions[diskChat.id];
+                if (!existing) {
+                    state.chatSessions[diskChat.id] = diskChat;
+                    changed = true;
+                } else {
+                    if (!existing.workspace && diskChat.workspace) {
+                        existing.workspace = diskChat.workspace;
+                        changed = true;
+                    }
+                    if ((diskChat.updatedAt || 0) > (existing.updatedAt || 0)) {
+                        state.chatSessions[diskChat.id] = diskChat;
+                        changed = true;
+                    }
+                }
+            }
+
+            if (changed) {
+                try {
+                    localStorage.setItem(CHATS_STORAGE_KEY, JSON.stringify(state.chatSessions));
+                } catch (_) {}
+                document.dispatchEvent(new CustomEvent("chatsUpdated"));
+            }
+        }
+    } catch (err) {
+        console.warn("[STORAGE] Backend chats sync error:", err.message);
+    }
 }
 
 export function saveStoredChats() {
@@ -25,6 +120,36 @@ export function saveStoredChats() {
         }
     } catch (e) {
         console.warn("Storage write error:", e);
+    }
+
+    // Persist current chat to backend disk ($HOME/.MuktiAI/conversations/)
+    if (state.currentChatId && state.chatSessions[state.currentChatId]) {
+        persistChatToDisk(state.chatSessions[state.currentChatId]);
+    }
+}
+
+/**
+ * Persists chat object to {chatDir}/chat.json on disk
+ */
+export async function persistChatToDisk(session) {
+    if (!session || !session.id) return;
+    try {
+        const res = await fetch("/api/chats/save", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(session)
+        });
+        if (res.ok) {
+            const data = await res.json();
+            if (data.workspace && !session.workspace) {
+                session.workspace = data.workspace;
+                if (state.currentChatId === session.id) {
+                    syncActiveWorkspacePrompt(data.workspace);
+                }
+            }
+        }
+    } catch (e) {
+        console.warn("[STORAGE] Failed to persist chat to disk:", e.message);
     }
 }
 
@@ -51,6 +176,10 @@ export function createNewChatSession(initialUserText = "") {
         chatHtml: chat ? chat.innerHTML : ""
     };
     state.currentChatId = id;
+
+    // Auto-create workspace directories on disk and prompt AI
+    initChatWorkspace(id, Date.now());
+
     if (state.config?.General?.RecordChatHistory !== false) {
         saveStoredChats();
     }
@@ -67,7 +196,6 @@ export function saveCurrentChatState() {
     if (chat) session.chatHtml = chat.innerHTML;
     
     // session.messages is the live conversation history.
-    // Keep state.messages synchronized with session.messages, never clobber session.messages with stale state.messages
     if (session.messages && session.messages.length > 0) {
         state.messages = JSON.parse(JSON.stringify(session.messages));
     } else if (state.messages && state.messages.length > 0) {

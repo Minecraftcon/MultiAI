@@ -4,7 +4,8 @@
 import { state } from "../state.js";
 import { escapeHTML, formatChatDate, wrapTablesForScroll } from "../utils/dom.js";
 import { renderIcons } from "../utils/icons.js";
-import { saveStoredChats, saveCurrentChatState } from "../services/storage.js";
+import { saveStoredChats, saveCurrentChatState, initChatWorkspace } from "../services/storage.js";
+import { syncActiveWorkspacePrompt } from "../services/system.js";
 import { closePanel } from "./gestures.js";
 import { hideMobileActions } from "./context-menu.js";
 import { bindInteractiveCodeBlocks, renderMermaidInElement, renderMath } from "./renderer.js";
@@ -149,6 +150,12 @@ export function switchToChat(id) {
     const chat = document.getElementById("chat");
     const modelSelect = document.getElementById("modelSelect");
 
+    if (session.workspace) {
+        syncActiveWorkspacePrompt(session.workspace);
+    } else {
+        initChatWorkspace(id, session.createdAt);
+    }
+
     state.messages = (session.messages && session.messages.length > 0)
         ? JSON.parse(JSON.stringify(session.messages))
         : [{ role: "system", content: state.activeSystemPrompt }];
@@ -195,6 +202,7 @@ export function deleteChatSession(id) {
 
     delete state.chatSessions[id];
     hideChatItemMenu();
+    fetch("/api/chats/" + encodeURIComponent(id), { method: "DELETE" }).catch(() => {});
 
     if (state.currentChatId === id) {
         state.currentChatId = null;
@@ -591,4 +599,9 @@ export function initSidePanel() {
             }
         });
     }
+
+    // 8. Disk sync listener
+    document.addEventListener("chatsUpdated", () => {
+        renderChatList();
+    });
 }
