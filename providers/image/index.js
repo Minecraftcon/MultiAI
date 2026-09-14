@@ -24,7 +24,11 @@ function loadAllImageProviders() {
             continue;
         }
         try {
-            const ProviderModule = require(path.join(dir, file));
+            const filePath = path.join(dir, file);
+            try {
+                delete require.cache[require.resolve(filePath)];
+            } catch (_) {}
+            const ProviderModule = require(filePath);
             if (ProviderModule && typeof ProviderModule === "function") {
                 registerImageProvider(ProviderModule);
             }

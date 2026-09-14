@@ -23,24 +23,9 @@ class PollinationsImageProvider extends BaseImageProvider {
         const effectiveModel = (safeModel.includes("turbo")) ? "turbo" : (safeModel.includes("anime") ? "anime" : "flux");
 
         const cleanPrompt = prompt.trim();
-        const encodedPrompt = encodeURIComponent(cleanPrompt);
+        const urlPrompt = cleanPrompt.length > 800 ? cleanPrompt.slice(0, 800) : cleanPrompt;
+        const encodedPrompt = encodeURIComponent(urlPrompt);
         const imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${dims.width}&height=${dims.height}&model=${effectiveModel}&seed=${seed}&nologo=true`;
-
-        // Verify that the endpoint is reachable (HEAD or fast GET request)
-        try {
-            const controller = new AbortController();
-            const timeout = setTimeout(() => controller.abort(), 15000);
-            const checkRes = await fetch(imageUrl, { method: "HEAD", signal: controller.signal });
-            clearTimeout(timeout);
-
-            if (!checkRes.ok && checkRes.status !== 200 && checkRes.status !== 302 && checkRes.status !== 307) {
-                // If HEAD fails, we can still provide the image URL as Pollinations renders on demand
-                console.warn(`[POLLINATIONS] HEAD check returned status ${checkRes.status}; proceeding with URL.`);
-            }
-        } catch (e) {
-            // Pollinations generates asynchronously upon first GET; timeout on check should not block URL delivery
-            console.warn(`[POLLINATIONS] Pre-flight check warning (${e.message}); using generated URL.`);
-        }
 
         return {
             success: true,
