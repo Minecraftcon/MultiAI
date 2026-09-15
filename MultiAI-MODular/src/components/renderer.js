@@ -145,26 +145,148 @@ if (markedRenderer) {
     marked.use({ renderer: markedRenderer });
 }
 
-export function parseMarkdown(text) {
-    let parsed = "";
+export function formatThoughtHtml(content, durationStr = "") {
+    if (!content || !content.trim()) return "";
+
+    const rawDur = String(durationStr || "").trim();
+    const durLabel = rawDur ? (typeof rawDur === "number" || (!isNaN(Number(rawDur)) && rawDur !== "") ? `${rawDur} seconds` : rawDur) : "a few seconds";
+    const brainSvg = `<svg class="thought-brain-icon" viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/><path d="M12 5v13"/><path d="M12 8h4"/><path d="M12 12h3"/><path d="M12 16h4"/><path d="M8 8h4"/><path d="M9 12h3"/><path d="M8 16h4"/></svg>`;
+
+    let innerFormatted = content.trim();
     if (typeof marked !== "undefined" && typeof marked.parse === "function") {
         try {
-            parsed = marked.parse(text);
-        } catch (e) {
-            parsed = escapeHTML(text);
+            innerFormatted = marked.parse(innerFormatted);
+        } catch {
+            innerFormatted = escapeHTML(innerFormatted);
         }
     } else {
-        parsed = escapeHTML(text);
+        innerFormatted = escapeHTML(innerFormatted);
     }
+
+    return `<details class="thought-box" open${rawDur ? ` data-duration="${escapeHTML(rawDur)}"` : ''}><summary class="thought-summary"><span class="thought-header">${brainSvg}<span class="thought-label">Thought for ${escapeHTML(durLabel)}</span><span class="thought-chevron">›</span></span></summary><div class="thought-body"><div class="thought-content">${innerFormatted}</div></div></details>`;
+}
+
+export function extractThoughtAndContent(text) {
+    let raw = text || "";
+    if (!raw.trim()) {
+        return { thoughtHtml: "", content: "", duration: "" };
+    }
+    let thoughts = [];
+    let duration = "";
+
+    // 1. Check for existing .thought-box (only retain if non-empty thought-content exists)
+    const thoughtBoxRegex = /<details class="thought-box"([^>]*)>([\s\S]*?)<\/details>/gi;
+    let match;
+    while ((match = thoughtBoxRegex.exec(raw)) !== null) {
+        const attrs = match[1] || "";
+        const body = match[2] || "";
+        const durMatch = attrs.match(/data-duration=["']([^"']*)["']/i);
+        if (durMatch && durMatch[1]) duration = durMatch[1];
+
+        const innerContentMatch = body.match(/<div class="thought-content">([\s\S]*?)<\/div>/i);
+        const innerRaw = innerContentMatch ? innerContentMatch[1] : body;
+        const textOnly = innerRaw.replace(/<[^>]+>/g, "").trim();
+        if (textOnly) {
+            thoughts.push(match[0]);
+        }
+    }
+    if (thoughts.length > 0) {
+        const cleanContent = raw.replace(thoughtBoxRegex, "").trim();
+        return {
+            thoughtHtml: thoughts.join("\n\n"),
+            content: cleanContent,
+            duration
+        };
+    }
+
+    // 2. Check for <think> tags (streaming or closed)
+    const thinkRegex = /<think>([\s\S]*?)(?:<\/think>|$)/gi;
+    let thinkMatches = [];
+    raw = raw.replace(thinkRegex, (_, thinkText) => {
+        if (thinkText && thinkText.trim()) {
+            thinkMatches.push(thinkText.trim());
+        }
+        return "";
+    });
+    if (thinkMatches.length > 0) {
+        const html = formatThoughtHtml(thinkMatches.join("\n\n"), duration);
+        if (html) {
+            return {
+                thoughtHtml: html,
+                content: raw.trim(),
+                duration
+            };
+        }
+    }
+
+    // 3. Check for generic <details><summary>Thinking Process / Thought / Reasoning</summary>...
+    const detailsRegex = /<details[^>]*>\s*<summary[^>]*>([\s\S]*?)<\/summary>([\s\S]*?)<\/details>/gi;
+    let detailsMatches = [];
+    raw = raw.replace(detailsRegex, (orig, summaryText, bodyText) => {
+        const isThought = /think|thought|reasoning/i.test(summaryText);
+        if (isThought && bodyText && bodyText.trim()) {
+            detailsMatches.push(bodyText.trim());
+            return "";
+        }
+        return orig;
+    });
+    if (detailsMatches.length > 0) {
+        const html = formatThoughtHtml(detailsMatches.join("\n\n"), duration);
+        if (html) {
+            return {
+                thoughtHtml: html,
+                content: raw.trim(),
+                duration
+            };
+        }
+    }
+
+    return {
+        thoughtHtml: "",
+        content: raw.trim(),
+        duration: ""
+    };
+}
+
+export function parseMarkdown(text) {
+    if (!text) return "";
+
+    const { thoughtHtml, content } = extractThoughtAndContent(text);
+    let parsedContent = "";
+    if (content) {
+        if (typeof marked !== "undefined" && typeof marked.parse === "function") {
+            try {
+                parsedContent = marked.parse(content);
+            } catch (e) {
+                parsedContent = escapeHTML(content);
+            }
+        } else {
+            parsedContent = escapeHTML(content);
+        }
+    }
+
+    let combined = "";
+    if (thoughtHtml && parsedContent) {
+        combined = `${thoughtHtml}\n${parsedContent}`;
+    } else if (thoughtHtml) {
+        combined = thoughtHtml;
+    } else {
+        combined = parsedContent;
+    }
+
     if (typeof DOMPurify !== "undefined" && typeof DOMPurify.sanitize === "function") {
-        return DOMPurify.sanitize(parsed, {
+        return DOMPurify.sanitize(combined, {
+            USE_PROFILES: { html: true, svg: true },
+            ADD_TAGS: ["details", "summary", "svg", "path", "polyline", "line"],
             ADD_ATTR: [
                 "target", "rel", "class", "data-code", "data-chart", 
-                "data-state", "data-src", "sandbox", "srcdoc", "loading", "style"
+                "data-state", "data-src", "sandbox", "srcdoc", "loading", "style",
+                "open", "viewBox", "stroke", "stroke-width", "fill",
+                "stroke-linecap", "stroke-linejoin", "d", "data-duration"
             ]
         });
     }
-    return parsed;
+    return combined;
 }
 
 export function bindAIImageCards(container, immediate = false) {

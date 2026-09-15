@@ -51,6 +51,82 @@ providers:
         supports_tools: true
         supports_vision: false
 
+  zai:
+    name: "Z.AI (GLM)"
+    type: "zai"
+    api_key_env: "Z_AI_API_KEY"
+    base_url: "https://api.z.ai/api/paas/v4"
+    default_max_tokens: 4096
+    models:
+      - id: "glm-4.5-flash"
+        name: "GLM 4.5 Flash (Fast & Reasoning)"
+        supports_tools: true
+        supports_vision: false
+      - id: "glm-4.7-flash"
+        name: "GLM 4.7 Flash"
+        supports_tools: true
+        supports_vision: false
+      - id: "glm-5.3-flash"
+        name: "GLM 5.3 Flash"
+        supports_tools: true
+        supports_vision: false
+      - id: "glm-4.5"
+        name: "GLM 4.5"
+        supports_tools: true
+        supports_vision: false
+      - id: "glm-4.7"
+        name: "GLM 4.7"
+        supports_tools: true
+        supports_vision: false
+
+  llm7:
+    name: "LLM7.io"
+    type: "llm7"
+    api_key_env: "LLM7_API_KEY"
+    base_url: "https://api.llm7.io/v1"
+    default_max_tokens: 4096
+    models:
+      - id: "minimax-m2.7"
+        name: "MiniMax M2.7 (Reasoning & Tools)"
+        supports_tools: true
+        supports_vision: false
+      - id: "codestral-latest"
+        name: "Codestral Latest (Coding Specialist & Tools)"
+        supports_tools: true
+        supports_vision: false
+      - id: "DeepSeek-V4-Flash-0731"
+        name: "DeepSeek V4 Flash (Tools)"
+        supports_tools: true
+        supports_vision: false
+
+  logflare:
+    name: "Logfare AI"
+    type: "logflare"
+    api_key_env: "LOGFLARE_API_KEY"
+    base_url: "https://logfare.ai/v1"
+    default_max_tokens: 4096
+    models:
+      - id: "glm-5.3-flash"
+        name: "GLM 5.3 Flash (Logfare — Tools & Fast)"
+        supports_tools: true
+        supports_vision: false
+      - id: "qwen-3.8-27b"
+        name: "Qwen 3.8 27B (Logfare — Tools & Reasoning)"
+        supports_tools: true
+        supports_vision: false
+      - id: "gemma-4-26b"
+        name: "Gemma 4 26B (Logfare — Reasoning)"
+        supports_tools: true
+        supports_vision: false
+      - id: "logfare/auto"
+        name: "Logfare Auto (Smart Router)"
+        supports_tools: true
+        supports_vision: false
+      - id: "moondream3.1"
+        name: "Moondream 3.1 9B (Vision)"
+        supports_tools: false
+        supports_vision: true
+
   groq:
     name: "Groq Cloud"
     type: "openai_compatible"

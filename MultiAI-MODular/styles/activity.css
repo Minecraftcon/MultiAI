@@ -207,3 +207,144 @@
     color: #ddd;
     font-weight: 500;
 }
+
+/* =========================================================
+   THINKING / REASONING DISCLOSURE
+   ========================================================= */
+.thought-box {
+    margin: 8px 0 14px 0;
+    user-select: text;
+}
+
+.thought-box summary,
+.message.ai details summary {
+    list-style: none;
+}
+
+.thought-box summary::-webkit-details-marker,
+.message.ai details summary::-webkit-details-marker {
+    display: none;
+}
+
+.thought-summary {
+    cursor: pointer;
+    user-select: none;
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 0;
+    outline: none;
+}
+
+.thought-summary:focus-visible {
+    outline: 2px solid #555555;
+    outline-offset: 3px;
+    border-radius: 4px;
+}
+
+.thought-header {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13.5px;
+    font-weight: 500;
+    color: #888888;
+    transition: color 0.2s ease;
+}
+
+.thought-summary:hover .thought-header {
+    color: #e2e2e2;
+}
+
+.thought-brain-icon {
+    width: 15px;
+    height: 15px;
+    flex-shrink: 0;
+    color: #888888;
+    transition: color 0.2s ease;
+}
+
+.thought-summary:hover .thought-brain-icon {
+    color: #e2e2e2;
+}
+
+.thought-label {
+    letter-spacing: -0.01em;
+}
+
+.thought-chevron {
+    font-size: 13px;
+    line-height: 1;
+    color: #777777;
+    margin-left: 2px;
+    display: inline-block;
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), color 0.2s ease;
+}
+
+.thought-box[open] .thought-chevron {
+    transform: rotate(90deg);
+    color: #bbbbbb;
+}
+
+/* Vertical line running down on the left, matching the worked for step-by-step progress line */
+.thought-body {
+    position: relative;
+    margin-top: 4px;
+    margin-left: 7px;
+    padding-left: 17px;
+    border-left: 2px solid #383838;
+    transition: border-color 0.2s ease;
+}
+
+.thought-box:hover .thought-body {
+    border-left-color: #555555;
+}
+
+.thought-content {
+    font-size: 13.5px;
+    line-height: 1.6;
+    color: #a3a3a3;
+    white-space: pre-wrap;
+    word-break: break-word;
+    padding: 2px 0 6px 0;
+}
+
+.thought-content p {
+    margin: 0 0 8px 0;
+}
+
+.thought-content p:last-child {
+    margin-bottom: 0;
+}
+
+/* Fallback styling for unclassed details/summary inside AI messages */
+.message.ai details:not(.thought-box) {
+    margin: 8px 0 14px 0;
+}
+
+.message.ai details:not(.thought-box) summary {
+    cursor: pointer;
+    user-select: none;
+    font-size: 13.5px;
+    font-weight: 500;
+    color: #888888;
+    padding: 3px 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: color 0.2s ease;
+}
+
+.message.ai details:not(.thought-box) summary:hover {
+    color: #e2e2e2;
+}
+
+.message.ai details:not(.thought-box) > :not(summary) {
+    margin-top: 4px;
+    margin-left: 7px;
+    padding-left: 17px;
+    border-left: 2px solid #383838;
+    font-size: 13.5px;
+    line-height: 1.6;
+    color: #a3a3a3;
+}
+

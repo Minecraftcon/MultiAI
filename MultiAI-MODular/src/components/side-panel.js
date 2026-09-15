@@ -10,6 +10,7 @@ import { closePanel } from "./gestures.js";
 import { hideMobileActions } from "./context-menu.js";
 import { bindInteractiveCodeBlocks, renderMermaidInElement, renderMath, bindAIImageCards } from "./renderer.js";
 import { updateSendButtonState, stopChatGeneration } from "./composer.js";
+import { updateModelPickerDisplay } from "./model-picker.js";
 
 let currentSearchFilter = "";
 let activeMenuChatId = null;
@@ -134,6 +135,11 @@ export function renderChatList(filterQuery = currentSearchFilter) {
     });
 
     renderIcons(chatList);
+
+    const panelBody = document.querySelector(".panel-body");
+    if (panelBody) {
+        panelBody.classList.toggle("scrolled-top", panelBody.scrollTop > 2);
+    }
 }
 
 export function switchToChat(id) {
@@ -166,6 +172,7 @@ export function switchToChat(id) {
 
     if (session.model && modelSelect) {
         modelSelect.value = session.model;
+        updateModelPickerDisplay();
     }
 
     if (chat) {
@@ -348,12 +355,14 @@ export async function loadAvailableModels() {
             const prov = modelSelect.selectedOptions?.[0]?.dataset?.provider;
             if (prov) state.chatSessions[state.currentChatId].provider = prov;
         }
+
+        updateModelPickerDisplay();
     } catch (e) {
         console.warn("[MODELS] Failed to load models from server:", e);
     }
 }
 
-function startFreshChat() {
+export function startFreshChat() {
     hideMobileActions();
     hideChatItemMenu();
     if (state.currentChatId && state.chatSessions[state.currentChatId]) {
@@ -377,8 +386,15 @@ function startFreshChat() {
 
 export function initSidePanel() {
     const newChatButton = document.getElementById("newChat");
+    const headerNewChatBtn = document.getElementById("headerNewChatBtn");
     const newVoiceBtn = document.getElementById("newVoiceBtn");
     const newImageBtn = document.getElementById("newImageBtn");
+
+    if (headerNewChatBtn) {
+        headerNewChatBtn.addEventListener("click", () => {
+            startFreshChat();
+        });
+    }
     const modelSelect = document.getElementById("modelSelect");
     const input = document.getElementById("input");
 
@@ -605,4 +621,14 @@ export function initSidePanel() {
     document.addEventListener("chatsUpdated", () => {
         renderChatList();
     });
+
+    // 9. Scroll gradient listener on panel body
+    const panelBody = sidePanel?.querySelector(".panel-body");
+    if (panelBody) {
+        const updateScrollState = () => {
+            panelBody.classList.toggle("scrolled-top", panelBody.scrollTop > 2);
+        };
+        panelBody.addEventListener("scroll", updateScrollState, { passive: true });
+        updateScrollState();
+    }
 }

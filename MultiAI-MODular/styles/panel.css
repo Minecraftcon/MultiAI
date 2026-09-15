@@ -134,7 +134,8 @@
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     overscroll-behavior-y: contain;
-    padding: 4px 8px 10px;
+    padding: 0 8px 56px 8px;
+    position: relative;
 }
 
 .panel-body::-webkit-scrollbar { width: 5px; }
@@ -268,18 +269,39 @@
 }
 
 .panel-section-header {
+    position: sticky;
+    top: 0;
+    z-index: 4;
+    background: #121212;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 14px 10px 6px 10px;
-    margin-top: 4px;
+    padding: 12px 18px 8px 18px;
+    margin: 0 -8px 2px -8px;
     max-height: 50px;
     opacity: 1;
-    overflow: hidden;
+    overflow: visible;
     transition: max-height 0.24s cubic-bezier(0.2, 0.9, 0.3, 1),
                 opacity 0.18s ease,
                 padding 0.24s cubic-bezier(0.2, 0.9, 0.3, 1),
                 margin 0.24s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+.panel-section-header::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    height: 28px;
+    background: linear-gradient(180deg, #121212 0%, rgba(18, 18, 18, 0) 100%);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.panel-body.scrolled-top .panel-section-header::after {
+    opacity: 1;
 }
 
 #sidePanel.search-active .panel-section-header,
@@ -289,7 +311,23 @@
     padding-top: 0;
     padding-bottom: 0;
     margin-top: 0;
+    margin-bottom: 0;
+    overflow: hidden;
     pointer-events: none;
+}
+
+#sidePanel.search-active .panel-body.scrolled-top::before {
+    content: '';
+    position: sticky;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 28px;
+    margin-bottom: -28px;
+    background: linear-gradient(180deg, #121212 0%, rgba(18, 18, 18, 0) 100%);
+    pointer-events: none;
+    z-index: 6;
+    display: block;
 }
 
 .panel-section-label {
@@ -465,16 +503,18 @@
 
 /* Panel Footer (Dark Gradient Bottom without separator) */
 .panel-footer {
-    margin-top: auto;
-    padding: 24px 12px 14px;
-    background: linear-gradient(180deg, rgba(18, 18, 18, 0) 0%, rgba(18, 18, 18, 0.82) 30%, #121212 100%);
+    position: relative;
+    margin-top: -50px;
+    padding: 44px 12px 14px;
+    background: linear-gradient(180deg, rgba(18, 18, 18, 0) 0%, rgba(18, 18, 18, 0.45) 24%, rgba(18, 18, 18, 0.88) 52%, #121212 75%, #121212 100%);
     flex-shrink: 0;
     border-top: none;
-    position: relative;
     z-index: 5;
+    pointer-events: none;
 }
 
 .panel-footer-btn {
+    pointer-events: auto;
     width: 100%;
     height: 40px;
     display: flex;

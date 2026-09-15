@@ -4,7 +4,7 @@
 import { escapeHTML, wrapTablesForScroll } from "../utils/dom.js";
 import { renderIcons } from "../utils/icons.js";
 import { logEvent } from "../utils/logger.js";
-import { parseMarkdown, bindInteractiveCodeBlocks, renderMermaidInElement, renderMath, bindAIImageCards } from "./renderer.js";
+import { parseMarkdown, extractThoughtAndContent, bindInteractiveCodeBlocks, renderMermaidInElement, renderMath, bindAIImageCards } from "./renderer.js";
 
 export function createAIMessageShell() {
     const chat = document.getElementById("chat");
@@ -206,15 +206,25 @@ export function updateAIStream(element, fullText, isDone, startTime, hasTools) {
     }
 
     if (answerText.trim()) {
-        const sanitized = parseMarkdown(answerText);
+        const { thoughtHtml, content } = extractThoughtAndContent(answerText);
+        const sanitizedThought = thoughtHtml ? parseMarkdown(thoughtHtml) : "";
+        const sanitizedRest = content ? parseMarkdown(content) : "";
 
         if (hasTools) {
-            finalContent.innerHTML = sanitized;
+            if (sanitizedThought) {
+                preSearchContent.innerHTML = sanitizedThought;
+                wrapTablesForScroll(preSearchContent);
+                renderIcons(preSearchContent);
+            } else {
+                preSearchContent.innerHTML = "";
+            }
+            finalContent.innerHTML = sanitizedRest;
             wrapTablesForScroll(finalContent);
             renderIcons(finalContent);
             bindAIImageCards(finalContent);
         } else {
-            preSearchContent.innerHTML = sanitized;
+            const combined = sanitizedThought ? `${sanitizedThought}\n${sanitizedRest}` : sanitizedRest;
+            preSearchContent.innerHTML = combined;
             wrapTablesForScroll(preSearchContent);
             renderIcons(preSearchContent);
             bindAIImageCards(preSearchContent);
@@ -229,6 +239,20 @@ export function updateAIStream(element, fullText, isDone, startTime, hasTools) {
 
     if (isDone) {
         if (cursor) cursor.remove();
+
+        // Clean up any empty thought boxes and finalize duration
+        element.querySelectorAll(".thought-box").forEach(tb => {
+            const contentEl = tb.querySelector(".thought-content");
+            const textInside = contentEl ? (contentEl.textContent || "").trim() : (tb.textContent || "").trim();
+            if (!textInside) {
+                tb.remove();
+                return;
+            }
+            const lbl = tb.querySelector(".thought-label");
+            if (lbl && (lbl.textContent.includes("{}") || lbl.textContent.includes("a few seconds"))) {
+                lbl.textContent = `Thought for ${elapsed} seconds`;
+            }
+        });
 
         element.querySelectorAll("a").forEach(link => {
             link.target = "_blank";

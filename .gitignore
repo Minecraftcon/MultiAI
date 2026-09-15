@@ -8,3 +8,6 @@ logs.txt
 .env.*
 scratch/
 generated_images/
+demo.txt
+example.txt
+test.txt

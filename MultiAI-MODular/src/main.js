@@ -12,6 +12,7 @@ import { initComposer } from "./components/composer.js";
 import { initContextMenu } from "./components/context-menu.js";
 import { initBottomSheet } from "./components/bottom-sheet.js";
 import { initErrorRecovery } from "./components/error-recovery.js";
+import { initModelPicker } from "./components/model-picker.js";
 
 import { renderIcons } from "./utils/dom.js";
 
@@ -86,6 +87,7 @@ async function bootstrap() {
     initContextMenu();
     initBottomSheet();
     initErrorRecovery();
+    initModelPicker();
 
     await initConfig();
     initSystemEnvironment();

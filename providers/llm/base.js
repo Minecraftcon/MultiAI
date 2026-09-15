@@ -210,6 +210,7 @@ class BaseProvider {
     }
 
     async send({ endpoint, headers, payload, timeoutMs = 120000 }) {
+        const startTime = Date.now();
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -242,6 +243,11 @@ class BaseProvider {
                 };
             }
 
+            const elapsedSec = ((Date.now() - startTime) / 1000).toFixed(1);
+            if (data && typeof data === "object") {
+                data._durationSec = elapsedSec;
+            }
+
             return {
                 ok: true,
                 status: res.status,
@@ -258,8 +264,26 @@ class BaseProvider {
 
     parseResponse(data) {
         const choice = data?.choices?.[0];
+        const rawMessage = choice?.message || {};
+        let content = rawMessage.content || "";
+        let reasoning = rawMessage.reasoning_content ? String(rawMessage.reasoning_content).trim() : "";
+        if (reasoning === "null" || reasoning === "undefined" || reasoning === "{}" || reasoning === "[]") {
+            reasoning = "";
+        }
+
+        if (reasoning && content) {
+            const durationStr = data?._durationSec ? `${data._durationSec} seconds` : "a few seconds";
+            content = `<details class="thought-box" open data-duration="${data?._durationSec || ''}"><summary class="thought-summary"><span class="thought-header"><svg class="thought-brain-icon" viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/><path d="M12 5v13"/><path d="M12 8h4"/><path d="M12 12h3"/><path d="M12 16h4"/><path d="M8 8h4"/><path d="M9 12h3"/><path d="M8 16h4"/></svg><span class="thought-label">Thought for ${durationStr}</span><span class="thought-chevron">›</span></span></summary><div class="thought-body"><div class="thought-content">\n\n${reasoning}\n\n</div></div></details>\n\n${content.trim()}`;
+        } else if (reasoning && !content) {
+            content = reasoning;
+        }
+
         return {
-            message: this.formatAssistantResponse(choice?.message)
+            message: this.formatAssistantResponse({
+                ...rawMessage,
+                content,
+                tool_calls: rawMessage.tool_calls
+            })
         };
     }
 
