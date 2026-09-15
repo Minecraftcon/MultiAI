@@ -27,12 +27,103 @@
 }
 
 .user {
+    position: relative;
     align-self: flex-end;
     max-width: 80%;
     padding: 11px 16px;
     background: var(--bubble-bg);
     border-radius: 18px;
     white-space: normal;
+    transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+/* Inline User Message Editing Mode */
+.user.is-editing {
+    width: 100%;
+    max-width: 85%;
+    background: #222222;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+    padding: 14px 16px;
+}
+
+.user-edit-container {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+    animation: popIn 0.2s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+.user-edit-textarea {
+    width: 100%;
+    field-sizing: content;
+    min-block-size: 2.5lh;
+    max-block-size: 16lh;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 12px;
+    color: #f3f4f6;
+    font-family: inherit;
+    font-size: 14.5px;
+    line-height: 1.55;
+    padding: 10px 13px;
+    outline: none;
+    resize: none;
+    box-sizing: border-box;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.user-edit-textarea:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
+}
+
+.user-edit-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.user-edit-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 6px 14px;
+    font-size: 13px;
+    font-weight: 500;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    border: none;
+    font-family: inherit;
+}
+
+.user-edit-cancel-btn {
+    background: rgba(255, 255, 255, 0.08);
+    color: #d1d5db;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.user-edit-cancel-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: #ffffff;
+}
+
+.user-edit-submit-btn {
+    background: #2563eb;
+    color: #ffffff;
+    border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.user-edit-submit-btn:hover {
+    background: #1d4ed8;
+}
+
+.user-edit-submit-btn:active {
+    transform: scale(0.98);
 }
 
 .user-bubble-content {

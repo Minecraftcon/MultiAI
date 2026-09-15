@@ -44,6 +44,8 @@ export function getMessageTextToCopy(msgEl) {
         return msgEl.dataset.rawText;
     }
     if (msgEl.classList.contains("user")) {
+        const textEl = msgEl.querySelector(".msg-bubble-text");
+        if (textEl) return textEl.textContent.trim();
         return msgEl.textContent.trim();
     }
 

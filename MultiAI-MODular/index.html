@@ -203,6 +203,10 @@
 
 <!-- ================= RIGHT CLICK CONTEXT MENU (MESSAGE / IN-CHAT) ================= -->
 <div id="msgContextMenu" class="context-menu" style="display: none;">
+    <button type="button" class="context-menu-item" id="ctxEditBtn">
+        <i data-lucide="pencil"></i>
+        <span>Edit message</span>
+    </button>
     <button type="button" class="context-menu-item" id="ctxCopyBtn">
         <i data-lucide="copy"></i>
         <span>Copy</span>
@@ -244,8 +248,11 @@
     </button>
 </div>
 
-<!-- ================= MOBILE MESSAGE ACTIONS (COPY & RETRY) ================= -->
+<!-- ================= MOBILE MESSAGE ACTIONS (EDIT, COPY & RETRY) ================= -->
 <div id="mobileMsgActions" class="mobile-msg-actions" style="display: none;">
+    <button type="button" class="mobile-action-btn" id="mobileEditBtn" title="Edit message" aria-label="Edit message">
+        <i data-lucide="pencil"></i>
+    </button>
     <button type="button" class="mobile-action-btn" id="mobileCopyBtn" title="Copy" aria-label="Copy">
         <i data-lucide="copy"></i>
     </button>

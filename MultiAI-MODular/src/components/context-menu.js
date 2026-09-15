@@ -46,13 +46,20 @@ export function hideMobileActions() {
 
 export function showMobileActions(msgEl) {
     const mobileMsgActions = document.getElementById("mobileMsgActions");
+    const mobileEditBtn = document.getElementById("mobileEditBtn");
     const mobileCopyBtn = document.getElementById("mobileCopyBtn");
     const mobileRetryBtn = document.getElementById("mobileRetryBtn");
     if (!msgEl || !mobileMsgActions) return;
 
     mobileActionsTargetEl = msgEl;
     const isBusy = Boolean(state.currentChatId && state.activeGenerations[state.currentChatId]?.isGenerating);
+    const isUser = msgEl.classList.contains("user");
 
+    if (mobileEditBtn) {
+        mobileEditBtn.innerHTML = '<i data-lucide="pencil"></i>';
+        mobileEditBtn.style.display = isUser ? "inline-flex" : "none";
+        mobileEditBtn.disabled = isBusy;
+    }
     if (mobileCopyBtn) {
         mobileCopyBtn.innerHTML = '<i data-lucide="copy"></i>';
     }
@@ -66,7 +73,7 @@ export function showMobileActions(msgEl) {
 
     const rect = msgEl.getBoundingClientRect();
     const actionsRect = mobileMsgActions.getBoundingClientRect();
-    const actionsWidth = actionsRect.width || 76;
+    const actionsWidth = actionsRect.width || (isUser ? 112 : 76);
     const actionsHeight = actionsRect.height || 36;
 
     let top = rect.bottom + 6;
@@ -346,6 +353,8 @@ export async function regenerateFromMessage(target) {
     const session = state.chatSessions[state.currentChatId];
     if (!session) return;
 
+    ensureSessionMessages(session, chat);
+
     let count = -1;
     let msgIndex = -1;
     for (let i = 0; i < session.messages.length; i++) {
@@ -460,9 +469,286 @@ export async function regenerateFromMessage(target) {
     }
 }
 
+/**
+ * Ensures session.messages is fully populated, reconstructing from DOM if missing
+ */
+export function ensureSessionMessages(session, chat = document.getElementById("chat")) {
+    if (!session) return;
+    if (!session.messages || !Array.isArray(session.messages)) {
+        session.messages = [{ role: "system", content: state.activeSystemPrompt }];
+    }
+    const userCount = session.messages.filter(m => m.role === "user").length;
+    const domUserEls = chat ? Array.from(chat.querySelectorAll(".message.user")) : [];
+    if (userCount < domUserEls.length && chat) {
+        const msgs = [{ role: "system", content: state.activeSystemPrompt }];
+        chat.querySelectorAll(".message").forEach(el => {
+            if (el.classList.contains("user")) {
+                const text = el.querySelector(".msg-bubble-text")?.textContent || el.dataset.rawText || el.textContent.trim();
+                msgs.push({ role: "user", content: text });
+            } else if (el.classList.contains("ai")) {
+                const text = el.querySelector(".final-content")?.textContent || el.dataset.rawText || el.textContent.trim();
+                msgs.push({ role: "assistant", content: text });
+            }
+        });
+        session.messages = msgs;
+        state.messages = session.messages;
+    }
+}
+
+/**
+ * Starts inline editing mode for a user message
+ */
+export function startEditUserMessage(userEl) {
+    if (!userEl || !userEl.classList.contains("user")) return;
+
+    const isBusy = Boolean(state.currentChatId && state.activeGenerations[state.currentChatId]?.isGenerating);
+    if (isBusy) return;
+
+    // Close any other open edit containers in the chat first
+    document.querySelectorAll(".message.user.is-editing").forEach(el => {
+        if (el !== userEl) cancelEditUserMessage(el);
+    });
+
+    hideContextMenu();
+    hideMobileActions();
+
+    userEl.classList.add("is-editing");
+
+    const textEl = userEl.querySelector(".msg-bubble-text");
+    const currentText = (textEl ? textEl.textContent : userEl.dataset.rawText || "").trim();
+
+    if (textEl) {
+        textEl.style.display = "none";
+    }
+
+    let editContainer = userEl.querySelector(".user-edit-container");
+    if (!editContainer) {
+        editContainer = document.createElement("div");
+        editContainer.className = "user-edit-container";
+        editContainer.innerHTML = `
+            <textarea class="user-edit-textarea" placeholder="Edit your message..." rows="1"></textarea>
+            <div class="user-edit-actions">
+                <button type="button" class="user-edit-btn user-edit-cancel-btn">Cancel</button>
+                <button type="button" class="user-edit-btn user-edit-submit-btn">Send</button>
+            </div>
+        `;
+        const bubbleContent = userEl.querySelector(".user-bubble-content") || userEl;
+        bubbleContent.appendChild(editContainer);
+    }
+
+    const textarea = editContainer.querySelector(".user-edit-textarea");
+    textarea.value = currentText;
+
+    const adjustHeight = () => {
+        textarea.style.height = "auto";
+        textarea.style.height = `${Math.min(textarea.scrollHeight, 360)}px`;
+    };
+    textarea.addEventListener("input", adjustHeight);
+
+    setTimeout(() => {
+        adjustHeight();
+        textarea.focus();
+        textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+    }, 30);
+
+    textarea.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            submitEditUserMessage(userEl);
+        } else if (e.key === "Escape") {
+            e.preventDefault();
+            cancelEditUserMessage(userEl);
+        }
+    });
+
+    const cancelBtn = editContainer.querySelector(".user-edit-cancel-btn");
+    cancelBtn.onclick = (e) => {
+        e.stopPropagation();
+        cancelEditUserMessage(userEl);
+    };
+
+    const submitBtn = editContainer.querySelector(".user-edit-submit-btn");
+    submitBtn.onclick = (e) => {
+        e.stopPropagation();
+        submitEditUserMessage(userEl);
+    };
+}
+
+/**
+ * Cancels editing mode and restores original message bubble display
+ */
+export function cancelEditUserMessage(userEl) {
+    if (!userEl) return;
+    const editContainer = userEl.querySelector(".user-edit-container");
+    if (editContainer) {
+        editContainer.remove();
+    }
+    const textEl = userEl.querySelector(".msg-bubble-text");
+    if (textEl) {
+        textEl.style.display = "";
+    }
+    userEl.classList.remove("is-editing");
+}
+
+/**
+ * Submits edited message and triggers model regeneration from that turn onward
+ */
+export async function submitEditUserMessage(userEl) {
+    const isBusy = Boolean(state.currentChatId && state.activeGenerations[state.currentChatId]?.isGenerating);
+    if (!userEl || isBusy || !state.currentChatId) return;
+
+    const editContainer = userEl.querySelector(".user-edit-container");
+    const textarea = editContainer?.querySelector(".user-edit-textarea");
+    if (!textarea) return;
+
+    const newText = textarea.value.trim();
+    const textEl = userEl.querySelector(".msg-bubble-text");
+    const originalText = (textEl ? textEl.textContent : userEl.dataset.rawText || "").trim();
+
+    const hasImages = userEl.querySelectorAll(".msg-img-card").length > 0;
+    const hasDocs = userEl.querySelectorAll(".msg-doc-pill").length > 0;
+
+    if (!newText && !hasImages && !hasDocs) {
+        textarea.focus();
+        return;
+    }
+
+    if (newText === originalText && (newText || hasImages || hasDocs)) {
+        cancelEditUserMessage(userEl);
+        return;
+    }
+
+    const chat = document.getElementById("chat");
+    const session = state.chatSessions[state.currentChatId];
+    if (!chat || !session) return;
+
+    ensureSessionMessages(session, chat);
+
+    const allUserEls = Array.from(chat.querySelectorAll(".message.user"));
+    const userIndex = allUserEls.indexOf(userEl);
+    if (userIndex === -1) return;
+
+    let count = -1;
+    let msgIndex = -1;
+    for (let i = 0; i < session.messages.length; i++) {
+        if (session.messages[i].role === "user") {
+            count++;
+            if (count === userIndex) {
+                msgIndex = i;
+                break;
+            }
+        }
+    }
+
+    let images = [];
+    if (msgIndex !== -1 && session.messages[msgIndex]) {
+        const userMsgObj = session.messages[msgIndex];
+        if (Array.isArray(userMsgObj.content)) {
+            for (const part of userMsgObj.content) {
+                if (part.type === "image_url" && part.image_url?.url) {
+                    images.push({ dataUrl: part.image_url.url, name: "image.png" });
+                }
+            }
+        }
+    }
+    if (images.length === 0) {
+        userEl.querySelectorAll(".msg-img-card").forEach(card => {
+            const dataUrl = card.dataset.fullImg || card.querySelector("img")?.src;
+            if (dataUrl) images.push({ dataUrl, name: "image.png" });
+        });
+    }
+
+    // Update DOM user bubble
+    let bubbleTextEl = userEl.querySelector(".msg-bubble-text");
+    if (!bubbleTextEl) {
+        bubbleTextEl = document.createElement("div");
+        bubbleTextEl.className = "msg-bubble-text";
+        const bubbleContent = userEl.querySelector(".user-bubble-content") || userEl;
+        bubbleContent.appendChild(bubbleTextEl);
+    }
+    bubbleTextEl.textContent = newText;
+    bubbleTextEl.style.display = "";
+
+    userEl.dataset.rawText = newText;
+    editContainer.remove();
+    userEl.classList.remove("is-editing");
+
+    // Remove following messages (the previous AI answer and any subsequent turns)
+    while (userEl.nextElementSibling) {
+        userEl.nextElementSibling.remove();
+    }
+
+    // Slice session messages up to the user message turn (runAgent will re-push the new user message)
+    if (msgIndex !== -1) {
+        session.messages = session.messages.slice(0, msgIndex);
+    }
+
+    // Create new AI message shell directly under the updated user bubble
+    const currentAIMessage = createAIMessageShell();
+    const targetChatId = state.currentChatId;
+
+    state.activeGenerations[targetChatId] = {
+        isGenerating: true,
+        abortRequested: false,
+        abortController: new AbortController(),
+        sleepResolve: null
+    };
+
+    updateSendButtonState(true);
+    renderChatList();
+
+    try {
+        await runAgent(newText, currentAIMessage, targetChatId, images);
+    } catch (error) {
+        const genState = state.activeGenerations[targetChatId];
+        if (!genState?.abortRequested && error.message !== "Generation stopped by user") {
+            console.error("Edit message regeneration error:", error);
+            logEvent("SEND_FATAL_ERROR", { userText: newText, error: String(error?.message || error) });
+
+            const cleanErr = error.message || "Request could not be succeeded";
+            const codeLabel = error.statusCode ? ` [HTTP ${error.statusCode}]` : "";
+
+            const finalContent = currentAIMessage.querySelector(".final-content");
+            if (finalContent) {
+                finalContent.innerHTML = `
+                    <div class="ai-error-notice">
+                        <span class="ai-error-badge"><i data-lucide="alert-circle"></i> Request could not be succeeded${codeLabel}</span>
+                        <span class="ai-error-text">${escapeHTML(cleanErr)}</span>
+                    </div>
+                `;
+                renderIcons(finalContent);
+            }
+            const cursor = currentAIMessage.querySelector(".blinking-cursor");
+            if (cursor) cursor.remove();
+            showErrorRecoveryPopup({
+                targetChatId,
+                promptText: newText,
+                images,
+                failedAIMessage: currentAIMessage,
+                error
+            });
+        }
+    } finally {
+        const targetSession = state.chatSessions[targetChatId];
+        if (targetSession) {
+            targetSession.chatHtml = (state.currentChatId === targetChatId) ? chat.innerHTML : targetSession.chatHtml;
+        }
+        delete state.activeGenerations[targetChatId];
+
+        if (state.currentChatId === targetChatId) {
+            updateSendButtonState(false);
+            chat.scrollTop = chat.scrollHeight;
+        }
+
+        saveStoredChats();
+        renderChatList();
+    }
+}
+
 export function initContextMenu() {
     const chat = document.getElementById("chat");
     const msgContextMenu = document.getElementById("msgContextMenu");
+    const ctxEditBtn = document.getElementById("ctxEditBtn");
     const ctxCopyBtn = document.getElementById("ctxCopyBtn");
     const ctxRegenerateBtn = document.getElementById("ctxRegenerateBtn");
     const ctxBranchBtn = document.getElementById("ctxBranchBtn");
@@ -475,6 +761,7 @@ export function initContextMenu() {
     const chatCtxDeleteBtn = document.getElementById("chatCtxDeleteBtn");
 
     const mobileMsgActions = document.getElementById("mobileMsgActions");
+    const mobileEditBtn = document.getElementById("mobileEditBtn");
     const mobileCopyBtn = document.getElementById("mobileCopyBtn");
     const mobileRetryBtn = document.getElementById("mobileRetryBtn");
 
@@ -494,6 +781,12 @@ export function initContextMenu() {
             renderIcons(msgContextMenu);
 
             const isBusy = Boolean(state.currentChatId && state.activeGenerations[state.currentChatId]?.isGenerating);
+            const isUser = msgEl.classList.contains("user");
+
+            if (ctxEditBtn) {
+                ctxEditBtn.style.display = isUser ? "flex" : "none";
+                ctxEditBtn.disabled = isBusy;
+            }
             if (ctxRegenerateBtn) {
                 ctxRegenerateBtn.disabled = isBusy;
             }
@@ -581,7 +874,7 @@ export function initContextMenu() {
         chat.addEventListener("click", (e) => {
             if (!isMobileDevice()) return;
 
-            if (e.target.closest("button, a, input, textarea, select, .activity-toggle, .code-copy-btn, .code-mode-pill, .table-wrapper, .clickable-badge, .command-output-box, .msg-img-card")) {
+            if (e.target.closest("button, a, input, textarea, select, .activity-toggle, .code-copy-btn, .code-mode-pill, .table-wrapper, .clickable-badge, .command-output-box, .msg-img-card, .user-edit-container")) {
                 return;
             }
 
@@ -608,6 +901,17 @@ export function initContextMenu() {
     });
 
     // Message context menu buttons
+    if (ctxEditBtn) {
+        ctxEditBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const target = contextMenuTargetEl;
+            hideContextMenu();
+            if (target && target.classList.contains("user")) {
+                startEditUserMessage(target);
+            }
+        });
+    }
+
     if (ctxCopyBtn) {
         ctxCopyBtn.addEventListener("click", async (e) => {
             e.stopPropagation();
@@ -709,6 +1013,17 @@ export function initContextMenu() {
     }
 
     // Mobile buttons
+    if (mobileEditBtn) {
+        mobileEditBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const target = mobileActionsTargetEl;
+            hideMobileActions();
+            if (target && target.classList.contains("user")) {
+                startEditUserMessage(target);
+            }
+        });
+    }
+
     if (mobileCopyBtn) {
         mobileCopyBtn.addEventListener("click", async (e) => {
             e.stopPropagation();

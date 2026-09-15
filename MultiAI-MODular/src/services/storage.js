@@ -50,6 +50,12 @@ export function loadStoredChats() {
     try {
         const raw = localStorage.getItem(CHATS_STORAGE_KEY);
         state.chatSessions = raw ? JSON.parse(raw) : {};
+        for (const id in state.chatSessions) {
+            const s = state.chatSessions[id];
+            if (s && typeof s.chatHtml === "string" && s.chatHtml.includes("user-msg-actions")) {
+                s.chatHtml = s.chatHtml.replace(/<div class="user-msg-actions">[\s\S]*?<\/div>/g, "");
+            }
+        }
     } catch (e) {
         state.chatSessions = {};
     }
@@ -207,6 +213,17 @@ export function saveCurrentChatState() {
 
     const chat = document.getElementById("chat");
     const modelSelect = document.getElementById("modelSelect");
+
+    // If any user message is currently being edited, restore its text before saving HTML
+    if (chat) {
+        chat.querySelectorAll(".message.user.is-editing").forEach(el => {
+            const editContainer = el.querySelector(".user-edit-container");
+            if (editContainer) editContainer.remove();
+            const textEl = el.querySelector(".msg-bubble-text");
+            if (textEl) textEl.style.display = "";
+            el.classList.remove("is-editing");
+        });
+    }
 
     const session = state.chatSessions[state.currentChatId];
     if (chat) session.chatHtml = chat.innerHTML;

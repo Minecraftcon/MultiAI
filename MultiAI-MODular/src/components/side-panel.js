@@ -177,10 +177,12 @@ export function switchToChat(id) {
 
     if (chat) {
         chat.innerHTML = session.chatHtml || "";
+        chat.querySelectorAll(".user-msg-actions").forEach(el => el.remove());
 
         chat.querySelectorAll(".message.user").forEach(msg => {
             if (!msg.dataset.rawText) {
-                msg.dataset.rawText = msg.textContent.trim();
+                const textEl = msg.querySelector(".msg-bubble-text");
+                msg.dataset.rawText = textEl ? textEl.textContent.trim() : msg.textContent.trim();
             }
         });
 
