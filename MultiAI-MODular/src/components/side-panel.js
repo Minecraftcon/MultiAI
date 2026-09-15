@@ -8,7 +8,7 @@ import { saveStoredChats, saveCurrentChatState, initChatWorkspace } from "../ser
 import { syncActiveWorkspacePrompt } from "../services/system.js";
 import { closePanel } from "./gestures.js";
 import { hideMobileActions } from "./context-menu.js";
-import { bindInteractiveCodeBlocks, renderMermaidInElement, renderMath } from "./renderer.js";
+import { bindInteractiveCodeBlocks, renderMermaidInElement, renderMath, bindAIImageCards } from "./renderer.js";
 import { updateSendButtonState, stopChatGeneration } from "./composer.js";
 
 let currentSearchFilter = "";
@@ -182,6 +182,7 @@ export function switchToChat(id) {
         wrapTablesForScroll(chat);
         renderIcons(chat);
         renderMath(chat);
+        bindAIImageCards(chat, true);
 
         chat.scrollTop = chat.scrollHeight;
     }

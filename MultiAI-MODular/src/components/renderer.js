@@ -117,6 +117,42 @@ if (markedRenderer) {
         `;
     };
 
+    markedRenderer.image = function(href, title, text) {
+        let cleanHref = href;
+        let cleanAlt = text || "";
+        let cleanTitle = title || "";
+        if (typeof href === "object" && href !== null) {
+            cleanHref = href.href;
+            cleanAlt = href.text || "";
+            cleanTitle = href.title || "";
+        }
+        const safeHref = escapeHTML(cleanHref || "");
+        const safeAlt = escapeHTML(cleanAlt || "Generated image");
+        const safeTitle = escapeHTML(cleanTitle || "");
+
+        return `
+        <div class="ai-image-card" data-state="generating" data-src="${safeHref}">
+            <div class="ai-image-header">
+                <span class="ai-image-status">
+                    <span class="ai-image-pulsing-dot"></span>
+                    <span class="ai-image-status-text">Generating image...</span>
+                </span>
+                <span class="ai-image-dimensions">1024 × 1024</span>
+            </div>
+            <div class="ai-image-canvas">
+                <div class="ai-image-dots-grid"></div>
+                <div class="ai-image-scan-beam"></div>
+                <div class="ai-image-beam-glow"></div>
+                <img class="ai-image-element" src="${safeHref}" alt="${safeAlt}" title="${safeTitle}" loading="eager" />
+                <div class="ai-image-reticle reticle-tl"></div>
+                <div class="ai-image-reticle reticle-tr"></div>
+                <div class="ai-image-reticle reticle-bl"></div>
+                <div class="ai-image-reticle reticle-br"></div>
+            </div>
+        </div>
+        `;
+    };
+
     marked.use({ renderer: markedRenderer });
 }
 
@@ -133,10 +169,77 @@ export function parseMarkdown(text) {
     }
     if (typeof DOMPurify !== "undefined" && typeof DOMPurify.sanitize === "function") {
         return DOMPurify.sanitize(parsed, {
-            ADD_ATTR: ["target", "rel", "class", "data-code", "data-chart", "sandbox", "srcdoc"]
+            ADD_ATTR: [
+                "target", "rel", "class", "data-code", "data-chart", 
+                "data-state", "data-src", "sandbox", "srcdoc", "loading", "style"
+            ]
         });
     }
     return parsed;
+}
+
+export function bindAIImageCards(container, immediate = false) {
+    if (!container) return;
+    const cards = container.querySelectorAll(".ai-image-card");
+    cards.forEach(card => {
+        if (card.dataset.bound) return;
+        card.dataset.bound = "true";
+
+        const img = card.querySelector(".ai-image-element");
+        const statusText = card.querySelector(".ai-image-status-text");
+        const dimText = card.querySelector(".ai-image-dimensions");
+
+        const onImageLoad = () => {
+            if (img && img.naturalWidth && img.naturalHeight && dimText) {
+                dimText.textContent = `${img.naturalWidth} × ${img.naturalHeight}`;
+                card.style.setProperty("--img-aspect-ratio", `${img.naturalWidth} / ${img.naturalHeight}`);
+            }
+        };
+
+        if (img) {
+            if (img.complete && img.naturalWidth > 0) {
+                onImageLoad();
+            } else {
+                img.addEventListener("load", onImageLoad, { once: true });
+            }
+        }
+
+        if (immediate || card.dataset.state === "ready") {
+            card.dataset.state = "ready";
+            if (statusText) statusText.textContent = "Generated";
+            return;
+        }
+
+        const prefersReducedMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        if (prefersReducedMotion) {
+            card.dataset.state = "ready";
+            if (statusText) statusText.textContent = "Generated";
+            return;
+        }
+
+        // 3-mask sequence timings (total ~2.1 seconds):
+        // Mask 1 (0ms - 700ms): Generating image...
+        // Mask 2 (700ms - 1400ms): Synthesizing details...
+        // Mask 3 (1400ms - 2100ms): 3rd mask sweep -> Unmask reveal!
+        // Final (2100ms+): Ready
+        setTimeout(() => {
+            if (card.dataset.state === "generating" && statusText) {
+                statusText.textContent = "Synthesizing details...";
+            }
+        }, 700);
+
+        setTimeout(() => {
+            if (card.dataset.state !== "ready") {
+                card.dataset.state = "revealing";
+                if (statusText) statusText.textContent = "Rendering...";
+            }
+        }, 1400);
+
+        setTimeout(() => {
+            card.dataset.state = "ready";
+            if (statusText) statusText.textContent = "Generated";
+        }, 2100);
+    });
 }
 
 export function bindInteractiveCodeBlocks(container) {

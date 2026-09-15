@@ -1,5 +1,6 @@
 // Persistent Chat & Workspace Manager
-// Manages $HOME/.MuktiAI/conversations/{Date}/chats/{id}/ with scratch and images subdirectories
+// Manages $HOME/.MuktiAI/conversations/{Date}/chats/{id}/
+// Storage format: meta.json + messages.jsonl with scratch/ and images/ subdirectories
 
 const fs = require("fs");
 const path = require("path");
@@ -77,6 +78,8 @@ function findChatDateDir(chatId) {
 /**
  * Auto-creates the required hierarchy:
  * $HOME/.MuktiAI/conversations/{Date}/chats/{id}/
+ *                                            /meta.json
+ *                                            /messages.jsonl
  *                                            /scratch
  *                                            /images
  */
@@ -85,7 +88,6 @@ function ensureChatWorkspace(chatId, dateStr) {
         throw new Error("Chat ID is required to ensure chat workspace.");
     }
 
-    // Use existing date folder if chat already exists on disk, otherwise provided or today
     const existingDate = findChatDateDir(chatId);
     const date = existingDate || (dateStr && /^\d{4}-\d{2}-\d{2}$/.test(dateStr) ? dateStr : formatDate());
 
@@ -95,7 +97,9 @@ function ensureChatWorkspace(chatId, dateStr) {
     const chatDir = path.join(chatsDir, chatId);
     const scratchDir = path.join(chatDir, "scratch");
     const imagesDir = path.join(chatDir, "images");
-    const chatFile = path.join(chatDir, "chat.json");
+    const metaFile = path.join(chatDir, "meta.json");
+    const messagesFile = path.join(chatDir, "messages.jsonl");
+    const legacyChatFile = path.join(chatDir, "chat.json");
 
     try {
         if (!fs.existsSync(scratchDir)) {
@@ -124,13 +128,16 @@ function ensureChatWorkspace(chatId, dateStr) {
         chatDir,
         scratchDir,
         imagesDir,
-        chatFile,
+        metaFile,
+        messagesFile,
+        chatFile: legacyChatFile,
         workspacePrompt
     };
 }
 
 /**
- * Persists a full chat session object to {chatDir}/chat.json
+ * Persists chat session into meta.json and messages.jsonl.
+ * Seamlessly handles full chat writes.
  */
 function saveChat(chatSession) {
     if (!chatSession || !chatSession.id) {
@@ -140,46 +147,151 @@ function saveChat(chatSession) {
     const dateStr = chatSession.createdAt ? formatDate(chatSession.createdAt) : formatDate();
     const ws = ensureChatWorkspace(chatId, dateStr);
 
-    const payload = {
-        ...chatSession,
+    const messages = Array.isArray(chatSession.messages) ? chatSession.messages : [];
+
+    // 1. Write metadata to meta.json
+    const metaPayload = {
+        id: chatId,
+        title: chatSession.title || "Conversation",
+        model: chatSession.model || "gemini-2.5-flash",
+        createdAt: chatSession.createdAt || Date.now(),
+        updatedAt: chatSession.updatedAt || Date.now(),
+        chatHtml: chatSession.chatHtml || "",
         workspace: {
             chatDir: ws.chatDir,
             scratchDir: ws.scratchDir,
             imagesDir: ws.imagesDir,
             dateStr: ws.dateStr
         },
+        messageCount: messages.length,
         savedAt: Date.now()
     };
+    fs.writeFileSync(ws.metaFile, JSON.stringify(metaPayload, null, 2), "utf8");
 
-    fs.writeFileSync(ws.chatFile, JSON.stringify(payload, null, 2), "utf8");
+    // 2. Write messages line-by-line to messages.jsonl
+    const lines = messages.map(m => JSON.stringify(m)).join("\n");
+    fs.writeFileSync(ws.messagesFile, lines ? lines + "\n" : "", "utf8");
+
+    // Clean up legacy chat.json if migrated
+    if (fs.existsSync(ws.chatFile)) {
+        try { fs.unlinkSync(ws.chatFile); } catch (_) {}
+    }
+
+    return ws;
+}
+
+/**
+ * Appends a single message to messages.jsonl (O(1) append-only write).
+ */
+function appendChatMessage(chatId, message) {
+    if (!chatId || !message) {
+        throw new Error("Chat ID and message object are required.");
+    }
+    const ws = ensureChatWorkspace(chatId);
+    
+    // Append JSON line
+    const line = JSON.stringify(message) + "\n";
+    fs.appendFileSync(ws.messagesFile, line, "utf8");
+
+    // Update meta.json timestamp and count
+    try {
+        let meta = {};
+        if (fs.existsSync(ws.metaFile)) {
+            meta = JSON.parse(fs.readFileSync(ws.metaFile, "utf8"));
+        } else {
+            meta = {
+                id: chatId,
+                title: "Conversation",
+                createdAt: Date.now(),
+                workspace: {
+                    chatDir: ws.chatDir,
+                    scratchDir: ws.scratchDir,
+                    imagesDir: ws.imagesDir,
+                    dateStr: ws.dateStr
+                }
+            };
+        }
+        meta.updatedAt = Date.now();
+        meta.messageCount = (meta.messageCount || 0) + 1;
+        fs.writeFileSync(ws.metaFile, JSON.stringify(meta, null, 2), "utf8");
+    } catch (e) {
+        console.warn(`[CONVERSATIONS] Could not update meta.json on append for ${chatId}:`, e.message);
+    }
+
     return ws;
 }
 
 /**
  * Loads a single chat session by ID.
+ * Reads meta.json and parses messages.jsonl line-by-line.
+ * Backward-compatible with legacy chat.json.
  */
 function getChat(chatId) {
     const existingDate = findChatDateDir(chatId);
     if (!existingDate) return null;
 
     const ws = ensureChatWorkspace(chatId, existingDate);
-    if (!fs.existsSync(ws.chatFile)) return null;
 
-    try {
-        const raw = fs.readFileSync(ws.chatFile, "utf8");
-        const session = JSON.parse(raw);
-        return {
-            session,
-            workspace: ws
-        };
-    } catch (e) {
-        console.error(`[CONVERSATIONS] Error reading chat ${chatId}:`, e.message);
-        return null;
+    // 1. Check for modern JSONL storage
+    if (fs.existsSync(ws.messagesFile) || fs.existsSync(ws.metaFile)) {
+        try {
+            let meta = {};
+            if (fs.existsSync(ws.metaFile)) {
+                meta = JSON.parse(fs.readFileSync(ws.metaFile, "utf8"));
+            }
+
+            let messages = [];
+            if (fs.existsSync(ws.messagesFile)) {
+                const raw = fs.readFileSync(ws.messagesFile, "utf8");
+                messages = raw
+                    .split("\n")
+                    .map(l => l.trim())
+                    .filter(Boolean)
+                    .map(l => {
+                        try { return JSON.parse(l); } catch (_) { return null; }
+                    })
+                    .filter(Boolean);
+            }
+
+            const session = {
+                ...meta,
+                id: chatId,
+                messages
+            };
+
+            return {
+                session,
+                workspace: ws
+            };
+        } catch (e) {
+            console.error(`[CONVERSATIONS] Error reading JSONL chat ${chatId}:`, e.message);
+            return null;
+        }
     }
+
+    // 2. Fallback to legacy chat.json & auto-migrate to JSONL
+    if (fs.existsSync(ws.chatFile)) {
+        try {
+            const raw = fs.readFileSync(ws.chatFile, "utf8");
+            const session = JSON.parse(raw);
+            // Auto-migrate to JSONL
+            saveChat(session);
+            return {
+                session,
+                workspace: ws
+            };
+        } catch (e) {
+            console.error(`[CONVERSATIONS] Error reading legacy chat ${chatId}:`, e.message);
+            return null;
+        }
+    }
+
+    return null;
 }
 
 /**
  * Lists all chats across all date directories.
+ * Reads lightweight meta.json (O(1) per chat without reading full messages history).
  */
 function listChats() {
     const convRoot = getConversationsRoot();
@@ -200,28 +312,40 @@ function listChats() {
                 const targetDir = path.join(chatsPath, cId);
                 if (!fs.statSync(targetDir).isDirectory()) continue;
 
-                const jsonPath = path.join(targetDir, "chat.json");
-                if (fs.existsSync(jsonPath)) {
+                const metaPath = path.join(targetDir, "meta.json");
+                const legacyPath = path.join(targetDir, "chat.json");
+
+                if (fs.existsSync(metaPath)) {
                     try {
-                        const raw = fs.readFileSync(jsonPath, "utf8");
+                        const raw = fs.readFileSync(metaPath, "utf8");
+                        const meta = JSON.parse(raw);
+                        results.push(meta);
+                        continue;
+                    } catch (_) {}
+                }
+
+                if (fs.existsSync(legacyPath)) {
+                    try {
+                        const raw = fs.readFileSync(legacyPath, "utf8");
                         const parsed = JSON.parse(raw);
                         results.push(parsed);
+                        continue;
                     } catch (_) {}
-                } else {
-                    // Minimal stub if folder exists without chat.json yet
-                    results.push({
-                        id: cId,
-                        title: "Conversation",
-                        createdAt: fs.statSync(targetDir).birthtimeMs || Date.now(),
-                        updatedAt: fs.statSync(targetDir).mtimeMs || Date.now(),
-                        workspace: {
-                            chatDir: targetDir,
-                            scratchDir: path.join(targetDir, "scratch"),
-                            imagesDir: path.join(targetDir, "images"),
-                            dateStr: dateFolder
-                        }
-                    });
                 }
+
+                // Stub if folder exists without meta/json yet
+                results.push({
+                    id: cId,
+                    title: "Conversation",
+                    createdAt: fs.statSync(targetDir).birthtimeMs || Date.now(),
+                    updatedAt: fs.statSync(targetDir).mtimeMs || Date.now(),
+                    workspace: {
+                        chatDir: targetDir,
+                        scratchDir: path.join(targetDir, "scratch"),
+                        imagesDir: path.join(targetDir, "images"),
+                        dateStr: dateFolder
+                    }
+                });
             }
         }
     } catch (err) {
@@ -276,6 +400,7 @@ module.exports = {
     formatDate,
     ensureChatWorkspace,
     saveChat,
+    appendChatMessage,
     getChat,
     listChats,
     deleteChat,

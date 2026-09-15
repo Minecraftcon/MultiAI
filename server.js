@@ -817,6 +817,22 @@ const server = http.createServer(async (req, res) => {
         }
     }
 
+    if (req.method === "POST" && req.url === "/api/chats/append") {
+        try {
+            let body = "";
+            for await (const chunk of req) body += chunk;
+            const data = JSON.parse(body || "{}");
+            const { chatId, message } = data;
+            if (!chatId || !message) {
+                return sendJSON(res, 400, { error: "Parameters 'chatId' and 'message' are required." });
+            }
+            const workspace = conversationsManager.appendChatMessage(chatId, message);
+            return sendJSON(res, 200, { success: true, workspace });
+        } catch (err) {
+            return sendJSON(res, 500, { error: err.message });
+        }
+    }
+
     if (req.method === "DELETE" && req.url.startsWith("/api/chats/")) {
         const chatId = req.url.slice("/api/chats/".length).split("?")[0];
         if (!chatId) {

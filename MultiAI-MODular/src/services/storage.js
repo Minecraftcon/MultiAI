@@ -153,6 +153,22 @@ export async function persistChatToDisk(session) {
     }
 }
 
+/**
+ * Appends a single message turn to {chatDir}/messages.jsonl
+ */
+export async function appendChatMessageToDisk(chatId, message) {
+    if (!chatId || !message) return;
+    try {
+        await fetch("/api/chats/append", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ chatId, message })
+        });
+    } catch (e) {
+        console.warn("[STORAGE] Failed to append message to disk:", e.message);
+    }
+}
+
 export function generateChatId() {
     return "chat_" + Date.now() + "_" + Math.random().toString(36).substring(2, 7);
 }

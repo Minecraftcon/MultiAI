@@ -4,8 +4,7 @@
 import { escapeHTML, wrapTablesForScroll } from "../utils/dom.js";
 import { renderIcons } from "../utils/icons.js";
 import { logEvent } from "../utils/logger.js";
-import { saveCurrentChatState } from "../services/storage.js";
-import { parseMarkdown, bindInteractiveCodeBlocks, renderMermaidInElement, renderMath } from "./renderer.js";
+import { parseMarkdown, bindInteractiveCodeBlocks, renderMermaidInElement, renderMath, bindAIImageCards } from "./renderer.js";
 
 export function createAIMessageShell() {
     const chat = document.getElementById("chat");
@@ -213,10 +212,12 @@ export function updateAIStream(element, fullText, isDone, startTime, hasTools) {
             finalContent.innerHTML = sanitized;
             wrapTablesForScroll(finalContent);
             renderIcons(finalContent);
+            bindAIImageCards(finalContent);
         } else {
             preSearchContent.innerHTML = sanitized;
             wrapTablesForScroll(preSearchContent);
             renderIcons(preSearchContent);
+            bindAIImageCards(preSearchContent);
         }
     } else if (isDone) {
         if (hasTools) {
@@ -237,6 +238,7 @@ export function updateAIStream(element, fullText, isDone, startTime, hasTools) {
         bindInteractiveCodeBlocks(element);
         renderMermaidInElement(element);
         renderMath(element);
+        bindAIImageCards(element);
     }
 
     chat.scrollTop = chat.scrollHeight;
@@ -329,11 +331,12 @@ export function initChatDelegation() {
             return;
         }
 
-        const imgTarget = e.target.closest(".msg-img-card") || 
+        const imgTarget = e.target.closest(".ai-image-card") ||
+                          e.target.closest(".msg-img-card") || 
                           (e.target.tagName === "IMG" && e.target.closest(".message") && !e.target.closest(".activity-item, .search-badge-item"));
         if (imgTarget) {
             const imgEl = imgTarget.tagName === "IMG" ? imgTarget : imgTarget.querySelector("img");
-            const fullImg = imgTarget.dataset?.fullImg || imgEl?.src;
+            const fullImg = imgTarget.dataset?.src || imgTarget.dataset?.fullImg || imgEl?.src;
             if (fullImg) {
                 let lb = document.getElementById("imageLightbox");
                 if (!lb) {
