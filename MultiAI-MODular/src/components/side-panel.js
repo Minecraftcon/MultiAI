@@ -11,6 +11,7 @@ import { hideMobileActions } from "./context-menu.js";
 import { bindInteractiveCodeBlocks, renderMermaidInElement, renderMath, bindAIImageCards } from "./renderer.js";
 import { updateSendButtonState, stopChatGeneration } from "./composer.js";
 import { updateModelPickerDisplay } from "./model-picker.js";
+import { openSettings } from "./settings-view.js";
 
 let currentSearchFilter = "";
 let activeMenuChatId = null;
@@ -410,20 +411,8 @@ export function initSidePanel() {
     const chatRenameBtn = document.getElementById("chatRenameBtn");
     const chatDeleteBtn = document.getElementById("chatDeleteBtn");
 
-    // Settings Modal Controls
+    // Settings Button
     const panelSettingsBtn = document.getElementById("panelSettingsBtn");
-    const settingsModal = document.getElementById("settingsModal");
-    const settingsBackdrop = document.getElementById("settingsBackdrop");
-    const settingsCloseBtn = document.getElementById("settingsCloseBtn");
-    const settingsCancelBtn = document.getElementById("settingsCancelBtn");
-    const settingsSaveBtn = document.getElementById("settingsSaveBtn");
-
-    const cfgStartupLLM = document.getElementById("cfgStartupLLM");
-    const cfgImageProvider = document.getElementById("cfgImageProvider");
-    const cfgImageRatio = document.getElementById("cfgImageRatio");
-    const cfgTheme = document.getElementById("cfgTheme");
-    const cfgRecordHistory = document.getElementById("cfgRecordHistory");
-    const cfgRecordDate = document.getElementById("cfgRecordDate");
 
     loadAvailableModels();
 
@@ -534,76 +523,11 @@ export function initSidePanel() {
         }
     });
 
-    // 6. Settings Modal
-    const openSettings = () => {
-        if (!settingsModal || !settingsBackdrop) return;
-        hideChatItemMenu();
-        if (state.config) {
-            if (cfgStartupLLM && state.config.General?.DefaultStartupLLM) {
-                cfgStartupLLM.value = state.config.General.DefaultStartupLLM;
-            }
-            if (cfgImageProvider && state.config.General?.DefaultImageProvider) {
-                cfgImageProvider.value = state.config.General.DefaultImageProvider;
-            }
-            if (cfgImageRatio && state.config.General?.DefaultImageAspectRatio) {
-                cfgImageRatio.value = state.config.General.DefaultImageAspectRatio;
-            }
-            if (cfgTheme && state.config.UI?.Theme) {
-                cfgTheme.value = state.config.UI.Theme;
-            }
-            if (cfgRecordHistory && state.config.General?.RecordChatHistory !== undefined) {
-                cfgRecordHistory.checked = Boolean(state.config.General.RecordChatHistory);
-            }
-            if (cfgRecordDate && state.config.General?.RecordDate !== undefined) {
-                cfgRecordDate.checked = Boolean(state.config.General.RecordDate);
-            }
-        }
-        settingsModal.style.display = "flex";
-        settingsBackdrop.style.display = "block";
-        renderIcons(settingsModal);
-    };
-
-    const closeSettings = () => {
-        if (settingsModal) settingsModal.style.display = "none";
-        if (settingsBackdrop) settingsBackdrop.style.display = "none";
-    };
-
+    // 6. Settings Screen
     if (panelSettingsBtn) {
-        panelSettingsBtn.addEventListener("click", openSettings);
-    }
-    if (settingsCloseBtn) settingsCloseBtn.addEventListener("click", closeSettings);
-    if (settingsCancelBtn) settingsCancelBtn.addEventListener("click", closeSettings);
-    if (settingsBackdrop) settingsBackdrop.addEventListener("click", closeSettings);
-
-    if (settingsSaveBtn) {
-        settingsSaveBtn.addEventListener("click", async () => {
-            settingsSaveBtn.disabled = true;
-            settingsSaveBtn.textContent = "Saving...";
-
-            state.config = state.config || {};
-            state.config.General = state.config.General || {};
-            state.config.UI = state.config.UI || {};
-
-            if (cfgStartupLLM) state.config.General.DefaultStartupLLM = cfgStartupLLM.value;
-            if (cfgImageProvider) state.config.General.DefaultImageProvider = cfgImageProvider.value;
-            if (cfgImageRatio) state.config.General.DefaultImageAspectRatio = cfgImageRatio.value;
-            if (cfgTheme) state.config.UI.Theme = cfgTheme.value;
-            if (cfgRecordHistory) state.config.General.RecordChatHistory = cfgRecordHistory.checked;
-            if (cfgRecordDate) state.config.General.RecordDate = cfgRecordDate.checked;
-
-            try {
-                await fetch("/api/config", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(state.config)
-                });
-            } catch (err) {
-                console.warn("Failed to persist config to server:", err);
-            }
-
-            settingsSaveBtn.disabled = false;
-            settingsSaveBtn.textContent = "Save Changes";
-            closeSettings();
+        panelSettingsBtn.addEventListener("click", () => {
+            hideChatItemMenu();
+            openSettings("general");
         });
     }
 

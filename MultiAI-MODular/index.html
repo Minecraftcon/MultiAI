@@ -56,6 +56,7 @@
     <link rel="stylesheet" href="./styles/code.css">
     <link rel="stylesheet" href="./styles/composer.css">
     <link rel="stylesheet" href="./styles/context-menu.css">
+    <link rel="stylesheet" href="./styles/settings.css">
     <link rel="stylesheet" href="./styles/responsive.css">
 </head>
 <body>
@@ -163,7 +164,479 @@
     <main id="chat"></main>
 
     <div id="inputArea"></div>
-</div>
+
+    <!-- ================= SETTINGS SCREEN (DEDICATED IN-APP SCREEN) ================= -->
+    <div id="settingsScreen" class="settings-screen" aria-hidden="true">
+        <!-- Settings Header -->
+        <div class="settings-header">
+            <div class="settings-header-left">
+                <button id="settingsBackBtn" type="button" class="settings-back-btn" title="Return to chat" aria-label="Back to Chat">
+                    <i data-lucide="arrow-left"></i>
+                    <span>Back to Chat</span>
+                </button>
+                <div class="settings-header-title-group">
+                    <h1 class="settings-header-title">Settings</h1>
+                    <span id="settingsActiveBadge" class="settings-header-badge">GENERAL</span>
+                </div>
+            </div>
+            <div class="settings-header-right">
+                <div id="settingsSaveStatus" class="settings-save-status">
+                    <i data-lucide="check"></i>
+                    <span>Auto-saved</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Settings Layout: Sidebar + Sub-screens -->
+        <div class="settings-layout">
+            <!-- Left Sidebar Navigation -->
+            <nav class="settings-sidebar" aria-label="Settings Categories">
+                <button type="button" class="settings-nav-item active" data-subscreen="general" aria-selected="true">
+                    <i data-lucide="sliders-horizontal"></i>
+                    <span>General</span>
+                </button>
+                <button type="button" class="settings-nav-item" data-subscreen="models" aria-selected="false">
+                    <i data-lucide="bot"></i>
+                    <span>Models & AI</span>
+                </button>
+                <button type="button" class="settings-nav-item" data-subscreen="images" aria-selected="false">
+                    <i data-lucide="image"></i>
+                    <span>Image Generation</span>
+                </button>
+                <button type="button" class="settings-nav-item" data-subscreen="tools" aria-selected="false">
+                    <i data-lucide="wrench"></i>
+                    <span>Agent & Tools</span>
+                </button>
+                <button type="button" class="settings-nav-item" data-subscreen="appearance" aria-selected="false">
+                    <i data-lucide="palette"></i>
+                    <span>Appearance</span>
+                </button>
+                <button type="button" class="settings-nav-item" data-subscreen="storage" aria-selected="false">
+                    <i data-lucide="database"></i>
+                    <span>Data & Storage</span>
+                </button>
+                <button type="button" class="settings-nav-item" data-subscreen="about" aria-selected="false">
+                    <i data-lucide="info"></i>
+                    <span>About & Status</span>
+                </button>
+            </nav>
+
+            <!-- Right Content Panels -->
+            <main class="settings-content">
+                <!-- 1. GENERAL -->
+                <section id="subScreen_general" class="settings-subscreen active">
+                    <div class="settings-subscreen-header">
+                        <h2 class="settings-subscreen-title">General Preferences</h2>
+                        <p class="settings-subscreen-desc">Manage startup behavior, system instructions, and input controls.</p>
+                    </div>
+
+                    <div class="settings-card">
+                        <span class="settings-card-title">Startup & Defaults</span>
+                        <div class="settings-row">
+                            <div class="settings-item-info">
+                                <span class="settings-item-title">Default Startup Model</span>
+                                <span class="settings-item-desc">Selected automatically when opening or starting new chats</span>
+                            </div>
+                            <select id="cfgStartupLLM" class="settings-select"></select>
+                        </div>
+                    </div>
+
+                    <div class="settings-card">
+                        <span class="settings-card-title">System Instructions</span>
+                        <div class="settings-row">
+                            <div class="settings-item-info">
+                                <span class="settings-item-title">Persona Preset</span>
+                                <span class="settings-item-desc">Defines the baseline personality and focus of the AI</span>
+                            </div>
+                            <select id="cfgSystemPreset" class="settings-select">
+                                <option value="default">General Assistant (Balanced)</option>
+                                <option value="developer">Senior Software Engineer (Deep Code)</option>
+                                <option value="creative">Creative Thinker & Writer</option>
+                                <option value="concise">Direct & Concise (Zero Fluff)</option>
+                                <option value="custom">Custom Instructions...</option>
+                            </select>
+                        </div>
+                        <div id="cfgCustomPromptRow" class="settings-row-stacked" style="display: none;">
+                            <label for="cfgCustomSystemPrompt" class="settings-item-title">Custom Instructions</label>
+                            <textarea id="cfgCustomSystemPrompt" class="settings-textarea" placeholder="Enter custom system instructions for all conversations..."></textarea>
+                        </div>
+                    </div>
+
+                    <div class="settings-card">
+                        <span class="settings-card-title">Composer Keys</span>
+                        <div class="settings-row">
+                            <div class="settings-item-info">
+                                <span class="settings-item-title">Send Key Behavior</span>
+                                <span class="settings-item-desc">Control keyboard shortcut to submit messages</span>
+                            </div>
+                            <select id="cfgSendKey" class="settings-select">
+                                <option value="enter">Enter to Send (Shift+Enter for newline)</option>
+                                <option value="cmd_enter">Cmd/Ctrl+Enter to Send (Enter for newline)</option>
+                            </select>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 2. MODELS & AI -->
+                <section id="subScreen_models" class="settings-subscreen">
+                    <div class="settings-subscreen-header">
+                        <h2 class="settings-subscreen-title">Models & AI Generation</h2>
+                        <p class="settings-subscreen-desc">Tune model parameters, reasoning visibility, and turn execution limits.</p>
+                    </div>
+
+                    <div class="settings-card">
+                        <span class="settings-card-title">Inference Tuning</span>
+                        <div class="settings-row">
+                            <div class="settings-item-info">
+                                <span class="settings-item-title">Creativity & Temperature</span>
+                                <span class="settings-item-desc">Higher values produce more creative output; lower values are more precise</span>
+                            </div>
+                            <div class="settings-range-container">
+                                <input type="range" id="cfgTemperature" class="settings-range" min="0.0" max="1.0" step="0.05" value="0.7">
+                                <span id="cfgTemperatureVal" class="settings-range-val">0.70</span>
+                            </div>
+                        </div>
+
+                        <div class="settings-row">
+                            <div class="settings-item-info">
+                                <span class="settings-item-title">Stream Reasoning & Thinking</span>
+                                <span class="settings-item-desc">Display real-time thinking process and thoughts collapsible card</span>
+                            </div>
+                            <label class="settings-switch">
+                                <input type="checkbox" id="cfgStreamReasoning" checked>
+                                <span class="settings-slider"></span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="settings-card">
+                        <span class="settings-card-title">Limits & Safeguards</span>
+                        <div class="settings-row">
+                            <div class="settings-item-info">
+                                <span class="settings-item-title">Turn Timeout</span>
+                                <span class="settings-item-desc">Maximum seconds before aborting stalled generations</span>
+                            </div>
+                            <select id="cfgTurnTimeout" class="settings-select">
+                                <option value="60">60 seconds (1 min)</option>
+                                <option value="120">120 seconds (2 mins - Recommended)</option>
+                                <option value="300">300 seconds (5 mins)</option>
+                            </select>
+                        </div>
+
+                        <div class="settings-row">
+                            <div class="settings-item-info">
+                                <span class="settings-item-title">Context History Messages</span>
+                                <span class="settings-item-desc">Max past turns sent to the LLM per prompt</span>
+                            </div>
+                            <select id="cfgMaxHistory" class="settings-select">
+                                <option value="20">20 messages</option>
+                                <option value="50">50 messages</option>
+                                <option value="100">100 messages (Default)</option>
+                            </select>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 3. IMAGE GENERATION -->
+                <section id="subScreen_images" class="settings-subscreen">
+                    <div class="settings-subscreen-header">
+                        <h2 class="settings-subscreen-title">Image Generation</h2>
+                        <p class="settings-subscreen-desc">Configure default models, providers, and proportions for visual creation.</p>
+                    </div>
+
+                    <div class="settings-card">
+                        <span class="settings-card-title">Image Engine</span>
+                        <div class="settings-row">
+                            <div class="settings-item-info">
+                                <span class="settings-item-title">Default Image Provider</span>
+                                <span class="settings-item-desc">Backend service used to generate art and illustrations</span>
+                            </div>
+                            <select id="cfgImageProvider" class="settings-select">
+                                <option value="pollinations">Pollinations.AI (Free, Unlimited, No Key)</option>
+                                <option value="openai_image">OpenAI DALL-E (API Key)</option>
+                                <option value="logflare">Logflare Custom</option>
+                            </select>
+                        </div>
+
+                        <div class="settings-row">
+                            <div class="settings-item-info">
+                                <span class="settings-item-title">Default Aspect Ratio</span>
+                                <span class="settings-item-desc">Initial canvas proportion for generated images</span>
+                            </div>
+                            <select id="cfgImageRatio" class="settings-select">
+                                <option value="1:1">1:1 Square (1024x1024)</option>
+                                <option value="16:9">16:9 Landscape (Desktop & Cinematic)</option>
+                                <option value="9:16">9:16 Portrait (Mobile & Wallpapers)</option>
+                                <option value="4:3">4:3 Standard</option>
+                                <option value="3:2">3:2 Classic Photo</option>
+                            </select>
+                        </div>
+
+                        <div class="settings-row">
+                            <div class="settings-item-info">
+                                <span class="settings-item-title">Default Image Model</span>
+                                <span class="settings-item-desc">Base diffusion checkpoint</span>
+                            </div>
+                            <select id="cfgImageModel" class="settings-select">
+                                <option value="flux">Flux (State of the art quality)</option>
+                                <option value="turbo">Turbo (Ultra fast generation)</option>
+                            </select>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 4. AGENT & TOOLS -->
+                <section id="subScreen_tools" class="settings-subscreen">
+                    <div class="settings-subscreen-header">
+                        <h2 class="settings-subscreen-title">Agent Capabilities & Tools</h2>
+                        <p class="settings-subscreen-desc">Toggle tools available for autonomous multi-step tool execution.</p>
+                    </div>
+
+                    <div class="settings-card">
+                        <span class="settings-card-title">Tool Toggles</span>
+                        <div class="settings-row">
+                            <div class="settings-item-info">
+                                <span class="settings-item-title">Web Search</span>
+                                <span class="settings-item-desc">Allows the model to fetch real-time facts and documentation online</span>
+                            </div>
+                            <label class="settings-switch">
+                                <input type="checkbox" id="cfgEnableWebSearch" checked>
+                                <span class="settings-slider"></span>
+                            </label>
+                        </div>
+
+                        <div class="settings-row">
+                            <div class="settings-item-info">
+                                <span class="settings-item-title">Terminal & Shell</span>
+                                <span class="settings-item-desc">Allows the model to propose and execute shell commands</span>
+                            </div>
+                            <label class="settings-switch">
+                                <input type="checkbox" id="cfgEnableTerminal" checked>
+                                <span class="settings-slider"></span>
+                            </label>
+                        </div>
+
+                        <div class="settings-row">
+                            <div class="settings-item-info">
+                                <span class="settings-item-title">File System Operations</span>
+                                <span class="settings-item-desc">Allows reading, viewing, and writing project files</span>
+                            </div>
+                            <label class="settings-switch">
+                                <input type="checkbox" id="cfgEnableFileOperations" checked>
+                                <span class="settings-slider"></span>
+                            </label>
+                        </div>
+
+                        <div class="settings-row">
+                            <div class="settings-item-info">
+                                <span class="settings-item-title">Autonomous Image Generation</span>
+                                <span class="settings-item-desc">Allows the model to trigger image creation tools autonomously</span>
+                            </div>
+                            <label class="settings-switch">
+                                <input type="checkbox" id="cfgEnableImageGeneration" checked>
+                                <span class="settings-slider"></span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="settings-card">
+                        <span class="settings-card-title">Execution Budget</span>
+                        <div class="settings-row">
+                            <div class="settings-item-info">
+                                <span class="settings-item-title">Max Tool Iterations</span>
+                                <span class="settings-item-desc">Safety ceiling for tool calling loops per message turn</span>
+                            </div>
+                            <div class="settings-range-container">
+                                <input type="range" id="cfgMaxToolRounds" class="settings-range" min="5" max="50" step="5" value="50">
+                                <span id="cfgMaxToolRoundsVal" class="settings-range-val">50</span>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 5. APPEARANCE -->
+                <section id="subScreen_appearance" class="settings-subscreen">
+                    <div class="settings-subscreen-header">
+                        <h2 class="settings-subscreen-title">Appearance & Interface</h2>
+                        <p class="settings-subscreen-desc">Customize theme palette, code presentation, and scroll behavior.</p>
+                    </div>
+
+                    <div class="settings-card">
+                        <span class="settings-card-title">Theme & Palette</span>
+                        <div class="settings-row">
+                            <div class="settings-item-info">
+                                <span class="settings-item-title">Interface Theme</span>
+                                <span class="settings-item-desc">Dark obsidian is optimized for low eye strain</span>
+                            </div>
+                            <select id="cfgTheme" class="settings-select">
+                                <option value="dark">Dark (Obsidian)</option>
+                                <option value="midnight">Midnight OLED (Deep Black)</option>
+                                <option value="light">Light</option>
+                                <option value="system">System Default</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="settings-card">
+                        <span class="settings-card-title">Display Options</span>
+                        <div class="settings-row">
+                            <div class="settings-item-info">
+                                <span class="settings-item-title">Code Block Line Numbers</span>
+                                <span class="settings-item-desc">Show line numbering in generated code blocks</span>
+                            </div>
+                            <label class="settings-switch">
+                                <input type="checkbox" id="cfgShowLineNumbers" checked>
+                                <span class="settings-slider"></span>
+                            </label>
+                        </div>
+
+                        <div class="settings-row">
+                            <div class="settings-item-info">
+                                <span class="settings-item-title">Streaming Auto-Scroll</span>
+                                <span class="settings-item-desc">Automatically follow the bottom of the chat as tokens arrive</span>
+                            </div>
+                            <label class="settings-switch">
+                                <input type="checkbox" id="cfgAutoScroll" checked>
+                                <span class="settings-slider"></span>
+                            </label>
+                        </div>
+
+                        <div class="settings-row">
+                            <div class="settings-item-info">
+                                <span class="settings-item-title">Compact Mobile Layout</span>
+                                <span class="settings-item-desc">Optimize margins and header sizes on smartphone viewports</span>
+                            </div>
+                            <label class="settings-switch">
+                                <input type="checkbox" id="cfgCompactMobileView" checked>
+                                <span class="settings-slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 6. DATA & STORAGE -->
+                <section id="subScreen_storage" class="settings-subscreen">
+                    <div class="settings-subscreen-header">
+                        <h2 class="settings-subscreen-title">Data & Storage</h2>
+                        <p class="settings-subscreen-desc">Manage local conversation storage, export chat archives, and reset cache.</p>
+                    </div>
+
+                    <div class="settings-card">
+                        <span class="settings-card-title">Persistence Rules</span>
+                        <div class="settings-row">
+                            <div class="settings-item-info">
+                                <span class="settings-item-title">Record Chat History</span>
+                                <span class="settings-item-desc">Persist conversations in local storage across browser refreshes</span>
+                            </div>
+                            <label class="settings-switch">
+                                <input type="checkbox" id="cfgRecordHistory" checked>
+                                <span class="settings-slider"></span>
+                            </label>
+                        </div>
+
+                        <div class="settings-row">
+                            <div class="settings-item-info">
+                                <span class="settings-item-title">Record Timestamps</span>
+                                <span class="settings-item-desc">Store creation and update timestamps for chats</span>
+                            </div>
+                            <label class="settings-switch">
+                                <input type="checkbox" id="cfgRecordDate" checked>
+                                <span class="settings-slider"></span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="settings-card">
+                        <span class="settings-card-title">Storage Summary</span>
+                        <div class="settings-info-grid">
+                            <div class="settings-info-box">
+                                <span class="settings-info-label">Stored Chats</span>
+                                <span id="settingsChatCount" class="settings-info-val">0 conversations</span>
+                            </div>
+                            <div class="settings-info-box">
+                                <span class="settings-info-label">Local Storage</span>
+                                <span id="settingsStorageSize" class="settings-info-val">~0 KB</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="settings-card">
+                        <span class="settings-card-title">Data Management</span>
+                        <div class="settings-row">
+                            <div class="settings-item-info">
+                                <span class="settings-item-title">Export All Conversations</span>
+                                <span class="settings-item-desc">Download full archive of all stored chats in JSON format</span>
+                            </div>
+                            <button type="button" id="settingsExportAllBtn" class="settings-action-btn secondary">
+                                <i data-lucide="download"></i>
+                                <span>Export JSON</span>
+                            </button>
+                        </div>
+
+                        <div class="settings-row">
+                            <div class="settings-item-info">
+                                <span class="settings-item-title">Clear All Chat History</span>
+                                <span class="settings-item-desc">Wipes all stored sessions from your local browser database</span>
+                            </div>
+                            <button type="button" id="settingsClearAllBtn" class="settings-action-btn danger">
+                                <i data-lucide="trash-2"></i>
+                                <span>Clear History</span>
+                            </button>
+                        </div>
+
+                        <div class="settings-row">
+                            <div class="settings-item-info">
+                                <span class="settings-item-title">Reset Settings to Defaults</span>
+                                <span class="settings-item-desc">Revert all preferences to initial installation state</span>
+                            </div>
+                            <button type="button" id="settingsResetDefaultsBtn" class="settings-action-btn secondary">
+                                <i data-lucide="rotate-ccw"></i>
+                                <span>Reset Defaults</span>
+                            </button>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 7. ABOUT & STATUS -->
+                <section id="subScreen_about" class="settings-subscreen">
+                    <div class="settings-subscreen-header">
+                        <h2 class="settings-subscreen-title">About & Diagnostics</h2>
+                        <p class="settings-subscreen-desc">System information, server connectivity, and runtime metrics.</p>
+                    </div>
+
+                    <div class="settings-card">
+                        <span class="settings-card-title">Application Info</span>
+                        <div class="settings-info-grid">
+                            <div class="settings-info-box">
+                                <span class="settings-info-label">Version</span>
+                                <span class="settings-info-val">MultiAI Modular v2.5</span>
+                            </div>
+                            <div class="settings-info-box">
+                                <span class="settings-info-label">Backend Host</span>
+                                <span id="aboutServerHost" class="settings-info-val">0.0.0.0</span>
+                            </div>
+                            <div class="settings-info-box">
+                                <span class="settings-info-label">Server Port</span>
+                                <span id="aboutServerPort" class="settings-info-val">8080</span>
+                            </div>
+                            <div class="settings-info-box">
+                                <span class="settings-info-label">Configured Models</span>
+                                <span id="aboutModelCount" class="settings-info-val">--</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="settings-card">
+                        <span class="settings-card-title">Architecture</span>
+                        <div class="settings-item-info">
+                            <span class="settings-item-title">Modular Architecture</span>
+                            <span class="settings-item-desc">Pure vanilla web standards, decoupled provider layer, native WebFetch streaming, zero vendor-lockin.</span>
+                        </div>
+                    </div>
+                </section>
+            </main>
+        </div>
+    </div>
 
 <!-- ================= ATTACHMENT BOTTOM SHEET DRAWER ================= -->
 <div id="attachBackdrop" class="attach-backdrop" style="display: none;"></div>
@@ -297,68 +770,7 @@
     </button>
 </div>
 
-<!-- ================= SETTINGS MODAL ================= -->
-<div id="settingsBackdrop" class="settings-backdrop" style="display: none;"></div>
-<div id="settingsModal" class="settings-modal" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
-    <div class="settings-modal-header">
-        <div class="settings-modal-title-group">
-            <i data-lucide="sliders-horizontal"></i>
-            <span id="settingsTitle">Settings</span>
-        </div>
-        <button id="settingsCloseBtn" type="button" class="icon-btn" aria-label="Close settings">
-            <i data-lucide="x"></i>
-        </button>
-    </div>
-    <div class="settings-modal-body">
-        <div class="settings-group">
-            <label for="cfgStartupLLM" class="settings-label">Default Startup Model</label>
-            <select id="cfgStartupLLM" class="settings-select"></select>
-        </div>
 
-        <div class="settings-group">
-            <label for="cfgImageProvider" class="settings-label">Default Image Provider</label>
-            <select id="cfgImageProvider" class="settings-select">
-                <option value="pollinations">Pollinations.AI (Free, No Key)</option>
-                <option value="openai_image">OpenAI DALL-E (API Key)</option>
-            </select>
-        </div>
-
-        <div class="settings-group">
-            <label for="cfgImageRatio" class="settings-label">Default Image Aspect Ratio</label>
-            <select id="cfgImageRatio" class="settings-select">
-                <option value="1:1">1:1 Square</option>
-                <option value="16:9">16:9 Landscape</option>
-                <option value="9:16">9:16 Portrait</option>
-                <option value="4:3">4:3 Standard</option>
-                <option value="3:2">3:2 Classic</option>
-            </select>
-        </div>
-
-        <div class="settings-group">
-            <label for="cfgTheme" class="settings-label">Appearance Theme</label>
-            <select id="cfgTheme" class="settings-select">
-                <option value="dark">Dark (Obsidian)</option>
-                <option value="light">Light</option>
-                <option value="system">System Default</option>
-            </select>
-        </div>
-
-        <div class="settings-toggle-group">
-            <label class="settings-toggle-label">
-                <input type="checkbox" id="cfgRecordHistory" checked>
-                <span>Record Chat History</span>
-            </label>
-            <label class="settings-toggle-label">
-                <input type="checkbox" id="cfgRecordDate" checked>
-                <span>Record Timestamps & Dates</span>
-            </label>
-        </div>
-    </div>
-    <div class="settings-modal-footer">
-        <button type="button" id="settingsCancelBtn" class="settings-btn settings-btn-cancel">Cancel</button>
-        <button type="button" id="settingsSaveBtn" class="settings-btn settings-btn-save">Save Changes</button>
-    </div>
-</div>
 
 <!-- ================= MODEL PICKER MODAL / DROPDOWN ================= -->
 <div id="modelPickerBackdrop" class="model-picker-backdrop"></div>

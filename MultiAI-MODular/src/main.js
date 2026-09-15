@@ -13,6 +13,7 @@ import { initContextMenu } from "./components/context-menu.js";
 import { initBottomSheet } from "./components/bottom-sheet.js";
 import { initErrorRecovery } from "./components/error-recovery.js";
 import { initModelPicker } from "./components/model-picker.js";
+import { initSettingsView } from "./components/settings-view.js";
 
 import { renderIcons } from "./utils/dom.js";
 
@@ -88,6 +89,7 @@ async function bootstrap() {
     initBottomSheet();
     initErrorRecovery();
     initModelPicker();
+    initSettingsView();
 
     await initConfig();
     initSystemEnvironment();
