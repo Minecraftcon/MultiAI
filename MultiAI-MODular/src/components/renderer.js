@@ -127,28 +127,17 @@ if (markedRenderer) {
             cleanTitle = href.title || "";
         }
         const safeHref = escapeHTML(cleanHref || "");
-        const safeAlt = escapeHTML(cleanAlt || "Generated image");
+        const safeAlt = escapeHTML(cleanAlt || "Image");
         const safeTitle = escapeHTML(cleanTitle || "");
 
         return `
-        <div class="ai-image-card" data-state="generating" data-src="${safeHref}">
-            <div class="ai-image-header">
-                <span class="ai-image-status">
-                    <span class="ai-image-pulsing-dot"></span>
-                    <span class="ai-image-status-text">Generating image...</span>
-                </span>
-                <span class="ai-image-dimensions">1024 × 1024</span>
+        <div class="ai-img-frame" data-state="generating" data-src="${safeHref}">
+            <div class="ai-img-placeholder">
+                <div class="ai-img-dots"></div>
+                <div class="ai-img-sweep"></div>
+                <span class="ai-img-size">1024 × 1024</span>
             </div>
-            <div class="ai-image-canvas">
-                <div class="ai-image-dots-grid"></div>
-                <div class="ai-image-scan-beam"></div>
-                <div class="ai-image-beam-glow"></div>
-                <img class="ai-image-element" src="${safeHref}" alt="${safeAlt}" title="${safeTitle}" loading="eager" />
-                <div class="ai-image-reticle reticle-tl"></div>
-                <div class="ai-image-reticle reticle-tr"></div>
-                <div class="ai-image-reticle reticle-bl"></div>
-                <div class="ai-image-reticle reticle-br"></div>
-            </div>
+            <img class="ai-img-el" src="${safeHref}" alt="${safeAlt}" title="${safeTitle}" loading="eager" />
         </div>
         `;
     };
@@ -180,64 +169,52 @@ export function parseMarkdown(text) {
 
 export function bindAIImageCards(container, immediate = false) {
     if (!container) return;
-    const cards = container.querySelectorAll(".ai-image-card");
-    cards.forEach(card => {
-        if (card.dataset.bound) return;
-        card.dataset.bound = "true";
+    const frames = container.querySelectorAll(".ai-img-frame");
+    frames.forEach(frame => {
+        if (frame.dataset.bound) return;
+        frame.dataset.bound = "true";
 
-        const img = card.querySelector(".ai-image-element");
-        const statusText = card.querySelector(".ai-image-status-text");
-        const dimText = card.querySelector(".ai-image-dimensions");
+        const img = frame.querySelector(".ai-img-el");
+        const sizeBadge = frame.querySelector(".ai-img-size");
 
-        const onImageLoad = () => {
-            if (img && img.naturalWidth && img.naturalHeight && dimText) {
-                dimText.textContent = `${img.naturalWidth} × ${img.naturalHeight}`;
-                card.style.setProperty("--img-aspect-ratio", `${img.naturalWidth} / ${img.naturalHeight}`);
+        const updateSize = () => {
+            if (img && img.naturalWidth && img.naturalHeight) {
+                if (sizeBadge) sizeBadge.textContent = `${img.naturalWidth} × ${img.naturalHeight}`;
+                frame.style.setProperty("--img-ar", `${img.naturalWidth} / ${img.naturalHeight}`);
             }
         };
 
         if (img) {
             if (img.complete && img.naturalWidth > 0) {
-                onImageLoad();
+                updateSize();
             } else {
-                img.addEventListener("load", onImageLoad, { once: true });
+                img.addEventListener("load", updateSize, { once: true });
             }
         }
 
-        if (immediate || card.dataset.state === "ready") {
-            card.dataset.state = "ready";
-            if (statusText) statusText.textContent = "Generated";
+        if (immediate || frame.dataset.state === "ready") {
+            frame.dataset.state = "ready";
             return;
         }
 
         const prefersReducedMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
         if (prefersReducedMotion) {
-            card.dataset.state = "ready";
-            if (statusText) statusText.textContent = "Generated";
+            frame.dataset.state = "ready";
             return;
         }
 
-        // 3-mask sequence timings (total ~2.1 seconds):
-        // Mask 1 (0ms - 700ms): Generating image...
-        // Mask 2 (700ms - 1400ms): Synthesizing details...
-        // Mask 3 (1400ms - 2100ms): 3rd mask sweep -> Unmask reveal!
-        // Final (2100ms+): Ready
+        // 3-mask sequence (~2.1 seconds total):
+        // Passes 1 & 2: 0ms - 1400ms (outline + grey dots sweep)
+        // Pass 3: 1400ms - 2100ms (3rd mask sweep reveals image)
+        // Ready: 2100ms (placeholder vanishes, pure flat image remains)
         setTimeout(() => {
-            if (card.dataset.state === "generating" && statusText) {
-                statusText.textContent = "Synthesizing details...";
-            }
-        }, 700);
-
-        setTimeout(() => {
-            if (card.dataset.state !== "ready") {
-                card.dataset.state = "revealing";
-                if (statusText) statusText.textContent = "Rendering...";
+            if (frame.dataset.state !== "ready") {
+                frame.dataset.state = "revealing";
             }
         }, 1400);
 
         setTimeout(() => {
-            card.dataset.state = "ready";
-            if (statusText) statusText.textContent = "Generated";
+            frame.dataset.state = "ready";
         }, 2100);
     });
 }

@@ -331,7 +331,7 @@ export function initChatDelegation() {
             return;
         }
 
-        const imgTarget = e.target.closest(".ai-image-card") ||
+        const imgTarget = e.target.closest(".ai-img-frame") ||
                           e.target.closest(".msg-img-card") || 
                           (e.target.tagName === "IMG" && e.target.closest(".message") && !e.target.closest(".activity-item, .search-badge-item"));
         if (imgTarget) {
