@@ -255,9 +255,24 @@ function showChatItemMenu(id, targetBtn) {
     const rect = targetBtn.getBoundingClientRect();
     menu.style.display = "flex";
     menu.style.position = "fixed";
-    menu.style.left = `${Math.max(10, rect.left - 100)}px`;
-    menu.style.top = `${rect.bottom + 4}px`;
     renderIcons(menu);
+
+    const mw = menu.offsetWidth || 150;
+    const mh = menu.offsetHeight || 100;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const GAP = 6;
+
+    let left = rect.right - mw;
+    let top = rect.bottom + GAP;
+
+    if (left + mw > vw - GAP) left = vw - mw - GAP;
+    if (left < GAP) left = GAP;
+    if (top + mh > vh - GAP) top = rect.top - mh - GAP;
+    if (top < GAP) top = GAP;
+
+    menu.style.left = `${Math.round(left)}px`;
+    menu.style.top = `${Math.round(top)}px`;
 }
 
 export function hideChatItemMenu() {
