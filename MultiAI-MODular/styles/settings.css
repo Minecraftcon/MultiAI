@@ -531,17 +531,67 @@
     font-family: ui-monospace, SFMono-Regular, monospace;
 }
 
-/* ================= MOBILE RESPONSIVENESS ================= */
+/* ================= MOBILE RESPONSIVENESS (ANDROID / TOUCH) ================= */
 @media (max-width: 768px) {
     .settings-header {
-        padding-left: 12px;
-        padding-right: 12px;
+        height: calc(50px + env(safe-area-inset-top, 0px));
+        padding-left: max(10px, env(safe-area-inset-left, 0px));
+        padding-right: max(12px, env(safe-area-inset-right, 0px));
+        gap: 8px;
+    }
+
+    .settings-header-left {
+        gap: 8px;
+        min-width: 0;
+        flex: 1;
+    }
+
+    .settings-back-btn {
+        height: 34px;
+        padding: 0 10px;
+        border-radius: 8px;
+        font-size: 13px;
+        gap: 6px;
+        flex-shrink: 0;
+    }
+
+    .settings-header-title-group {
+        min-width: 0;
+        gap: 6px;
+    }
+
+    .settings-header-title {
+        font-size: 15px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .settings-header-badge {
+        display: none; /* Hide badge on mobile to eliminate clutter */
+    }
+
+    .settings-save-status {
+        font-size: 11.5px;
+        gap: 4px;
+        flex-shrink: 0;
+    }
+
+    .settings-save-status span {
+        display: none; /* Icon-only status on mobile */
+    }
+
+    .settings-save-status svg,
+    .settings-save-status i {
+        width: 16px;
+        height: 16px;
     }
 
     .settings-layout {
         flex-direction: column;
     }
 
+    /* Native Android horizontal chips carousel */
     .settings-sidebar {
         width: 100%;
         height: auto;
@@ -550,11 +600,15 @@
         overflow-y: hidden;
         padding: 8px 12px;
         border-right: none;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-        gap: 6px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        gap: 8px;
         white-space: nowrap;
         -webkit-overflow-scrolling: touch;
         scrollbar-width: none;
+        background: #0f0f0f;
+        position: sticky;
+        top: 0;
+        z-index: 15;
     }
 
     .settings-sidebar::-webkit-scrollbar {
@@ -564,36 +618,142 @@
     .settings-nav-item {
         width: auto;
         flex-shrink: 0;
-        padding: 7px 12px;
-        font-size: 13px;
-        gap: 8px;
+        padding: 6px 13px;
+        font-size: 12.5px;
+        font-weight: 500;
+        border-radius: 9999px; /* Modern capsule chips */
+        gap: 6px;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        color: #a1a1aa;
+        scroll-snap-align: center;
+    }
+
+    .settings-nav-item svg,
+    .settings-nav-item i {
+        width: 14px;
+        height: 14px;
+    }
+
+    .settings-nav-item.active {
+        background: #ffffff;
+        color: #09090b;
+        border-color: #ffffff;
+        font-weight: 600;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
     }
 
     .settings-content {
-        padding: 18px 14px 60px 14px;
+        padding: 14px 12px calc(env(safe-area-inset-bottom, 20px) + 40px) 12px;
     }
 
+    /* Compact subscreen header */
+    .settings-subscreen-header {
+        margin-bottom: 14px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .settings-subscreen-title {
+        font-size: 17px;
+        margin-bottom: 0;
+    }
+
+    .settings-subscreen-desc {
+        display: none; /* Remove redundant paragraph text on mobile */
+    }
+
+    /* Streamlined grouped cards */
     .settings-card {
-        padding: 15px 14px;
-        gap: 14px;
+        background: #141416;
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-radius: 12px;
+        padding: 12px 14px;
+        margin-bottom: 12px;
+        gap: 0;
     }
 
+    .settings-card-title {
+        font-size: 11px;
+        letter-spacing: 0.06em;
+        color: #71717a;
+        margin-bottom: 8px;
+    }
+
+    /* Hairline dividers between items in grouped card */
+    .settings-card > .settings-row:not(:last-child),
+    .settings-card > .settings-row-stacked:not(:last-child) {
+        border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+        padding-bottom: 11px;
+        margin-bottom: 11px;
+    }
+
+    /* Keep toggle switches in a single horizontal row on mobile! */
     .settings-row {
-        flex-direction: column;
-        align-items: flex-start;
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
         gap: 12px;
+        min-height: 40px;
+    }
+
+    .settings-item-title {
+        font-size: 13.5px;
+    }
+
+    .settings-item-desc {
+        font-size: 12px;
+        color: #71717a;
+        line-height: 1.35;
+    }
+
+    .settings-row-stacked {
+        gap: 6px;
     }
 
     .settings-select {
         width: 100%;
         min-width: 0;
+        height: 38px;
+        font-size: 13px;
+        background: #19191c;
+        border-radius: 8px;
+    }
+
+    /* Full width inputs/controls when stacked */
+    .settings-row-stacked .settings-select {
+        margin-top: 2px;
     }
 
     .settings-range-container {
         max-width: 100%;
+        margin-top: 4px;
     }
 
     .settings-action-btn {
         width: 100%;
+        height: 38px;
+        font-size: 13px;
+        border-radius: 8px;
+    }
+
+    /* Diagnostics grid on small screens */
+    .settings-info-grid {
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+    }
+
+    .settings-info-box {
+        padding: 10px 12px;
+        border-radius: 8px;
+    }
+
+    .settings-info-label {
+        font-size: 10.5px;
+    }
+
+    .settings-info-val {
+        font-size: 12.5px;
     }
 }

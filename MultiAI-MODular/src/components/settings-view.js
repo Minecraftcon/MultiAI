@@ -64,6 +64,11 @@ export function switchSubScreen(screenId) {
         const isMatch = btn.dataset.subscreen === screenId;
         btn.classList.toggle("active", isMatch);
         btn.setAttribute("aria-selected", isMatch ? "true" : "false");
+        if (isMatch && isMobileDevice()) {
+            try {
+                btn.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+            } catch (_) {}
+        }
     });
 
     // Update sub-screens visibility
@@ -72,6 +77,12 @@ export function switchSubScreen(screenId) {
         const isMatch = panel.id === `subScreen_${screenId}`;
         panel.classList.toggle("active", isMatch);
     });
+
+    // Reset content scroll so user starts at the top of the newly chosen section
+    const content = settingsScreen.querySelector(".settings-content");
+    if (content) {
+        content.scrollTop = 0;
+    }
 
     // Update header badge or label
     const badge = document.getElementById("settingsActiveBadge");
