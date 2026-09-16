@@ -36,6 +36,36 @@ export function hideChatItemContextMenu() {
     }
 }
 
+export function showChatItemContextMenu(chatId, posX, posY) {
+    if (!chatId || !state.chatSessions[chatId]) return;
+    const chatItemContextMenu = document.getElementById("chatItemContextMenu");
+    if (!chatItemContextMenu) return;
+
+    hideContextMenu();
+    hideMobileActions();
+
+    chatMenuTargetId = chatId;
+    chatItemContextMenu.style.display = "flex";
+    renderIcons(chatItemContextMenu);
+
+    const menuRect = chatItemContextMenu.getBoundingClientRect();
+    const menuWidth = menuRect.width || 150;
+    const menuHeight = menuRect.height || 120;
+
+    let x = (typeof posX === "number" && posX > 0) ? posX : (window.innerWidth / 2 - menuWidth / 2);
+    let y = (typeof posY === "number" && posY > 0) ? posY : (window.innerHeight / 2 - menuHeight / 2);
+
+    if (x + menuWidth > window.innerWidth - 8) {
+        x = window.innerWidth - menuWidth - 8;
+    }
+    if (y + menuHeight > window.innerHeight - 8) {
+        y = window.innerHeight - menuHeight - 8;
+    }
+
+    chatItemContextMenu.style.left = `${Math.max(8, Math.round(x))}px`;
+    chatItemContextMenu.style.top = `${Math.max(8, Math.round(y))}px`;
+}
+
 export function hideMobileActions() {
     const mobileMsgActions = document.getElementById("mobileMsgActions");
     if (mobileMsgActions && mobileMsgActions.style.display !== "none") {
@@ -816,33 +846,11 @@ export function initContextMenu() {
         if (!chatItem) return;
 
         e.preventDefault();
-        hideContextMenu();
-
         const chatId = chatItem.dataset.chatId;
-        if (!chatId || !state.chatSessions[chatId]) return;
-
-        chatMenuTargetId = chatId;
-        if (!chatItemContextMenu) return;
-
-        chatItemContextMenu.style.display = "flex";
-        renderIcons(chatItemContextMenu);
-
-        const menuRect = chatItemContextMenu.getBoundingClientRect();
-        const menuWidth = menuRect.width || 150;
-        const menuHeight = menuRect.height || 120;
-
-        let posX = e.clientX;
-        let posY = e.clientY;
-
-        if (posX + menuWidth > window.innerWidth) {
-            posX = window.innerWidth - menuWidth - 8;
-        }
-        if (posY + menuHeight > window.innerHeight) {
-            posY = window.innerHeight - menuHeight - 8;
-        }
-
-        chatItemContextMenu.style.left = `${Math.max(8, posX)}px`;
-        chatItemContextMenu.style.top = `${Math.max(8, posY)}px`;
+        const rect = chatItem.getBoundingClientRect();
+        const posX = (typeof e.clientX === "number" && e.clientX > 0) ? e.clientX : rect.left + 20;
+        const posY = (typeof e.clientY === "number" && e.clientY > 0) ? e.clientY : rect.bottom + 4;
+        showChatItemContextMenu(chatId, posX, posY);
     });
 
     // 3. Close menus on pointerdown outside

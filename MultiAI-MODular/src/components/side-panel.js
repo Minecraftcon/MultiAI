@@ -7,7 +7,7 @@ import { renderIcons } from "../utils/icons.js";
 import { saveStoredChats, saveCurrentChatState, initChatWorkspace } from "../services/storage.js";
 import { syncActiveWorkspacePrompt } from "../services/system.js";
 import { closePanel } from "./gestures.js";
-import { hideMobileActions } from "./context-menu.js";
+import { hideMobileActions, showChatItemContextMenu } from "./context-menu.js";
 import { bindInteractiveCodeBlocks, renderMermaidInElement, renderMath, bindAIImageCards } from "./renderer.js";
 import { updateSendButtonState, stopChatGeneration } from "./composer.js";
 import { updateModelPickerDisplay } from "./model-picker.js";
@@ -105,7 +105,70 @@ export function renderChatList(filterQuery = currentSearchFilter) {
             </button>
         `;
 
+        let holdTimer = null;
+        let startX = 0;
+        let startY = 0;
+        let didLongPress = false;
+
+        item.addEventListener("touchstart", (e) => {
+            if (e.touches.length !== 1) return;
+            if (e.target.closest(".chat-item-more-btn")) return;
+
+            const touch = e.touches[0];
+            startX = touch.clientX;
+            startY = touch.clientY;
+            didLongPress = false;
+
+            clearTimeout(holdTimer);
+            holdTimer = setTimeout(() => {
+                didLongPress = true;
+                if (navigator.vibrate) {
+                    try { navigator.vibrate(40); } catch (err) {}
+                }
+                showChatItemContextMenu(id, startX, startY);
+            }, 450);
+        }, { passive: true });
+
+        item.addEventListener("touchmove", (e) => {
+            if (!holdTimer) return;
+            if (e.touches.length !== 1) {
+                clearTimeout(holdTimer);
+                holdTimer = null;
+                return;
+            }
+            const touch = e.touches[0];
+            const dx = Math.abs(touch.clientX - startX);
+            const dy = Math.abs(touch.clientY - startY);
+            // If moved more than 10px, it is scrolling, cancel hold
+            if (dx > 10 || dy > 10) {
+                clearTimeout(holdTimer);
+                holdTimer = null;
+            }
+        }, { passive: true });
+
+        item.addEventListener("touchend", () => {
+            clearTimeout(holdTimer);
+            holdTimer = null;
+            if (didLongPress) {
+                setTimeout(() => {
+                    didLongPress = false;
+                }, 350);
+            }
+        });
+
+        item.addEventListener("touchcancel", () => {
+            clearTimeout(holdTimer);
+            holdTimer = null;
+            didLongPress = false;
+        });
+
         item.addEventListener("click", (e) => {
+            if (didLongPress) {
+                e.preventDefault();
+                e.stopPropagation();
+                didLongPress = false;
+                return;
+            }
             if (e.target.closest(".chat-item-more-btn")) return;
             if (id !== state.currentChatId) {
                 switchToChat(id);
