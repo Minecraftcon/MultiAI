@@ -130,6 +130,14 @@ class ChatBoxComponent {
             this.updateInputMeta();
         });
 
+        this.inputEl.addEventListener("focus", () => {
+            this.handleInputResize();
+        });
+
+        window.addEventListener("resize", () => {
+            this.handleInputResize();
+        }, { passive: true });
+
         // IME composition protection (Japanese, Chinese, Korean, etc.)
         this.inputEl.addEventListener("compositionstart", () => {
             this.isComposing = true;
@@ -190,58 +198,53 @@ class ChatBoxComponent {
     }
 
     /**
-     * Tracks whether the input is single-line or multi-line/staged.
+     * Smoothly calculates target height for the textarea and updates layout mode.
+     * Supports explicit newlines (\n) AND natural text wrapping without newlines.
+     * Keeps buttons anchored at the bottom while the top expands upwards.
      */
-    updateLayoutMode() {
-        if (!this.root || !this.inputEl) return;
+    handleInputResize() {
+        if (!this.inputEl || !this.root) return;
 
+        const baseHeight = 24;
+        const maxHeight = 180;
         const text = this.inputEl.value || "";
         const hasNewline = text.includes("\n");
         const hasStaged = this.hasAttachments || 
             (this.stagedStrip && this.stagedStrip.children.length > 0 && this.stagedStrip.style.display !== "none");
 
-        const shouldExpand = hasNewline || hasStaged;
+        // Temporarily reset height to base line height to accurately measure scrollHeight as text wraps
+        this.inputEl.style.height = baseHeight + "px";
+        const scrollH = this.inputEl.scrollHeight;
+
+        // Multi-line condition: has a newline character OR wrapped text causing scrollHeight to exceed base height (~30px)
+        const isMultiLine = hasNewline || (scrollH > baseHeight + 6);
+        const shouldExpand = isMultiLine || hasStaged;
 
         if (shouldExpand) {
             if (!this.root.classList.contains("composer-expanded")) {
                 this.root.classList.remove("composer-compact");
                 this.root.classList.add("composer-expanded");
             }
+            const targetHeight = Math.min(Math.max(scrollH, 44), maxHeight);
+            this.inputEl.style.height = targetHeight + "px";
+            this.inputEl.style.overflowY = scrollH > maxHeight ? "auto" : "hidden";
+            // Ensure cursor/newly typed text stays in view when scrolling
+            this.inputEl.scrollTop = this.inputEl.scrollHeight;
         } else {
             if (!this.root.classList.contains("composer-compact")) {
                 this.root.classList.remove("composer-expanded");
                 this.root.classList.add("composer-compact");
             }
+            this.inputEl.style.height = baseHeight + "px";
+            this.inputEl.style.overflowY = "hidden";
         }
     }
 
     /**
-     * Smoothly calculates target height for the textarea.
-     * Keeps buttons fixed at the bottom while the top expands upwards.
+     * Synchronizes compact/expanded mode.
      */
-    handleInputResize() {
-        if (!this.inputEl) return;
-        this.updateLayoutMode();
-
-        const isStartPage = document.getElementById("appShell")?.classList.contains("is-start-page");
-        const text = this.inputEl.value || "";
-        const hasNewline = text.includes("\n");
-        const hasStaged = this.hasAttachments || 
-            (this.stagedStrip && this.stagedStrip.children.length > 0 && this.stagedStrip.style.display !== "none");
-
-        const baseHeight = 24;
-        const maxHeight = 180;
-
-        if (hasNewline || hasStaged) {
-            this.inputEl.style.height = baseHeight + "px";
-            const scrollH = this.inputEl.scrollHeight;
-            const targetHeight = Math.min(Math.max(scrollH, 48), maxHeight);
-            this.inputEl.style.height = targetHeight + "px";
-            this.inputEl.style.overflowY = scrollH > maxHeight ? "auto" : "hidden";
-        } else {
-            this.inputEl.style.height = baseHeight + "px";
-            this.inputEl.style.overflowY = "hidden";
-        }
+    updateLayoutMode() {
+        this.handleInputResize();
     }
 
     updateInputMeta() {

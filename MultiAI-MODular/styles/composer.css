@@ -954,29 +954,41 @@ body.drag-over .composer {
     -webkit-backdrop-filter: none !important;
 }
 
-#appShell.is-start-page .composer-dock .composer-input-row {
-    align-items: center;
-}
-
 #appShell.is-start-page .composer-dock.composer-compact .composer-input-row {
     align-items: center;
 }
 
-#appShell.is-start-page .composer-dock .attach-btn {
+#appShell.is-start-page .composer-dock.composer-compact .attach-btn {
     align-self: center;
 }
 
-#appShell.is-start-page .composer-dock .composer-actions {
+#appShell.is-start-page .composer-dock.composer-compact .composer-actions {
     align-self: center;
 }
 
-#appShell.is-start-page .composer-dock .composer-textarea {
+#appShell.is-start-page .composer-dock.composer-compact .composer-textarea {
     min-height: 24px;
     height: 24px;
     font-size: 15.5px;
     line-height: 24px;
     color: #f4f4f5;
     padding: 0 8px;
+}
+
+#appShell.is-start-page .composer-dock.composer-expanded .composer-input-row {
+    align-items: flex-end;
+}
+
+#appShell.is-start-page .composer-dock.composer-expanded .attach-btn,
+#appShell.is-start-page .composer-dock.composer-expanded .composer-actions {
+    align-self: flex-end;
+}
+
+#appShell.is-start-page .composer-dock.composer-expanded .composer-textarea {
+    font-size: 15.5px;
+    line-height: 1.45;
+    color: #f4f4f5;
+    padding: 4px 8px;
 }
 
 #appShell.is-start-page .start-page-footer {
@@ -1272,10 +1284,22 @@ body.drag-over .composer {
     #appShell.is-start-page .composer-dock {
         width: 100%;
         max-width: 100%;
-        min-height: 96px;
-        padding: 14px;
+        min-height: auto;
+        padding: 10px 14px;
         margin: 0 auto;
         box-sizing: border-box;
+    }
+    #appShell.is-start-page:has(.composer-dock:focus-within) #inputArea,
+    #appShell.is-start-page:has(.composer-dock.composer-expanded) #inputArea {
+        padding-top: 10px;
+    }
+    #appShell.is-start-page:has(.composer-dock:focus-within) .start-page-hero,
+    #appShell.is-start-page:has(.composer-dock.composer-expanded) .start-page-hero {
+        margin-bottom: 4px;
+    }
+    #appShell.is-start-page:has(.composer-dock:focus-within) .start-page-title,
+    #appShell.is-start-page:has(.composer-dock.composer-expanded) .start-page-title {
+        font-size: 22px;
     }
     /* Themes and glow aura completely removed for Android / mobile devices */
     #startPageBackdrop,
