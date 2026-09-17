@@ -1367,15 +1367,16 @@ body.drag-over .composer {
     z-index: 2;
 }
 
-/* Ambient Amber Nebula Glow behind Saturn */
+/* Ambient Amber Nebula Glow behind Saturn (anchored on left edge) */
 .saturn-ambient-glow {
     position: absolute;
-    top: -100px;
-    right: -80px;
-    width: clamp(420px, 60vw, 850px);
-    height: clamp(420px, 60vw, 850px);
-    background: radial-gradient(circle at 75% 25%, rgba(235, 165, 70, 0.22) 0%, rgba(185, 110, 40, 0.12) 34%, rgba(95, 50, 120, 0.05) 60%, transparent 75%);
-    filter: blur(54px);
+    top: 15%;
+    left: -200px;
+    right: auto;
+    width: clamp(450px, 60vw, 900px);
+    height: clamp(450px, 60vw, 900px);
+    background: radial-gradient(circle at 20% 50%, rgba(235, 165, 70, 0.20) 0%, rgba(185, 110, 40, 0.10) 34%, rgba(95, 50, 120, 0.04) 60%, transparent 75%);
+    filter: blur(60px);
     pointer-events: none;
     z-index: 1;
 }
@@ -1601,11 +1602,12 @@ body.drag-over .composer {
    --------------------------------------------------------- */
 @media (max-width: 600px) {
     .saturn-ambient-glow {
-        top: -80px;
-        right: -60px;
-        width: 300px;
-        height: 300px;
-        filter: blur(36px);
+        top: 10%;
+        left: -120px;
+        right: auto;
+        width: 320px;
+        height: 320px;
+        filter: blur(40px);
     }
     .eclipse-solar-ring {
         top: 2%;

@@ -15,14 +15,9 @@ let ringMesh = null;
 let nebulaMesh = null;
 let starPoints = null;
 let saturnGroup = null;
+// Animation loop tracking
 let isRunning = false;
 let currentCanvas = null;
-
-// Target and current rotation / parallax
-let mouseX = 0;
-let mouseY = 0;
-let targetX = 0;
-let targetY = 0;
 
 /**
  * Creates high-fidelity procedural Saturn latitudinal cloud bands
@@ -84,28 +79,28 @@ function createSaturnRingTexture() {
     grad.addColorStop(0.18, "rgba(175, 135, 95, 0.32)");
     grad.addColorStop(0.22, "rgba(90, 65, 40, 0.08)");
     // B-Ring (Main, densest, brightest golden band)
-    grad.addColorStop(0.23, "rgba(240, 205, 150, 0.88)");
-    grad.addColorStop(0.40, "rgba(255, 225, 175, 0.96)");
-    grad.addColorStop(0.54, "rgba(230, 190, 135, 0.92)");
-    grad.addColorStop(0.63, "rgba(205, 160, 110, 0.82)");
+    grad.addColorStop(0.23, "rgba(240, 205, 150, 0.90)");
+    grad.addColorStop(0.40, "rgba(255, 225, 175, 0.98)");
+    grad.addColorStop(0.54, "rgba(230, 190, 135, 0.94)");
+    grad.addColorStop(0.63, "rgba(205, 160, 110, 0.85)");
     // Cassini Division (Dark division gap)
     grad.addColorStop(0.640, "rgba(10, 8, 6, 0.04)");
     grad.addColorStop(0.680, "rgba(2, 2, 2, 0.00)");
     grad.addColorStop(0.685, "rgba(10, 8, 6, 0.04)");
     // A-Ring (Outer ring with Encke gap)
-    grad.addColorStop(0.690, "rgba(215, 175, 125, 0.78)");
-    grad.addColorStop(0.820, "rgba(225, 185, 135, 0.72)");
-    grad.addColorStop(0.910, "rgba(180, 140, 95, 0.60)");
+    grad.addColorStop(0.690, "rgba(215, 175, 125, 0.82)");
+    grad.addColorStop(0.820, "rgba(225, 185, 135, 0.76)");
+    grad.addColorStop(0.910, "rgba(180, 140, 95, 0.65)");
     // Encke division
     grad.addColorStop(0.925, "rgba(20, 15, 10, 0.08)");
-    grad.addColorStop(0.940, "rgba(175, 130, 85, 0.45)");
-    grad.addColorStop(0.980, "rgba(130, 90, 55, 0.15)");
+    grad.addColorStop(0.940, "rgba(175, 130, 85, 0.48)");
+    grad.addColorStop(0.980, "rgba(130, 90, 55, 0.18)");
     grad.addColorStop(1.000, "rgba(0, 0, 0, 0)");
 
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Particle streaks
+    // Fine particle streaks
     for (let x = 0; x < canvas.width; x += 2) {
         const noise = Math.sin(x * 0.35) * 0.5 + 0.5;
         ctx.fillStyle = `rgba(255, 255, 255, ${noise * 0.05})`;
@@ -159,41 +154,20 @@ function createNebulaTexture() {
 }
 
 /**
- * Handle mouse movement for subtle cosmic parallax
- */
-function onMouseMove(e) {
-    const w = window.innerWidth || 1;
-    const h = window.innerHeight || 1;
-    mouseX = (e.clientX / w - 0.5) * 2;
-    mouseY = (e.clientY / h - 0.5) * 2;
-}
-
-/**
  * Main animation loop with performance throttle
+ * Strictly stationary & pinned to left (non-dynamic, no mouse tracking)
  */
 function animate() {
     if (!isRunning) return;
     animId = requestAnimationFrame(animate);
 
-    // Smooth camera / group parallax
-    targetX += (mouseX - targetX) * 0.035;
-    targetY += (mouseY - targetY) * 0.035;
-
-    if (saturnGroup) {
-        // Slow cinematic planetary rotation
-        if (saturnMesh) {
-            saturnMesh.rotation.y += 0.0007;
-        }
-        if (ringMesh) {
-            ringMesh.rotation.z += 0.0004;
-        }
-        // Parallax tilt
-        saturnGroup.position.x = 2.45 + targetX * 0.25;
-        saturnGroup.position.y = 1.65 - targetY * 0.2;
+    // Majestic slow axial rotation of planetary cloud bands
+    if (saturnMesh) {
+        saturnMesh.rotation.y += 0.0002;
     }
 
     if (starPoints) {
-        starPoints.rotation.y += 0.00015;
+        starPoints.rotation.y += 0.00005;
     }
 
     if (renderer && scene && camera) {
@@ -222,7 +196,7 @@ export function startSaturnWebGL(container) {
     // 1. Scene & Camera
     scene = new THREE.Scene();
     camera = new THREE.PerspectiveCamera(42, w / h, 0.1, 100);
-    camera.position.set(0, 0, 8.5);
+    camera.position.set(0, 0, 7.5);
 
     // 2. Renderer
     renderer = new THREE.WebGLRenderer({
@@ -241,40 +215,41 @@ export function startSaturnWebGL(container) {
     container.appendChild(currentCanvas);
 
     // 3. Lighting
-    // Warm Sun Directional Light (illuminates from top-right front)
-    const sunLight = new THREE.DirectionalLight(0xffecd2, 2.6);
+    // Warm Sun Directional Light (illuminates the right limb and ring plane)
+    const sunLight = new THREE.DirectionalLight(0xffedd5, 2.8);
     sunLight.position.set(6, 4, 5);
     scene.add(sunLight);
 
-    // Ambient space light (deep twilight cosmic fill)
-    const ambientLight = new THREE.AmbientLight(0x1a1525, 0.7);
+    // Ambient space twilight
+    const ambientLight = new THREE.AmbientLight(0x181424, 0.75);
     scene.add(ambientLight);
 
-    // Atmospheric rim light (soft back scattering)
-    const rimLight = new THREE.DirectionalLight(0x9a65d0, 1.1);
-    rimLight.position.set(-5, -3, -4);
+    // Atmospheric rim back-light
+    const rimLight = new THREE.DirectionalLight(0x8a50c8, 1.0);
+    rimLight.position.set(-6, -2, -4);
     scene.add(rimLight);
 
-    // 4. Saturn Master Group (Positioned in Top-Right Corner)
+    // 4. Saturn Master Group - DEEP IN SPACE, PINNED TO LEFT & STATIONARY
     saturnGroup = new THREE.Group();
-    // Responsive positioning: on smaller screens, scale and position closer to corner
     const isMobile = w < 600;
     if (isMobile) {
-        saturnGroup.position.set(1.4, 2.0, 0);
-        saturnGroup.scale.set(0.68, 0.68, 0.68);
+        // Mobile: pushed deep back in space on upper-left
+        saturnGroup.position.set(-2.8, 0.6, -4.0);
+        saturnGroup.scale.set(0.70, 0.70, 0.70);
     } else {
-        saturnGroup.position.set(2.45, 1.65, 0);
+        // Desktop: elegant Saturn sitting deep back on the left, clear of text
+        saturnGroup.position.set(-4.5, 0.4, -4.0);
         saturnGroup.scale.set(1.0, 1.0, 1.0);
     }
 
-    // Tilted ring axial orientation (Saturn has a 26.73° obliquity)
-    saturnGroup.rotation.x = 0.58;
-    saturnGroup.rotation.y = -0.32;
-    saturnGroup.rotation.z = -0.42;
+    // Majestic cosmic tilt
+    saturnGroup.rotation.x = 0.52;
+    saturnGroup.rotation.y = 0.32;
+    saturnGroup.rotation.z = 0.16;
     scene.add(saturnGroup);
 
-    // 5. Saturn Planet Sphere
-    const planetRadius = 1.35;
+    // 5. Smaller Saturn Planet Sphere (deep in background)
+    const planetRadius = 1.8;
     const sphereGeo = new THREE.SphereGeometry(planetRadius, 64, 64);
     const planetTex = createSaturnBandTexture();
     const planetMat = new THREE.MeshStandardMaterial({
@@ -286,32 +261,32 @@ export function startSaturnWebGL(container) {
     saturnGroup.add(saturnMesh);
 
     // 6. Atmospheric Glow Shell (Fresnel Rim)
-    const atmosGeo = new THREE.SphereGeometry(planetRadius * 1.025, 32, 32);
+    const atmosGeo = new THREE.SphereGeometry(planetRadius * 1.025, 48, 48);
     const atmosMat = new THREE.MeshBasicMaterial({
         color: 0xdfb470,
         transparent: true,
-        opacity: 0.22,
+        opacity: 0.28,
         blending: THREE.AdditiveBlending,
         side: THREE.BackSide
     });
     const atmosMesh = new THREE.Mesh(atmosGeo, atmosMat);
     saturnGroup.add(atmosMesh);
 
-    // 7. Multi-lane Saturn Rings
-    const ringInner = 1.68;
-    const ringOuter = 3.65;
-    const ringGeo = createRadialRingGeometry(ringInner, ringOuter, 128);
+    // 7. Expansive Multi-lane Saturn Rings (proportionately large wingspan, elegant)
+    const ringInner = 2.2;
+    const ringOuter = 8.5;
+    const ringGeo = createRadialRingGeometry(ringInner, ringOuter, 180);
     const ringTex = createSaturnRingTexture();
     const ringMat = new THREE.MeshStandardMaterial({
         map: ringTex,
         side: THREE.DoubleSide,
         transparent: true,
-        opacity: 0.94,
-        roughness: 0.65,
-        metalness: 0.15
+        opacity: 0.95,
+        roughness: 0.55,
+        metalness: 0.14
     });
     ringMesh = new THREE.Mesh(ringGeo, ringMat);
-    ringMesh.rotation.x = Math.PI / 2; // Flat on equator
+    ringMesh.rotation.x = Math.PI / 2; // Lie on planetary equator
     saturnGroup.add(ringMesh);
 
     // 8. Glowing Volumetric Nebula Backdrop
@@ -325,7 +300,7 @@ export function startSaturnWebGL(container) {
         depthWrite: false
     });
     nebulaMesh = new THREE.Mesh(nebulaGeo, nebulaMat);
-    nebulaMesh.position.set(1.5, 1.0, -3.5);
+    nebulaMesh.position.set(-4.5, 0.4, -6.0);
     scene.add(nebulaMesh);
 
     // 9. Twinkling Celestial Starfield
@@ -348,8 +323,7 @@ export function startSaturnWebGL(container) {
     starPoints = new THREE.Points(starGeo, starMat);
     scene.add(starPoints);
 
-    // 10. Listeners & Modern Web Guidance: Efficient Background Processing
-    window.addEventListener("mousemove", onMouseMove, { passive: true });
+    // 10. Modern Web Guidance: Visibility observer & resize containment (NO mouse parallax)
     window.addEventListener("resize", handleResize, { passive: true });
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
@@ -371,10 +345,10 @@ function handleResize() {
 
     if (saturnGroup) {
         if (w < 600) {
-            saturnGroup.position.set(1.4, 2.0, 0);
-            saturnGroup.scale.set(0.68, 0.68, 0.68);
+            saturnGroup.position.set(-2.8, 0.6, -4.0);
+            saturnGroup.scale.set(0.70, 0.70, 0.70);
         } else {
-            saturnGroup.position.set(2.45, 1.65, 0);
+            saturnGroup.position.set(-4.5, 0.4, -4.0);
             saturnGroup.scale.set(1.0, 1.0, 1.0);
         }
     }
@@ -409,7 +383,6 @@ export function resumeSaturnWebGL() {
 export function destroySaturnWebGL() {
     pauseSaturnWebGL();
 
-    window.removeEventListener("mousemove", onMouseMove);
     window.removeEventListener("resize", handleResize);
     document.removeEventListener("visibilitychange", handleVisibilityChange);
 
