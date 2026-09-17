@@ -219,13 +219,13 @@ class ChatBoxComponent {
         const hasStaged = this.hasAttachments || 
             (this.stagedStrip && this.stagedStrip.children.length > 0 && this.stagedStrip.style.display !== "none");
 
-        const baseHeight = isStartPage ? 48 : 24;
-        const maxHeight = isStartPage ? 220 : 180;
+        const baseHeight = 24;
+        const maxHeight = 180;
 
-        if (hasNewline || hasStaged || isStartPage) {
+        if (hasNewline || hasStaged) {
             this.inputEl.style.height = baseHeight + "px";
             const scrollH = this.inputEl.scrollHeight;
-            const targetHeight = Math.min(Math.max(scrollH, baseHeight), maxHeight);
+            const targetHeight = Math.min(Math.max(scrollH, 48), maxHeight);
             this.inputEl.style.height = targetHeight + "px";
             this.inputEl.style.overflowY = scrollH > maxHeight ? "auto" : "hidden";
         } else {
