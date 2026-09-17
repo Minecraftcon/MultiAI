@@ -8,6 +8,7 @@ import { closePanel } from "./gestures.js";
 import { saveStoredChats } from "../services/storage.js";
 import { updateModelPickerDisplay } from "./model-picker.js";
 import { getUiScale, setUiScale, resetZoom } from "./ui-scale.js";
+import { getAuroraTheme, setAuroraTheme } from "./aurora-theme.js";
 
 let activeSubScreen = "general";
 let saveTimeout = null;
@@ -177,6 +178,9 @@ export function populateSettingsValues() {
     // 5. Appearance
     const themeSelect = document.getElementById("cfgTheme");
     if (themeSelect) themeSelect.value = ui.Theme || "dark";
+
+    const auroraThemeSelect = document.getElementById("cfgAuroraTheme");
+    if (auroraThemeSelect) auroraThemeSelect.value = getAuroraTheme();
 
     const showLineNumbers = document.getElementById("cfgShowLineNumbers");
     if (showLineNumbers) showLineNumbers.checked = ui.ShowLineNumbers !== false;
@@ -487,6 +491,14 @@ export function initSettingsView() {
             const val = e.target.value;
             saveSetting("UI", "Theme", val);
             document.documentElement.setAttribute("data-theme", val);
+        });
+    }
+
+    const auroraThemeSelect = document.getElementById("cfgAuroraTheme");
+    if (auroraThemeSelect) {
+        auroraThemeSelect.addEventListener("change", (e) => {
+            const val = e.target.value;
+            setAuroraTheme(val, true);
         });
     }
 

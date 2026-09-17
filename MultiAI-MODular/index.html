@@ -163,6 +163,9 @@
 
     <main id="chat"></main>
 
+    <!-- Start Page Celestial / Aurora Backdrop (Active on welcome screen) -->
+    <div id="startPageBackdrop" class="start-page-backdrop" aria-hidden="true"></div>
+
     <div id="inputArea"></div>
 
     <!-- ================= SETTINGS SCREEN (DEDICATED IN-APP SCREEN) ================= -->
@@ -473,6 +476,21 @@
                                 <option value="midnight">Midnight OLED (Deep Black)</option>
                                 <option value="light">Light</option>
                                 <option value="system">System Default</option>
+                            </select>
+                        </div>
+
+                        <div class="settings-row">
+                            <div class="settings-item-info">
+                                <span class="settings-item-title">Start Page Aurora Theme</span>
+                                <span class="settings-item-desc">Celestial backdrop and aura glow on the welcome screen</span>
+                            </div>
+                            <select id="cfgAuroraTheme" class="settings-select">
+                                <option value="saturn">🪐 Saturn (Corner Planet & Rings)</option>
+                                <option value="aurora">🌌 Northern Lights (Boreal Aurora)</option>
+                                <option value="clouds">☁️ Lunar Mist (Monochromatic Cloud)</option>
+                                <option value="nebula">✨ Cosmic Nebula (Cyan & Magenta)</option>
+                                <option value="eclipse">🌑 Solar Eclipse (Amber Corona)</option>
+                                <option value="none">🚫 Off (No Glow)</option>
                             </select>
                         </div>
                     </div>

@@ -18,6 +18,7 @@ import { initSettingsView } from "./components/settings-view.js";
 import { renderIcons } from "./utils/dom.js";
 import { setStartPageMode } from "./components/chatbox.js";
 import { initUiScale } from "./components/ui-scale.js";
+import { initAuroraTheme } from "./components/aurora-theme.js";
 
 function initChatSessions() {
     loadStoredChats();
@@ -75,6 +76,9 @@ async function initConfig() {
             if (theme && theme !== "system") {
                 document.documentElement.setAttribute("data-theme", theme);
             }
+
+            // Sync configured Aurora theme
+            initAuroraTheme();
         }
     } catch (e) {
         console.warn("[CONFIG] Could not load /api/config:", e);
@@ -85,6 +89,7 @@ async function initConfig() {
 async function bootstrap() {
     renderIcons();
     initUiScale();
+    initAuroraTheme();
     initComposer();
     initGestures();
     initSidePanel();

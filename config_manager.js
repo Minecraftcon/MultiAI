@@ -38,6 +38,7 @@ const DEFAULT_CONFIG = {
     },
     UI: {
         Theme: "dark",
+        AuroraTheme: "saturn",
         ShowLineNumbers: true,
         CompactMobileView: true
     }
