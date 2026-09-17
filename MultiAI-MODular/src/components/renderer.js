@@ -293,21 +293,128 @@ export function extractThoughtAndContent(text) {
     };
 }
 
+/**
+ * Pre-processes LaTeX math formulas before marked parses markdown,
+ * shielding math expressions from markdown underscore/asterisk italic corruption,
+ * and tokenizing them for KaTeX rendering.
+ */
+function processMathInText(rawText) {
+    if (!rawText || typeof rawText !== "string") return { text: rawText, mathBlocks: [] };
+
+    // 1. Stash code blocks and inline code so math syntax inside code blocks is never altered
+    const codeBlocks = [];
+    let text = rawText.replace(/(```[\s\S]*?```|`[^`\n]+`)/g, (match) => {
+        const token = `@@@MULTI_AI_CODE_${codeBlocks.length}@@@`;
+        codeBlocks.push(match);
+        return token;
+    });
+
+    const mathBlocks = [];
+
+    // 2. Display math: $$...$$
+    text = text.replace(/\$\$([\s\S]+?)\$\$/g, (_, math) => {
+        const token = `@@@KATEX_BLOCK_${mathBlocks.length}@@@`;
+        mathBlocks.push({ math: math.trim(), display: true });
+        return `\n\n${token}\n\n`;
+    });
+
+    // 3. Display math: \[...\]
+    text = text.replace(/\\\[([\s\S]+?)\\\]/g, (_, math) => {
+        const token = `@@@KATEX_BLOCK_${mathBlocks.length}@@@`;
+        mathBlocks.push({ math: math.trim(), display: true });
+        return `\n\n${token}\n\n`;
+    });
+
+    // 4. Display math environments: \begin{equation}...\end{equation}, \begin{align}...\end{align}, etc.
+    text = text.replace(/\\begin\{(equation|align|gather|alignat|flalign|matrix|pmatrix|bmatrix|vmatrix|Vmatrix|cases)\*?\}([\s\S]+?)\\end\{\1\*?\}/g, (match) => {
+        const token = `@@@KATEX_BLOCK_${mathBlocks.length}@@@`;
+        mathBlocks.push({ math: match.trim(), display: true });
+        return `\n\n${token}\n\n`;
+    });
+
+    // 5. Standalone bracket display math: [ ... \cmd ... ] (very common in LLM outputs)
+    text = text.replace(/(?:^|\n)\s*\[\s*([\s\S]*?\\[a-zA-Z]+[\s\S]*?)\s*\]\s*(?=\n|$)/g, (_, math) => {
+        const token = `@@@KATEX_BLOCK_${mathBlocks.length}@@@`;
+        mathBlocks.push({ math: math.trim(), display: true });
+        return `\n\n${token}\n\n`;
+    });
+
+    // 6. Inline math: \(...\)
+    text = text.replace(/\\\(([\s\S]+?)\\\)/g, (_, math) => {
+        const token = `@@@KATEX_INLINE_${mathBlocks.length}@@@`;
+        mathBlocks.push({ math: math.trim(), display: false });
+        return token;
+    });
+
+    // 7. Inline math: $...$ (ensure not preceded/followed by digits or currency symbols)
+    text = text.replace(/(?<![\$\\\w])\$([^\s\$](?:[^\$]*?[^\s\$])?)\$(?![\$\d\w])/g, (_, math) => {
+        const token = `@@@KATEX_INLINE_${mathBlocks.length}@@@`;
+        mathBlocks.push({ math: math.trim(), display: false });
+        return token;
+    });
+
+    // 8. Restore code blocks
+    text = text.replace(/@@@MULTI_AI_CODE_(\d+)@@@/g, (_, i) => codeBlocks[parseInt(i, 10)]);
+
+    return { text, mathBlocks };
+}
+
+function restoreMathTokens(html, mathBlocks) {
+    if (!html || !mathBlocks || mathBlocks.length === 0) return html;
+
+    let res = html;
+
+    // Remove wrapping <p> around display blocks if marked added them
+    res = res.replace(/<p>\s*(@@@KATEX_BLOCK_\d+@@@)\s*<\/p>/g, "$1");
+
+    // Replace display math tokens
+    res = res.replace(/@@@KATEX_BLOCK_(\d+)@@@/g, (_, i) => {
+        const item = mathBlocks[parseInt(i, 10)];
+        if (!item) return "";
+        try {
+            if (typeof katex !== "undefined" && typeof katex.renderToString === "function") {
+                return `<div class="katex-display-wrapper">${katex.renderToString(item.math, { displayMode: true, throwOnError: false })}</div>`;
+            }
+        } catch (e) {
+            console.warn("[KaTeX] Display math error:", e);
+        }
+        return `<div class="katex-display-wrapper">$$${escapeHTML(item.math)}$$</div>`;
+    });
+
+    // Replace inline math tokens
+    res = res.replace(/@@@KATEX_INLINE_(\d+)@@@/g, (_, i) => {
+        const item = mathBlocks[parseInt(i, 10)];
+        if (!item) return "";
+        try {
+            if (typeof katex !== "undefined" && typeof katex.renderToString === "function") {
+                return `<span class="katex-inline-wrapper">${katex.renderToString(item.math, { displayMode: false, throwOnError: false })}</span>`;
+            }
+        } catch (e) {
+            console.warn("[KaTeX] Inline math error:", e);
+        }
+        return `<span class="katex-inline-wrapper">$${escapeHTML(item.math)}$</span>`;
+    });
+
+    return res;
+}
+
 export function parseMarkdown(text) {
     if (!text) return "";
 
     const { thoughtHtml, content } = extractThoughtAndContent(text);
     let parsedContent = "";
     if (content) {
+        const { text: processedText, mathBlocks } = processMathInText(content);
         if (typeof marked !== "undefined" && typeof marked.parse === "function") {
             try {
-                parsedContent = marked.parse(content);
+                parsedContent = marked.parse(processedText);
             } catch (e) {
-                parsedContent = escapeHTML(content);
+                parsedContent = escapeHTML(processedText);
             }
         } else {
-            parsedContent = escapeHTML(content);
+            parsedContent = escapeHTML(processedText);
         }
+        parsedContent = restoreMathTokens(parsedContent, mathBlocks);
     }
 
     let combined = "";
@@ -321,13 +428,19 @@ export function parseMarkdown(text) {
 
     if (typeof DOMPurify !== "undefined" && typeof DOMPurify.sanitize === "function") {
         return DOMPurify.sanitize(combined, {
-            USE_PROFILES: { html: true, svg: true },
-            ADD_TAGS: ["details", "summary", "svg", "path", "polyline", "line"],
+            USE_PROFILES: { html: true, svg: true, mathMl: true },
+            ADD_TAGS: [
+                "details", "summary", "svg", "path", "polyline", "line", "circle", "rect",
+                "math", "semantics", "mrow", "annotation", "mtext", "mspace",
+                "mo", "mi", "mn", "msub", "msup", "msubsup", "mfrac", "mroot",
+                "msqrt", "mtable", "mtr", "mtd", "munder", "mover", "munderover"
+            ],
             ADD_ATTR: [
                 "target", "rel", "class", "data-code", "data-chart", 
                 "data-state", "data-src", "sandbox", "srcdoc", "loading", "style",
                 "open", "viewBox", "stroke", "stroke-width", "fill",
-                "stroke-linecap", "stroke-linejoin", "d", "data-duration"
+                "stroke-linecap", "stroke-linejoin", "d", "data-duration",
+                "xmlns", "display", "mathvariant", "columnalign", "rowspacing", "columnspacing"
             ]
         });
     }
@@ -476,16 +589,28 @@ export async function renderMermaidInElement(container) {
 }
 
 export function renderMath(container) {
+    if (!container) return;
     if (typeof renderMathInElement === "function") {
-        renderMathInElement(container, {
-            delimiters: [
-                { left: "$$", right: "$$", display: true },
-                { left: "\\[", right: "\\]", display: true },
-                { left: "$", right: "$", display: false },
-                { left: "\\(", right: "\\)", display: false }
-            ],
-            throwOnError: false,
-            strict: false
-        });
+        try {
+            renderMathInElement(container, {
+                delimiters: [
+                    { left: "$$", right: "$$", display: true },
+                    { left: "\\[", right: "\\]", display: true },
+                    { left: "\\begin{equation}", right: "\\end{equation}", display: true },
+                    { left: "\\begin{align}", right: "\\end{align}", display: true },
+                    { left: "\\begin{gather}", right: "\\end{gather}", display: true },
+                    { left: "\\begin{matrix}", right: "\\end{matrix}", display: true },
+                    { left: "\\begin{pmatrix}", right: "\\end{pmatrix}", display: true },
+                    { left: "\\begin{cases}", right: "\\end{cases}", display: true },
+                    { left: "$", right: "$", display: false },
+                    { left: "\\(", right: "\\)", display: false }
+                ],
+                throwOnError: false,
+                strict: false,
+                ignoredTags: ["script", "noscript", "style", "textarea", "pre", "code"]
+            });
+        } catch (e) {
+            console.warn("[KaTeX] renderMathInElement failed:", e);
+        }
     }
 }
