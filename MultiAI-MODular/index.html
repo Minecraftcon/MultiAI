@@ -45,6 +45,14 @@
     <!-- Mermaid Diagrams -->
     <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
 
+    <!-- Three.js (Photorealistic WebGL 3D Celestial Engine) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        if (typeof THREE === "undefined") {
+            document.write('<script src="https://unpkg.com/three@0.128.0/build/three.min.js"><\/script>');
+        }
+    </script>
+
     <!-- Modular Stylesheets -->
     <link rel="stylesheet" href="./styles/variables.css">
     <link rel="stylesheet" href="./styles/base.css">

@@ -1,0 +1,433 @@
+/* =========================================================
+   PHOTOREALISTIC 3D GLOWING SATURN & NEBULA (WEBGL / THREE.JS)
+   - Procedural high-resolution latitudinal atmospheric cloud banding
+   - Multi-lane tilted ring system with Cassini division & radial UVs
+   - Volumetric glowing amber nebula & celestial starfield
+   - Modern Web Guidance: Efficient background processing & pausing
+   ========================================================= */
+
+let scene = null;
+let camera = null;
+let renderer = null;
+let animId = null;
+let saturnMesh = null;
+let ringMesh = null;
+let nebulaMesh = null;
+let starPoints = null;
+let saturnGroup = null;
+let isRunning = false;
+let currentCanvas = null;
+
+// Target and current rotation / parallax
+let mouseX = 0;
+let mouseY = 0;
+let targetX = 0;
+let targetY = 0;
+
+/**
+ * Creates high-fidelity procedural Saturn latitudinal cloud bands
+ */
+function createSaturnBandTexture() {
+    const canvas = document.createElement("canvas");
+    canvas.width = 1024;
+    canvas.height = 512;
+    const ctx = canvas.getContext("2d");
+
+    // Atmospheric palette matching NASA Cassini & Hubble observations
+    const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    grad.addColorStop(0.00, "#4a5b63"); // North polar hexagon veil
+    grad.addColorStop(0.07, "#6b7773");
+    grad.addColorStop(0.16, "#9e917d");
+    grad.addColorStop(0.24, "#baa588");
+    grad.addColorStop(0.33, "#cfba95");
+    grad.addColorStop(0.42, "#dfca9f");
+    grad.addColorStop(0.48, "#e7d5ad"); // Bright tropical zone
+    grad.addColorStop(0.50, "#c49866"); // Equatorial brown-amber jet
+    grad.addColorStop(0.52, "#e5cf9f");
+    grad.addColorStop(0.60, "#cbb189");
+    grad.addColorStop(0.72, "#b29571");
+    grad.addColorStop(0.84, "#8a755b");
+    grad.addColorStop(1.00, "#56483b"); // South polar region
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Micro-storm filaments and latitudinal striations
+    for (let y = 0; y < canvas.height; y += 2) {
+        const factor = (Math.sin(y * 0.14) * 0.5 + 0.5) * (Math.cos(y * 0.04) * 0.5 + 0.5);
+        ctx.fillStyle = `rgba(255, 245, 220, ${factor * 0.07})`;
+        ctx.fillRect(0, y, canvas.width, 1);
+        ctx.fillStyle = `rgba(35, 22, 12, ${factor * 0.05})`;
+        ctx.fillRect(0, y + 1, canvas.width, 1);
+    }
+
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.ClampToEdgeWrapping;
+    return tex;
+}
+
+/**
+ * Creates authentic multi-lane ring texture (C-Ring, B-Ring, Cassini, A-Ring)
+ */
+function createSaturnRingTexture() {
+    const canvas = document.createElement("canvas");
+    canvas.width = 1024;
+    canvas.height = 64;
+    const ctx = canvas.getContext("2d");
+
+    // Linear gradient across radius (x: 0 = inner boundary, 1024 = outer boundary)
+    const grad = ctx.createLinearGradient(0, 0, canvas.width, 0);
+    // Inner gap
+    grad.addColorStop(0.00, "rgba(0, 0, 0, 0)");
+    // C-Ring (Crepe Ring, faint dusky veil)
+    grad.addColorStop(0.04, "rgba(130, 95, 60, 0.12)");
+    grad.addColorStop(0.18, "rgba(175, 135, 95, 0.32)");
+    grad.addColorStop(0.22, "rgba(90, 65, 40, 0.08)");
+    // B-Ring (Main, densest, brightest golden band)
+    grad.addColorStop(0.23, "rgba(240, 205, 150, 0.88)");
+    grad.addColorStop(0.40, "rgba(255, 225, 175, 0.96)");
+    grad.addColorStop(0.54, "rgba(230, 190, 135, 0.92)");
+    grad.addColorStop(0.63, "rgba(205, 160, 110, 0.82)");
+    // Cassini Division (Dark division gap)
+    grad.addColorStop(0.640, "rgba(10, 8, 6, 0.04)");
+    grad.addColorStop(0.680, "rgba(2, 2, 2, 0.00)");
+    grad.addColorStop(0.685, "rgba(10, 8, 6, 0.04)");
+    // A-Ring (Outer ring with Encke gap)
+    grad.addColorStop(0.690, "rgba(215, 175, 125, 0.78)");
+    grad.addColorStop(0.820, "rgba(225, 185, 135, 0.72)");
+    grad.addColorStop(0.910, "rgba(180, 140, 95, 0.60)");
+    // Encke division
+    grad.addColorStop(0.925, "rgba(20, 15, 10, 0.08)");
+    grad.addColorStop(0.940, "rgba(175, 130, 85, 0.45)");
+    grad.addColorStop(0.980, "rgba(130, 90, 55, 0.15)");
+    grad.addColorStop(1.000, "rgba(0, 0, 0, 0)");
+
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Particle streaks
+    for (let x = 0; x < canvas.width; x += 2) {
+        const noise = Math.sin(x * 0.35) * 0.5 + 0.5;
+        ctx.fillStyle = `rgba(255, 255, 255, ${noise * 0.05})`;
+        ctx.fillRect(x, 0, 1, canvas.height);
+    }
+
+    const tex = new THREE.CanvasTexture(canvas);
+    return tex;
+}
+
+/**
+ * Builds RingGeometry with UV coordinates mapped along the radial axis
+ */
+function createRadialRingGeometry(innerRadius, outerRadius, thetaSegments) {
+    const geometry = new THREE.RingGeometry(innerRadius, outerRadius, thetaSegments);
+    const pos = geometry.attributes.position;
+    const uv = geometry.attributes.uv;
+
+    for (let i = 0; i < pos.count; i++) {
+        const x = pos.getX(i);
+        const y = pos.getY(i);
+        const distance = Math.sqrt(x * x + y * y);
+        const norm = (distance - innerRadius) / (outerRadius - innerRadius);
+        uv.setXY(i, Math.max(0, Math.min(1, norm)), 0.5);
+    }
+    uv.needsUpdate = true;
+    return geometry;
+}
+
+/**
+ * Creates atmospheric glowing nebula texture for background depth
+ */
+function createNebulaTexture() {
+    const canvas = document.createElement("canvas");
+    canvas.width = 512;
+    canvas.height = 512;
+    const ctx = canvas.getContext("2d");
+
+    // Center radiant nebula core
+    const grad = ctx.createRadialGradient(256, 256, 10, 256, 256, 256);
+    grad.addColorStop(0.00, "rgba(235, 165, 75, 0.35)"); // Golden core
+    grad.addColorStop(0.35, "rgba(180, 105, 45, 0.20)");
+    grad.addColorStop(0.65, "rgba(90, 45, 110, 0.10)"); // Cosmic violet
+    grad.addColorStop(1.00, "rgba(0, 0, 0, 0)");
+
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    const tex = new THREE.CanvasTexture(canvas);
+    return tex;
+}
+
+/**
+ * Handle mouse movement for subtle cosmic parallax
+ */
+function onMouseMove(e) {
+    const w = window.innerWidth || 1;
+    const h = window.innerHeight || 1;
+    mouseX = (e.clientX / w - 0.5) * 2;
+    mouseY = (e.clientY / h - 0.5) * 2;
+}
+
+/**
+ * Main animation loop with performance throttle
+ */
+function animate() {
+    if (!isRunning) return;
+    animId = requestAnimationFrame(animate);
+
+    // Smooth camera / group parallax
+    targetX += (mouseX - targetX) * 0.035;
+    targetY += (mouseY - targetY) * 0.035;
+
+    if (saturnGroup) {
+        // Slow cinematic planetary rotation
+        if (saturnMesh) {
+            saturnMesh.rotation.y += 0.0007;
+        }
+        if (ringMesh) {
+            ringMesh.rotation.z += 0.0004;
+        }
+        // Parallax tilt
+        saturnGroup.position.x = 2.45 + targetX * 0.25;
+        saturnGroup.position.y = 1.65 - targetY * 0.2;
+    }
+
+    if (starPoints) {
+        starPoints.rotation.y += 0.00015;
+    }
+
+    if (renderer && scene && camera) {
+        renderer.render(scene, camera);
+    }
+}
+
+/**
+ * Starts or mounts the 3D Saturn WebGL experience
+ */
+export function startSaturnWebGL(container) {
+    if (typeof THREE === "undefined") {
+        console.warn("[SATURN-3D] Three.js not loaded yet. Waiting...");
+        setTimeout(() => startSaturnWebGL(container), 200);
+        return;
+    }
+
+    if (!container) return;
+
+    // Clean up previous instance if exists
+    destroySaturnWebGL();
+
+    const w = container.clientWidth || window.innerWidth;
+    const h = container.clientHeight || window.innerHeight;
+
+    // 1. Scene & Camera
+    scene = new THREE.Scene();
+    camera = new THREE.PerspectiveCamera(42, w / h, 0.1, 100);
+    camera.position.set(0, 0, 8.5);
+
+    // 2. Renderer
+    renderer = new THREE.WebGLRenderer({
+        antialias: true,
+        alpha: true,
+        powerPreference: "high-performance"
+    });
+    const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+    renderer.setPixelRatio(dpr);
+    renderer.setSize(w, h);
+    renderer.setClearColor(0x000000, 0); // Transparent canvas
+
+    currentCanvas = renderer.domElement;
+    currentCanvas.id = "saturnCanvas";
+    currentCanvas.style.cssText = "position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1;";
+    container.appendChild(currentCanvas);
+
+    // 3. Lighting
+    // Warm Sun Directional Light (illuminates from top-right front)
+    const sunLight = new THREE.DirectionalLight(0xffecd2, 2.6);
+    sunLight.position.set(6, 4, 5);
+    scene.add(sunLight);
+
+    // Ambient space light (deep twilight cosmic fill)
+    const ambientLight = new THREE.AmbientLight(0x1a1525, 0.7);
+    scene.add(ambientLight);
+
+    // Atmospheric rim light (soft back scattering)
+    const rimLight = new THREE.DirectionalLight(0x9a65d0, 1.1);
+    rimLight.position.set(-5, -3, -4);
+    scene.add(rimLight);
+
+    // 4. Saturn Master Group (Positioned in Top-Right Corner)
+    saturnGroup = new THREE.Group();
+    // Responsive positioning: on smaller screens, scale and position closer to corner
+    const isMobile = w < 600;
+    if (isMobile) {
+        saturnGroup.position.set(1.4, 2.0, 0);
+        saturnGroup.scale.set(0.68, 0.68, 0.68);
+    } else {
+        saturnGroup.position.set(2.45, 1.65, 0);
+        saturnGroup.scale.set(1.0, 1.0, 1.0);
+    }
+
+    // Tilted ring axial orientation (Saturn has a 26.73° obliquity)
+    saturnGroup.rotation.x = 0.58;
+    saturnGroup.rotation.y = -0.32;
+    saturnGroup.rotation.z = -0.42;
+    scene.add(saturnGroup);
+
+    // 5. Saturn Planet Sphere
+    const planetRadius = 1.35;
+    const sphereGeo = new THREE.SphereGeometry(planetRadius, 64, 64);
+    const planetTex = createSaturnBandTexture();
+    const planetMat = new THREE.MeshStandardMaterial({
+        map: planetTex,
+        roughness: 0.82,
+        metalness: 0.08
+    });
+    saturnMesh = new THREE.Mesh(sphereGeo, planetMat);
+    saturnGroup.add(saturnMesh);
+
+    // 6. Atmospheric Glow Shell (Fresnel Rim)
+    const atmosGeo = new THREE.SphereGeometry(planetRadius * 1.025, 32, 32);
+    const atmosMat = new THREE.MeshBasicMaterial({
+        color: 0xdfb470,
+        transparent: true,
+        opacity: 0.22,
+        blending: THREE.AdditiveBlending,
+        side: THREE.BackSide
+    });
+    const atmosMesh = new THREE.Mesh(atmosGeo, atmosMat);
+    saturnGroup.add(atmosMesh);
+
+    // 7. Multi-lane Saturn Rings
+    const ringInner = 1.68;
+    const ringOuter = 3.65;
+    const ringGeo = createRadialRingGeometry(ringInner, ringOuter, 128);
+    const ringTex = createSaturnRingTexture();
+    const ringMat = new THREE.MeshStandardMaterial({
+        map: ringTex,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.94,
+        roughness: 0.65,
+        metalness: 0.15
+    });
+    ringMesh = new THREE.Mesh(ringGeo, ringMat);
+    ringMesh.rotation.x = Math.PI / 2; // Flat on equator
+    saturnGroup.add(ringMesh);
+
+    // 8. Glowing Volumetric Nebula Backdrop
+    const nebulaTex = createNebulaTexture();
+    const nebulaGeo = new THREE.PlaneGeometry(16, 12);
+    const nebulaMat = new THREE.MeshBasicMaterial({
+        map: nebulaTex,
+        transparent: true,
+        opacity: 0.75,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+    });
+    nebulaMesh = new THREE.Mesh(nebulaGeo, nebulaMat);
+    nebulaMesh.position.set(1.5, 1.0, -3.5);
+    scene.add(nebulaMesh);
+
+    // 9. Twinkling Celestial Starfield
+    const starCount = 320;
+    const starPositions = new Float32Array(starCount * 3);
+    for (let i = 0; i < starCount * 3; i += 3) {
+        starPositions[i] = (Math.random() - 0.5) * 22;
+        starPositions[i + 1] = (Math.random() - 0.5) * 16;
+        starPositions[i + 2] = -4 - Math.random() * 8;
+    }
+    const starGeo = new THREE.BufferGeometry();
+    starGeo.setAttribute("position", new THREE.BufferAttribute(starPositions, 3));
+    const starMat = new THREE.PointsMaterial({
+        color: 0xffffff,
+        size: 0.05,
+        transparent: true,
+        opacity: 0.8,
+        blending: THREE.AdditiveBlending
+    });
+    starPoints = new THREE.Points(starGeo, starMat);
+    scene.add(starPoints);
+
+    // 10. Listeners & Modern Web Guidance: Efficient Background Processing
+    window.addEventListener("mousemove", onMouseMove, { passive: true });
+    window.addEventListener("resize", handleResize, { passive: true });
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    isRunning = true;
+    animate();
+}
+
+function handleResize() {
+    if (!renderer || !camera || !currentCanvas) return;
+    const parent = currentCanvas.parentElement;
+    if (!parent) return;
+
+    const w = parent.clientWidth || window.innerWidth;
+    const h = parent.clientHeight || window.innerHeight;
+
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+    renderer.setSize(w, h);
+
+    if (saturnGroup) {
+        if (w < 600) {
+            saturnGroup.position.set(1.4, 2.0, 0);
+            saturnGroup.scale.set(0.68, 0.68, 0.68);
+        } else {
+            saturnGroup.position.set(2.45, 1.65, 0);
+            saturnGroup.scale.set(1.0, 1.0, 1.0);
+        }
+    }
+}
+
+function handleVisibilityChange() {
+    if (document.visibilityState === "hidden") {
+        pauseSaturnWebGL();
+    } else {
+        const shell = document.getElementById("appShell");
+        if (shell && shell.classList.contains("is-start-page")) {
+            resumeSaturnWebGL();
+        }
+    }
+}
+
+export function pauseSaturnWebGL() {
+    isRunning = false;
+    if (animId) {
+        cancelAnimationFrame(animId);
+        animId = null;
+    }
+}
+
+export function resumeSaturnWebGL() {
+    if (!isRunning && scene && renderer && camera) {
+        isRunning = true;
+        animate();
+    }
+}
+
+export function destroySaturnWebGL() {
+    pauseSaturnWebGL();
+
+    window.removeEventListener("mousemove", onMouseMove);
+    window.removeEventListener("resize", handleResize);
+    document.removeEventListener("visibilitychange", handleVisibilityChange);
+
+    if (currentCanvas && currentCanvas.parentElement) {
+        currentCanvas.parentElement.removeChild(currentCanvas);
+    }
+    currentCanvas = null;
+
+    if (renderer) {
+        renderer.dispose();
+        renderer = null;
+    }
+
+    scene = null;
+    camera = null;
+    saturnMesh = null;
+    ringMesh = null;
+    nebulaMesh = null;
+    starPoints = null;
+    saturnGroup = null;
+}

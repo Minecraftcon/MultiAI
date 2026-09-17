@@ -11,6 +11,7 @@
 import { renderIcons } from "../utils/icons.js";
 import { isMobileBrowser } from "../utils/dom.js";
 import { toggleModelPicker } from "./model-picker.js";
+import { onStartPageModeChange } from "./aurora-theme.js";
 
 class ChatBoxComponent {
     constructor() {
@@ -353,4 +354,8 @@ export function setStartPageMode(isStartPage) {
         shell.classList.remove("is-start-page");
         chatbox.handleInputResize();
     }
+
+    try {
+        onStartPageModeChange(isStartPage);
+    } catch (_) {}
 }

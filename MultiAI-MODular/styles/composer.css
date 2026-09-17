@@ -1347,7 +1347,7 @@ body.drag-over .composer {
 }
 
 /* ---------------------------------------------------------
-   1. SATURN THEME: Corner Half-Planet & Tilted Ring System
+   1. SATURN THEME: Photorealistic WebGL 3D Planet & Nebula
    --------------------------------------------------------- */
 .saturn-stage {
     position: absolute;
@@ -1358,200 +1358,26 @@ body.drag-over .composer {
     overflow: hidden;
 }
 
+#saturnCanvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 2;
+}
+
 /* Ambient Amber Nebula Glow behind Saturn */
 .saturn-ambient-glow {
     position: absolute;
-    top: -120px;
-    right: -100px;
-    width: clamp(480px, 65vw, 850px);
-    height: clamp(480px, 65vw, 850px);
-    background: radial-gradient(circle at 75% 25%, rgba(230, 168, 75, 0.22) 0%, rgba(185, 115, 45, 0.12) 32%, rgba(100, 60, 120, 0.06) 58%, transparent 75%);
-    filter: blur(48px);
+    top: -100px;
+    right: -80px;
+    width: clamp(420px, 60vw, 850px);
+    height: clamp(420px, 60vw, 850px);
+    background: radial-gradient(circle at 75% 25%, rgba(235, 165, 70, 0.22) 0%, rgba(185, 110, 40, 0.12) 34%, rgba(95, 50, 120, 0.05) 60%, transparent 75%);
+    filter: blur(54px);
     pointer-events: none;
-}
-
-/* Celestial Twinkling Stars */
-.celestial-stars {
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-}
-
-.star {
-    position: absolute;
-    border-radius: 50%;
-    background: #ffffff;
-    box-shadow: 0 0 6px rgba(255, 255, 255, 0.9), 0 0 14px rgba(235, 200, 140, 0.6);
-    opacity: 0.65;
-    animation: starTwinkle 4s ease-in-out infinite alternate;
-}
-
-.star-1 { top: 12%; right: 38%; width: 2.5px; height: 2.5px; animation-delay: 0.2s; }
-.star-2 { top: 22%; right: 48%; width: 2px; height: 2px; animation-delay: 1.5s; }
-.star-3 { top: 8%; right: 26%; width: 3px; height: 3px; animation-delay: 0.8s; }
-.star-4 { top: 32%; right: 28%; width: 1.5px; height: 1.5px; animation-delay: 2.2s; }
-.star-5 { top: 18%; left: 16%; width: 2px; height: 2px; animation-delay: 1.1s; }
-.star-6 { top: 28%; left: 32%; width: 2.5px; height: 2.5px; animation-delay: 2.8s; }
-.star-7 { top: 9%; left: 42%; width: 1.5px; height: 1.5px; animation-delay: 0.5s; }
-.star-8 { top: 35%; right: 58%; width: 2px; height: 2px; animation-delay: 3.2s; }
-
-@keyframes starTwinkle {
-    0% { opacity: 0.25; transform: scale(0.85); }
-    50% { opacity: 0.95; transform: scale(1.25); }
-    100% { opacity: 0.35; transform: scale(0.9); }
-}
-
-/* Saturn System Anchor in Top-Right Corner */
-.saturn-system {
-    position: absolute;
-    top: -110px;
-    right: -110px;
-    width: clamp(380px, 48vw, 680px);
-    height: clamp(380px, 48vw, 680px);
-    pointer-events: none;
-    animation: saturnSlowFloat 28s ease-in-out infinite alternate;
-    will-change: transform;
-}
-
-@keyframes saturnSlowFloat {
-    0% { transform: translate3d(0, 0, 0) rotate(0deg); }
-    100% { transform: translate3d(-10px, 12px, 0) rotate(1.2deg); }
-}
-
-/* Saturn Planet Sphere (Peeking limb) */
-.saturn-planet {
-    position: absolute;
-    top: 24%;
-    right: 24%;
-    width: 52%;
-    height: 52%;
-    border-radius: 50%;
-    overflow: hidden;
-    z-index: 2;
-    box-shadow: -14px 18px 45px rgba(0, 0, 0, 0.92), 
-                inset -6px 6px 16px rgba(255, 215, 140, 0.42),
-                0 0 35px rgba(230, 165, 70, 0.16);
-}
-
-/* Realistic Golden Ochre Atmospheric Banding */
-.saturn-bands {
-    position: absolute;
-    inset: 0;
-    border-radius: 50%;
-    background: linear-gradient(168deg,
-        #eec58e 0%,
-        #d8a86a 12%,
-        #c69252 24%,
-        #dfb77c 36%,
-        #b88040 48%,
-        #cca169 60%,
-        #9e6932 72%,
-        #c1945d 84%,
-        #8a5827 100%
-    );
-}
-
-/* 3D Spherical Lighting / Day-Night Terminator */
-.saturn-terminator {
-    position: absolute;
-    inset: 0;
-    border-radius: 50%;
-    background: radial-gradient(circle at 74% 24%, 
-        rgba(255, 245, 220, 0.35) 0%, 
-        rgba(220, 175, 105, 0.08) 28%,
-        rgba(25, 15, 10, 0.55) 58%, 
-        rgba(8, 5, 4, 0.92) 80%, 
-        #050302 100%
-    );
-}
-
-/* Atmospheric Rim Haze (Limb glow) */
-.saturn-atmosphere-rim {
-    position: absolute;
-    inset: 0;
-    border-radius: 50%;
-    box-shadow: inset 2px -2px 8px rgba(255, 235, 190, 0.4),
-                0 0 16px rgba(240, 185, 95, 0.3);
-}
-
-/* Ring Shadow cast onto planet disk */
-.saturn-ring-shadow {
-    position: absolute;
-    top: 42%;
-    left: -10%;
-    width: 120%;
-    height: 14%;
-    background: linear-gradient(180deg, rgba(5, 3, 2, 0.95) 0%, rgba(12, 8, 5, 0.75) 65%, transparent 100%);
-    transform: rotate(-16deg);
-    filter: blur(1.5px);
-}
-
-/* Saturn Rings (Multi-lane elliptical structure) */
-.saturn-ring {
-    position: absolute;
-    top: 15%;
-    right: -25%;
-    width: 150%;
-    height: 70%;
-    border-radius: 50%;
-    transform: rotate(-24deg) skewX(26deg);
-    pointer-events: none;
-}
-
-.saturn-ring-back {
-    z-index: 1; /* Renders behind planet sphere */
-}
-
-.saturn-ring-front {
-    z-index: 3; /* Renders in front of planet sphere */
-    clip-path: polygon(0 50%, 100% 50%, 100% 100%, 0 100%); /* Only the front half */
-}
-
-/* Ring Bands: A-Ring, Cassini Division, B-Ring, C-Ring */
-.ring-band {
-    position: absolute;
-    border-radius: 50%;
-    box-sizing: border-box;
-}
-
-/* Outer Ring A */
-.ring-a {
-    inset: 0;
-    border: 14px solid transparent;
-    border-top-color: rgba(225, 185, 125, 0.75);
-    border-bottom-color: rgba(225, 185, 125, 0.7);
-    border-left-color: rgba(195, 150, 95, 0.6);
-    border-right-color: rgba(195, 150, 95, 0.6);
-    filter: drop-shadow(0 0 8px rgba(240, 190, 120, 0.35));
-}
-
-/* Dark Cassini Division gap */
-.ring-cassini {
-    position: absolute;
-    inset: 14px;
-    border-radius: 50%;
-    border: 4px solid rgba(15, 10, 8, 0.88);
-}
-
-/* Bright Main Ring B */
-.ring-b {
-    inset: 18px;
-    border: 24px solid transparent;
-    border-top-color: rgba(250, 215, 155, 0.92);
-    border-bottom-color: rgba(240, 200, 135, 0.88);
-    border-left-color: rgba(215, 170, 110, 0.78);
-    border-right-color: rgba(215, 170, 110, 0.78);
-    box-shadow: 0 0 18px rgba(255, 210, 140, 0.45);
-}
-
-/* Faint Inner Crepe Ring C */
-.ring-c {
-    inset: 42px;
-    border: 12px solid transparent;
-    border-top-color: rgba(185, 140, 90, 0.35);
-    border-bottom-color: rgba(185, 140, 90, 0.3);
-    border-left-color: rgba(145, 105, 65, 0.2);
-    border-right-color: rgba(145, 105, 65, 0.2);
+    z-index: 1;
 }
 
 /* Chatbox Glow Aura: Saturn Amber & Starlight Gold */
@@ -1607,12 +1433,6 @@ body.drag-over .composer {
     background: linear-gradient(185deg, transparent 0%, rgba(121, 40, 202, 0.26) 30%, rgba(0, 245, 160, 0.22) 65%, transparent 100%);
     animation: borealWave2 22s ease-in-out infinite alternate-reverse;
     animation-delay: -5s;
-}
-
-.boreal-curtain-3 {
-    background: linear-gradient(165deg, transparent 0%, rgba(0, 217, 245, 0.24) 40%, rgba(121, 40, 202, 0.16) 70%, transparent 100%);
-    animation: borealWave1 19s ease-in-out infinite alternate;
-    animation-delay: -9s;
 }
 
 .boreal-horizon-glow {
@@ -1693,15 +1513,6 @@ body.drag-over .composer {
     animation-delay: -8s;
 }
 
-.nebula-violet {
-    top: 2%;
-    left: 35%;
-    width: clamp(300px, 42vw, 550px);
-    height: clamp(300px, 42vw, 550px);
-    background: radial-gradient(circle at center, rgba(138, 43, 226, 0.24) 0%, rgba(75, 0, 130, 0.12) 50%, transparent 75%);
-    animation-delay: -14s;
-}
-
 @keyframes nebulaDrift {
     0% { transform: scale(0.94) translate3d(0, 0, 0); }
     100% { transform: scale(1.08) translate3d(-15px, 12px, 0); }
@@ -1766,17 +1577,6 @@ body.drag-over .composer {
     box-shadow: inset -5px -5px 15px rgba(0, 0, 0, 0.95);
 }
 
-.eclipse-diamond-glint {
-    position: absolute;
-    top: 8%;
-    right: 14%;
-    width: 14px;
-    height: 14px;
-    border-radius: 50%;
-    background: #ffffff;
-    box-shadow: 0 0 20px #ffffff, 0 0 45px rgba(255, 220, 140, 0.9);
-}
-
 @keyframes coronaPulse {
     0% { transform: scale(0.96); opacity: 0.7; }
     100% { transform: scale(1.05); opacity: 0.95; }
@@ -1800,17 +1600,11 @@ body.drag-over .composer {
    RESPONSIVE ADJUSTMENTS FOR CELESTIAL STAGES
    --------------------------------------------------------- */
 @media (max-width: 600px) {
-    .saturn-system {
-        top: -85px;
-        right: -85px;
-        width: min(340px, 80vw);
-        height: min(340px, 80vw);
-    }
     .saturn-ambient-glow {
         top: -80px;
         right: -60px;
-        width: 320px;
-        height: 320px;
+        width: 300px;
+        height: 300px;
         filter: blur(36px);
     }
     .eclipse-solar-ring {

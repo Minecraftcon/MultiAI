@@ -5,9 +5,10 @@
      chatbox dock aura coordination, and persistence.
    ========================================================= */
 import { state } from "../state.js";
+import { startSaturnWebGL, pauseSaturnWebGL, resumeSaturnWebGL, destroySaturnWebGL } from "./saturn-webgl.js";
 
 export const AURORA_THEMES = {
-    saturn: "Saturn (Corner Planet & Rings)",
+    saturn: "Saturn (3D Planet, Rings & Nebula)",
     aurora: "Northern Lights (Boreal Aurora)",
     clouds: "Lunar Mist (Monochromatic Cloud)",
     nebula: "Cosmic Nebula (Cyan & Magenta)",
@@ -31,91 +32,31 @@ function getBackdropTemplate(theme) {
     switch (theme) {
         case "saturn":
             return `
-            <div class="saturn-stage" aria-hidden="true">
-                <!-- Cosmic Starlight Dust -->
-                <div class="celestial-stars">
-                    <span class="star star-1"></span>
-                    <span class="star star-2"></span>
-                    <span class="star star-3"></span>
-                    <span class="star star-4"></span>
-                    <span class="star star-5"></span>
-                    <span class="star star-6"></span>
-                    <span class="star star-7"></span>
-                    <span class="star star-8"></span>
-                </div>
-
-                <!-- Ambient Planetary Corona Glow -->
+            <div class="saturn-stage" id="saturnStage" aria-hidden="true">
                 <div class="saturn-ambient-glow"></div>
-
-                <!-- Saturn Complex (Planet Body + Tilted Multi-band Rings) -->
-                <div class="saturn-system">
-                    <!-- Back Ring Arc (passes behind planet) -->
-                    <div class="saturn-ring saturn-ring-back">
-                        <div class="ring-band ring-a"></div>
-                        <div class="ring-cassini"></div>
-                        <div class="ring-band ring-b"></div>
-                        <div class="ring-band ring-c"></div>
-                    </div>
-
-                    <!-- Planet Body (Half-sphere peeking into screen with atmospheric bands) -->
-                    <div class="saturn-planet">
-                        <div class="saturn-bands"></div>
-                        <div class="saturn-terminator"></div>
-                        <div class="saturn-atmosphere-rim"></div>
-                        <div class="saturn-ring-shadow"></div>
-                    </div>
-
-                    <!-- Front Ring Arc (passes in front of planet) -->
-                    <div class="saturn-ring saturn-ring-front">
-                        <div class="ring-band ring-a"></div>
-                        <div class="ring-cassini"></div>
-                        <div class="ring-band ring-b"></div>
-                        <div class="ring-band ring-c"></div>
-                    </div>
-                </div>
             </div>`;
 
         case "aurora":
             return `
             <div class="aurora-stage" aria-hidden="true">
-                <div class="celestial-stars">
-                    <span class="star star-1"></span>
-                    <span class="star star-3"></span>
-                    <span class="star star-5"></span>
-                    <span class="star star-7"></span>
-                </div>
                 <div class="boreal-curtain boreal-curtain-1"></div>
                 <div class="boreal-curtain boreal-curtain-2"></div>
-                <div class="boreal-curtain boreal-curtain-3"></div>
                 <div class="boreal-horizon-glow"></div>
             </div>`;
 
         case "nebula":
             return `
             <div class="nebula-stage" aria-hidden="true">
-                <div class="celestial-stars">
-                    <span class="star star-2"></span>
-                    <span class="star star-4"></span>
-                    <span class="star star-6"></span>
-                    <span class="star star-8"></span>
-                </div>
                 <div class="nebula-cloud nebula-cyan"></div>
                 <div class="nebula-cloud nebula-magenta"></div>
-                <div class="nebula-cloud nebula-violet"></div>
             </div>`;
 
         case "eclipse":
             return `
             <div class="eclipse-stage" aria-hidden="true">
-                <div class="celestial-stars">
-                    <span class="star star-1"></span>
-                    <span class="star star-4"></span>
-                    <span class="star star-7"></span>
-                </div>
                 <div class="eclipse-corona-flare"></div>
                 <div class="eclipse-solar-ring">
                     <div class="eclipse-moon-disk"></div>
-                    <div class="eclipse-diamond-glint"></div>
                 </div>
             </div>`;
 
@@ -147,6 +88,17 @@ export function setAuroraTheme(theme, save = false) {
     if (backdropEl) {
         backdropEl.innerHTML = getBackdropTemplate(target);
         backdropEl.className = `start-page-backdrop theme-${target}`;
+
+        // If Saturn 3D theme is selected, mount the WebGL experience
+        if (target === "saturn") {
+            const shell = document.getElementById("appShell");
+            if (shell && shell.classList.contains("is-start-page")) {
+                const stage = document.getElementById("saturnStage") || backdropEl;
+                startSaturnWebGL(stage);
+            }
+        } else {
+            destroySaturnWebGL();
+        }
     }
 
     try {
@@ -170,6 +122,24 @@ export function setAuroraTheme(theme, save = false) {
 }
 
 /**
+ * Lifecycle hook called when switching between Start Page mode and Chat mode
+ * Follows Modern Web Guidance: pauses 3D WebGL rendering when chatting
+ */
+export function onStartPageModeChange(isStartPage) {
+    if (currentTheme === "saturn") {
+        if (isStartPage) {
+            const backdropEl = document.getElementById("startPageBackdrop");
+            const stage = document.getElementById("saturnStage") || backdropEl;
+            if (stage) {
+                startSaturnWebGL(stage);
+            }
+        } else {
+            pauseSaturnWebGL();
+        }
+    }
+}
+
+/**
  * Initializes the aurora theme on startup from config or localStorage.
  */
 export function initAuroraTheme() {
@@ -183,3 +153,4 @@ export function initAuroraTheme() {
 
     setAuroraTheme(initialTheme, false);
 }
+
