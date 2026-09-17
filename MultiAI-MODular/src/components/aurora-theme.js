@@ -8,7 +8,7 @@ import { state } from "../state.js";
 import { startSaturnWebGL, pauseSaturnWebGL, resumeSaturnWebGL, destroySaturnWebGL } from "./saturn-webgl.js";
 
 export const AURORA_THEMES = {
-    saturn: "Saturn (3D Planet, Rings & Nebula)",
+    saturn: "Saturn (3D Rings & Nebula)",
     aurora: "Northern Lights (Boreal Aurora)",
     clouds: "Lunar Mist (Monochromatic Cloud)",
     nebula: "Cosmic Nebula (Cyan & Magenta)",
@@ -17,7 +17,7 @@ export const AURORA_THEMES = {
 };
 
 const STORAGE_KEY = "multiai_aurora_theme";
-export const DEFAULT_AURORA_THEME = "saturn";
+export const DEFAULT_AURORA_THEME = "clouds";
 
 let currentTheme = DEFAULT_AURORA_THEME;
 
