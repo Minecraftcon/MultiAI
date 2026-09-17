@@ -17,6 +17,7 @@ import { initSettingsView } from "./components/settings-view.js";
 
 import { renderIcons } from "./utils/dom.js";
 import { setStartPageMode } from "./components/chatbox.js";
+import { initUiScale } from "./components/ui-scale.js";
 
 function initChatSessions() {
     loadStoredChats();
@@ -83,6 +84,7 @@ async function initConfig() {
 // Global bootstrap with readyState guard
 async function bootstrap() {
     renderIcons();
+    initUiScale();
     initComposer();
     initGestures();
     initSidePanel();

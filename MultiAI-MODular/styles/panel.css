@@ -1,13 +1,13 @@
 /* =========================================================
    SLIDE-IN SIDE PANEL & CHAT ITEMS (DUCK.AI INSPIRED)
    ========================================================= */
-#sidePanel {
+#sidePanel,
+.side-panel {
     position: fixed;
     top: 0;
     left: 0;
-    bottom: 0;
     width: var(--panel-width);
-    height: 100dvh;
+    height: calc(100dvh / var(--ui-scale, 1));
     padding-top: env(safe-area-inset-top, 0px);
     z-index: 40;
     display: flex;

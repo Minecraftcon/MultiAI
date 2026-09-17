@@ -478,6 +478,21 @@
                     </div>
 
                     <div class="settings-card">
+                        <span class="settings-card-title">UI Scaling & Zoom</span>
+                        <div class="settings-row">
+                            <div class="settings-item-info">
+                                <span class="settings-item-title">Interface Scale</span>
+                                <span class="settings-item-desc">Scale UI size (or use Ctrl + = / Ctrl + -, Ctrl + 0 to reset)</span>
+                            </div>
+                            <div class="settings-range-container">
+                                <input type="range" id="cfgUiScale" class="settings-range" min="60" max="180" step="5" value="100">
+                                <span id="cfgUiScaleVal" class="settings-range-val">100%</span>
+                                <button id="cfgUiScaleResetBtn" type="button" class="settings-action-btn secondary" style="padding: 4px 10px; font-size: 11.5px; height: 28px;" title="Reset Zoom to 100% (Ctrl+0)">Reset</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="settings-card">
                         <span class="settings-card-title">Display Options</span>
                         <div class="settings-row">
                             <div class="settings-item-info">

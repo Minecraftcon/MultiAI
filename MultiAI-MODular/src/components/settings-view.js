@@ -7,6 +7,7 @@ import { renderIcons, isMobileDevice } from "../utils/dom.js";
 import { closePanel } from "./gestures.js";
 import { saveStoredChats } from "../services/storage.js";
 import { updateModelPickerDisplay } from "./model-picker.js";
+import { getUiScale, setUiScale, resetZoom } from "./ui-scale.js";
 
 let activeSubScreen = "general";
 let saveTimeout = null;
@@ -185,6 +186,14 @@ export function populateSettingsValues() {
 
     const compactMobile = document.getElementById("cfgCompactMobileView");
     if (compactMobile) compactMobile.checked = ui.CompactMobileView !== false;
+
+    const uiScaleSlider = document.getElementById("cfgUiScale");
+    const uiScaleVal = document.getElementById("cfgUiScaleVal");
+    if (uiScaleSlider && uiScaleVal) {
+        const cur = Math.round(getUiScale() * 100);
+        uiScaleSlider.value = cur;
+        uiScaleVal.textContent = `${cur}%`;
+    }
 
     // 6. Storage & History
     const recordHistory = document.getElementById("cfgRecordHistory");
@@ -485,6 +494,26 @@ export function initSettingsView() {
     if (showLineNumbers) {
         showLineNumbers.addEventListener("change", (e) => {
             saveSetting("UI", "ShowLineNumbers", e.target.checked);
+        });
+    }
+
+    const uiScaleSlider = document.getElementById("cfgUiScale");
+    const uiScaleVal = document.getElementById("cfgUiScaleVal");
+    const uiScaleResetBtn = document.getElementById("cfgUiScaleResetBtn");
+
+    if (uiScaleSlider && uiScaleVal) {
+        uiScaleSlider.addEventListener("input", (e) => {
+            const val = parseInt(e.target.value, 10);
+            uiScaleVal.textContent = `${val}%`;
+            setUiScale(val / 100, true);
+        });
+    }
+
+    if (uiScaleResetBtn) {
+        uiScaleResetBtn.addEventListener("click", () => {
+            resetZoom(true);
+            if (uiScaleSlider) uiScaleSlider.value = 100;
+            if (uiScaleVal) uiScaleVal.textContent = "100%";
         });
     }
 
