@@ -204,51 +204,49 @@ class ChatBoxComponent {
         const hasStaged = this.hasAttachments || 
             (this.stagedStrip && this.stagedStrip.children.length > 0 && this.stagedStrip.style.display !== "none");
 
-        let isMultiLine = false;
-        let scrollH = baseHeight;
-
-        if (hasNewline) {
-            isMultiLine = true;
-        } else if (trimmedText.length > 0) {
-            // Temporarily bypass CSS height transition to synchronously and accurately measure scrollHeight
-            const prevTransition = this.inputEl.style.transition;
-            this.inputEl.style.transition = "none";
-            this.inputEl.style.height = baseHeight + "px";
-            scrollH = this.inputEl.scrollHeight;
-            this.inputEl.style.transition = prevTransition;
-
-            // In expanded mode, padding is 4px top + 4px bottom and line-height ~22px, so 1 line scrollH is ~30px.
-            // Text wraps to multiple lines when scrollH exceeds the single-line content box (> 34px).
-            const threshold = this.root.classList.contains("composer-expanded") ? 34 : 30;
-            isMultiLine = scrollH > threshold;
-        } else {
-            isMultiLine = false;
+        // 1. Completely empty with no attachments: cleanly collapse to compact mode
+        if (!trimmedText && !hasStaged) {
+            if (!this.root.classList.contains("composer-compact")) {
+                this.root.classList.remove("composer-expanded");
+                this.root.classList.add("composer-compact");
+            }
+            if (this.inputEl.style.height !== baseHeight + "px") {
+                this.inputEl.style.height = baseHeight + "px";
+            }
+            this.inputEl.style.overflowY = "hidden";
+            return;
         }
 
+        // 2. Measure natural content height
+        this.inputEl.style.height = "auto";
+        const scrollH = this.inputEl.scrollHeight;
+
+        // In expanded mode, padding is 4px top + 4px bottom and line-height ~22px -> ~30px for single line.
+        // Threshold for multiline wrap is > 32px or explicit newline
+        const threshold = this.root.classList.contains("composer-expanded") ? 32 : 28;
+        const isMultiLine = hasNewline || (scrollH > threshold);
         const shouldExpand = isMultiLine || hasStaged;
 
         if (shouldExpand) {
             if (!this.root.classList.contains("composer-expanded")) {
                 this.root.classList.remove("composer-compact");
                 this.root.classList.add("composer-expanded");
+                // Re-read scrollHeight since padding changes when expanding
+                this.inputEl.style.height = "auto";
             }
-            const prevTransition = this.inputEl.style.transition;
-            this.inputEl.style.transition = "none";
-            this.inputEl.style.height = baseHeight + "px";
-            scrollH = this.inputEl.scrollHeight;
-            this.inputEl.style.transition = prevTransition;
-
-            const targetHeight = Math.min(Math.max(scrollH, 44), maxHeight);
-            this.inputEl.style.height = targetHeight + "px";
-            this.inputEl.style.overflowY = scrollH > maxHeight ? "auto" : "hidden";
-            // Ensure cursor/newly typed text stays in view when scrolling
-            this.inputEl.scrollTop = this.inputEl.scrollHeight;
+            const targetHeight = Math.min(Math.max(this.inputEl.scrollHeight, 44), maxHeight);
+            if (this.inputEl.style.height !== targetHeight + "px") {
+                this.inputEl.style.height = targetHeight + "px";
+            }
+            this.inputEl.style.overflowY = this.inputEl.scrollHeight > maxHeight ? "auto" : "hidden";
         } else {
             if (!this.root.classList.contains("composer-compact")) {
                 this.root.classList.remove("composer-expanded");
                 this.root.classList.add("composer-compact");
             }
-            this.inputEl.style.height = baseHeight + "px";
+            if (this.inputEl.style.height !== baseHeight + "px") {
+                this.inputEl.style.height = baseHeight + "px";
+            }
             this.inputEl.style.overflowY = "hidden";
         }
     }

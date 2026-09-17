@@ -144,7 +144,6 @@
     box-sizing: border-box;
     overflow-y: hidden;
     vertical-align: middle;
-    transition: height 0.22s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .composer-dock.composer-expanded .composer-textarea {
