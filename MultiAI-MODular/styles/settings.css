@@ -589,18 +589,22 @@
 
     .settings-layout {
         flex-direction: column;
+        width: 100%;
+        max-width: 100%;
+        overflow: hidden;
     }
 
     /* Native Android horizontal chips carousel */
     .settings-sidebar {
         width: 100%;
         height: auto;
+        flex-shrink: 0;
         flex-direction: row;
         overflow-x: auto;
         overflow-y: hidden;
         padding: 8px 12px;
         border-right: none;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
         gap: 8px;
         white-space: nowrap;
         -webkit-overflow-scrolling: touch;
@@ -609,6 +613,8 @@
         position: sticky;
         top: 0;
         z-index: 15;
+        overscroll-behavior-x: contain;
+        touch-action: pan-x;
     }
 
     .settings-sidebar::-webkit-scrollbar {
@@ -618,15 +624,16 @@
     .settings-nav-item {
         width: auto;
         flex-shrink: 0;
-        padding: 6px 13px;
+        padding: 6px 14px;
         font-size: 12.5px;
         font-weight: 500;
         border-radius: 9999px; /* Modern capsule chips */
         gap: 6px;
         background: rgba(255, 255, 255, 0.05);
-        border: 1px solid rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.08);
         color: #a1a1aa;
         scroll-snap-align: center;
+        touch-action: manipulation;
     }
 
     .settings-nav-item svg,
@@ -644,116 +651,272 @@
     }
 
     .settings-content {
-        padding: 14px 12px calc(env(safe-area-inset-bottom, 20px) + 40px) 12px;
+        flex: 1;
+        min-width: 0;
+        width: 100%;
+        max-width: 100%;
+        height: auto;
+        overflow-x: hidden;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        padding: 14px 12px calc(env(safe-area-inset-bottom, 20px) + 50px) 12px;
+        box-sizing: border-box;
+    }
+
+    .settings-subscreen {
+        width: 100%;
+        max-width: 100%;
+        box-sizing: border-box;
     }
 
     /* Compact subscreen header */
     .settings-subscreen-header {
-        margin-bottom: 14px;
-        padding-bottom: 10px;
+        margin-bottom: 12px;
+        padding-bottom: 8px;
         border-bottom: 1px solid rgba(255, 255, 255, 0.05);
     }
 
     .settings-subscreen-title {
-        font-size: 17px;
+        font-size: 16px;
+        font-weight: 600;
         margin-bottom: 0;
     }
 
     .settings-subscreen-desc {
-        display: none; /* Remove redundant paragraph text on mobile */
+        display: none; /* Remove redundant paragraph text on mobile for density */
     }
 
     /* Streamlined grouped cards */
     .settings-card {
         background: #141416;
-        border: 1px solid rgba(255, 255, 255, 0.06);
-        border-radius: 12px;
-        padding: 12px 14px;
+        border: 1px solid rgba(255, 255, 255, 0.07);
+        border-radius: 14px;
+        padding: 14px;
         margin-bottom: 12px;
+        width: 100%;
+        max-width: 100%;
+        box-sizing: border-box;
+        overflow: hidden;
         gap: 0;
     }
 
     .settings-card-title {
         font-size: 11px;
+        font-weight: 600;
         letter-spacing: 0.06em;
+        text-transform: uppercase;
         color: #71717a;
-        margin-bottom: 8px;
+        margin-bottom: 10px;
+        display: block;
     }
 
     /* Hairline dividers between items in grouped card */
     .settings-card > .settings-row:not(:last-child),
     .settings-card > .settings-row-stacked:not(:last-child) {
-        border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-        padding-bottom: 11px;
-        margin-bottom: 11px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        padding-bottom: 12px;
+        margin-bottom: 12px;
     }
 
-    /* Keep toggle switches in a single horizontal row on mobile! */
+    /* Mobile settings row: stack vertically so selects, ranges, and buttons don't fly offscreen */
     .settings-row {
         display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+        width: 100%;
+        min-width: 0;
+        box-sizing: border-box;
+    }
+
+    /* Switch rows (toggle switches) stay horizontal with the switch aligned on the right */
+    .settings-row:has(.settings-switch),
+    .settings-row:has(input[type="checkbox"]) {
         flex-direction: row;
         align-items: center;
         justify-content: space-between;
         gap: 12px;
-        min-height: 40px;
+        min-height: 44px;
+    }
+
+    .settings-row:has(.settings-switch) .settings-item-info,
+    .settings-row:has(input[type="checkbox"]) .settings-item-info {
+        flex: 1;
+        min-width: 0;
+        width: auto;
+    }
+
+    .settings-item-info {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        min-width: 0;
+        width: 100%;
     }
 
     .settings-item-title {
         font-size: 13.5px;
+        font-weight: 500;
+        color: #f4f4f5;
+        line-height: 1.35;
+        word-break: break-word;
     }
 
     .settings-item-desc {
         font-size: 12px;
         color: #71717a;
-        line-height: 1.35;
+        line-height: 1.4;
+        word-break: break-word;
     }
 
-    .settings-row-stacked {
-        gap: 6px;
-    }
-
+    /* Mobile custom select: full-width, touch-friendly, truncated cleanly with custom SVG chevron */
     .settings-select {
-        width: 100%;
-        min-width: 0;
-        height: 38px;
-        font-size: 13px;
-        background: #19191c;
-        border-radius: 8px;
+        width: 100% !important;
+        min-width: 0 !important;
+        max-width: 100% !important;
+        height: 44px;
+        font-size: 13.5px;
+        font-weight: 500;
+        color: #f4f4f5;
+        background-color: #19191c;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 10px;
+        padding: 0 38px 0 14px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        overflow: hidden;
+        -webkit-appearance: none;
+        appearance: none;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23a1a1aa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 14px center;
+        background-size: 16px;
+        box-sizing: border-box;
+        touch-action: manipulation;
     }
 
-    /* Full width inputs/controls when stacked */
-    .settings-row-stacked .settings-select {
-        margin-top: 2px;
+    .settings-select:focus {
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
     }
 
+    /* Switch styling for mobile */
+    .settings-switch {
+        flex-shrink: 0;
+        margin-left: auto;
+    }
+
+    /* Range slider row */
     .settings-range-container {
-        max-width: 100%;
+        width: 100% !important;
+        max-width: 100% !important;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-top: 4px;
+        box-sizing: border-box;
+    }
+
+    .settings-range {
+        flex: 1;
+        min-width: 0;
+        height: 28px;
+        accent-color: #3b82f6;
+        cursor: pointer;
+    }
+
+    .settings-range-val {
+        font-family: ui-monospace, SFMono-Regular, monospace;
+        font-size: 13px;
+        font-weight: 500;
+        color: #a1a1aa;
+        min-width: 38px;
+        text-align: right;
+        flex-shrink: 0;
+    }
+
+    /* Keep the UI Scale reset button compact inside range slider */
+    #cfgUiScaleResetBtn,
+    .settings-range-container .settings-action-btn {
+        width: auto !important;
+        height: 32px !important;
+        min-height: 32px !important;
+        padding: 0 12px !important;
+        font-size: 11.5px !important;
+        border-radius: 8px !important;
+        flex-shrink: 0;
+        margin: 0;
+    }
+
+    /* Action buttons (full width, 44px min touch target) */
+    .settings-action-btn:not(#cfgUiScaleResetBtn) {
+        width: 100%;
+        height: 44px;
+        min-height: 44px;
+        font-size: 13.5px;
+        font-weight: 500;
+        border-radius: 10px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        box-sizing: border-box;
+        touch-action: manipulation;
         margin-top: 4px;
     }
 
-    .settings-action-btn {
+    .settings-action-btn svg,
+    .settings-action-btn i {
+        width: 16px;
+        height: 16px;
+        flex-shrink: 0;
+    }
+
+    /* Stacked inputs (e.g. system prompt textarea) */
+    .settings-row-stacked {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
         width: 100%;
-        height: 38px;
-        font-size: 13px;
-        border-radius: 8px;
+        box-sizing: border-box;
+    }
+
+    .settings-textarea {
+        width: 100%;
+        min-height: 96px;
+        font-size: 14px;
+        box-sizing: border-box;
+        border-radius: 10px;
     }
 
     /* Diagnostics grid on small screens */
     .settings-info-grid {
         grid-template-columns: 1fr 1fr;
         gap: 8px;
+        width: 100%;
+        box-sizing: border-box;
     }
 
     .settings-info-box {
         padding: 10px 12px;
-        border-radius: 8px;
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        min-width: 0;
+        overflow: hidden;
     }
 
     .settings-info-label {
         font-size: 10.5px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
 
     .settings-info-val {
-        font-size: 12.5px;
+        font-size: 13px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
 }
