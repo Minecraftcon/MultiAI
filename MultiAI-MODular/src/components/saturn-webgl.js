@@ -233,9 +233,9 @@ export function startSaturnWebGL(container) {
     saturnGroup = new THREE.Group();
     const isMobile = w < 600;
     if (isMobile) {
-        // Mobile: rings anchored on left, sweeping across lower-mid screen
-        saturnGroup.position.set(-2.8, -0.2, -4.0);
-        saturnGroup.scale.set(0.70, 0.70, 0.70);
+        // Mobile: rings anchored on left of phone screen, sweeping across view
+        saturnGroup.position.set(-1.3, 0.0, -3.2);
+        saturnGroup.scale.set(0.60, 0.60, 0.60);
     } else {
         // Desktop: rings pinned to left, sweeping across background below text
         saturnGroup.position.set(-4.8, -0.2, -4.0);
@@ -279,13 +279,15 @@ export function startSaturnWebGL(container) {
     nebulaMesh.position.set(-4.5, 0.4, -6.0);
     scene.add(nebulaMesh);
 
-    // 9. Twinkling Celestial Starfield
+    // 9. Twinkling Celestial Starfield (responsive viewport spread)
     const starCount = 320;
     const starPositions = new Float32Array(starCount * 3);
+    const spreadX = isMobile ? 8 : 22;
+    const spreadY = isMobile ? 18 : 16;
     for (let i = 0; i < starCount * 3; i += 3) {
-        starPositions[i] = (Math.random() - 0.5) * 22;
-        starPositions[i + 1] = (Math.random() - 0.5) * 16;
-        starPositions[i + 2] = -4 - Math.random() * 8;
+        starPositions[i] = (Math.random() - 0.5) * spreadX;
+        starPositions[i + 1] = (Math.random() - 0.5) * spreadY;
+        starPositions[i + 2] = -3 - Math.random() * 8;
     }
     const starGeo = new THREE.BufferGeometry();
     starGeo.setAttribute("position", new THREE.BufferAttribute(starPositions, 3));
@@ -321,8 +323,8 @@ function handleResize() {
 
     if (saturnGroup) {
         if (w < 600) {
-            saturnGroup.position.set(-2.8, -0.2, -4.0);
-            saturnGroup.scale.set(0.70, 0.70, 0.70);
+            saturnGroup.position.set(-1.3, 0.0, -3.2);
+            saturnGroup.scale.set(0.60, 0.60, 0.60);
         } else {
             saturnGroup.position.set(-4.8, -0.2, -4.0);
             saturnGroup.scale.set(1.0, 1.0, 1.0);
