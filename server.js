@@ -409,16 +409,20 @@ function getMimeType(ext) {
         ".svg": "image/svg+xml",
         ".bmp": "image/bmp",
         ".ico": "image/x-icon",
+        ".avif": "image/avif",
+        ".tif": "image/tiff",
+        ".tiff": "image/tiff",
         ".pdf": "application/pdf",
         ".json": "application/json",
         ".txt": "text/plain",
         ".md": "text/markdown",
         ".js": "text/javascript",
+        ".mjs": "text/javascript",
         ".ts": "text/typescript",
         ".html": "text/html",
         ".css": "text/css"
     };
-    return map[ext.toLowerCase()] || "application/octet-stream";
+    return map[(ext || "").toLowerCase()] || "application/octet-stream";
 }
 
 function resolveSafePath(inputPath) {
@@ -756,6 +760,101 @@ const server = http.createServer(async (req, res) => {
             return res.end();
         }
         return sendJSON(res, 200, getSystemInfo());
+    }
+
+    // -------------------------------------------------------------
+    // Local Media Bridge (/api/media?path=...)
+    // Safely stream local Linux images/files to the browser
+    // -------------------------------------------------------------
+    if ((req.method === "GET" || req.method === "HEAD") && req.url.startsWith("/api/media")) {
+        try {
+            const parsedUrl = new URL(req.url, "http://localhost");
+            let rawPath = parsedUrl.searchParams.get("path") || "";
+            if (!rawPath) {
+                res.writeHead(400, { "Content-Type": "text/plain" });
+                return res.end("Path parameter is required");
+            }
+
+            if (rawPath.includes("%")) {
+                try {
+                    rawPath = decodeURIComponent(rawPath);
+                } catch (e) {}
+            }
+
+            // Handle file:// URI scheme
+            if (rawPath.startsWith("file://")) {
+                try {
+                    rawPath = url.fileURLToPath(rawPath);
+                } catch {
+                    rawPath = rawPath.replace(/^file:\/\//, "");
+                }
+            }
+
+            // Handle home directory ~
+            if (rawPath.startsWith("~/") || rawPath === "~") {
+                rawPath = path.join(os.homedir(), rawPath.slice(1));
+            }
+
+            // Candidate search paths:
+            const candidates = [];
+            if (path.isAbsolute(rawPath)) {
+                candidates.push(path.normalize(rawPath));
+                // Also check if relative to project root in case user passed /assets/ or /generated_images/
+                candidates.push(path.join(process.cwd(), rawPath.replace(/^\/+/, "")));
+                candidates.push(path.join(process.cwd(), "MultiAI-MODular", rawPath.replace(/^\/+/, "")));
+            } else {
+                candidates.push(path.resolve(process.cwd(), rawPath));
+                candidates.push(path.resolve(process.cwd(), "MultiAI-MODular", rawPath));
+                candidates.push(path.resolve(process.cwd(), "generated_images", rawPath));
+                candidates.push(path.resolve(os.homedir(), rawPath));
+            }
+
+            let targetPath = null;
+            for (const cand of candidates) {
+                try {
+                    if (fs.existsSync(cand) && !fs.statSync(cand).isDirectory()) {
+                        targetPath = cand;
+                        break;
+                    }
+                } catch (e) {}
+            }
+
+            if (!targetPath) {
+                res.writeHead(404, { "Content-Type": "text/plain" });
+                return res.end(`Image not found: ${path.basename(rawPath)}`);
+            }
+
+            const stat = fs.statSync(targetPath);
+            const ext = path.extname(targetPath).toLowerCase();
+            let mimeType = getMimeType(ext);
+            if (mimeType === "application/octet-stream") {
+                mimeType = "image/png";
+            }
+
+            res.writeHead(200, {
+                "Content-Type": mimeType,
+                "Content-Length": stat.size,
+                "Accept-Ranges": "bytes",
+                "Cache-Control": "public, max-age=3600"
+            });
+
+            if (req.method === "HEAD") {
+                return res.end();
+            }
+
+            const stream = fs.createReadStream(targetPath);
+            stream.on("error", (err) => {
+                if (!res.headersSent) {
+                    res.writeHead(500, { "Content-Type": "text/plain" });
+                }
+                res.end("Error streaming file: " + err.message);
+            });
+            stream.pipe(res);
+            return;
+        } catch (err) {
+            res.writeHead(500, { "Content-Type": "text/plain" });
+            return res.end("Server error: " + err.message);
+        }
     }
 
     // -------------------------------------------------------------
@@ -1125,19 +1224,8 @@ const server = http.createServer(async (req, res) => {
                 res.writeHead(404);
                 return res.end("Not found");
             }
-            const ext = filePath.split(".").pop().toLowerCase();
-            const mimeTypes = {
-                html: "text/html",
-                js: "text/javascript",
-                mjs: "text/javascript",
-                css: "text/css",
-                json: "application/json",
-                svg: "image/svg+xml",
-                png: "image/png",
-                jpg: "image/jpeg",
-                ico: "image/x-icon"
-            };
-            const type = mimeTypes[ext] || "application/octet-stream";
+            const ext = path.extname(filePath).toLowerCase();
+            const type = getMimeType(ext);
             res.writeHead(200, { 
                 "Content-Type": type,
                 "Content-Length": Buffer.byteLength(data),

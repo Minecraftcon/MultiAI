@@ -126,7 +126,16 @@ if (markedRenderer) {
             cleanAlt = href.text || "";
             cleanTitle = href.title || "";
         }
-        const safeHref = escapeHTML(cleanHref || "");
+
+        let resolvedHref = cleanHref || "";
+        if (resolvedHref) {
+            const trimmed = resolvedHref.trim();
+            if (!/^(https?:|data:|blob:|\/api\/media[/?])/i.test(trimmed)) {
+                resolvedHref = `/api/media?path=${encodeURIComponent(trimmed)}`;
+            }
+        }
+
+        const safeHref = escapeHTML(resolvedHref);
         const safeAlt = escapeHTML(cleanAlt || "Image");
         const safeTitle = escapeHTML(cleanTitle || "");
 
