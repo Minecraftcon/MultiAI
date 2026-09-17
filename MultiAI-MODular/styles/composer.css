@@ -906,6 +906,8 @@ body.drag-over .composer {
     z-index: 40;
     gap: 16px;
     box-sizing: border-box;
+    max-width: 100vw;
+    overflow-x: clip;
 }
 
 #appShell.is-start-page .start-page-hero {
@@ -1260,19 +1262,59 @@ body.drag-over .composer {
 @media (max-width: 600px) {
     #appShell.is-start-page #inputArea {
         padding: 16px 14px 40px;
+        width: 100%;
+        max-width: 100vw;
+        box-sizing: border-box;
     }
     #appShell.is-start-page .composer-dock {
         width: 100%;
+        max-width: 100%;
         min-height: 96px;
         padding: 14px;
+        margin: 0 auto;
+        box-sizing: border-box;
     }
+    /* Mobile-optimized single-pass radial mist aura - zero tile clipping, zero horizontal bleed */
     #appShell.is-start-page .start-page-glow-aura {
-        inset: -22px -20px -26px -20px;
-        filter: blur(36px) saturate(160%);
-        -webkit-filter: blur(36px) saturate(160%);
+        inset: -6px -4px -10px -4px;
+        max-width: calc(100% + 8px);
+        margin: 0 auto;
+        border-radius: 28px;
+        filter: blur(16px);
+        -webkit-filter: blur(16px);
+        background: radial-gradient(ellipse at center, rgba(255, 255, 255, 0.26) 0%, rgba(225, 230, 242, 0.14) 42%, rgba(180, 185, 205, 0.04) 68%, transparent 80%);
+        box-shadow: 0 0 18px rgba(255, 255, 255, 0.10), 0 0 34px rgba(255, 255, 255, 0.05);
+        animation: mobileAuraPulse 6s ease-in-out infinite alternate;
+        will-change: opacity, transform;
+        opacity: 0.85;
+    }
+    #appShell.is-start-page .composer-dock:focus-within .start-page-glow-aura {
+        opacity: 1;
+        transform: scale(1.02);
+        filter: blur(18px);
+        -webkit-filter: blur(18px);
+        box-shadow: 0 0 24px rgba(255, 255, 255, 0.16), 0 0 44px rgba(255, 255, 255, 0.08);
+    }
+    /* Hide heavy multi-layer 3D-transformed blurred DOM nodes on mobile GPUs */
+    #appShell.is-start-page .glow-cloud,
+    #appShell.is-start-page .glow-cloud-shimmer {
+        display: none !important;
     }
     #appShell.is-start-page .start-page-footer {
         width: 100%;
+        max-width: 100%;
+        box-sizing: border-box;
+    }
+}
+
+@keyframes mobileAuraPulse {
+    0% {
+        opacity: 0.72;
+        transform: scale(0.99);
+    }
+    100% {
+        opacity: 0.95;
+        transform: scale(1.015);
     }
 }
 

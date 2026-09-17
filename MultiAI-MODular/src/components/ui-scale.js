@@ -74,12 +74,22 @@ export function showScaleHud(scale) {
     }, 1200);
 }
 
+export function isMobileDevice() {
+    return window.matchMedia("(max-width: 600px), ((hover: none) and (pointer: coarse))").matches;
+}
+
 export function setUiScale(scale, showHud = true) {
     const clamped = Math.max(MIN_SCALE, Math.min(MAX_SCALE, Math.round(scale * 100) / 100));
     currentScale = clamped;
 
-    document.documentElement.style.setProperty("--ui-scale", currentScale);
-    document.documentElement.style.zoom = currentScale;
+    if (isMobileDevice()) {
+        // Never apply CSS zoom on mobile/Android - prevents coordinate drift & viewport divergence
+        document.documentElement.style.setProperty("--ui-scale", "1");
+        document.documentElement.style.zoom = "";
+    } else {
+        document.documentElement.style.setProperty("--ui-scale", currentScale);
+        document.documentElement.style.zoom = currentScale;
+    }
 
     try {
         localStorage.setItem(STORAGE_KEY, currentScale.toFixed(2));
@@ -91,7 +101,7 @@ export function setUiScale(scale, showHud = true) {
     if (slider) slider.value = Math.round(currentScale * 100);
     if (val) val.textContent = `${Math.round(currentScale * 100)}%`;
 
-    if (showHud) {
+    if (showHud && !isMobileDevice()) {
         showScaleHud(currentScale);
     }
 
@@ -99,19 +109,22 @@ export function setUiScale(scale, showHud = true) {
 }
 
 export function zoomIn(showHud = true) {
+    if (isMobileDevice()) return 1;
     return setUiScale(currentScale + SCALE_STEP, showHud);
 }
 
 export function zoomOut(showHud = true) {
+    if (isMobileDevice()) return 1;
     return setUiScale(currentScale - SCALE_STEP, showHud);
 }
 
 export function resetZoom(showHud = true) {
+    if (isMobileDevice()) return 1;
     return setUiScale(DEFAULT_SCALE, showHud);
 }
 
 export function initUiScale() {
-    // 1. Restore saved scale preference
+    // 1. Restore saved scale preference on desktop only
     try {
         const saved = localStorage.getItem(STORAGE_KEY);
         if (saved) {
@@ -121,6 +134,23 @@ export function initUiScale() {
             }
         }
     } catch (e) {}
+
+    // 2. Clear any lingering document zoom if running on mobile
+    if (isMobileDevice()) {
+        document.documentElement.style.setProperty("--ui-scale", "1");
+        document.documentElement.style.zoom = "";
+    }
+
+    // 3. React to viewport size / orientation changes
+    window.matchMedia("(max-width: 600px)").addEventListener("change", (e) => {
+        if (e.matches) {
+            document.documentElement.style.setProperty("--ui-scale", "1");
+            document.documentElement.style.zoom = "";
+        } else {
+            document.documentElement.style.setProperty("--ui-scale", currentScale);
+            document.documentElement.style.zoom = currentScale;
+        }
+    });
 
     // 2. Global Keyboard Shortcuts: Ctrl/Cmd + '=', '-', '0'
     document.addEventListener("keydown", (e) => {

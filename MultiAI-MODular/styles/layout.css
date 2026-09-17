@@ -3,10 +3,12 @@
    ========================================================= */
 #appShell {
     width: 100%;
+    max-width: 100vw;
     height: calc(100dvh / var(--ui-scale, 1));
     display: flex;
     flex-direction: column;
     position: relative;
+    overflow-x: hidden;
     transform: translateX(0px);
     will-change: transform;
     background: #0f0f0f;

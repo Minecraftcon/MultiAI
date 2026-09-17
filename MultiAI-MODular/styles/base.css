@@ -6,8 +6,10 @@
     -webkit-tap-highlight-color: transparent;
 }
 
-html {
-    zoom: var(--ui-scale, 1);
+@media (min-width: 601px) and (pointer: fine) {
+    html {
+        zoom: var(--ui-scale, 1);
+    }
 }
 
 html, body {
