@@ -161,9 +161,9 @@ function animate() {
     if (!isRunning) return;
     animId = requestAnimationFrame(animate);
 
-    // Majestic slow axial rotation of planetary cloud bands
-    if (saturnMesh) {
-        saturnMesh.rotation.y += 0.0002;
+    // Majestic slow axial drift of the ring structure
+    if (ringMesh) {
+        ringMesh.rotation.z += 0.00012;
     }
 
     if (starPoints) {
@@ -229,59 +229,35 @@ export function startSaturnWebGL(container) {
     rimLight.position.set(-6, -2, -4);
     scene.add(rimLight);
 
-    // 4. Saturn Master Group - DEEP IN SPACE, PINNED TO LEFT & STATIONARY
+    // 4. Saturn Rings Master Group - DEEP IN SPACE, PINNED TO LEFT & STATIONARY
     saturnGroup = new THREE.Group();
     const isMobile = w < 600;
     if (isMobile) {
-        // Mobile: pushed deep back in space on upper-left
-        saturnGroup.position.set(-2.8, 0.6, -4.0);
+        // Mobile: rings anchored on left, sweeping across lower-mid screen
+        saturnGroup.position.set(-2.8, -0.2, -4.0);
         saturnGroup.scale.set(0.70, 0.70, 0.70);
     } else {
-        // Desktop: elegant Saturn sitting deep back on the left, clear of text
-        saturnGroup.position.set(-4.5, 0.4, -4.0);
+        // Desktop: rings pinned to left, sweeping across background below text
+        saturnGroup.position.set(-4.8, -0.2, -4.0);
         saturnGroup.scale.set(1.0, 1.0, 1.0);
     }
 
-    // Majestic cosmic tilt
-    saturnGroup.rotation.x = 0.52;
-    saturnGroup.rotation.y = 0.32;
-    saturnGroup.rotation.z = 0.16;
+    // Majestic cosmic tilt: rings sweep diagonally, framing the view cleanly
+    saturnGroup.rotation.x = 0.50;
+    saturnGroup.rotation.y = 0.30;
+    saturnGroup.rotation.z = 0.15;
     scene.add(saturnGroup);
 
-    // 5. Smaller Saturn Planet Sphere (deep in background)
-    const planetRadius = 1.8;
-    const sphereGeo = new THREE.SphereGeometry(planetRadius, 64, 64);
-    const planetTex = createSaturnBandTexture();
-    const planetMat = new THREE.MeshStandardMaterial({
-        map: planetTex,
-        roughness: 0.82,
-        metalness: 0.08
-    });
-    saturnMesh = new THREE.Mesh(sphereGeo, planetMat);
-    saturnGroup.add(saturnMesh);
-
-    // 6. Atmospheric Glow Shell (Fresnel Rim)
-    const atmosGeo = new THREE.SphereGeometry(planetRadius * 1.025, 48, 48);
-    const atmosMat = new THREE.MeshBasicMaterial({
-        color: 0xdfb470,
-        transparent: true,
-        opacity: 0.28,
-        blending: THREE.AdditiveBlending,
-        side: THREE.BackSide
-    });
-    const atmosMesh = new THREE.Mesh(atmosGeo, atmosMat);
-    saturnGroup.add(atmosMesh);
-
-    // 7. Expansive Multi-lane Saturn Rings (proportionately large wingspan, elegant)
-    const ringInner = 2.2;
-    const ringOuter = 8.5;
+    // 5. Expansive Multi-lane Saturn Rings (ONLY rings visible, planet hidden)
+    const ringInner = 2.0;
+    const ringOuter = 9.2;
     const ringGeo = createRadialRingGeometry(ringInner, ringOuter, 180);
     const ringTex = createSaturnRingTexture();
     const ringMat = new THREE.MeshStandardMaterial({
         map: ringTex,
         side: THREE.DoubleSide,
         transparent: true,
-        opacity: 0.95,
+        opacity: 0.92,
         roughness: 0.55,
         metalness: 0.14
     });
@@ -345,10 +321,10 @@ function handleResize() {
 
     if (saturnGroup) {
         if (w < 600) {
-            saturnGroup.position.set(-2.8, 0.6, -4.0);
+            saturnGroup.position.set(-2.8, -0.2, -4.0);
             saturnGroup.scale.set(0.70, 0.70, 0.70);
         } else {
-            saturnGroup.position.set(-4.5, 0.4, -4.0);
+            saturnGroup.position.set(-4.8, -0.2, -4.0);
             saturnGroup.scale.set(1.0, 1.0, 1.0);
         }
     }

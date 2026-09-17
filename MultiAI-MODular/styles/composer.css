@@ -929,6 +929,9 @@ body.drag-over .composer {
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     user-select: none;
+    filter: drop-shadow(0 2px 14px rgba(0, 0, 0, 0.95)) drop-shadow(0 0 28px rgba(0, 0, 0, 0.8));
+    position: relative;
+    z-index: 10;
 }
 
 #appShell.is-start-page .composer-dock {
