@@ -421,18 +421,34 @@ function getMimeType(ext) {
         ".ts": "text/typescript",
         ".html": "text/html",
         ".css": "text/css",
+        ".avif": "image/avif",
+        ".tiff": "image/tiff",
+        ".tif": "image/tiff",
         ".mp4": "video/mp4",
         ".webm": "video/webm",
         ".ogv": "video/ogg",
+        ".ogg": "video/ogg",
         ".mov": "video/quicktime",
         ".m4v": "video/x-m4v",
         ".mkv": "video/x-matroska",
+        ".avi": "video/x-msvideo",
+        ".mpg": "video/mpeg",
+        ".mpeg": "video/mpeg",
+        ".wmv": "video/x-ms-wmv",
+        ".flv": "video/x-flv",
+        ".3gp": "video/3gpp",
+        ".3gpp": "video/3gpp",
+        ".ts": "video/mp2t",
+        ".m2ts": "video/mp2t",
         ".mp3": "audio/mpeg",
         ".wav": "audio/wav",
-        ".ogg": "audio/ogg",
+        ".oga": "audio/ogg",
         ".m4a": "audio/mp4",
         ".aac": "audio/aac",
-        ".flac": "audio/flac"
+        ".flac": "audio/flac",
+        ".wma": "audio/x-ms-wma",
+        ".opus": "audio/opus",
+        ".weba": "audio/webm"
     };
     return map[(ext || "").toLowerCase()] || "application/octet-stream";
 }
@@ -793,6 +809,9 @@ const server = http.createServer(async (req, res) => {
                 } catch (e) {}
             }
 
+            // Clean leading/trailing quotes, backticks, angle brackets, and whitespace
+            rawPath = rawPath.trim().replace(/^["'`<]+|["'`>]+$/g, "").trim();
+
             // Handle file:// URI scheme
             if (rawPath.startsWith("file://")) {
                 try {
@@ -811,7 +830,6 @@ const server = http.createServer(async (req, res) => {
             const candidates = [];
             if (path.isAbsolute(rawPath)) {
                 candidates.push(path.normalize(rawPath));
-                // Also check if relative to project root in case user passed /assets/ or /generated_images/
                 candidates.push(path.join(process.cwd(), rawPath.replace(/^\/+/, "")));
                 candidates.push(path.join(process.cwd(), "MultiAI-MODular", rawPath.replace(/^\/+/, "")));
             } else {
@@ -819,6 +837,10 @@ const server = http.createServer(async (req, res) => {
                 candidates.push(path.resolve(process.cwd(), "MultiAI-MODular", rawPath));
                 candidates.push(path.resolve(process.cwd(), "generated_images", rawPath));
                 candidates.push(path.resolve(os.homedir(), rawPath));
+                candidates.push(path.resolve(os.homedir(), "Videos", rawPath));
+                candidates.push(path.resolve(os.homedir(), "Pictures", rawPath));
+                candidates.push(path.resolve(os.homedir(), "Downloads", rawPath));
+                candidates.push(path.resolve(os.homedir(), "Documents", rawPath));
             }
 
             let targetPath = null;
@@ -828,22 +850,35 @@ const server = http.createServer(async (req, res) => {
                         targetPath = cand;
                         break;
                     }
+                    // Case-insensitive fallback in same directory
+                    const dir = path.dirname(cand);
+                    const base = path.basename(cand).toLowerCase();
+                    if (fs.existsSync(dir) && fs.statSync(dir).isDirectory()) {
+                        const files = fs.readdirSync(dir);
+                        const match = files.find(f => f.toLowerCase() === base);
+                        if (match) {
+                            const found = path.join(dir, match);
+                            if (fs.existsSync(found) && !fs.statSync(found).isDirectory()) {
+                                targetPath = found;
+                                break;
+                            }
+                        }
+                    }
                 } catch (e) {}
             }
 
             if (!targetPath) {
-                res.writeHead(404, { "Content-Type": "text/plain" });
-                return res.end(`Image not found: ${path.basename(rawPath)}`);
+                console.warn(`[MEDIA 404] File not found: ${rawPath}`);
+                res.writeHead(404, { 
+                    "Content-Type": "text/plain",
+                    "Access-Control-Allow-Origin": "*"
+                });
+                return res.end(`Media not found: ${path.basename(rawPath)}`);
             }
 
             const stat = fs.statSync(targetPath);
             const ext = path.extname(targetPath).toLowerCase();
             let mimeType = getMimeType(ext);
-            if (mimeType === "application/octet-stream") {
-                if (ext === ".mp4" || ext === ".m4v") mimeType = "video/mp4";
-                else if (ext === ".webm") mimeType = "video/webm";
-                else mimeType = "image/png";
-            }
 
             // Support HTTP Range requests (crucial for video/audio seeking and buffering)
             const range = req.headers.range;
@@ -854,7 +889,8 @@ const server = http.createServer(async (req, res) => {
 
                 if (start >= stat.size || end >= stat.size || start > end) {
                     res.writeHead(416, {
-                        "Content-Range": `bytes */${stat.size}`
+                        "Content-Range": `bytes */${stat.size}`,
+                        "Access-Control-Allow-Origin": "*"
                     });
                     return res.end();
                 }
@@ -865,6 +901,8 @@ const server = http.createServer(async (req, res) => {
                     "Accept-Ranges": "bytes",
                     "Content-Length": chunksize,
                     "Content-Type": mimeType,
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Headers": "Range, Content-Type",
                     "Cache-Control": "public, max-age=3600"
                 });
 
@@ -875,7 +913,7 @@ const server = http.createServer(async (req, res) => {
                 const stream = fs.createReadStream(targetPath, { start, end });
                 stream.on("error", (err) => {
                     if (!res.headersSent) {
-                        res.writeHead(500, { "Content-Type": "text/plain" });
+                        res.writeHead(500, { "Content-Type": "text/plain", "Access-Control-Allow-Origin": "*" });
                     }
                     res.end("Error streaming media: " + err.message);
                 });
@@ -887,6 +925,8 @@ const server = http.createServer(async (req, res) => {
                 "Content-Type": mimeType,
                 "Content-Length": stat.size,
                 "Accept-Ranges": "bytes",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Headers": "Range, Content-Type",
                 "Cache-Control": "public, max-age=3600"
             });
 

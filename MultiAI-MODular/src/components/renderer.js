@@ -117,8 +117,13 @@ if (markedRenderer) {
         `;
     };
 
-const VIDEO_EXTENSIONS = new Set([".mp4", ".webm", ".ogg", ".ogv", ".mov", ".m4v", ".mkv"]);
-const AUDIO_EXTENSIONS = new Set([".mp3", ".wav", ".m4a", ".aac", ".flac", ".oga"]);
+const VIDEO_EXTENSIONS = new Set([
+    ".mp4", ".webm", ".ogg", ".ogv", ".mov", ".m4v", ".mkv",
+    ".avi", ".mpg", ".mpeg", ".wmv", ".flv", ".3gp", ".3gpp", ".ts", ".m2ts"
+]);
+const AUDIO_EXTENSIONS = new Set([
+    ".mp3", ".wav", ".m4a", ".aac", ".flac", ".oga", ".opus", ".weba", ".wma"
+]);
 
     markedRenderer.image = function(href, title, text) {
         let cleanHref = href;
@@ -128,6 +133,16 @@ const AUDIO_EXTENSIONS = new Set([".mp3", ".wav", ".m4a", ".aac", ".flac", ".oga
             cleanHref = href.href;
             cleanAlt = href.text || "";
             cleanTitle = href.title || "";
+        }
+
+        if (typeof cleanHref === "string") {
+            cleanHref = cleanHref.trim().replace(/^["'`<]+|["'`>]+$/g, "").trim();
+        }
+        if (typeof cleanAlt === "string") {
+            cleanAlt = cleanAlt.trim().replace(/^["'`]+|["'`]+$/g, "").trim();
+        }
+        if (typeof cleanTitle === "string") {
+            cleanTitle = cleanTitle.trim().replace(/^["'`]+|["'`]+$/g, "").trim();
         }
 
         let resolvedHref = cleanHref || "";
@@ -142,7 +157,7 @@ const AUDIO_EXTENSIONS = new Set([".mp3", ".wav", ".m4a", ".aac", ".flac", ".oga
         const safeAlt = escapeHTML(cleanAlt || "");
         const safeTitle = escapeHTML(cleanTitle || "");
 
-        const urlClean = (cleanHref || "").split("?")[0].split("#")[0];
+        const urlClean = (cleanHref || "").split("?")[0].split("#")[0].replace(/^["'`<]+|["'`>]+$/g, "");
         const ext = ("." + urlClean.split(".").pop()).toLowerCase();
 
         if (VIDEO_EXTENSIONS.has(ext)) {
@@ -435,13 +450,44 @@ function restoreMathTokens(html, mathBlocks) {
     return res;
 }
 
+function normalizeMarkdownMediaSyntax(content) {
+    if (!content) return "";
+    return content.replace(/!\[(.*?)\]\((.*?)\)/g, (match, alt, target) => {
+        let trimmedTarget = (target || "").trim();
+        if (!trimmedTarget) return match;
+
+        // If already angle bracket enclosed, e.g. <...>, leave as is
+        if (/^<.*>$/.test(trimmedTarget)) {
+            return match;
+        }
+
+        let titlePart = "";
+        let urlPart = trimmedTarget;
+
+        const titleMatch = trimmedTarget.match(/\s+("[^"]*"|'[^']*')$/);
+        if (titleMatch) {
+            titlePart = " " + titleMatch[1];
+            urlPart = trimmedTarget.slice(0, titleMatch.index).trim();
+        }
+
+        urlPart = urlPart.replace(/^["'`]+|["'`]+$/g, "").trim();
+
+        if (urlPart.includes(" ")) {
+            urlPart = `<${urlPart}>`;
+        }
+
+        return `![${alt}](${urlPart}${titlePart})`;
+    });
+}
+
 export function parseMarkdown(text) {
     if (!text) return "";
 
     const { thoughtHtml, content } = extractThoughtAndContent(text);
     let parsedContent = "";
     if (content) {
-        const { text: processedText, mathBlocks } = processMathInText(content);
+        const normalizedContent = normalizeMarkdownMediaSyntax(content);
+        const { text: processedText, mathBlocks } = processMathInText(normalizedContent);
         if (typeof marked !== "undefined" && typeof marked.parse === "function") {
             try {
                 parsedContent = marked.parse(processedText);
@@ -455,7 +501,7 @@ export function parseMarkdown(text) {
 
         parsedContent = parsedContent.replace(/<(video|audio|source|img)\b([^>]*?)>/gi, (match, tag, attrs) => {
             let updatedAttrs = attrs.replace(/\b(src|poster)\s*=\s*(["'])(.*?)\2/gi, (attrMatch, attrName, quote, urlVal) => {
-                const trimmed = (urlVal || "").trim();
+                let trimmed = (urlVal || "").trim().replace(/^["'`<]+|["'`>]+$/g, "").trim();
                 if (trimmed && !/^(https?:|data:|blob:|\/api\/media[/?]|#)/i.test(trimmed)) {
                     return `${attrName}=${quote}/api/media?path=${encodeURIComponent(trimmed)}${quote}`;
                 }
@@ -487,7 +533,7 @@ export function parseMarkdown(text) {
                 "math", "semantics", "mrow", "annotation", "mtext", "mspace",
                 "mo", "mi", "mn", "msub", "msup", "msubsup", "mfrac", "mroot",
                 "msqrt", "mtable", "mtr", "mtd", "munder", "mover", "munderover",
-                "video", "audio", "source", "track"
+                "video", "audio", "source", "track", "a"
             ],
             ADD_ATTR: [
                 "target", "rel", "class", "data-code", "data-chart", 
@@ -495,15 +541,40 @@ export function parseMarkdown(text) {
                 "open", "viewBox", "stroke", "stroke-width", "fill",
                 "stroke-linecap", "stroke-linejoin", "d", "data-duration",
                 "xmlns", "display", "mathvariant", "columnalign", "rowspacing", "columnspacing",
-                "controls", "playsinline", "preload", "autoplay", "muted", "loop", "poster", "width", "height", "src", "type"
+                "controls", "playsinline", "preload", "autoplay", "muted", "loop", "poster", "width", "height", "src", "type", "href", "download"
             ]
         });
     }
     return combined;
 }
 
+export function bindAIVideoFrames(container) {
+    if (!container) return;
+    const videoFrames = container.querySelectorAll(".ai-video-frame");
+    videoFrames.forEach(frame => {
+        if (frame.dataset.bound) return;
+        frame.dataset.bound = "true";
+        const video = frame.querySelector(".ai-video-el");
+        if (!video) return;
+
+        video.addEventListener("error", () => {
+            const src = video.getAttribute("src") || video.currentSrc || "";
+            if (!frame.querySelector(".ai-media-error-notice")) {
+                const notice = document.createElement("div");
+                notice.className = "ai-media-error-notice";
+                notice.innerHTML = `
+                    <span class="ai-media-error-text">Browser could not decode video stream.</span>
+                    ${src ? `<a class="ai-media-download-link" href="${src}" target="_blank" download>Direct file link</a>` : ""}
+                `;
+                frame.appendChild(notice);
+            }
+        });
+    });
+}
+
 export function bindAIImageCards(container, immediate = false) {
     if (!container) return;
+    bindAIVideoFrames(container);
     const frames = container.querySelectorAll(".ai-img-frame");
     frames.forEach(frame => {
         if (frame.dataset.state === "ready" || frame.dataset.state === "error") return;
@@ -528,18 +599,12 @@ export function bindAIImageCards(container, immediate = false) {
         };
 
         if (img) {
-            if (img.complete) {
-                if (img.naturalWidth > 0) {
-                    setReady();
-                    return;
-                } else if (img.src) {
-                    setError();
-                    return;
-                }
-            } else {
-                img.addEventListener("load", setReady, { once: true });
-                img.addEventListener("error", setError, { once: true });
+            if (img.complete && img.naturalWidth > 0) {
+                setReady();
+                return;
             }
+            img.addEventListener("load", setReady, { once: true });
+            img.addEventListener("error", setError, { once: true });
         }
 
         if (immediate) {
