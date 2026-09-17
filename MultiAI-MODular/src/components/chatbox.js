@@ -199,16 +199,32 @@ class ChatBoxComponent {
         const baseHeight = 24;
         const maxHeight = 180;
         const text = this.inputEl.value || "";
+        const trimmedText = text.trim();
         const hasNewline = text.includes("\n");
         const hasStaged = this.hasAttachments || 
             (this.stagedStrip && this.stagedStrip.children.length > 0 && this.stagedStrip.style.display !== "none");
 
-        // Temporarily reset height to base line height to accurately measure scrollHeight as text wraps
-        this.inputEl.style.height = baseHeight + "px";
-        const scrollH = this.inputEl.scrollHeight;
+        let isMultiLine = false;
+        let scrollH = baseHeight;
 
-        // Multi-line condition: has a newline character OR wrapped text causing scrollHeight to exceed base height (~30px)
-        const isMultiLine = hasNewline || (scrollH > baseHeight + 6);
+        if (hasNewline) {
+            isMultiLine = true;
+        } else if (trimmedText.length > 0) {
+            // Temporarily bypass CSS height transition to synchronously and accurately measure scrollHeight
+            const prevTransition = this.inputEl.style.transition;
+            this.inputEl.style.transition = "none";
+            this.inputEl.style.height = baseHeight + "px";
+            scrollH = this.inputEl.scrollHeight;
+            this.inputEl.style.transition = prevTransition;
+
+            // In expanded mode, padding is 4px top + 4px bottom and line-height ~22px, so 1 line scrollH is ~30px.
+            // Text wraps to multiple lines when scrollH exceeds the single-line content box (> 34px).
+            const threshold = this.root.classList.contains("composer-expanded") ? 34 : 30;
+            isMultiLine = scrollH > threshold;
+        } else {
+            isMultiLine = false;
+        }
+
         const shouldExpand = isMultiLine || hasStaged;
 
         if (shouldExpand) {
@@ -216,6 +232,12 @@ class ChatBoxComponent {
                 this.root.classList.remove("composer-compact");
                 this.root.classList.add("composer-expanded");
             }
+            const prevTransition = this.inputEl.style.transition;
+            this.inputEl.style.transition = "none";
+            this.inputEl.style.height = baseHeight + "px";
+            scrollH = this.inputEl.scrollHeight;
+            this.inputEl.style.transition = prevTransition;
+
             const targetHeight = Math.min(Math.max(scrollH, 44), maxHeight);
             this.inputEl.style.height = targetHeight + "px";
             this.inputEl.style.overflowY = scrollH > maxHeight ? "auto" : "hidden";
