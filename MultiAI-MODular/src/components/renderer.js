@@ -166,11 +166,45 @@ export function formatThoughtHtml(content, durationStr = "") {
     return `<details class="thought-box" open${rawDur ? ` data-duration="${escapeHTML(rawDur)}"` : ''}><summary class="thought-summary"><span class="thought-header">${brainSvg}<span class="thought-label">Thought for ${escapeHTML(durLabel)}</span><span class="thought-chevron">›</span></span></summary><div class="thought-body"><div class="thought-content">${innerFormatted}</div></div></details>`;
 }
 
+export function extractFollowups(text) {
+    if (!text || typeof text !== "string") return { cleanText: text || "", followups: [] };
+
+    const followups = [];
+    // Matches <followup>...</followup>, <followup>...<followup/>, <fw1>...</fw1>, <fw1>...<fw1/>
+    const tagRegex = /<\s*(?:followup|fw\d*)\s*>([\s\S]*?)(?:<\s*\/\s*(?:followup|fw\d*)\s*>|<\s*(?:followup|fw\d*)\s*\/\s*>)/gi;
+
+    let cleanText = text.replace(tagRegex, (_, q) => {
+        let trimmed = (q || "").trim();
+        trimmed = trimmed.replace(/^[-*•\d.)\]\s]+/, "").trim();
+        if (trimmed && !followups.includes(trimmed)) {
+            followups.push(trimmed);
+        }
+        return "";
+    });
+
+    // Capture unclosed tag at the very end if generation ended without closing tag
+    const unclosedRegex = /<\s*(?:followup|fw\d*)\s*>([\s\S]*)$/gi;
+    cleanText = cleanText.replace(unclosedRegex, (_, q) => {
+        let trimmed = (q || "").trim();
+        trimmed = trimmed.replace(/^[-*•\d.)\]\s]+/, "").trim();
+        if (trimmed && trimmed.length > 3 && !followups.includes(trimmed)) {
+            followups.push(trimmed);
+        }
+        return "";
+    });
+
+    return { cleanText: cleanText.trimEnd(), followups };
+}
+
 export function extractThoughtAndContent(text) {
     let raw = text || "";
     if (!raw.trim()) {
-        return { thoughtHtml: "", content: "", duration: "" };
+        return { thoughtHtml: "", content: "", duration: "", followups: [] };
     }
+
+    const { cleanText, followups } = extractFollowups(raw);
+    raw = cleanText;
+
     let thoughts = [];
     let duration = "";
 
@@ -195,7 +229,8 @@ export function extractThoughtAndContent(text) {
         return {
             thoughtHtml: thoughts.join("\n\n"),
             content: cleanContent,
-            duration
+            duration,
+            followups
         };
     }
 
@@ -214,7 +249,8 @@ export function extractThoughtAndContent(text) {
             return {
                 thoughtHtml: html,
                 content: raw.trim(),
-                duration
+                duration,
+                followups
             };
         }
     }
@@ -236,7 +272,8 @@ export function extractThoughtAndContent(text) {
             return {
                 thoughtHtml: html,
                 content: raw.trim(),
-                duration
+                duration,
+                followups
             };
         }
     }
@@ -244,7 +281,8 @@ export function extractThoughtAndContent(text) {
     return {
         thoughtHtml: "",
         content: raw.trim(),
-        duration: ""
+        duration: "",
+        followups
     };
 }
 

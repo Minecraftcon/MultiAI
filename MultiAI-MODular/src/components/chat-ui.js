@@ -4,6 +4,8 @@
 import { escapeHTML, wrapTablesForScroll } from "../utils/dom.js";
 import { renderIcons } from "../utils/icons.js";
 import { logEvent } from "../utils/logger.js";
+import { state } from "../state.js";
+import { chatbox } from "./chatbox.js";
 import { parseMarkdown, extractThoughtAndContent, bindInteractiveCodeBlocks, renderMermaidInElement, renderMath, bindAIImageCards } from "./renderer.js";
 
 export function createAIMessageShell() {
@@ -26,6 +28,7 @@ export function createAIMessageShell() {
             </div>
         </div>
         <div class="final-content"></div>
+        <div class="followup-suggestions" style="display: none;"></div>
         <span class="blinking-cursor"></span>
     `;
 
@@ -205,8 +208,11 @@ export function updateAIStream(element, fullText, isDone, startTime, hasTools) {
         activityLabel.textContent = `Working... (${elapsed}s)`;
     }
 
+    let followups = [];
     if (answerText.trim()) {
-        const { thoughtHtml, content } = extractThoughtAndContent(answerText);
+        const { thoughtHtml, content, followups: extractedFollowups } = extractThoughtAndContent(answerText);
+        followups = extractedFollowups || [];
+        element.dataset.rawText = content ? content.trim() : answerText;
         const sanitizedThought = thoughtHtml ? parseMarkdown(thoughtHtml) : "";
         const sanitizedRest = content ? parseMarkdown(content) : "";
 
@@ -240,6 +246,8 @@ export function updateAIStream(element, fullText, isDone, startTime, hasTools) {
     if (isDone) {
         if (cursor) cursor.remove();
 
+        renderFollowupSuggestions(element, followups, isDone);
+
         // Clean up any empty thought boxes and finalize duration
         element.querySelectorAll(".thought-box").forEach(tb => {
             const contentEl = tb.querySelector(".thought-content");
@@ -266,6 +274,36 @@ export function updateAIStream(element, fullText, isDone, startTime, hasTools) {
     }
 
     chat.scrollTop = chat.scrollHeight;
+}
+
+export function renderFollowupSuggestions(element, followups, isDone) {
+    if (!element) return;
+    let container = element.querySelector(".followup-suggestions");
+    if (!container) {
+        container = document.createElement("div");
+        container.className = "followup-suggestions";
+        container.style.display = "none";
+        const cursor = element.querySelector(".blinking-cursor");
+        if (cursor) {
+            element.insertBefore(container, cursor);
+        } else {
+            element.appendChild(container);
+        }
+    }
+
+    if (isDone && Array.isArray(followups) && followups.length > 0) {
+        container.innerHTML = followups.map(q => `
+            <button type="button" class="followup-item" data-question="${escapeHTML(q)}" aria-label="Ask: ${escapeHTML(q)}">
+                <i data-lucide="corner-down-right" class="followup-icon"></i>
+                <span class="followup-text">${escapeHTML(q)}</span>
+            </button>
+        `).join("");
+        container.style.display = "flex";
+        renderIcons(container);
+    } else if (isDone) {
+        container.style.display = "none";
+        container.innerHTML = "";
+    }
 }
 
 export function finalizeStopped(element, startTime, hasTools) {
@@ -304,6 +342,19 @@ export function initChatDelegation() {
     if (!chat) return;
 
     chat.addEventListener("click", (e) => {
+        const followupBtn = e.target.closest(".followup-item");
+        if (followupBtn) {
+            const question = followupBtn.dataset.question;
+            if (question) {
+                if (state.currentChatId && state.activeGenerations[state.currentChatId]?.isGenerating) {
+                    return;
+                }
+                chatbox.setValue(question);
+                chatbox.triggerSend();
+            }
+            return;
+        }
+
         const actToggle = e.target.closest(".activity-toggle");
         if (actToggle) {
             const wrapper = actToggle.closest(".activity-wrapper");

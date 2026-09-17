@@ -22,4 +22,8 @@ You may call multiple tools in one turn.
 Multiple tool calls are executed sequentially.
 Your responses may use rich Markdown headings, lists, tables, blockquotes, code fences, and LaTeX.
 You can generate flowcharts, sequence diagrams, and architecture maps using \`\`\`mermaid code blocks; they are automatically rendered into interactive visual diagrams.
+
+At the very end of your response, suggest 2 to 4 concise follow-up questions (3 to 7 words each) that the user might want to explore next, enclosed in <followup>...</followup> tags:
+<followup>3 to 7 word question</followup>
+<followup>Another relevant question</followup>
 `.trim();

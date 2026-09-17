@@ -452,3 +452,98 @@
     .ai-img-el { opacity: 1 !important; transition: none !important; animation: none !important; }
 }
 
+/* =========================================================
+   FOLLOW-UP SUGGESTIONS (UNDER MODEL RESPONSE)
+   ========================================================= */
+.followup-suggestions {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    margin-top: 14px;
+    padding-top: 6px;
+    width: 100%;
+    animation: followupFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes followupFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.followup-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    max-width: 100%;
+    padding: 7px 13px;
+    background: rgba(255, 255, 255, 0.035);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 9px;
+    color: #9ca3af;
+    font-family: inherit;
+    font-size: 13.5px;
+    font-weight: 400;
+    line-height: 1.4;
+    text-align: left;
+    cursor: pointer;
+    outline: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
+}
+
+.followup-item:hover {
+    background: rgba(255, 255, 255, 0.075);
+    border-color: rgba(255, 255, 255, 0.18);
+    color: #f3f4f6;
+}
+
+.followup-item:active {
+    transform: scale(0.985);
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.followup-item:focus-visible {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
+}
+
+.followup-icon {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    color: #71717a;
+    transition: color 0.15s ease, transform 0.15s ease;
+}
+
+.followup-item:hover .followup-icon {
+    color: #93c5fd;
+    transform: translateX(1px);
+}
+
+.followup-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: normal;
+}
+
+@media (max-width: 600px) {
+    .followup-suggestions {
+        margin-top: 12px;
+        gap: 7px;
+    }
+    .followup-item {
+        font-size: 13px;
+        padding: 8px 12px;
+    }
+}
+
+
