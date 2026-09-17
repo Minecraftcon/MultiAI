@@ -126,6 +126,37 @@ providers:
         name: "Moondream 3.1 9B (Vision)"
         supports_tools: false
         supports_vision: true
+  arliai:
+    name: "ArliAI"
+    type: "arliai"
+    api_key_env: "ARLIAI_API_KEY"
+    base_url: "https://api.arliai.com/v1"
+    default_max_tokens: 4096
+    models:
+      - id: "Qwen3.5-27B-Derestricted"
+        name: "Qwen 3.5 27B Derestricted (ArliAI — Reasoning)"
+        supports_tools: true
+        supports_vision: true
+      - id: "Fastest"
+        name: "ArliAI Fastest"
+        supports_tools: true
+        supports_vision: false
+      - id: "(TRIAL) GLM-4.7"
+        name: "GLM 4.7 (ArliAI Trial)"
+        supports_tools: true
+        supports_vision: false
+      - id: "(TRIAL) Gemma-4-31B-it"
+        name: "Gemma 4 31B IT (ArliAI Trial)"
+        supports_tools: true
+        supports_vision: false
+      - id: "(TRIAL) Qwen3.5-27B-Writer-V2-Derestricted"
+        name: "Qwen 3.5 27B Writer V2 (ArliAI Trial)"
+        supports_tools: true
+        supports_vision: false
+      - id: "(TRIAL) DeepSeek-V4-Flash-0731"
+        name: "DeepSeek V4 Flash (ArliAI Trial)"
+        supports_tools: true
+        supports_vision: false
 
   groq:
     name: "Groq Cloud"
