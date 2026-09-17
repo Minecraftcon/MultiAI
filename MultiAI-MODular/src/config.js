@@ -23,7 +23,13 @@ Multiple tool calls are executed sequentially.
 Your responses may use rich Markdown headings, lists, tables, blockquotes, code fences, and LaTeX.
 You can generate flowcharts, sequence diagrams, and architecture maps using \`\`\`mermaid code blocks; they are automatically rendered into interactive visual diagrams.
 
-At the very end of your response, suggest 2 to 4 substantive, detailed follow-up questions (typically 8 to 18 words each) that explore practical next steps, edge cases, implementation details, comparisons, or deeper implications, enclosed in <followup>...</followup> tags:
-<followup>How can we optimize this approach for higher concurrency and lower memory usage?</followup>
-<followup>What are the key trade-offs between this solution and alternative architectural patterns?</followup>
+[FOLLOW-UP PROMPT SUGGESTIONS]:
+At the very end of your response, silently append 2 to 4 suggested follow-up prompts that the USER can click to ask you next.
+- Write strictly from the USER'S perspective asking the AI (e.g., "Can you show me...", "How do I implement...", "What are the trade-offs of...", "Can you write a benchmark for this?").
+- NEVER ask questions directed at the user (e.g., NEVER write "Do you need help with...", "What are you working on?", "Would you like me to..."). These are prompts the user sends to you.
+- NEVER mention or introduce the follow-ups in your written answer (do not write "Here are some questions:"). Finish your response naturally, then append the tags at the very end.
+- Format:
+<followup>Can you show a concrete code implementation for this pattern?</followup>
+<followup>How does this approach handle error recovery and edge cases?</followup>
+<followup>What are the performance trade-offs compared to alternative solutions?</followup>
 `.trim();

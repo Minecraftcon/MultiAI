@@ -166,6 +166,15 @@ export function formatThoughtHtml(content, durationStr = "") {
     return `<details class="thought-box" open${rawDur ? ` data-duration="${escapeHTML(rawDur)}"` : ''}><summary class="thought-summary"><span class="thought-header">${brainSvg}<span class="thought-label">Thought for ${escapeHTML(durLabel)}</span><span class="thought-chevron">›</span></span></summary><div class="thought-body"><div class="thought-content">${innerFormatted}</div></div></details>`;
 }
 
+function cleanFollowupPrompt(q) {
+    let text = (q || "").trim();
+    text = text.replace(/^[-*•\d.)\]\s]+/, "").trim();
+    // Normalize assistant-style questions into direct user-side prompts
+    text = text.replace(/^(?:would\s+you\s+like\s+me\s+to|do\s+you\s+want\s+me\s+to|should\s+i)\s+/i, "Can you ");
+    text = text.replace(/^(?:do\s+you\s+need\s+(?:help\s+with\s+)?|are\s+you\s+looking\s+(?:to\s+|for\s+)?)/i, "How to ");
+    return text.trim();
+}
+
 export function extractFollowups(text) {
     if (!text || typeof text !== "string") return { cleanText: text || "", followups: [] };
 
@@ -174,10 +183,9 @@ export function extractFollowups(text) {
     const tagRegex = /<\s*(?:followup|fw\d*)\s*>([\s\S]*?)(?:<\s*\/\s*(?:followup|fw\d*)\s*>|<\s*(?:followup|fw\d*)\s*\/\s*>)/gi;
 
     let cleanText = text.replace(tagRegex, (_, q) => {
-        let trimmed = (q || "").trim();
-        trimmed = trimmed.replace(/^[-*•\d.)\]\s]+/, "").trim();
-        if (trimmed && !followups.includes(trimmed)) {
-            followups.push(trimmed);
+        const cleaned = cleanFollowupPrompt(q);
+        if (cleaned && !followups.includes(cleaned)) {
+            followups.push(cleaned);
         }
         return "";
     });
@@ -185,10 +193,9 @@ export function extractFollowups(text) {
     // Capture unclosed tag at the very end if generation ended without closing tag
     const unclosedRegex = /<\s*(?:followup|fw\d*)\s*>([\s\S]*)$/gi;
     cleanText = cleanText.replace(unclosedRegex, (_, q) => {
-        let trimmed = (q || "").trim();
-        trimmed = trimmed.replace(/^[-*•\d.)\]\s]+/, "").trim();
-        if (trimmed && trimmed.length > 3 && !followups.includes(trimmed)) {
-            followups.push(trimmed);
+        const cleaned = cleanFollowupPrompt(q);
+        if (cleaned && cleaned.length > 3 && !followups.includes(cleaned)) {
+            followups.push(cleaned);
         }
         return "";
     });
