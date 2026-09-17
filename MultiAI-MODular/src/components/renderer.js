@@ -451,8 +451,7 @@ export function bindAIImageCards(container, immediate = false) {
     if (!container) return;
     const frames = container.querySelectorAll(".ai-img-frame");
     frames.forEach(frame => {
-        if (frame.dataset.bound) return;
-        frame.dataset.bound = "true";
+        if (frame.dataset.state === "ready" || frame.dataset.state === "error") return;
 
         const img = frame.querySelector(".ai-img-el");
         const sizeBadge = frame.querySelector(".ai-img-size");
@@ -464,37 +463,60 @@ export function bindAIImageCards(container, immediate = false) {
             }
         };
 
+        const setReady = () => {
+            updateSize();
+            frame.dataset.state = "ready";
+        };
+
+        const setError = () => {
+            frame.dataset.state = "error";
+        };
+
         if (img) {
-            if (img.complete && img.naturalWidth > 0) {
-                updateSize();
+            if (img.complete) {
+                if (img.naturalWidth > 0) {
+                    setReady();
+                    return;
+                } else if (img.src) {
+                    setError();
+                    return;
+                }
             } else {
-                img.addEventListener("load", updateSize, { once: true });
+                img.addEventListener("load", setReady, { once: true });
+                img.addEventListener("error", setError, { once: true });
             }
         }
 
-        if (immediate || frame.dataset.state === "ready") {
-            frame.dataset.state = "ready";
+        if (immediate) {
+            if (img && img.complete && img.naturalWidth > 0) {
+                setReady();
+            } else if (img && img.complete && !img.naturalWidth && img.src) {
+                setError();
+            } else {
+                setReady();
+            }
             return;
         }
 
         const prefersReducedMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
         if (prefersReducedMotion) {
-            frame.dataset.state = "ready";
+            setReady();
             return;
         }
 
-        // 3-mask sequence (~2.1 seconds total):
-        // Passes 1 & 2: 0ms - 1400ms (outline + grey dots sweep)
-        // Pass 3: 1400ms - 2100ms (3rd mask sweep reveals image)
-        // Ready: 2100ms (placeholder vanishes, pure flat image remains)
+        if (frame.dataset.animating === "true") return;
+        frame.dataset.animating = "true";
+
         setTimeout(() => {
-            if (frame.dataset.state !== "ready") {
+            if (frame.dataset.state !== "ready" && frame.dataset.state !== "error") {
                 frame.dataset.state = "revealing";
             }
         }, 1400);
 
         setTimeout(() => {
-            frame.dataset.state = "ready";
+            if (frame.dataset.state !== "error") {
+                setReady();
+            }
         }, 2100);
     });
 }
