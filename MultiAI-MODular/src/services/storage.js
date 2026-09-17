@@ -97,6 +97,12 @@ export async function syncFromBackendDisk() {
                         changed = true;
                     }
                     if ((diskChat.updatedAt || 0) > (existing.updatedAt || 0)) {
+                        if (!diskChat.messages && existing.messages) {
+                            diskChat.messages = existing.messages;
+                        }
+                        if (existing.chatHtml && existing.chatHtml.includes("katex") && (!diskChat.chatHtml || !diskChat.chatHtml.includes("katex"))) {
+                            diskChat.chatHtml = existing.chatHtml;
+                        }
                         state.chatSessions[diskChat.id] = diskChat;
                         changed = true;
                     }

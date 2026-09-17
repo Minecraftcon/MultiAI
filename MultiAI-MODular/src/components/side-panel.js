@@ -8,7 +8,7 @@ import { saveStoredChats, saveCurrentChatState, initChatWorkspace } from "../ser
 import { syncActiveWorkspacePrompt } from "../services/system.js";
 import { closePanel } from "./gestures.js";
 import { hideMobileActions, showChatItemContextMenu } from "./context-menu.js";
-import { bindInteractiveCodeBlocks, renderMermaidInElement, renderMath, bindAIImageCards } from "./renderer.js";
+import { bindInteractiveCodeBlocks, renderMermaidInElement, renderMath, bindAIImageCards, parseMarkdown } from "./renderer.js";
 import { updateSendButtonState, stopChatGeneration } from "./composer.js";
 import { updateModelPickerDisplay } from "./model-picker.js";
 import { openSettings } from "./settings-view.js";
@@ -242,12 +242,50 @@ export function switchToChat(id) {
 
     if (chat) {
         chat.innerHTML = session.chatHtml || "";
+
+        // Reconstruct from messages if chatHtml was empty or missing
+        if ((!chat.innerHTML || !chat.innerHTML.trim()) && Array.isArray(session.messages) && session.messages.length > 0) {
+            session.messages.forEach(m => {
+                if (m.role === "user") {
+                    const div = document.createElement("div");
+                    div.className = "message user";
+                    div.dataset.rawText = m.content || "";
+                    div.innerHTML = `<div class="user-bubble-content"><div class="msg-bubble-text">${escapeHTML(m.content || "")}</div></div>`;
+                    chat.appendChild(div);
+                } else if (m.role === "assistant") {
+                    const div = document.createElement("div");
+                    div.className = "message ai";
+                    div.dataset.rawText = m.content || "";
+                    div.innerHTML = `<div class="pre-search-content">${parseMarkdown(m.content || "")}</div><div class="activity-wrapper" style="display:none;"><button type="button" class="activity-toggle"><span class="chevron">▶</span><span class="activity-label">Activity</span></button><div class="activity-collapse"><div class="activity-overflow"><div class="activity-content"><div class="search-items-container"></div></div></div></div></div><div class="final-content"></div><div class="followup-suggestions" style="display:none;"></div>`;
+                    chat.appendChild(div);
+                }
+            });
+        }
+
         chat.querySelectorAll(".user-msg-actions").forEach(el => el.remove());
 
         chat.querySelectorAll(".message.user").forEach(msg => {
             if (!msg.dataset.rawText) {
                 const textEl = msg.querySelector(".msg-bubble-text");
                 msg.dataset.rawText = textEl ? textEl.textContent.trim() : msg.textContent.trim();
+            }
+        });
+
+        // Upgrade/re-hydrate any AI messages whose rawText contains math but KaTeX elements are absent
+        chat.querySelectorAll(".message.ai").forEach(msg => {
+            const raw = msg.dataset.rawText;
+            if (raw && !msg.querySelector(".katex")) {
+                const hasMath = raw.includes("\\[") || raw.includes("$$") || raw.includes("\\(") ||
+                                /(?:^|\n)\s*\[\s*[\s\S]*?\\[a-zA-Z]+[\s\S]*?\s*\]/.test(raw) ||
+                                /(?<![\$\\\w])\$[^\s\$][^\$]*?[^\s\$]?\$(?![\$\d\w])/.test(raw);
+                if (hasMath) {
+                    const preContent = msg.querySelector(".pre-search-content");
+                    const finalContent = msg.querySelector(".final-content");
+                    const target = (finalContent && finalContent.innerHTML.trim()) ? finalContent : preContent;
+                    if (target) {
+                        target.innerHTML = parseMarkdown(raw);
+                    }
+                }
             }
         });
 
@@ -259,6 +297,11 @@ export function switchToChat(id) {
         bindAIImageCards(chat, true);
 
         chat.scrollTop = chat.scrollHeight;
+
+        // Ensure newly rendered KaTeX markup is stored in chatHtml for seamless reload
+        if (session.chatHtml !== chat.innerHTML) {
+            session.chatHtml = chat.innerHTML;
+        }
     }
 
     const isThisRunning = Boolean(state.activeGenerations[id]?.isGenerating);

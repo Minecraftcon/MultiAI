@@ -590,9 +590,14 @@ export async function renderMermaidInElement(container) {
 
 export function renderMath(container) {
     if (!container) return;
-    if (typeof renderMathInElement === "function") {
+
+    const renderFn = typeof renderMathInElement === "function"
+        ? renderMathInElement
+        : (typeof window !== "undefined" && typeof window.renderMathInElement === "function" ? window.renderMathInElement : null);
+
+    if (renderFn) {
         try {
-            renderMathInElement(container, {
+            renderFn(container, {
                 delimiters: [
                     { left: "$$", right: "$$", display: true },
                     { left: "\\[", right: "\\]", display: true },
@@ -611,6 +616,33 @@ export function renderMath(container) {
             });
         } catch (e) {
             console.warn("[KaTeX] renderMathInElement failed:", e);
+        }
+    }
+
+    // Secondary pass for standalone bracket display math: [ ... \cmd ... ]
+    // Common in LLM outputs or when markdown parsers strip escaped brackets \[ -> [
+    const katexFn = typeof katex !== "undefined" && typeof katex.renderToString === "function"
+        ? katex
+        : (typeof window !== "undefined" && window.katex && typeof window.katex.renderToString === "function" ? window.katex : null);
+
+    if (katexFn) {
+        try {
+            const candidates = container.querySelectorAll("p, div, li, span");
+            for (const el of candidates) {
+                if (el.closest("pre, code, .katex, .katex-display-wrapper, .katex-inline-wrapper")) continue;
+                if (el.querySelector(".katex, pre, code")) continue;
+
+                const text = el.textContent.trim();
+                const m = text.match(/^\[\s*([\s\S]*?\\[a-zA-Z]+[\s\S]*?)\s*\]$/);
+                if (m) {
+                    const math = m[1].trim();
+                    try {
+                        el.innerHTML = `<div class="katex-display-wrapper">${katexFn.renderToString(math, { displayMode: true, throwOnError: false })}</div>`;
+                    } catch (_) {}
+                }
+            }
+        } catch (e) {
+            console.warn("[KaTeX] Bracket math pass failed:", e);
         }
     }
 }
