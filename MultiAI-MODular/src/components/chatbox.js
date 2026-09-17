@@ -40,6 +40,15 @@ class ChatBoxComponent {
         </div>
 
         <div class="composer-dock composer composer-compact" id="chatboxDock">
+            <!-- Start Page Dynamic Cloud Glow Effect (Visible only in start page mode) -->
+            <div class="start-page-glow-aura" aria-hidden="true">
+                <div class="glow-cloud glow-cloud-1"></div>
+                <div class="glow-cloud glow-cloud-2"></div>
+                <div class="glow-cloud glow-cloud-3"></div>
+                <div class="glow-cloud glow-cloud-4"></div>
+                <div class="glow-cloud-shimmer"></div>
+            </div>
+
             <!-- Top: Staged Attachments Strip (Spanning from the left corner over the plus button) -->
             <div id="stagedAttachments" class="staged-attachments-strip" style="display: none;"></div>
 

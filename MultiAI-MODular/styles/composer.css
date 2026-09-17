@@ -933,16 +933,18 @@ body.drag-over .composer {
     width: min(800px, 100%);
     padding: 10px 14px;
     border-radius: 24px;
-    background: #18181a;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    box-shadow: 0 16px 48px -8px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.04);
+    background: rgba(24, 24, 26, 0.88);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    box-shadow: 0 20px 52px -8px rgba(0, 0, 0, 0.76), 0 0 0 1px rgba(255, 255, 255, 0.05);
     animation: startDockIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 #appShell.is-start-page .composer-dock:focus-within {
-    border-color: rgba(255, 255, 255, 0.24);
-    box-shadow: 0 20px 54px -6px rgba(0, 0, 0, 0.82), 0 0 0 1px rgba(255, 255, 255, 0.08);
-    background: #1b1b1d;
+    border-color: rgba(255, 255, 255, 0.28);
+    box-shadow: 0 24px 60px -8px rgba(0, 0, 0, 0.86), 0 0 0 1px rgba(255, 255, 255, 0.1);
+    background: rgba(27, 27, 30, 0.94);
 }
 
 #appShell.is-start-page .composer-dock .composer-input-row {
@@ -1050,6 +1052,208 @@ body.drag-over .composer {
     }
 }
 
+/* =========================================================
+   DYNAMIC REALISTIC CLOUD GLOW EFFECT (WELCOME SCREEN)
+   Organic, multi-layered volumetric cloud nebula around chatbox
+   ========================================================= */
+.start-page-glow-aura {
+    display: none;
+    position: absolute;
+    inset: -38px -54px -44px -54px;
+    pointer-events: none;
+    z-index: -1;
+    border-radius: 48px;
+    overflow: visible;
+    opacity: 0;
+    filter: blur(52px) saturate(180%);
+    -webkit-filter: blur(52px) saturate(180%);
+    transform: scale(0.97);
+    transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1), 
+                transform 0.6s cubic-bezier(0.16, 1, 0.3, 1),
+                filter 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+    contain: layout style;
+    will-change: transform, opacity;
+}
+
+#appShell.is-start-page .start-page-glow-aura {
+    display: block !important;
+    opacity: 0.82;
+    transform: scale(1);
+}
+
+#appShell.is-start-page .composer-dock:hover .start-page-glow-aura {
+    opacity: 0.95;
+    transform: scale(1.02);
+    filter: blur(56px) saturate(190%);
+    -webkit-filter: blur(56px) saturate(190%);
+}
+
+#appShell.is-start-page .composer-dock:focus-within .start-page-glow-aura {
+    opacity: 1;
+    transform: scale(1.035);
+    filter: blur(58px) saturate(210%);
+    -webkit-filter: blur(58px) saturate(210%);
+}
+
+/* Base Cloud Orb Layers */
+.glow-cloud {
+    position: absolute;
+    pointer-events: none;
+    border-radius: 50%;
+    will-change: transform, border-radius, opacity;
+}
+
+/* Cloud 1: Ethereal Aurora Cyan / Electric Teal */
+.glow-cloud-1 {
+    top: -18%;
+    left: 4%;
+    width: 68%;
+    height: 95%;
+    background: radial-gradient(circle at center, rgba(45, 212, 191, 0.44) 0%, rgba(56, 189, 248, 0.32) 40%, rgba(99, 102, 241, 0.16) 65%, transparent 75%);
+    animation: cloudDrift1 23s ease-in-out infinite alternate;
+}
+
+/* Cloud 2: Cosmic Indigo / Radiant Violet */
+.glow-cloud-2 {
+    bottom: -22%;
+    right: 3%;
+    width: 65%;
+    height: 98%;
+    background: radial-gradient(circle at center, rgba(168, 85, 247, 0.42) 0%, rgba(129, 140, 248, 0.34) 42%, rgba(236, 72, 153, 0.18) 68%, transparent 78%);
+    animation: cloudDrift2 19s ease-in-out infinite alternate-reverse;
+    animation-delay: -6s;
+}
+
+/* Cloud 3: Warm Rose / Amber sunset drift for natural chromatic depth */
+.glow-cloud-3 {
+    top: 5%;
+    left: 32%;
+    width: 52%;
+    height: 82%;
+    background: radial-gradient(circle at center, rgba(244, 63, 94, 0.3) 0%, rgba(251, 146, 60, 0.22) 45%, rgba(139, 92, 246, 0.14) 65%, transparent 75%);
+    animation: cloudDrift3 29s ease-in-out infinite alternate;
+    animation-delay: -14s;
+}
+
+/* Cloud 4: Deep sapphire ambient underflow */
+.glow-cloud-4 {
+    top: -4%;
+    left: 14%;
+    width: 76%;
+    height: 92%;
+    background: radial-gradient(ellipse at center, rgba(59, 130, 246, 0.36) 0%, rgba(99, 102, 241, 0.24) 40%, transparent 70%);
+    animation: cloudDrift4 17s ease-in-out infinite alternate;
+    animation-delay: -9s;
+}
+
+/* Dynamic chromatic aura overlay with slow organic sweep */
+.glow-cloud-shimmer {
+    position: absolute;
+    inset: -14px;
+    border-radius: 44px;
+    background: linear-gradient(135deg, 
+        rgba(45, 212, 191, 0.18) 0%, 
+        rgba(99, 102, 241, 0.2) 28%, 
+        rgba(236, 72, 153, 0.16) 65%, 
+        rgba(56, 189, 248, 0.18) 100%
+    );
+    opacity: 0.65;
+    animation: shimmerShift 21s ease-in-out infinite alternate;
+    mix-blend-mode: screen;
+}
+
+/* Fluid Organic Keyframes - Multi-Axis Morphing & Drift */
+@keyframes cloudDrift1 {
+    0% {
+        transform: translate3d(-6%, -10%, 0) scale(0.94) rotate(0deg);
+        border-radius: 56% 44% 42% 58% / 62% 48% 52% 38%;
+        opacity: 0.78;
+    }
+    33% {
+        transform: translate3d(10%, 8%, 0) scale(1.08) rotate(14deg);
+        border-radius: 42% 58% 60% 40% / 46% 58% 42% 54%;
+        opacity: 0.95;
+    }
+    66% {
+        transform: translate3d(2%, -14%, 0) scale(0.98) rotate(-8deg);
+        border-radius: 64% 36% 48% 52% / 54% 44% 56% 46%;
+        opacity: 0.82;
+    }
+    100% {
+        transform: translate3d(-10%, 6%, 0) scale(1.06) rotate(20deg);
+        border-radius: 48% 52% 56% 44% / 44% 56% 44% 56%;
+        opacity: 0.92;
+    }
+}
+
+@keyframes cloudDrift2 {
+    0% {
+        transform: translate3d(8%, 10%, 0) scale(1) rotate(0deg);
+        border-radius: 46% 54% 64% 36% / 52% 44% 56% 48%;
+        opacity: 0.74;
+    }
+    33% {
+        transform: translate3d(-12%, -8%, 0) scale(1.07) rotate(-18deg);
+        border-radius: 60% 40% 44% 56% / 42% 62% 38% 58%;
+        opacity: 0.92;
+    }
+    66% {
+        transform: translate3d(6%, 12%, 0) scale(0.95) rotate(12deg);
+        border-radius: 40% 60% 50% 50% / 58% 46% 54% 42%;
+        opacity: 0.78;
+    }
+    100% {
+        transform: translate3d(-6%, -10%, 0) scale(1.05) rotate(-12deg);
+        border-radius: 54% 46% 42% 58% / 62% 42% 58% 38%;
+        opacity: 0.88;
+    }
+}
+
+@keyframes cloudDrift3 {
+    0% {
+        transform: translate3d(-8%, 6%, 0) scale(0.92) rotate(-12deg);
+        opacity: 0.68;
+    }
+    50% {
+        transform: translate3d(14%, -8%, 0) scale(1.12) rotate(22deg);
+        opacity: 0.94;
+    }
+    100% {
+        transform: translate3d(-12%, 10%, 0) scale(0.96) rotate(-8deg);
+        opacity: 0.72;
+    }
+}
+
+@keyframes cloudDrift4 {
+    0% {
+        transform: translate3d(0, 0, 0) scale(0.98);
+        opacity: 0.72;
+    }
+    50% {
+        transform: translate3d(6%, -5%, 0) scale(1.07);
+        opacity: 0.96;
+    }
+    100% {
+        transform: translate3d(-5%, 6%, 0) scale(1.01);
+        opacity: 0.78;
+    }
+}
+
+@keyframes shimmerShift {
+    0% {
+        transform: rotate(0deg) scale(0.97);
+        opacity: 0.55;
+    }
+    50% {
+        transform: rotate(180deg) scale(1.03);
+        opacity: 0.8;
+    }
+    100% {
+        transform: rotate(360deg) scale(0.97);
+        opacity: 0.55;
+    }
+}
+
 @media (max-width: 600px) {
     #appShell.is-start-page #inputArea {
         padding: 16px 14px 40px;
@@ -1059,8 +1263,14 @@ body.drag-over .composer {
         min-height: 96px;
         padding: 14px;
     }
+    #appShell.is-start-page .start-page-glow-aura {
+        inset: -22px -20px -26px -20px;
+        filter: blur(36px) saturate(160%);
+        -webkit-filter: blur(36px) saturate(160%);
+    }
     #appShell.is-start-page .start-page-footer {
         width: 100%;
     }
 }
+
 
