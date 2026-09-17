@@ -302,8 +302,8 @@ def main():
     atexit.register(supervisor.stop_all)
 
     # 3. Start Node.js Web Server (which also supervises the Python task server on port 5000)
-    log_info(f"Starting MultiAI on port {args.port} (node server.js)...")
-    supervisor.spawn("Server", ["node", "server.js"], color=GREEN, cwd=root_dir)
+    log_info(f"Starting MultiAI on port {args.port} (node --watch server.js)...")
+    supervisor.spawn("Server", ["node", "--watch", "server.js"], color=GREEN, cwd=root_dir)
 
     # 4. Wait for server to become ready
     ready = False
