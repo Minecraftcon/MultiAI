@@ -97,13 +97,20 @@ export async function syncFromBackendDisk() {
                         changed = true;
                     }
                     if ((diskChat.updatedAt || 0) > (existing.updatedAt || 0)) {
-                        if (!diskChat.messages && existing.messages) {
+                        // CRITICAL: NEVER overwrite existing in-memory messages with undefined/empty!
+                        if ((!diskChat.messages || diskChat.messages.length === 0) && (existing.messages && existing.messages.length > 0)) {
                             diskChat.messages = existing.messages;
                         }
-                        if (existing.chatHtml && existing.chatHtml.includes("katex") && (!diskChat.chatHtml || !diskChat.chatHtml.includes("katex"))) {
+                        if (existing.chatHtml && (!diskChat.chatHtml || !diskChat.chatHtml.trim())) {
                             diskChat.chatHtml = existing.chatHtml;
                         }
+                        if (existing.title && (!diskChat.title || diskChat.title === "Conversation")) {
+                            diskChat.title = existing.title;
+                        }
                         state.chatSessions[diskChat.id] = diskChat;
+                        changed = true;
+                    } else if ((!existing.messages || existing.messages.length === 0) && diskChat.messages && diskChat.messages.length > 0) {
+                        existing.messages = diskChat.messages;
                         changed = true;
                     }
                 }
@@ -232,22 +239,31 @@ export function saveCurrentChatState() {
     }
 
     const session = state.chatSessions[state.currentChatId];
-    if (chat) session.chatHtml = chat.innerHTML;
+    if (chat) {
+        const currentHtml = chat.innerHTML;
+        if (currentHtml && currentHtml.trim()) {
+            session.chatHtml = currentHtml;
+        }
+    }
     
-    // session.messages is the live conversation history.
-    if (session.messages && session.messages.length > 0) {
+    // Protect against overwriting real message history with empty/system-only arrays
+    const sessionHasReal = session.messages && session.messages.some(m => m.role !== "system");
+    const stateHasReal = state.messages && state.messages.some(m => m.role !== "system");
+
+    if (sessionHasReal) {
         state.messages = JSON.parse(JSON.stringify(session.messages));
-    } else if (state.messages && state.messages.length > 0) {
+    } else if (stateHasReal) {
         session.messages = JSON.parse(JSON.stringify(state.messages));
     }
+
     session.updatedAt = Date.now();
     if (modelSelect) session.model = modelSelect.value;
 
     if (!session.title || session.title === "Conversation") {
-        const firstUserMsg = session.messages.find(m => m.role === "user");
+        const firstUserMsg = session.messages && session.messages.find(m => m.role === "user");
         if (firstUserMsg && typeof firstUserMsg.content === "string") {
             const rawTitle = firstUserMsg.content.trim();
-            session.title = rawTitle.slice(0, 34) + (rawTitle.length > 34 ? "..." : "");
+            session.title = rawTitle.slice(0, 34) + (rawTitle.length > 34 ? "…" : "");
         }
     }
 

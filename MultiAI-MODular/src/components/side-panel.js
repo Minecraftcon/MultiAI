@@ -302,13 +302,59 @@ export function switchToChat(id) {
         if (session.chatHtml !== chat.innerHTML) {
             session.chatHtml = chat.innerHTML;
         }
+
+        // If session messages are missing or empty, reconstruct from DOM so context is never lost
+        if ((!session.messages || !session.messages.some(m => m.role === "user")) && chat) {
+            const userMsgs = chat.querySelectorAll(".message.user");
+            if (userMsgs.length > 0) {
+                const reconstructed = [{ role: "system", content: state.activeSystemPrompt }];
+                chat.querySelectorAll(".message").forEach(el => {
+                    if (el.classList.contains("user")) {
+                        const text = el.dataset.rawText || el.querySelector(".msg-bubble-text")?.textContent || el.textContent;
+                        reconstructed.push({ role: "user", content: (text || "").trim() });
+                    } else if (el.classList.contains("ai")) {
+                        const text = el.dataset.rawText || el.querySelector(".final-content")?.textContent || el.querySelector(".pre-search-content")?.textContent || el.textContent;
+                        reconstructed.push({ role: "assistant", content: (text || "").trim() });
+                    }
+                });
+                if (reconstructed.length > 1) {
+                    session.messages = reconstructed;
+                    state.messages = JSON.parse(JSON.stringify(reconstructed));
+                }
+            }
+        }
     }
 
     const isThisRunning = Boolean(state.activeGenerations[id]?.isGenerating);
     updateSendButtonState(isThisRunning);
 
-    const hasUserMsg = session.messages && session.messages.some(m => m.role === "user");
+    // Multi-factor detection: a chat is only a start page if it has NO user content anywhere
+    const hasUserMsg = Boolean(
+        (session.messages && session.messages.some(m => m.role === "user")) ||
+        (state.messages && state.messages.some(m => m.role === "user")) ||
+        (session.messageCount && session.messageCount > 0) ||
+        (chat && chat.querySelector(".message.user")) ||
+        (session.chatHtml && (session.chatHtml.includes('class="message user"') || session.chatHtml.includes("message user")))
+    );
     setStartPageMode(!hasUserMsg);
+
+    // Asynchronously fetch full messages from backend if missing
+    if (!session.messages || !session.messages.some(m => m.role === "user")) {
+        fetch("/api/chats/" + encodeURIComponent(id))
+            .then(res => res.ok ? res.json() : null)
+            .then(data => {
+                if (data && data.session && Array.isArray(data.session.messages) && data.session.messages.length > 0) {
+                    if (state.currentChatId === id) {
+                        session.messages = data.session.messages;
+                        state.messages = JSON.parse(JSON.stringify(session.messages));
+                        if (session.messages.some(m => m.role === "user")) {
+                            setStartPageMode(false);
+                        }
+                    }
+                }
+            })
+            .catch(() => {});
+    }
 
     saveStoredChats();
     renderChatList();
@@ -573,16 +619,16 @@ export function initSidePanel() {
                         }
                     };
                     recognition.onend = () => {
-                        if (input) input.placeholder = "Message AI...";
+                        if (input) input.placeholder = "Message AI…";
                     };
                     recognition.start();
                 } catch (err) {
                     console.warn("Speech recognition error:", err);
-                    if (input) input.placeholder = "Message AI...";
+                    if (input) input.placeholder = "Message AI…";
                 }
             } else {
                 if (input) {
-                    input.placeholder = "Message AI...";
+                    input.placeholder = "Message AI…";
                 }
             }
         });

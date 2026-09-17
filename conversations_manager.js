@@ -143,34 +143,46 @@ function saveChat(chatSession) {
     if (!chatSession || !chatSession.id) {
         throw new Error("Invalid chat session object.");
     }
-    const chatId = chatSession.id;
-    const dateStr = chatSession.createdAt ? formatDate(chatSession.createdAt) : formatDate();
+    const existingDate = findChatDateDir(chatId);
+    const dateStr = chatSession.createdAt ? formatDate(chatSession.createdAt) : (existingDate || formatDate());
     const ws = ensureChatWorkspace(chatId, dateStr);
 
+    let existingMeta = {};
+    if (fs.existsSync(ws.metaFile)) {
+        try { existingMeta = JSON.parse(fs.readFileSync(ws.metaFile, "utf8")); } catch (_) {}
+    }
+
     const messages = Array.isArray(chatSession.messages) ? chatSession.messages : [];
+    const hasMeaningfulMessages = messages.some(m => m.role !== "system");
 
     // 1. Write metadata to meta.json
     const metaPayload = {
         id: chatId,
-        title: chatSession.title || "Conversation",
-        model: chatSession.model || "gemini-2.5-flash",
-        createdAt: chatSession.createdAt || Date.now(),
+        title: chatSession.title || existingMeta.title || "Conversation",
+        model: chatSession.model || existingMeta.model || "gemini-2.5-flash",
+        createdAt: chatSession.createdAt || existingMeta.createdAt || Date.now(),
         updatedAt: chatSession.updatedAt || Date.now(),
-        chatHtml: chatSession.chatHtml || "",
+        chatHtml: chatSession.chatHtml || existingMeta.chatHtml || "",
         workspace: {
             chatDir: ws.chatDir,
             scratchDir: ws.scratchDir,
             imagesDir: ws.imagesDir,
             dateStr: ws.dateStr
         },
-        messageCount: messages.length,
+        messageCount: hasMeaningfulMessages ? messages.length : (existingMeta.messageCount || messages.length),
         savedAt: Date.now()
     };
     fs.writeFileSync(ws.metaFile, JSON.stringify(metaPayload, null, 2), "utf8");
 
-    // 2. Write messages line-by-line to messages.jsonl
-    const lines = messages.map(m => JSON.stringify(m)).join("\n");
-    fs.writeFileSync(ws.messagesFile, lines ? lines + "\n" : "", "utf8");
+    // 2. Write messages line-by-line to messages.jsonl ONLY if meaningful messages were provided,
+    // OR if messages.jsonl does not exist yet. NEVER erase existing messages with an empty payload!
+    if (hasMeaningfulMessages) {
+        const lines = messages.map(m => JSON.stringify(m)).join("\n");
+        fs.writeFileSync(ws.messagesFile, lines + "\n", "utf8");
+    } else if (!fs.existsSync(ws.messagesFile)) {
+        const lines = messages.map(m => JSON.stringify(m)).join("\n");
+        fs.writeFileSync(ws.messagesFile, lines ? lines + "\n" : "", "utf8");
+    }
 
     // Clean up legacy chat.json if migrated
     if (fs.existsSync(ws.chatFile)) {
@@ -319,6 +331,13 @@ function listChats() {
                     try {
                         const raw = fs.readFileSync(metaPath, "utf8");
                         const meta = JSON.parse(raw);
+                        const msgFile = path.join(targetDir, "messages.jsonl");
+                        if (fs.existsSync(msgFile) && (meta.messageCount === undefined || meta.messageCount === null)) {
+                            try {
+                                const lines = fs.readFileSync(msgFile, "utf8").split("\n").map(l => l.trim()).filter(Boolean);
+                                meta.messageCount = lines.length;
+                            } catch (_) {}
+                        }
                         results.push(meta);
                         continue;
                     } catch (_) {}

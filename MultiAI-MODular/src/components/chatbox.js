@@ -64,7 +64,7 @@ class ChatBoxComponent {
                     <textarea 
                         id="input" 
                         class="composer-textarea" 
-                        placeholder="Message AI..." 
+                        placeholder="Message AI…" 
                         rows="1" 
                         aria-label="Message AI"
                         enterkeyhint="enter"
