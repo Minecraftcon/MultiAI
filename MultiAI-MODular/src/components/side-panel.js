@@ -12,6 +12,7 @@ import { bindInteractiveCodeBlocks, renderMermaidInElement, renderMath, bindAIIm
 import { updateSendButtonState, stopChatGeneration } from "./composer.js";
 import { updateModelPickerDisplay } from "./model-picker.js";
 import { openSettings } from "./settings-view.js";
+import { setStartPageMode } from "./chatbox.js";
 
 let currentSearchFilter = "";
 let activeMenuChatId = null;
@@ -263,6 +264,9 @@ export function switchToChat(id) {
     const isThisRunning = Boolean(state.activeGenerations[id]?.isGenerating);
     updateSendButtonState(isThisRunning);
 
+    const hasUserMsg = session.messages && session.messages.some(m => m.role === "user");
+    setStartPageMode(!hasUserMsg);
+
     saveStoredChats();
     renderChatList();
 }
@@ -457,9 +461,9 @@ export function startFreshChat() {
     state.messages = [{ role: "system", content: state.activeSystemPrompt }];
     updateSendButtonState(false);
     renderChatList();
+    setStartPageMode(true);
     if (input) {
         input.value = "";
-        input.style.height = "auto";
         input.focus();
     }
     closePanel(true);

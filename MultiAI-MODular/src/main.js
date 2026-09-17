@@ -16,6 +16,7 @@ import { initModelPicker } from "./components/model-picker.js";
 import { initSettingsView } from "./components/settings-view.js";
 
 import { renderIcons } from "./utils/dom.js";
+import { setStartPageMode } from "./components/chatbox.js";
 
 function initChatSessions() {
     loadStoredChats();
@@ -48,6 +49,7 @@ function initChatSessions() {
         if (chat) chat.innerHTML = "";
         state.messages = [{ role: "system", content: state.activeSystemPrompt }];
         renderChatList();
+        setStartPageMode(true);
     }
 }
 

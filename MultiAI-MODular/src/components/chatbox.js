@@ -10,6 +10,7 @@
    ========================================================= */
 import { renderIcons } from "../utils/icons.js";
 import { isMobileBrowser } from "../utils/dom.js";
+import { toggleModelPicker } from "./model-picker.js";
 
 class ChatBoxComponent {
     constructor() {
@@ -20,6 +21,7 @@ class ChatBoxComponent {
         this.attachBtn = null;
         this.stagedStrip = null;
         this.clearBtn = null;
+        this.heroModelPickerBtn = null;
 
         this.isComposing = false;
         this.hasAttachments = false;
@@ -28,11 +30,15 @@ class ChatBoxComponent {
 
     /**
      * Return the HTML template for the ChatBox dock.
-     * Keeps original component sizes and layout (Plus on bottom-left,
-     * Send on bottom-right, center column expanding upwards).
+     * Includes start page hero header and footer model selector for new chats.
      */
     renderTemplate() {
         return `
+        <!-- Start Page Hero Header (Visible only when in start page mode) -->
+        <div class="start-page-hero" id="startPageHero">
+            <h1 class="start-page-title">How can I assist you today?</h1>
+        </div>
+
         <div class="composer-dock composer composer-compact" id="chatboxDock">
             <!-- Top: Staged Attachments Strip (Spanning from the left corner over the plus button) -->
             <div id="stagedAttachments" class="staged-attachments-strip" style="display: none;"></div>
@@ -69,6 +75,15 @@ class ChatBoxComponent {
                 </div>
             </div>
         </div>
+
+        <!-- Start Page Footer (Visible only when in start page mode, positioned under left corner of chatbox) -->
+        <div class="start-page-footer" id="startPageFooter">
+            <button id="heroModelPickerBtn" class="hero-model-picker-btn" type="button" aria-haspopup="dialog" aria-expanded="false" title="Select AI Model">
+                <i data-lucide="bot" class="hero-model-icon"></i>
+                <span id="heroModelPickerName" class="model-picker-name">Select Model</span>
+                <i data-lucide="chevron-down" class="hero-model-chevron"></i>
+            </button>
+        </div>
         `;
     }
 
@@ -86,6 +101,7 @@ class ChatBoxComponent {
         this.attachBtn = this.container.querySelector("#attachSheetBtn");
         this.stagedStrip = this.container.querySelector("#stagedAttachments");
         this.clearBtn = this.container.querySelector("#composerClearBtn");
+        this.heroModelPickerBtn = this.container.querySelector("#heroModelPickerBtn");
 
         this.bindEvents();
         this.updateLayoutMode();
@@ -153,6 +169,14 @@ class ChatBoxComponent {
                 this.focus();
             });
         }
+
+        // Hero Model Picker button click (start page)
+        if (this.heroModelPickerBtn) {
+            this.heroModelPickerBtn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                toggleModelPicker();
+            });
+        }
     }
 
     /**
@@ -189,19 +213,23 @@ class ChatBoxComponent {
         if (!this.inputEl) return;
         this.updateLayoutMode();
 
+        const isStartPage = document.getElementById("appShell")?.classList.contains("is-start-page");
         const text = this.inputEl.value || "";
         const hasNewline = text.includes("\n");
         const hasStaged = this.hasAttachments || 
             (this.stagedStrip && this.stagedStrip.children.length > 0 && this.stagedStrip.style.display !== "none");
 
-        if (hasNewline || hasStaged) {
-            this.inputEl.style.height = "24px";
+        const baseHeight = isStartPage ? 48 : 24;
+        const maxHeight = isStartPage ? 220 : 180;
+
+        if (hasNewline || hasStaged || isStartPage) {
+            this.inputEl.style.height = baseHeight + "px";
             const scrollH = this.inputEl.scrollHeight;
-            const targetHeight = Math.min(Math.max(scrollH, 48), 180);
+            const targetHeight = Math.min(Math.max(scrollH, baseHeight), maxHeight);
             this.inputEl.style.height = targetHeight + "px";
-            this.inputEl.style.overflowY = scrollH > 180 ? "auto" : "hidden";
+            this.inputEl.style.overflowY = scrollH > maxHeight ? "auto" : "hidden";
         } else {
-            this.inputEl.style.height = "24px";
+            this.inputEl.style.height = baseHeight + "px";
             this.inputEl.style.overflowY = "hidden";
         }
     }
@@ -292,3 +320,28 @@ class ChatBoxComponent {
 }
 
 export const chatbox = new ChatBoxComponent();
+
+/**
+ * Toggles the Start Page (hero state for new chats) vs Active Chat mode.
+ * In Start Page mode:
+ *   - The chat messages view is hidden.
+ *   - The chatbox is centered in the viewport, spacious, and expanded.
+ *   - The hero title is displayed above the chatbox.
+ *   - The model selector sits directly below the left corner of the chatbox.
+ * In Active Chat mode:
+ *   - The chatbox docks to the bottom.
+ *   - The hero title and hero model selector are hidden.
+ *   - Chat messages are visible.
+ */
+export function setStartPageMode(isStartPage) {
+    const shell = document.getElementById("appShell");
+    if (!shell) return;
+
+    if (isStartPage) {
+        shell.classList.add("is-start-page");
+        chatbox.handleInputResize();
+    } else {
+        shell.classList.remove("is-start-page");
+        chatbox.handleInputResize();
+    }
+}

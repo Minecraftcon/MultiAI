@@ -10,15 +10,27 @@ let currentSearch = "";
 export function updateModelPickerDisplay() {
     const modelSelect = document.getElementById("modelSelect");
     const nameEl = document.getElementById("modelPickerName");
-    if (!modelSelect || !nameEl) return;
+    const heroNameEl = document.getElementById("heroModelPickerName");
+    if (!modelSelect) return;
 
     const opt = modelSelect.selectedOptions?.[0];
+    let cleanText = "";
+    let fullText = "";
     if (opt) {
-        const text = opt.textContent || opt.value;
-        nameEl.textContent = text.replace(/\s*\[Vision\]/i, "").trim();
-        nameEl.title = text;
+        fullText = opt.textContent || opt.value;
+        cleanText = fullText.replace(/\s*\[Vision\]/i, "").trim();
     } else if (modelSelect.value) {
-        nameEl.textContent = modelSelect.value;
+        cleanText = modelSelect.value;
+        fullText = modelSelect.value;
+    }
+
+    if (nameEl && cleanText) {
+        nameEl.textContent = cleanText;
+        nameEl.title = fullText;
+    }
+    if (heroNameEl && cleanText) {
+        heroNameEl.textContent = cleanText;
+        heroNameEl.title = fullText;
     }
 }
 
@@ -162,6 +174,11 @@ export function openModelPicker() {
         btn.classList.add("is-open");
         btn.setAttribute("aria-expanded", "true");
     }
+    const heroBtn = document.getElementById("heroModelPickerBtn");
+    if (heroBtn) {
+        heroBtn.classList.add("is-open");
+        heroBtn.setAttribute("aria-expanded", "true");
+    }
 
     // Scroll active item into view
     setTimeout(() => {
@@ -179,6 +196,7 @@ export function closeModelPicker() {
     const dropdown = document.getElementById("modelPickerDropdown");
     const backdrop = document.getElementById("modelPickerBackdrop");
     const btn = document.getElementById("modelPickerBtn");
+    const heroBtn = document.getElementById("heroModelPickerBtn");
 
     isPickerOpen = false;
     if (dropdown) dropdown.classList.remove("is-open");
@@ -186,6 +204,10 @@ export function closeModelPicker() {
     if (btn) {
         btn.classList.remove("is-open");
         btn.setAttribute("aria-expanded", "false");
+    }
+    if (heroBtn) {
+        heroBtn.classList.remove("is-open");
+        heroBtn.setAttribute("aria-expanded", "false");
     }
 }
 
@@ -199,6 +221,7 @@ export function toggleModelPicker() {
 
 export function initModelPicker() {
     const btn = document.getElementById("modelPickerBtn");
+    const heroBtn = document.getElementById("heroModelPickerBtn");
     const backdrop = document.getElementById("modelPickerBackdrop");
     const searchInput = document.getElementById("modelSearchInput");
     const searchClear = document.getElementById("modelSearchClear");
@@ -206,6 +229,13 @@ export function initModelPicker() {
 
     if (btn) {
         btn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            toggleModelPicker();
+        });
+    }
+
+    if (heroBtn) {
+        heroBtn.addEventListener("click", (e) => {
             e.stopPropagation();
             toggleModelPicker();
         });
@@ -250,7 +280,8 @@ export function initModelPicker() {
     document.addEventListener("click", (e) => {
         if (!isPickerOpen) return;
         const dropdown = document.getElementById("modelPickerDropdown");
-        if (dropdown && !dropdown.contains(e.target) && !btn?.contains(e.target)) {
+        const currentHeroBtn = document.getElementById("heroModelPickerBtn");
+        if (dropdown && !dropdown.contains(e.target) && !btn?.contains(e.target) && !currentHeroBtn?.contains(e.target)) {
             closeModelPicker();
         }
     });

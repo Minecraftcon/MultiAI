@@ -869,3 +869,186 @@ body.drag-over .composer {
         display: none !important;
     }
 }
+
+/* =========================================================
+   START PAGE / NEW CHAT HERO MODE
+   ========================================================= */
+/* Hidden by default in active chat mode */
+.start-page-hero,
+.start-page-footer {
+    display: none !important;
+}
+
+#appShell.is-start-page #chat {
+    display: none !important;
+}
+
+#appShell.is-start-page .header-center,
+#appShell.is-start-page #headerNewChatBtn {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+}
+
+#appShell.is-start-page #inputArea {
+    position: absolute;
+    top: calc(56px + env(safe-area-inset-top, 0px));
+    bottom: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px 20px 60px;
+    background: transparent;
+    pointer-events: none;
+    z-index: 40;
+    gap: 16px;
+    box-sizing: border-box;
+}
+
+#appShell.is-start-page .start-page-hero {
+    display: flex !important;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    margin-bottom: 6px;
+    animation: startHeroFadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.start-page-title {
+    font-size: clamp(26px, 3.8vw, 36px);
+    font-weight: 600;
+    letter-spacing: -0.035em;
+    margin: 0;
+    line-height: 1.25;
+    background: linear-gradient(180deg, #ffffff 15%, #b5b5ba 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    user-select: none;
+}
+
+#appShell.is-start-page .composer-dock {
+    width: min(800px, 100%);
+    min-height: 108px;
+    padding: 16px 18px;
+    border-radius: 24px;
+    background: #18181a;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 16px 48px -8px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.04);
+    animation: startDockIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+#appShell.is-start-page .composer-dock:focus-within {
+    border-color: rgba(255, 255, 255, 0.24);
+    box-shadow: 0 20px 54px -6px rgba(0, 0, 0, 0.82), 0 0 0 1px rgba(255, 255, 255, 0.08);
+    background: #1b1b1d;
+}
+
+#appShell.is-start-page .composer-dock .composer-input-row {
+    align-items: flex-end;
+}
+
+#appShell.is-start-page .composer-dock .composer-textarea {
+    min-height: 48px;
+    font-size: 16px;
+    line-height: 1.5;
+    color: #f4f4f5;
+    padding: 2px 4px;
+}
+
+#appShell.is-start-page .start-page-footer {
+    display: flex !important;
+    width: min(800px, 100%);
+    justify-content: flex-start;
+    padding-left: 4px;
+    animation: startHeroFadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.hero-model-picker-btn {
+    pointer-events: auto !important;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 7px 14px;
+    border-radius: 9999px;
+    background: #1f1f22;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #dedee3;
+    font-size: 13.5px;
+    font-weight: 500;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease, transform 0.15s ease, box-shadow 0.18s ease;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+.hero-model-picker-btn:hover {
+    background: #29292d;
+    border-color: rgba(255, 255, 255, 0.2);
+    color: #ffffff;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+}
+
+.hero-model-picker-btn:active {
+    transform: translateY(0);
+    background: #232326;
+}
+
+.hero-model-picker-btn .hero-model-icon {
+    width: 15px;
+    height: 15px;
+    color: #a1a1aa;
+    display: block;
+}
+
+.hero-model-picker-btn .hero-model-chevron {
+    width: 14px;
+    height: 14px;
+    color: #71717a;
+    display: block;
+    transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.hero-model-picker-btn.is-open .hero-model-chevron {
+    transform: rotate(180deg);
+}
+
+@keyframes startHeroFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes startDockIn {
+    from {
+        opacity: 0;
+        transform: scale(0.98) translateY(8px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+@media (max-width: 600px) {
+    #appShell.is-start-page #inputArea {
+        padding: 16px 14px 40px;
+    }
+    #appShell.is-start-page .composer-dock {
+        width: 100%;
+        min-height: 96px;
+        padding: 14px;
+    }
+    #appShell.is-start-page .start-page-footer {
+        width: 100%;
+    }
+}
+

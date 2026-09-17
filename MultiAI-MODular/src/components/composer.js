@@ -12,7 +12,8 @@ import { renderChatList, isModelVisionCapable } from "./side-panel.js";
 import { showToast } from "./bottom-sheet.js";
 import { showErrorRecoveryPopup } from "./error-recovery.js";
 import { escapeHTML } from "../utils/dom.js";
-import { chatbox } from "./chatbox.js";
+import { chatbox, setStartPageMode } from "./chatbox.js";
+import { updateModelPickerDisplay } from "./model-picker.js";
 
 export { chatbox };
 export let stagedAttachments = [];
@@ -332,6 +333,8 @@ export async function send() {
     const hasAttachments = stagedAttachments.length > 0;
     if (!text && !hasAttachments) return;
 
+    setStartPageMode(false);
+
     const currentAttachments = stagedAttachments.slice();
     stagedAttachments = [];
     renderStagedAttachments();
@@ -501,6 +504,7 @@ export function initComposer() {
     const inputArea = document.getElementById("inputArea");
     if (inputArea) {
         chatbox.mount(inputArea);
+        updateModelPickerDisplay();
     }
 
     chatbox.onSend(() => {
