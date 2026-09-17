@@ -919,4 +919,13 @@
         overflow: hidden;
         text-overflow: ellipsis;
     }
+
+    /* Hide Start Page Aurora theme option on mobile/Android devices entirely */
+    .settings-row:has(#cfgAuroraTheme) {
+        display: none !important;
+    }
+}
+
+.is-android .settings-row:has(#cfgAuroraTheme) {
+    display: none !important;
 }

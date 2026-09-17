@@ -8,7 +8,7 @@ import { closePanel } from "./gestures.js";
 import { saveStoredChats } from "../services/storage.js";
 import { updateModelPickerDisplay } from "./model-picker.js";
 import { getUiScale, setUiScale, resetZoom } from "./ui-scale.js";
-import { getAuroraTheme, setAuroraTheme } from "./aurora-theme.js";
+import { getAuroraTheme, setAuroraTheme, isAndroidOrMobile } from "./aurora-theme.js";
 
 let activeSubScreen = "general";
 let saveTimeout = null;
@@ -180,7 +180,14 @@ export function populateSettingsValues() {
     if (themeSelect) themeSelect.value = ui.Theme || "dark";
 
     const auroraThemeSelect = document.getElementById("cfgAuroraTheme");
-    if (auroraThemeSelect) auroraThemeSelect.value = getAuroraTheme();
+    if (auroraThemeSelect) {
+        if (isAndroidOrMobile()) {
+            const row = auroraThemeSelect.closest(".settings-row");
+            if (row) row.style.display = "none";
+        } else {
+            auroraThemeSelect.value = getAuroraTheme();
+        }
+    }
 
     const showLineNumbers = document.getElementById("cfgShowLineNumbers");
     if (showLineNumbers) showLineNumbers.checked = ui.ShowLineNumbers !== false;

@@ -1277,40 +1277,22 @@ body.drag-over .composer {
         margin: 0 auto;
         box-sizing: border-box;
     }
-    /* Mobile-optimized symmetrical dual-core volumetric aura - perfectly centered via transform */
-    #appShell.is-start-page .start-page-glow-aura {
-        position: absolute;
-        left: 50% !important;
-        top: 50% !important;
-        transform: translate(-50%, -50%) !important;
-        width: calc(100% + 36px) !important;
-        height: calc(100% + 30px) !important;
-        max-width: none !important;
-        margin: 0 !important;
-        border-radius: 34px !important;
-        filter: blur(24px) !important;
-        -webkit-filter: blur(24px) !important;
-        background: 
-            radial-gradient(circle at 35% 35%, rgba(255, 255, 255, 0.44) 0%, rgba(230, 235, 248, 0.24) 38%, transparent 72%),
-            radial-gradient(circle at 65% 65%, rgba(245, 248, 255, 0.40) 0%, rgba(205, 215, 235, 0.20) 42%, transparent 75%) !important;
-        box-shadow: 0 0 24px rgba(255, 255, 255, 0.22), 0 0 48px rgba(230, 235, 250, 0.12) !important;
-        animation: mobileAuraPulse 6s ease-in-out infinite alternate !important;
-        will-change: opacity, transform;
-        opacity: 0.92 !important;
-        pointer-events: none !important;
-        z-index: -1 !important;
-    }
-    #appShell.is-start-page .composer-dock:focus-within .start-page-glow-aura {
-        opacity: 1 !important;
-        transform: translate(-50%, -50%) scale(1.03) !important;
-        filter: blur(26px) !important;
-        -webkit-filter: blur(26px) !important;
-        box-shadow: 0 0 32px rgba(255, 255, 255, 0.28), 0 0 60px rgba(255, 255, 255, 0.15) !important;
-    }
-    /* Hide heavy multi-layer 3D-transformed blurred DOM nodes on mobile GPUs in favor of single-pass multi-core gradient */
-    #appShell.is-start-page .glow-cloud,
-    #appShell.is-start-page .glow-cloud-shimmer {
+    /* Themes and glow aura completely removed for Android / mobile devices */
+    #startPageBackdrop,
+    .start-page-backdrop,
+    #appShell.is-start-page .start-page-glow-aura,
+    .start-page-glow-aura,
+    .saturn-stage,
+    .aurora-stage,
+    .nebula-stage,
+    .eclipse-stage,
+    .clouds-stage,
+    .glow-cloud,
+    .glow-cloud-shimmer {
         display: none !important;
+        visibility: hidden !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
     }
     #appShell.is-start-page .start-page-footer {
         width: 100%;
@@ -1652,47 +1634,39 @@ body.drag-over .composer {
 /* ---------------------------------------------------------
    RESPONSIVE ADJUSTMENTS FOR CELESTIAL STAGES
    --------------------------------------------------------- */
-@media (max-width: 600px) {
-    .lunar-mist-ambient {
-        top: 6%;
-        width: 96vw;
-        height: 320px;
-        filter: blur(42px);
-    }
-    .saturn-ambient-glow {
-        top: 8%;
-        left: -40px;
-        right: auto;
-        width: 280px;
-        height: 280px;
-        filter: blur(40px);
-    }
-    .nebula-cyan {
-        top: 2%;
-        right: -20px;
-        width: 240px;
-        height: 240px;
-        filter: blur(40px);
-    }
-    .nebula-magenta {
-        top: 14%;
-        left: -20px;
-        width: 260px;
-        height: 260px;
-        filter: blur(40px);
-    }
-    .eclipse-corona-flare {
-        top: -30px;
-        right: -20px;
-        width: 260px;
-        height: 260px;
-        filter: blur(36px);
-    }
-    .eclipse-solar-ring {
-        top: 2%;
-        right: 4%;
-        width: 140px;
-        height: 140px;
+.is-android #startPageBackdrop,
+.is-android .start-page-backdrop,
+.is-android #appShell.is-start-page .start-page-glow-aura,
+.is-android .start-page-glow-aura,
+.is-android .saturn-stage,
+.is-android .aurora-stage,
+.is-android .nebula-stage,
+.is-android .eclipse-stage,
+.is-android .clouds-stage,
+.is-android .glow-cloud,
+.is-android .glow-cloud-shimmer {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+}
+
+@media (max-width: 768px) {
+    #startPageBackdrop,
+    .start-page-backdrop,
+    #appShell.is-start-page .start-page-glow-aura,
+    .start-page-glow-aura,
+    .saturn-stage,
+    .aurora-stage,
+    .nebula-stage,
+    .eclipse-stage,
+    .clouds-stage,
+    .glow-cloud,
+    .glow-cloud-shimmer {
+        display: none !important;
+        visibility: hidden !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
     }
 }
 

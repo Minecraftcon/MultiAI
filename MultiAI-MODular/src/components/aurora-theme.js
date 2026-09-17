@@ -21,7 +21,18 @@ export const DEFAULT_AURORA_THEME = "clouds";
 
 let currentTheme = DEFAULT_AURORA_THEME;
 
+/**
+ * Detects if the current client is an Android or mobile touch device
+ */
+export function isAndroidOrMobile() {
+    return /Android/i.test(navigator.userAgent) || 
+           (typeof window !== "undefined" && window.matchMedia && window.matchMedia("(max-width: 768px)").matches);
+}
+
 export function getAuroraTheme() {
+    if (isAndroidOrMobile()) {
+        return "none";
+    }
     return currentTheme;
 }
 
@@ -29,6 +40,9 @@ export function getAuroraTheme() {
  * Return HTML markup for the celestial backdrop of a given theme
  */
 function getBackdropTemplate(theme) {
+    if (isAndroidOrMobile()) {
+        return "";
+    }
     switch (theme) {
         case "saturn":
             return `
@@ -76,6 +90,25 @@ function getBackdropTemplate(theme) {
  * Applies the selected aurora theme to the document and updates the backdrop.
  */
 export function setAuroraTheme(theme, save = false) {
+    // If Android or mobile, completely disable theme effects
+    if (isAndroidOrMobile()) {
+        document.documentElement.classList.add("is-android");
+        document.documentElement.setAttribute("data-aurora-theme", "none");
+        currentTheme = "none";
+        destroySaturnWebGL();
+        const backdropEl = document.getElementById("startPageBackdrop");
+        if (backdropEl) {
+            backdropEl.innerHTML = "";
+            backdropEl.className = "start-page-backdrop theme-none";
+        }
+        const select = document.getElementById("cfgAuroraTheme");
+        if (select) {
+            const row = select.closest(".settings-row");
+            if (row) row.style.display = "none";
+        }
+        return "none";
+    }
+
     const validThemes = Object.keys(AURORA_THEMES);
     const target = validThemes.includes(theme) ? theme : DEFAULT_AURORA_THEME;
     currentTheme = target;
@@ -126,6 +159,10 @@ export function setAuroraTheme(theme, save = false) {
  * Follows Modern Web Guidance: pauses 3D WebGL rendering when chatting
  */
 export function onStartPageModeChange(isStartPage) {
+    if (isAndroidOrMobile()) {
+        destroySaturnWebGL();
+        return;
+    }
     if (currentTheme === "saturn") {
         if (isStartPage) {
             const backdropEl = document.getElementById("startPageBackdrop");
@@ -143,6 +180,12 @@ export function onStartPageModeChange(isStartPage) {
  * Initializes the aurora theme on startup from config or localStorage.
  */
 export function initAuroraTheme() {
+    if (isAndroidOrMobile()) {
+        document.documentElement.classList.add("is-android");
+        setAuroraTheme("none", false);
+        return;
+    }
+
     let saved = null;
     try {
         saved = localStorage.getItem(STORAGE_KEY);

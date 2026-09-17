@@ -179,6 +179,10 @@ function animate() {
  * Starts or mounts the 3D Saturn WebGL experience
  */
 export function startSaturnWebGL(container) {
+    if (/Android/i.test(navigator.userAgent) || (typeof window !== "undefined" && window.matchMedia && window.matchMedia("(max-width: 768px)").matches)) {
+        return;
+    }
+
     if (typeof THREE === "undefined") {
         console.warn("[SATURN-3D] Three.js not loaded yet. Waiting...");
         setTimeout(() => startSaturnWebGL(container), 200);
