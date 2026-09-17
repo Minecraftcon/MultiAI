@@ -117,6 +117,9 @@ if (markedRenderer) {
         `;
     };
 
+const VIDEO_EXTENSIONS = new Set([".mp4", ".webm", ".ogg", ".ogv", ".mov", ".m4v", ".mkv"]);
+const AUDIO_EXTENSIONS = new Set([".mp3", ".wav", ".m4a", ".aac", ".flac", ".oga"]);
+
     markedRenderer.image = function(href, title, text) {
         let cleanHref = href;
         let cleanAlt = text || "";
@@ -136,8 +139,33 @@ if (markedRenderer) {
         }
 
         const safeHref = escapeHTML(resolvedHref);
-        const safeAlt = escapeHTML(cleanAlt || "Image");
+        const safeAlt = escapeHTML(cleanAlt || "");
         const safeTitle = escapeHTML(cleanTitle || "");
+
+        const urlClean = (cleanHref || "").split("?")[0].split("#")[0];
+        const ext = ("." + urlClean.split(".").pop()).toLowerCase();
+
+        if (VIDEO_EXTENSIONS.has(ext)) {
+            return `
+            <div class="ai-video-frame">
+                <video class="ai-video-el" src="${safeHref}" controls playsinline preload="metadata" title="${safeTitle || safeAlt || 'Video'}">
+                    Your browser does not support the video tag.
+                </video>
+                ${cleanAlt ? `<span class="ai-media-caption">${safeAlt}</span>` : ""}
+            </div>
+            `;
+        }
+
+        if (AUDIO_EXTENSIONS.has(ext)) {
+            return `
+            <div class="ai-audio-frame">
+                <audio class="ai-audio-el" src="${safeHref}" controls preload="metadata">
+                    Your browser does not support the audio tag.
+                </audio>
+                ${cleanAlt ? `<span class="ai-media-caption">${safeAlt}</span>` : ""}
+            </div>
+            `;
+        }
 
         return `
         <div class="ai-img-frame" data-state="generating" data-src="${safeHref}">
@@ -146,7 +174,7 @@ if (markedRenderer) {
                 <div class="ai-img-sweep"></div>
                 <span class="ai-img-size">1024 × 1024</span>
             </div>
-            <img class="ai-img-el" src="${safeHref}" alt="${safeAlt}" title="${safeTitle}" loading="eager" />
+            <img class="ai-img-el" src="${safeHref}" alt="${safeAlt || 'Image'}" title="${safeTitle}" loading="eager" />
         </div>
         `;
     };
@@ -424,6 +452,22 @@ export function parseMarkdown(text) {
             parsedContent = escapeHTML(processedText);
         }
         parsedContent = restoreMathTokens(parsedContent, mathBlocks);
+
+        parsedContent = parsedContent.replace(/<(video|audio|source|img)\b([^>]*?)>/gi, (match, tag, attrs) => {
+            let updatedAttrs = attrs.replace(/\b(src|poster)\s*=\s*(["'])(.*?)\2/gi, (attrMatch, attrName, quote, urlVal) => {
+                const trimmed = (urlVal || "").trim();
+                if (trimmed && !/^(https?:|data:|blob:|\/api\/media[/?]|#)/i.test(trimmed)) {
+                    return `${attrName}=${quote}/api/media?path=${encodeURIComponent(trimmed)}${quote}`;
+                }
+                return attrMatch;
+            });
+
+            if ((tag.toLowerCase() === "video" || tag.toLowerCase() === "audio") && !/\bcontrols\b/i.test(updatedAttrs)) {
+                updatedAttrs += " controls playsinline";
+            }
+
+            return `<${tag}${updatedAttrs}>`;
+        });
     }
 
     let combined = "";
@@ -442,14 +486,16 @@ export function parseMarkdown(text) {
                 "details", "summary", "svg", "path", "polyline", "line", "circle", "rect",
                 "math", "semantics", "mrow", "annotation", "mtext", "mspace",
                 "mo", "mi", "mn", "msub", "msup", "msubsup", "mfrac", "mroot",
-                "msqrt", "mtable", "mtr", "mtd", "munder", "mover", "munderover"
+                "msqrt", "mtable", "mtr", "mtd", "munder", "mover", "munderover",
+                "video", "audio", "source", "track"
             ],
             ADD_ATTR: [
                 "target", "rel", "class", "data-code", "data-chart", 
                 "data-state", "data-src", "sandbox", "srcdoc", "loading", "style",
                 "open", "viewBox", "stroke", "stroke-width", "fill",
                 "stroke-linecap", "stroke-linejoin", "d", "data-duration",
-                "xmlns", "display", "mathvariant", "columnalign", "rowspacing", "columnspacing"
+                "xmlns", "display", "mathvariant", "columnalign", "rowspacing", "columnspacing",
+                "controls", "playsinline", "preload", "autoplay", "muted", "loop", "poster", "width", "height", "src", "type"
             ]
         });
     }

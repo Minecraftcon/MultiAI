@@ -420,7 +420,19 @@ function getMimeType(ext) {
         ".mjs": "text/javascript",
         ".ts": "text/typescript",
         ".html": "text/html",
-        ".css": "text/css"
+        ".css": "text/css",
+        ".mp4": "video/mp4",
+        ".webm": "video/webm",
+        ".ogv": "video/ogg",
+        ".mov": "video/quicktime",
+        ".m4v": "video/x-m4v",
+        ".mkv": "video/x-matroska",
+        ".mp3": "audio/mpeg",
+        ".wav": "audio/wav",
+        ".ogg": "audio/ogg",
+        ".m4a": "audio/mp4",
+        ".aac": "audio/aac",
+        ".flac": "audio/flac"
     };
     return map[(ext || "").toLowerCase()] || "application/octet-stream";
 }
@@ -828,7 +840,47 @@ const server = http.createServer(async (req, res) => {
             const ext = path.extname(targetPath).toLowerCase();
             let mimeType = getMimeType(ext);
             if (mimeType === "application/octet-stream") {
-                mimeType = "image/png";
+                if (ext === ".mp4" || ext === ".m4v") mimeType = "video/mp4";
+                else if (ext === ".webm") mimeType = "video/webm";
+                else mimeType = "image/png";
+            }
+
+            // Support HTTP Range requests (crucial for video/audio seeking and buffering)
+            const range = req.headers.range;
+            if (range) {
+                const parts = range.replace(/bytes=/, "").split("-");
+                const start = parseInt(parts[0], 10);
+                const end = parts[1] ? parseInt(parts[1], 10) : stat.size - 1;
+
+                if (start >= stat.size || end >= stat.size || start > end) {
+                    res.writeHead(416, {
+                        "Content-Range": `bytes */${stat.size}`
+                    });
+                    return res.end();
+                }
+
+                const chunksize = (end - start) + 1;
+                res.writeHead(206, {
+                    "Content-Range": `bytes ${start}-${end}/${stat.size}`,
+                    "Accept-Ranges": "bytes",
+                    "Content-Length": chunksize,
+                    "Content-Type": mimeType,
+                    "Cache-Control": "public, max-age=3600"
+                });
+
+                if (req.method === "HEAD") {
+                    return res.end();
+                }
+
+                const stream = fs.createReadStream(targetPath, { start, end });
+                stream.on("error", (err) => {
+                    if (!res.headersSent) {
+                        res.writeHead(500, { "Content-Type": "text/plain" });
+                    }
+                    res.end("Error streaming media: " + err.message);
+                });
+                stream.pipe(res);
+                return;
             }
 
             res.writeHead(200, {

@@ -605,5 +605,56 @@
     }
 }
 
+/* =========================================================
+   MEDIA ELEMENTS: Video & Audio in Chat
+   ========================================================= */
+.ai-video-frame {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: min(100%, 640px);
+    max-width: 100%;
+    margin: 14px 0;
+    clear: both;
+}
 
+.ai-video-el,
+.message-content video {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    max-height: 480px;
+    border-radius: 12px;
+    background: #0d0e12;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+    outline: none;
+}
 
+.ai-audio-frame {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: min(100%, 420px);
+    max-width: 100%;
+    margin: 12px 0;
+    clear: both;
+}
+
+.ai-audio-el,
+.message-content audio {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    border-radius: 28px;
+    outline: none;
+}
+
+.ai-media-caption {
+    font-size: 12px;
+    color: #94a3b8;
+    margin-top: 2px;
+    padding-left: 2px;
+    font-style: italic;
+    word-break: break-word;
+}
