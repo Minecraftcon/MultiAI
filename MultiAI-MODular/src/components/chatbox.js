@@ -10,7 +10,6 @@
    ========================================================= */
 import { renderIcons } from "../utils/icons.js";
 import { isMobileBrowser } from "../utils/dom.js";
-import { toggleModelPicker } from "./model-picker.js";
 import { onStartPageModeChange } from "./aurora-theme.js";
 
 class ChatBoxComponent {
@@ -185,14 +184,6 @@ class ChatBoxComponent {
             this.clearBtn.addEventListener("click", () => {
                 this.clearInput();
                 this.focus();
-            });
-        }
-
-        // Hero Model Picker button click (start page)
-        if (this.heroModelPickerBtn) {
-            this.heroModelPickerBtn.addEventListener("click", (e) => {
-                e.stopPropagation();
-                toggleModelPicker();
             });
         }
     }
