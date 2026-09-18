@@ -65,7 +65,8 @@ export function addToolBadge(element, toolName, args) {
     } else if (toolName === "run_task") {
         icon = "play";
         label = "Ran command";
-        detail = args.command || "task command";
+        const taskName = args.task_name || args.name;
+        detail = taskName || args.command || "task command";
         isCommandTask = true;
     } else if (toolName === "task_stdout") {
         icon = "file-text";
@@ -120,8 +121,14 @@ export function addToolBadge(element, toolName, args) {
         ? detailLines.slice(0, 3).join("\n") + "\n..."
         : detail;
 
+    const isRunTaskWithTitle = toolName === "run_task" && (args.task_name || args.name);
+    const codeIconHtml = isRunTaskWithTitle 
+        ? `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-code preview-icon" style="display:inline-block; vertical-align:-2px; margin: 0 4px; opacity:0.8;"><path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/></svg>` 
+        : ``;
+
     const item = document.createElement("div");
     item.className = "search-badge-item" + (hasRing ? " timer-badge" : "") + (isCommandTask ? " clickable-badge" : "") + (isDetailMulti ? " has-multiline" : "");
+
     item.innerHTML = `
         <div class="search-icon-circle ${hasRing ? 'has-timer-ring' : ''}">
             ${hasRing ? `
@@ -134,6 +141,7 @@ export function addToolBadge(element, toolName, args) {
         </div>
         <div>
             <span class="search-label">${label}</span>
+            ${codeIconHtml}
             <span class="search-query ${detailLines.length > 1 ? 'is-multiline' : ''}" data-full="${escapeHTML(detail)}" data-compact="${escapeHTML(compactDetail)}">${escapeHTML(compactDetail)}</span>
             ${isCommandTask ? '<span class="badge-expand-chevron">▶</span>' : ''}
         </div>

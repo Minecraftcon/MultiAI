@@ -232,6 +232,15 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
     logEvent("REQUEST_START", { chatId, model: selectedModel, userText, isFirstUserTurn });
 
     const maxRounds = state.config?.Agent?.MaxToolRounds || MAX_TOOL_ROUNDS;
+    let stageStatus = "Thinking";
+    const statusTimer = setInterval(() => {
+        const activityLabel = currentAIMessage.querySelector(".activity-label");
+        if (activityLabel) {
+            const sec = ((Date.now() - overallStartTime) / 1000).toFixed(1);
+            activityLabel.textContent = `${stageStatus}... (${sec}s)`;
+        }
+    }, 100);
+
     try {
         for (let round = 0; round < maxRounds; round++) {
             if (genState.abortRequested) {
@@ -239,9 +248,11 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
                 return;
             }
 
+            stageStatus = round === 0 ? "Thinking" : `Synthesizing (round ${round + 1})`;
             const activityLabel = currentAIMessage.querySelector(".activity-label");
             if (activityLabel) {
-                activityLabel.textContent = round === 0 ? "Working..." : `Working... (reasoning round ${round + 1})`;
+                const sec = ((Date.now() - overallStartTime) / 1000).toFixed(1);
+                activityLabel.textContent = `${stageStatus}... (${sec}s)`;
             }
 
             let response;
@@ -360,6 +371,7 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
                 args = {};
             }
 
+            stageStatus = `Running ${toolName}`;
             const badgeEl = addToolBadge(currentAIMessage, toolName, args);
 
             try {
@@ -410,6 +422,7 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
     logEvent("MAX_TOOL_ROUNDS_REACHED", { model: selectedModel, userText });
     updateAIStream(currentAIMessage, "*(Max reasoning rounds reached)*", true, overallStartTime, true);
     } finally {
+        clearInterval(statusTimer);
         if (isFirstUserTurn && session.messages[0]?.role === "system") {
             session.messages[0].content = state.activeSystemPrompt;
         }

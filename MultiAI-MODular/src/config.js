@@ -20,7 +20,7 @@ export const SYSTEM_PROMPT_PRESETS = {
 export const CORE_TOOLS_PROMPT = `
 Use web_search whenever current, recent, or externally verifiable information is needed.
 Use fetch_web_content whenever you need to read the full content, documentation, or articles from specific web URLs.
-To execute terminal commands, call run_task. You can inspect output, read files, or manage shell scripts.
+To execute terminal commands, call run_task. Always provide a concise task_name (e.g. 'Analyze project', 'Run unit tests', 'Install dependencies'). You can inspect output, read files, or manage shell scripts.
 If a command is long-running, run_task returns an initial state. Use task_stdout to monitor it, task_send_input to pipe interactive text into standard input, and task_kill to terminate it.
 Use idle if you need to pause or wait for a background command to complete or produce output. When task_id is provided, idle will wake up immediately as soon as the command exits or produces output without waiting for the full timeout.
 Use read_file to inspect files, check file metadata/stats (action: "info"), examine line-numbered code slices with start_line/end_line (action: "read"), or preview images/media (action: "view").

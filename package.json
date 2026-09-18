@@ -1,5 +1,7 @@
 {
   "dependencies": {
+    "@langchain/core": "^1.2.11",
+    "@langchain/langgraph": "^1.4.15",
     "yaml": "^2.9.1"
   }
 }

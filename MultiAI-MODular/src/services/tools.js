@@ -53,6 +53,7 @@ export const tools = [
                 type: "object",
                 properties: {
                     command: { type: "string", description: "The shell command to execute" },
+                    task_name: { type: "string", description: "A concise 2-4 word label describing what this command accomplishes (e.g. 'Analyze project', 'Run unit tests', 'Check git status')" },
                     timeout: { type: "integer", description: "Cooldown seconds to wait before checking output (e.g. 1, 2, 5)" }
                 },
                 required: ["command", "timeout"]
@@ -416,7 +417,10 @@ export async function executeTool(name, args, badgeEl, genState) {
 
     const opts = {
         method,
-        headers: { "Content-Type": "application/json" }
+        headers: { 
+            "Content-Type": "application/json",
+            "x-chat-id": state.currentChatId || ""
+        }
     };
 
     if (genState.abortController) {
@@ -480,7 +484,21 @@ export async function executeTool(name, args, badgeEl, genState) {
         const resEl = badgeEl._collapseDiv.querySelector(".command-output-res");
         if (resEl) {
             let outText = "";
-            if (name === "read_file") {
+            const isLarge = data.is_large_output || (data.stdout && data.stdout.split("\n").length > 100);
+            if (isLarge && (name === "run_task" || name === "idle" || name.startsWith("task_"))) {
+                const rawOutput = data.truncated_lines || data.stdout || "";
+                const lines = rawOutput.split("\n").slice(-100);
+                const indentedLines = lines.map(l => "      " + l).join("\n");
+                outText = `id: ${data.task_id || args.task_id || "task"}\n`;
+                if (data.stderr && data.stderr.trim()) {
+                    outText += `stderr: [output turnicated] ... showing last 100 lines\n${indentedLines}\n`;
+                } else {
+                    outText += `stdrr: [output turnicated] ... showing last 100 lines\n${indentedLines}\n`;
+                }
+                outText += `status_code: ${data.exit_code ?? 0}\n`;
+                outText += `ran_for: ${data.ran_for || data.elapsed_seconds || "1.0"}s\n`;
+                outText += `sys: output has been saved to ${data.scratch_log_path || `scratch/${args.task_name ? (args.task_name.toLowerCase().replace(/[^a-z0-9_-]+/g, '-') + '-') : ''}${data.task_id || 'task'}.log`}`;
+            } else if (name === "read_file") {
                 if (data.action === "view" && data.type === "image") {
                     outText = `[Image View: ${data.path} (${data.mime}, ${data.human_size})]\n${data.markdown || ""}`;
                 } else if (data.action === "info") {

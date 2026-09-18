@@ -240,14 +240,26 @@ providers:
         name: "Command A (03-2025)"
         supports_tools: true
         supports_vision: false
-      - id: "command-a-vision-07-2025"
-        name: "Command A Vision"
-        supports_tools: true
-        supports_vision: true
-      - id: "command-r-plus-08-2024"
-        name: "Command R+ (08-2024)"
+      - id: "command-a-reasoning-08-2025"
+        name: "Command A Reasoning"
         supports_tools: true
         supports_vision: false
+      - id: "command-r-08-2024"
+        name: "Command R (Fast 35B)"
+        supports_tools: true
+        supports_vision: false
+      - id: "command-r-plus-08-2024"
+        name: "Command R+ (104B)"
+        supports_tools: true
+        supports_vision: false
+      - id: "command-r7b-12-2024"
+        name: "Command R7B (Ultra-Fast)"
+        supports_tools: true
+        supports_vision: false
+      - id: "command-a-vision-07-2025"
+        name: "Command A Vision"
+        supports_tools: false
+        supports_vision: true
       - id: "c4ai-aya-vision-32b"
         name: "Aya Vision 32B (Multimodal)"
         supports_tools: false

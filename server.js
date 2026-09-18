@@ -8,6 +8,7 @@ const YAML = require("yaml");
 const { resolveProvider, resolveImageProvider } = require("./providers");
 const { getConfig, saveConfig } = require("./config_manager");
 const conversationsManager = require("./conversations_manager");
+const { createAgentGraph } = require("./agent_graph");
 
 function getEnvKey(keyName) {
     if (!keyName) return null;
@@ -1058,24 +1059,98 @@ const server = http.createServer(async (req, res) => {
         }
     }
 
-    // Proxy terminal tasks to the supervised Python backend
+    // Proxy terminal tasks to the supervised Python backend with large-output scratch logging
     if (req.url.startsWith("/api/task/")) {
+        let reqBody = "";
+        try {
+            for await (const chunk of req) reqBody += chunk;
+        } catch (_) {}
+
+        let parsedBody = {};
+        try {
+            parsedBody = reqBody ? JSON.parse(reqBody) : {};
+        } catch (_) {}
+
+        const headers = { ...req.headers };
+        if (reqBody) {
+            headers["content-length"] = Buffer.byteLength(reqBody);
+        }
+
         const options = {
             hostname: "127.0.0.1",
             port: 5000,
             path: req.url,
             method: req.method,
-            headers: req.headers
+            headers
         };
+
+        const startTime = Date.now();
         const proxyReq = http.request(options, (proxyRes) => {
-            res.writeHead(proxyRes.statusCode, proxyRes.headers);
-            proxyRes.pipe(res, { end: true });
+            let resData = "";
+            proxyRes.on("data", (chunk) => { resData += chunk; });
+            proxyRes.on("end", () => {
+                let json;
+                try {
+                    json = JSON.parse(resData);
+                } catch (_) {}
+
+                if (json && typeof json === "object") {
+                    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+                    json.ran_for = json.elapsed_seconds ? String(json.elapsed_seconds) : elapsed;
+
+                    const combinedOutput = (json.stdout || "") + (json.stderr ? "\n" + json.stderr : "");
+                    const lines = combinedOutput.split("\n");
+                    const isLarge = lines.length > 100 || Buffer.byteLength(combinedOutput) > 2048;
+
+                    if (isLarge) {
+                        try {
+                            const chatId = req.headers["x-chat-id"] || parsedBody.chatId || "";
+                            let scratchDir = "";
+                            if (chatId) {
+                                try {
+                                    scratchDir = conversationsManager.ensureChatWorkspace(chatId).scratchDir;
+                                } catch (_) {}
+                            }
+                            if (!scratchDir) {
+                                scratchDir = path.join(conversationsManager.getStorageRoot(), "scratch");
+                            }
+                            if (!fs.existsSync(scratchDir)) {
+                                fs.mkdirSync(scratchDir, { recursive: true });
+                            }
+
+                            const taskName = parsedBody.task_name || parsedBody.name || "";
+                            const cleanName = taskName 
+                                ? taskName.toLowerCase().replace(/[^a-z0-9_-]+/g, "-").slice(0, 30) 
+                                : "task";
+                            const logFileName = `${cleanName}-${json.task_id || Date.now().toString(36)}.log`;
+                            const logFilePath = path.join(scratchDir, logFileName);
+
+                            fs.writeFileSync(logFilePath, combinedOutput, "utf8");
+
+                            json.is_large_output = true;
+                            json.scratch_log_path = `scratch/${logFileName}`;
+                            json.truncated_lines = lines.slice(-100).join("\n");
+                        } catch (err) {
+                            console.warn("[TASK LOG SAVE ERROR]", err.message);
+                        }
+                    }
+                    return sendJSON(res, proxyRes.statusCode, json);
+                }
+
+                res.writeHead(proxyRes.statusCode, proxyRes.headers);
+                res.end(resData);
+            });
         });
-        req.pipe(proxyReq, { end: true });
+
         proxyReq.on("error", (e) => {
             console.error(`[PROXY ERROR] Python server unreachable: ${e.message}`);
             sendJSON(res, 500, { error: "Python backend is not responding." });
         });
+
+        if (reqBody) {
+            proxyReq.write(reqBody);
+        }
+        proxyReq.end();
         return;
     }
 
@@ -1292,6 +1367,53 @@ const server = http.createServer(async (req, res) => {
         } catch (error) {
             console.error("[CHAT API ERROR]", error);
             return sendJSON(res, 500, { error: error.message });
+        }
+    }
+
+    if (req.method === "POST" && req.url === "/api/agent/stream") {
+        try {
+            let body = "";
+            for await (const chunk of req) body += chunk;
+            const data = JSON.parse(body || "{}");
+            const { model, messages, tools, chatId, todos } = data;
+
+            res.writeHead(200, {
+                "Content-Type": "text/event-stream",
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "Access-Control-Allow-Origin": "*"
+            });
+
+            const graph = createAgentGraph();
+            const stream = await graph.stream({
+                messages: messages || [],
+                model: model || "gemini-2.5-flash",
+                chatId: chatId || "",
+                todos: todos || []
+            }, {
+                configurable: {
+                    thread_id: chatId || "default_thread",
+                    tools: tools || [],
+                    modelsConfig: loadModelsConfig(),
+                    getApiKey: getEnvKey
+                },
+                streamMode: "updates"
+            });
+
+            for await (const update of stream) {
+                res.write(`data: ${JSON.stringify(update)}\n\n`);
+            }
+
+            res.write("data: [DONE]\n\n");
+            return res.end();
+        } catch (err) {
+            console.error("[AGENT STREAM ERROR]", err);
+            if (!res.headersSent) {
+                return sendJSON(res, 500, { error: err.message });
+            }
+            res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
+            res.write("data: [DONE]\n\n");
+            return res.end();
         }
     }
 
