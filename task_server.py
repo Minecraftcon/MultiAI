@@ -4,6 +4,7 @@ import threading
 import queue
 import uuid
 import time
+import os
 
 app = Flask(__name__)
 
@@ -20,16 +21,22 @@ class TaskManager:
         finally:
             out.close()
 
-    def run_task(self, command: str) -> str:
+    def run_task(self, command: str, scratch_dir: str = None) -> str:
         task_id = str(uuid.uuid4())[:8]
         
+        env = os.environ.copy()
+        if scratch_dir:
+            env['SCRATCH'] = scratch_dir
+            env['SCRATCH_DIR'] = scratch_dir
+
         process = subprocess.Popen(
             command,
             shell=True,
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            bufsize=0 
+            bufsize=0,
+            env=env
         )
         
         output_queue = queue.Queue()
@@ -122,7 +129,8 @@ def run_task_endpoint():
     if not command:
         return jsonify({"error": "No command provided"}), 400
         
-    task_id = manager.run_task(command)
+    scratch_dir = data.get('scratch_dir')
+    task_id = manager.run_task(command, scratch_dir=scratch_dir)
     
     # Wait until process finishes with an exit code OR timeout expires
     cooldown = max(0.05, float(timeout_secs))

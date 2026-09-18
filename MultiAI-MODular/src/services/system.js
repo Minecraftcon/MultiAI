@@ -56,9 +56,13 @@ export function buildFullSystemPrompt(workspace = null, personaOverride = null) 
             `[SCRATCHPAD & CONVERSATION WORKSPACE]:`,
             `- Active Chat ID: ${workspace.chatId}`,
             `- Conversation Root: ${workspace.chatDir}`,
-            `- Scratchsheet Directory: ${workspace.scratchDir}`,
+            `- Scratchsheet Directory ($SCRATCH): ${workspace.scratchDir}`,
             `- Images Directory: ${workspace.imagesDir}`,
-            `- Scratchpad Instructions: You have a dedicated scratchsheet directory (${workspace.scratchDir}) for this conversation. Always use it when writing temporary scripts, data files, analysis notes, code snippets, or intermediate tool outputs.`
+            `- SCRATCHPAD & TEMPORARY FILE GUIDELINES:`,
+            `  1. You have a dedicated scratchsheet directory (${workspace.scratchDir}) for this conversation accessible via '$SCRATCH'.`,
+            `  2. For non-relevant, temporary scripts, one-off test files, mock data, scratchpad notes, or benchmarks, write them using '$SCRATCH/<filename>' (or the full path ${workspace.scratchDir}/<filename>). Paths starting with '$SCRATCH/' automatically resolve to this directory.`,
+            `  3. In run_task, you can directly use '$SCRATCH/<filename>' or '$SCRATCH_DIR/<filename>' in terminal commands.`,
+            `  4. Regular relative paths resolve normally against the project workspace.`
         ].join("\n");
         sections.push(wsText.trim());
     }

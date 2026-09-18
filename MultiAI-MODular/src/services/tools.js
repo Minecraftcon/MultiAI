@@ -48,11 +48,11 @@ export const tools = [
         type: "function",
         function: {
             name: "run_task",
-            description: "Run a system command asynchronously. Waits for cooldown timeout before capturing initial stdout/stderr.",
+            description: "Run a system command asynchronously. Waits for cooldown timeout before capturing initial stdout/stderr. You can execute scratch scripts or redirect outputs using '$SCRATCH/<filename>'.",
             parameters: {
                 type: "object",
                 properties: {
-                    command: { type: "string", description: "The shell command to execute" },
+                    command: { type: "string", description: "The shell command to execute. Supports '$SCRATCH/<filename>' to access conversation scratch files." },
                     task_name: { type: "string", description: "A concise 2-4 word label describing what this command accomplishes (e.g. 'Analyze project', 'Run unit tests', 'Check git status')" },
                     timeout: { type: "integer", description: "Cooldown seconds to wait before checking output (e.g. 1, 2, 5)" }
                 },
@@ -121,13 +121,13 @@ export const tools = [
         type: "function",
         function: {
             name: "read_file",
-            description: "Inspect, read, or view file content and metadata. Supports line range pagination with line numbers, metadata inspection, and media/binary viewing.",
+            description: "Inspect, read, or view file content and metadata. Supports line range pagination with line numbers, metadata inspection, media/binary viewing, and scratchpad files ('$SCRATCH/<filename>').",
             parameters: {
                 type: "object",
                 properties: {
                     path: {
                         type: "string",
-                        description: "Relative or absolute file or directory path"
+                        description: "Relative or absolute file or directory path. Use '$SCRATCH/' or '$SCRATCH/<filename>' to read files from the isolated conversation scratch directory."
                     },
                     action: {
                         type: "string",
@@ -155,13 +155,13 @@ export const tools = [
         type: "function",
         function: {
             name: "write_file",
-            description: "Create, overwrite, replace text, inject lines, or execute batched/nested atomic file modifications.",
+            description: "Create, overwrite, replace text, inject lines, or execute batched/nested atomic file modifications. Use '$SCRATCH/<filename>' for temporary scripts, scratch notes, or experimental files.",
             parameters: {
                 type: "object",
                 properties: {
                     path: {
                         type: "string",
-                        description: "Relative or absolute target file path"
+                        description: "Relative or absolute target file path. For temporary files, tests, or scratch notes, you can prefix with '$SCRATCH/' (e.g. '$SCRATCH/test_api.py') to place them in the conversation scratch directory."
                     },
                     action: {
                         type: "string",
@@ -413,6 +413,10 @@ export async function executeTool(name, args, badgeEl, genState) {
         }
     } else {
         throw new Error("Unknown tool: " + name);
+    }
+
+    if (!args.chatId && state.currentChatId) {
+        args.chatId = state.currentChatId;
     }
 
     const opts = {

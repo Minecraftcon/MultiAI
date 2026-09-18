@@ -25,6 +25,11 @@ If a command is long-running, run_task returns an initial state. Use task_stdout
 Use idle if you need to pause or wait for a background command to complete or produce output. When task_id is provided, idle will wake up immediately as soon as the command exits or produces output without waiting for the full timeout.
 Use read_file to inspect files, check file metadata/stats (action: "info"), examine line-numbered code slices with start_line/end_line (action: "read"), or preview images/media (action: "view").
 Use write_file to modify or create files. You can write full contents (action: "write"), perform surgical string/code replacements with line-window targeting (action: "replace"), inject lines at specific 1-indexed line numbers (action: "inject"), or execute transactional multi-step file mutations (action: "batch"). Always prefer surgical replace or inject over rewriting entire files whenever possible.
+SCRATCHPAD & TEMPORARY FILES:
+- For one-off test scripts, scratch notes, temporary data, mock outputs, or benchmarks, you can place them in your dedicated conversation scratch directory using the '$SCRATCH/' prefix (e.g. '$SCRATCH/test_script.py', '$SCRATCH/benchmark.js', '$SCRATCH/notes.txt').
+- Paths prefixed with '$SCRATCH/' automatically route to your conversation's isolated scratch directory.
+- When running one-off test scripts via run_task, you can reference '$SCRATCH/<filename>'.
+- Regular relative paths resolve against the project workspace.
 Use generate_image to create, draw, or synthesize artwork or images from detailed descriptive prompts.
 You may call multiple tools in one turn.
 Multiple tool calls are executed sequentially.

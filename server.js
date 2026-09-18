@@ -454,14 +454,47 @@ function getMimeType(ext) {
     return map[(ext || "").toLowerCase()] || "application/octet-stream";
 }
 
-function resolveSafePath(inputPath) {
+function getChatScratchDir(chatId) {
+    if (chatId) {
+        try {
+            return conversationsManager.ensureChatWorkspace(chatId).scratchDir;
+        } catch (_) {}
+    }
+    return path.join(conversationsManager.getStorageRoot(), "scratch");
+}
+
+function resolveSafePath(inputPath, chatId) {
     const raw = String(inputPath || "").trim();
     if (!raw) throw new Error("Path parameter is empty or missing");
+
+    // Check if path is targeted at scratch directory via $SCRATCH
+    const isScratch = raw === "$SCRATCH" || 
+                      raw === "${SCRATCH}" || 
+                      raw.startsWith("$SCRATCH/") || 
+                      raw.startsWith("${SCRATCH}/") ||
+                      raw.startsWith("$SCRATCH\\") || 
+                      raw.startsWith("${SCRATCH}\\");
+
+    if (isScratch) {
+        let rel = raw;
+        if (rel.startsWith("$SCRATCH/")) rel = rel.slice(9);
+        else if (rel.startsWith("${SCRATCH}/")) rel = rel.slice(10);
+        else if (rel.startsWith("$SCRATCH\\")) rel = rel.slice(9);
+        else if (rel.startsWith("${SCRATCH}\\")) rel = rel.slice(10);
+        else if (rel === "$SCRATCH" || rel === "${SCRATCH}") rel = "";
+
+        const scratchDir = getChatScratchDir(chatId);
+        if (!fs.existsSync(scratchDir)) {
+            fs.mkdirSync(scratchDir, { recursive: true });
+        }
+        return rel ? path.resolve(scratchDir, rel) : scratchDir;
+    }
+
     return path.isAbsolute(raw) ? path.normalize(raw) : path.resolve(process.cwd(), raw);
 }
 
-async function handleFileRead(args) {
-    const targetPath = resolveSafePath(args.path);
+async function handleFileRead(args, chatId) {
+    const targetPath = resolveSafePath(args.path, chatId);
     if (!fs.existsSync(targetPath)) {
         throw new Error(`File or directory not found: ${args.path}`);
     }
@@ -584,9 +617,10 @@ async function handleFileRead(args) {
     };
 }
 
-async function handleFileWrite(args) {
-    const targetPath = resolveSafePath(args.path);
+async function handleFileWrite(args, chatId) {
+    const targetPath = resolveSafePath(args.path, chatId);
     await fs.promises.mkdir(path.dirname(targetPath), { recursive: true });
+    const isScratch = targetPath.includes(path.sep + "scratch" + path.sep) || targetPath.endsWith(path.sep + "scratch");
 
     let action = args.action;
     if (!action) {
@@ -612,10 +646,13 @@ async function handleFileWrite(args) {
             success: true,
             path: args.path,
             resolved_path: targetPath,
+            is_scratch: isScratch,
             action: "write",
             bytes_written: Buffer.byteLength(textToWrite),
             status: "success",
-            message: `Successfully wrote file: ${args.path}`
+            message: isScratch
+                ? `Successfully wrote file to conversation scratch directory: ${args.path}`
+                : `Successfully wrote file: ${args.path}`
         };
     }
 
@@ -1071,6 +1108,25 @@ const server = http.createServer(async (req, res) => {
             parsedBody = reqBody ? JSON.parse(reqBody) : {};
         } catch (_) {}
 
+        const chatId = req.headers["x-chat-id"] || parsedBody.chatId || parsedBody.chat_id || "";
+        let scratchDir = "";
+        if (chatId) {
+            try {
+                scratchDir = conversationsManager.ensureChatWorkspace(chatId).scratchDir;
+            } catch (_) {}
+        }
+        if (!scratchDir) {
+            scratchDir = path.join(conversationsManager.getStorageRoot(), "scratch");
+        }
+        if (!fs.existsSync(scratchDir)) {
+            fs.mkdirSync(scratchDir, { recursive: true });
+        }
+
+        if (parsedBody && typeof parsedBody === "object") {
+            parsedBody.scratch_dir = scratchDir;
+            reqBody = JSON.stringify(parsedBody);
+        }
+
         const headers = { ...req.headers };
         if (reqBody) {
             headers["content-length"] = Buffer.byteLength(reqBody);
@@ -1183,7 +1239,8 @@ const server = http.createServer(async (req, res) => {
             let body = "";
             for await (const chunk of req) body += chunk;
             const args = JSON.parse(body || "{}");
-            const result = await handleFileRead(args);
+            const chatId = req.headers["x-chat-id"] || args.chatId || args.chat_id || "";
+            const result = await handleFileRead(args, chatId);
             return sendJSON(res, 200, result);
         } catch (error) {
             return sendJSON(res, 500, { error: error.message });
@@ -1195,7 +1252,8 @@ const server = http.createServer(async (req, res) => {
             let body = "";
             for await (const chunk of req) body += chunk;
             const args = JSON.parse(body || "{}");
-            const result = await handleFileWrite(args);
+            const chatId = req.headers["x-chat-id"] || args.chatId || args.chat_id || "";
+            const result = await handleFileWrite(args, chatId);
             return sendJSON(res, 200, result);
         } catch (error) {
             return sendJSON(res, 500, { error: error.message });

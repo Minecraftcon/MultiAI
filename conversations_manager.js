@@ -116,9 +116,13 @@ function ensureChatWorkspace(chatId, dateStr) {
         `[SCRATCHPAD & CONVERSATION WORKSPACE]:`,
         `- Active Chat ID: ${chatId}`,
         `- Conversation Root: ${chatDir}`,
-        `- Scratchsheet Directory: ${scratchDir}`,
+        `- Scratchsheet Directory ($SCRATCH): ${scratchDir}`,
         `- Images Directory: ${imagesDir}`,
-        `- Scratchpad Instructions: You have a dedicated scratchsheet directory (${scratchDir}) for this conversation. Always use it when writing temporary scripts, data files, analysis notes, code snippets, or intermediate tool outputs.`
+        `- SCRATCHPAD & TEMPORARY FILE GUIDELINES:`,
+        `  1. You have a dedicated scratchsheet directory (${scratchDir}) for this conversation accessible via '$SCRATCH'.`,
+        `  2. For non-relevant, temporary scripts, one-off test files, mock data, scratchpad notes, or benchmarks, write them using '$SCRATCH/<filename>' (or the full path ${scratchDir}/<filename>). Paths starting with '$SCRATCH/' automatically resolve to this directory.`,
+        `  3. In run_task, you can directly use '$SCRATCH/<filename>' or '$SCRATCH_DIR/<filename>' in terminal commands.`,
+        `  4. Regular relative paths resolve normally against the project workspace.`
     ].join("\n");
 
     return {
