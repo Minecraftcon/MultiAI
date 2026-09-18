@@ -1,16 +1,42 @@
 /* =========================================================
    HOST SYSTEM ENVIRONMENT & WORKSPACE PROMPT SERVICE
    ========================================================= */
-import { BASE_SYSTEM_PROMPT } from "../config.js";
+import { 
+    DEFAULT_PERSONA_PROMPT, 
+    SYSTEM_PROMPT_PRESETS, 
+    CORE_TOOLS_PROMPT, 
+    FOLLOWUP_SYSTEM_PROMPT 
+} from "../config.js";
 import { state, setActiveSystemPrompt } from "../state.js";
 
 let cachedSystemInfo = null;
 
-export function buildFullSystemPrompt(workspace = null) {
-    let full = BASE_SYSTEM_PROMPT;
+export function getActivePersonaPrompt() {
+    if (state.activePersonaPrompt && state.activePersonaPrompt.trim()) {
+        return state.activePersonaPrompt.trim();
+    }
+    const storedPreset = localStorage.getItem("multiai_system_preset") || "default";
+    if (storedPreset === "custom") {
+        const storedCustom = localStorage.getItem("multiai_custom_system_prompt");
+        if (storedCustom && storedCustom.trim()) return storedCustom.trim();
+    } else if (SYSTEM_PROMPT_PRESETS[storedPreset]) {
+        return SYSTEM_PROMPT_PRESETS[storedPreset];
+    }
+    return DEFAULT_PERSONA_PROMPT;
+}
+
+export function buildFullSystemPrompt(workspace = null, personaOverride = null) {
+    const persona = (typeof personaOverride === "string" && personaOverride.trim())
+        ? personaOverride.trim()
+        : getActivePersonaPrompt();
+
+    const sections = [
+        persona,
+        CORE_TOOLS_PROMPT
+    ];
 
     if (cachedSystemInfo) {
-        let envPrompt = `\n\n[HOST SYSTEM ENVIRONMENT]\n`;
+        let envPrompt = `[HOST SYSTEM ENVIRONMENT]\n`;
         envPrompt += `- Operating System: ${cachedSystemInfo.osName} (${cachedSystemInfo.arch})\n`;
         envPrompt += `- Terminal Shell: ${cachedSystemInfo.shellName}\n`;
         envPrompt += `- Working Directory: ${cachedSystemInfo.cwd}\n`;
@@ -22,7 +48,7 @@ export function buildFullSystemPrompt(workspace = null) {
                 envPrompt += `- ${ins}\n`;
             });
         }
-        full += envPrompt;
+        sections.push(envPrompt.trim());
     }
 
     if (workspace && workspace.scratchDir) {
@@ -34,9 +60,18 @@ export function buildFullSystemPrompt(workspace = null) {
             `- Images Directory: ${workspace.imagesDir}`,
             `- Scratchpad Instructions: You have a dedicated scratchsheet directory (${workspace.scratchDir}) for this conversation. Always use it when writing temporary scripts, data files, analysis notes, code snippets, or intermediate tool outputs.`
         ].join("\n");
-        full += `\n\n${wsText}`;
+        sections.push(wsText.trim());
     }
 
+    sections.push(FOLLOWUP_SYSTEM_PROMPT);
+
+    return sections.filter(Boolean).join("\n\n");
+}
+
+export function rebuildActiveSystemPrompt(workspace = null, personaOverride = null) {
+    const currentWorkspace = workspace || (state.currentChatId ? state.chatSessions[state.currentChatId]?.workspace : null);
+    const full = buildFullSystemPrompt(currentWorkspace, personaOverride);
+    setActiveSystemPrompt(full);
     return full;
 }
 
@@ -48,14 +83,12 @@ export async function initSystemEnvironment() {
         state.hostSystemInfo = cachedSystemInfo;
 
         const currentSession = state.currentChatId ? state.chatSessions[state.currentChatId] : null;
-        const fullPrompt = buildFullSystemPrompt(currentSession?.workspace);
-        setActiveSystemPrompt(fullPrompt);
+        rebuildActiveSystemPrompt(currentSession?.workspace);
     } catch (e) {
         console.warn("Could not fetch system info:", e);
     }
 }
 
 export function syncActiveWorkspacePrompt(workspace) {
-    const fullPrompt = buildFullSystemPrompt(workspace);
-    setActiveSystemPrompt(fullPrompt);
+    rebuildActiveSystemPrompt(workspace);
 }

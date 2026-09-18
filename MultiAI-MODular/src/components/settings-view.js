@@ -9,16 +9,11 @@ import { saveStoredChats } from "../services/storage.js";
 import { updateModelPickerDisplay } from "./model-picker.js";
 import { getUiScale, setUiScale, resetZoom } from "./ui-scale.js";
 import { getAuroraTheme, setAuroraTheme, isAndroidOrMobile } from "./aurora-theme.js";
+import { SYSTEM_PROMPT_PRESETS } from "../config.js";
+import { rebuildActiveSystemPrompt } from "../services/system.js";
 
 let activeSubScreen = "general";
 let saveTimeout = null;
-
-const SYSTEM_PROMPT_PRESETS = {
-    default: "You are a helpful, versatile AI assistant. Answer queries accurately, concisely, and with high technical precision.",
-    developer: "You are an elite senior software engineer and architect. Write clean, idiomatic, robust, and performant code with comments explaining non-obvious architecture decisions.",
-    creative: "You are a brilliant and imaginative writer and thought partner. Use evocative language, rich metaphors, and original ideas.",
-    concise: "You are an ultra-concise assistant. Provide only the essential facts and direct code or answers without preamble or fluff."
-};
 
 export function openSettings(targetCategory = "general") {
     const appShell = document.getElementById("appShell");
@@ -115,7 +110,7 @@ export function populateSettingsValues() {
 
     const presetSelect = document.getElementById("cfgSystemPreset");
     const customPromptText = document.getElementById("cfgCustomSystemPrompt");
-    const storedPreset = localStorage.getItem("multiai_system_preset") || "default";
+    const storedPreset = localStorage.getItem("multiai_system_preset") || gen.SystemPreset || "default";
     const storedCustom = localStorage.getItem("multiai_custom_system_prompt") || "";
 
     if (presetSelect) presetSelect.value = storedPreset;
@@ -124,6 +119,15 @@ export function populateSettingsValues() {
         const row = document.getElementById("cfgCustomPromptRow");
         if (row) row.style.display = (storedPreset === "custom") ? "flex" : "none";
     }
+
+    let initialPersona = SYSTEM_PROMPT_PRESETS.default;
+    if (storedPreset === "custom") {
+        initialPersona = storedCustom.trim() || SYSTEM_PROMPT_PRESETS.default;
+    } else if (SYSTEM_PROMPT_PRESETS[storedPreset]) {
+        initialPersona = SYSTEM_PROMPT_PRESETS[storedPreset];
+    }
+    state.activePersonaPrompt = initialPersona;
+    rebuildActiveSystemPrompt();
 
     const sendKey = document.getElementById("cfgSendKey");
     if (sendKey) {
@@ -367,13 +371,16 @@ export function initSettingsView() {
         presetSelect.addEventListener("change", (e) => {
             const val = e.target.value;
             localStorage.setItem("multiai_system_preset", val);
+            let persona = SYSTEM_PROMPT_PRESETS.default;
             if (val === "custom") {
                 if (customPromptRow) customPromptRow.style.display = "flex";
-                if (customPromptText) state.activeSystemPrompt = customPromptText.value.trim();
+                persona = customPromptText ? customPromptText.value.trim() : "";
             } else {
                 if (customPromptRow) customPromptRow.style.display = "none";
-                state.activeSystemPrompt = SYSTEM_PROMPT_PRESETS[val] || SYSTEM_PROMPT_PRESETS.default;
+                persona = SYSTEM_PROMPT_PRESETS[val] || SYSTEM_PROMPT_PRESETS.default;
             }
+            state.activePersonaPrompt = persona || SYSTEM_PROMPT_PRESETS.default;
+            rebuildActiveSystemPrompt();
             saveSetting("General", "SystemPreset", val);
         });
     }
@@ -383,7 +390,8 @@ export function initSettingsView() {
             const val = e.target.value;
             localStorage.setItem("multiai_custom_system_prompt", val);
             if (presetSelect?.value === "custom") {
-                state.activeSystemPrompt = val.trim() || SYSTEM_PROMPT_PRESETS.default;
+                state.activePersonaPrompt = val.trim() || SYSTEM_PROMPT_PRESETS.default;
+                rebuildActiveSystemPrompt();
             }
         });
     }
