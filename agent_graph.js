@@ -1,7 +1,18 @@
 // MultiAI LangGraph StateFlow Engine
 // Orchestrates multi-step agent workflows with dynamic planning, tool execution, and circuit-breaker recovery.
 
-const { Annotation, StateGraph, START, END, MemorySaver } = require("@langchain/langgraph");
+let Annotation, StateGraph, START, END, MemorySaver;
+try {
+    const lg = require("@langchain/langgraph");
+    Annotation = lg.Annotation;
+    StateGraph = lg.StateGraph;
+    START = lg.START;
+    END = lg.END;
+    MemorySaver = lg.MemorySaver;
+} catch (e) {
+    // LangGraph packages will be auto-installed by start.py
+}
+
 const { resolveProvider } = require("./providers");
 const path = require("path");
 const fs = require("fs");
@@ -10,7 +21,7 @@ const conversationsManager = require("./conversations_manager");
 // ---------------------------------------------------------
 // State Schema
 // ---------------------------------------------------------
-const AgentState = Annotation.Root({
+const AgentState = Annotation ? Annotation.Root({
     messages: Annotation({
         reducer: (prev, next) => (Array.isArray(next) ? prev.concat(next) : prev.concat([next])),
         default: () => []
@@ -51,7 +62,7 @@ const AgentState = Annotation.Root({
         reducer: (prev, next) => (typeof next === "number" ? next : prev),
         default: () => 0
     })
-});
+}) : null;
 
 // ---------------------------------------------------------
 // Node Implementations
@@ -277,6 +288,9 @@ function routeNext(state) {
 // Graph Construction & Compilation
 // ---------------------------------------------------------
 function createAgentGraph() {
+    if (!StateGraph) {
+        throw new Error("LangGraph is not installed. Please run 'npm install' or launch via './start.py'.");
+    }
     const workflow = new StateGraph(AgentState)
         .addNode("router", routerNode)
         .addNode("planner", plannerNode)

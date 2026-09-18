@@ -123,20 +123,27 @@ def check_setup():
         log_error("npm is not installed or not in PATH.")
         sys.exit(1)
 
-    # 4. Check Node dependencies (yaml)
+    # 4. Check Node dependencies (yaml, @langchain/langgraph, @langchain/core)
     root_dir = os.path.dirname(os.path.abspath(__file__))
     node_modules_dir = os.path.join(root_dir, "node_modules")
-    yaml_pkg_dir = os.path.join(node_modules_dir, "yaml")
 
-    if not os.path.exists(yaml_pkg_dir):
-        log_warn("Node dependencies not detected. Running 'npm install'...")
+    required_node_pkgs = [
+        ("yaml", os.path.join(node_modules_dir, "yaml")),
+        ("@langchain/langgraph", os.path.join(node_modules_dir, "@langchain", "langgraph")),
+        ("@langchain/core", os.path.join(node_modules_dir, "@langchain", "core"))
+    ]
+
+    missing_pkgs = [name for name, path in required_node_pkgs if not os.path.exists(path)]
+
+    if missing_pkgs:
+        log_warn(f"Node dependencies missing ({', '.join(missing_pkgs)}). Running 'npm install'...")
         res = subprocess.run(["npm", "install"], cwd=root_dir)
         if res.returncode != 0:
             log_error("Failed to install npm dependencies.")
             sys.exit(1)
         log_success("Node dependencies installed successfully.")
     else:
-        log_success("Node dependencies verified (node_modules/yaml present).")
+        log_success("Node dependencies verified (yaml, @langchain/langgraph, @langchain/core present).")
 
     # 5. Check Python dependencies (flask for task server)
     try:
