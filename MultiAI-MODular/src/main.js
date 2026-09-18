@@ -37,22 +37,11 @@ function initChatSessions() {
     }
 
     const chat = document.getElementById("chat");
-    const storedIds = Object.keys(state.chatSessions);
-
-    if (storedIds.length > 0) {
-        const targetId = (state.currentChatId && state.chatSessions[state.currentChatId]) ? state.currentChatId : (
-            storedIds.sort((a, b) => (state.chatSessions[b].updatedAt || 0) - (state.chatSessions[a].updatedAt || 0)),
-            storedIds[0]
-        );
-        state.currentChatId = null;
-        switchToChat(targetId);
-    } else {
-        state.currentChatId = null;
-        if (chat) chat.innerHTML = "";
-        state.messages = [{ role: "system", content: state.activeSystemPrompt }];
-        renderChatList();
-        setStartPageMode(true);
-    }
+    state.currentChatId = null;
+    if (chat) chat.innerHTML = "";
+    state.messages = [{ role: "system", content: state.activeSystemPrompt }];
+    renderChatList();
+    setStartPageMode(true);
 }
 
 async function initConfig() {

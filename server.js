@@ -1024,6 +1024,15 @@ const server = http.createServer(async (req, res) => {
         }
     }
 
+    if (req.method === "DELETE" && req.url === "/api/chats") {
+        try {
+            const deleted = conversationsManager.deleteAllChats();
+            return sendJSON(res, 200, { success: true, deleted });
+        } catch (err) {
+            return sendJSON(res, 500, { error: err.message });
+        }
+    }
+
     if (req.method === "DELETE" && req.url.startsWith("/api/chats/")) {
         const chatId = req.url.slice("/api/chats/".length).split("?")[0];
         if (!chatId) {

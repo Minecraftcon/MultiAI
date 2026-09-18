@@ -398,6 +398,28 @@ function deleteChat(chatId) {
 }
 
 /**
+ * Deletes all chats from disk under $HOME/.MuktiAI/conversations/
+ */
+function deleteAllChats() {
+    const convRoot = getConversationsRoot();
+    if (!fs.existsSync(convRoot)) return true;
+
+    try {
+        const dates = fs.readdirSync(convRoot);
+        for (const dateFolder of dates) {
+            const datePath = path.join(convRoot, dateFolder);
+            if (fs.existsSync(datePath) && fs.statSync(datePath).isDirectory()) {
+                fs.rmSync(datePath, { recursive: true, force: true });
+            }
+        }
+        return true;
+    } catch (err) {
+        console.error("[CONVERSATIONS] Error deleting all chats:", err.message);
+        return false;
+    }
+}
+
+/**
  * Saves or copies an image buffer to the chat's images directory.
  */
 function saveChatImage(chatId, filename, buffer) {
@@ -423,5 +445,6 @@ module.exports = {
     getChat,
     listChats,
     deleteChat,
+    deleteAllChats,
     saveChatImage
 };

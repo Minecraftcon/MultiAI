@@ -899,21 +899,16 @@ body.drag-over .composer {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 24px 20px 60px;
+    padding: 20px 20px calc(28px + env(safe-area-inset-bottom, 0px));
     background: transparent;
     pointer-events: none;
     z-index: 40;
     gap: 16px;
     box-sizing: border-box;
     max-width: 100vw;
+    overflow-y: auto;
     overflow-x: clip;
     transition: padding 0.25s ease;
-}
-
-#appShell.is-start-page:has(.composer-dock:focus-within) #inputArea,
-#appShell.is-start-page:has(.composer-dock.composer-expanded) #inputArea {
-    justify-content: flex-end;
-    padding-bottom: calc(32px + env(safe-area-inset-bottom, 0px));
 }
 
 #appShell.is-start-page .start-page-hero {
@@ -927,8 +922,8 @@ body.drag-over .composer {
 }
 
 #appShell.is-start-page:has(.composer-dock.composer-expanded) .start-page-hero {
-    margin-bottom: 12px;
-    transform: translateY(-8px);
+    margin-bottom: 8px;
+    transform: translateY(-4px);
 }
 
 .start-page-title {
@@ -1293,9 +1288,10 @@ body.drag-over .composer {
 
 @media (max-width: 600px) {
     #appShell.is-start-page #inputArea {
-        padding: 16px 14px 40px;
+        padding: 14px 14px calc(24px + env(safe-area-inset-bottom, 0px));
         width: 100%;
         max-width: 100vw;
+        justify-content: center;
         box-sizing: border-box;
     }
     #appShell.is-start-page .composer-dock {
@@ -1306,20 +1302,11 @@ body.drag-over .composer {
         margin: 0 auto;
         box-sizing: border-box;
     }
-    #appShell.is-start-page:has(.composer-dock:focus-within) #inputArea,
-    #appShell.is-start-page:has(.composer-dock.composer-expanded) #inputArea {
-        justify-content: flex-end;
-        padding-top: 10px;
-        padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+    #appShell.is-start-page .start-page-hero {
+        margin-bottom: 4px;
     }
-    #appShell.is-start-page:has(.composer-dock:focus-within) .start-page-hero,
-    #appShell.is-start-page:has(.composer-dock.composer-expanded) .start-page-hero {
-        margin-bottom: 8px;
-        transform: translateY(-4px);
-    }
-    #appShell.is-start-page:has(.composer-dock:focus-within) .start-page-title,
-    #appShell.is-start-page:has(.composer-dock.composer-expanded) .start-page-title {
-        font-size: 22px;
+    #appShell.is-start-page .start-page-title {
+        font-size: clamp(20px, 5.5vw, 24px);
     }
     /* Themes and glow aura completely removed for Android / mobile devices */
     #startPageBackdrop,

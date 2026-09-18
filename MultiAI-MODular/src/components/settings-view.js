@@ -9,8 +9,10 @@ import { saveStoredChats } from "../services/storage.js";
 import { updateModelPickerDisplay } from "./model-picker.js";
 import { getUiScale, setUiScale, resetZoom } from "./ui-scale.js";
 import { getAuroraTheme, setAuroraTheme, isAndroidOrMobile } from "./aurora-theme.js";
-import { SYSTEM_PROMPT_PRESETS } from "../config.js";
+import { SYSTEM_PROMPT_PRESETS, CHATS_STORAGE_KEY, ACTIVE_CHAT_KEY } from "../config.js";
 import { rebuildActiveSystemPrompt } from "../services/system.js";
+import { renderChatList } from "./side-panel.js";
+import { setStartPageMode } from "./chatbox.js";
 
 let activeSubScreen = "general";
 let saveTimeout = null;
@@ -249,8 +251,21 @@ function updateStorageSummary() {
     const sizeEl = document.getElementById("settingsStorageSize");
     if (sizeEl) {
         try {
-            const raw = localStorage.getItem("multiai_chats") || "";
-            const kb = (new Blob([raw]).size / 1024).toFixed(1);
+            let bytes = 0;
+            const chatsRaw = localStorage.getItem(CHATS_STORAGE_KEY);
+            if (chatsRaw) {
+                bytes += new Blob([chatsRaw]).size;
+            } else if (state.chatSessions && totalSessions > 0) {
+                bytes += new Blob([JSON.stringify(state.chatSessions)]).size;
+            }
+            // Include other app localStorage keys for complete accuracy
+            for (let i = 0; i < localStorage.length; i++) {
+                const k = localStorage.key(i);
+                if (k && k !== CHATS_STORAGE_KEY && (k.startsWith("multi") || k.startsWith("gemini"))) {
+                    bytes += new Blob([localStorage.getItem(k) || ""]).size;
+                }
+            }
+            const kb = (bytes / 1024).toFixed(1);
             sizeEl.textContent = `~${kb} KB`;
         } catch (_) {
             sizeEl.textContent = "Local";
@@ -595,13 +610,25 @@ export function initSettingsView() {
     // Clear All Chats Button
     const clearBtn = document.getElementById("settingsClearAllBtn");
     if (clearBtn) {
-        clearBtn.addEventListener("click", () => {
+        clearBtn.addEventListener("click", async () => {
             if (confirm("Are you sure you want to clear all stored conversation history? This cannot be undone.")) {
+                try {
+                    await fetch("/api/chats", { method: "DELETE" });
+                } catch (e) {
+                    console.warn("[SETTINGS] Backend clear error:", e);
+                }
                 state.chatSessions = {};
                 state.currentChatId = null;
+                state.messages = [{ role: "system", content: state.activeSystemPrompt }];
+                try {
+                    localStorage.removeItem(CHATS_STORAGE_KEY);
+                    localStorage.removeItem(ACTIVE_CHAT_KEY);
+                } catch (_) {}
                 saveStoredChats();
                 const chat = document.getElementById("chat");
                 if (chat) chat.innerHTML = "";
+                renderChatList();
+                setStartPageMode(true);
                 updateStorageSummary();
                 closeSettings();
             }
