@@ -71,8 +71,8 @@
     content: "";
     position: absolute;
     left: 17px;
-    top: 18px;
-    bottom: 18px;
+    top: 10px;
+    bottom: 10px;
     width: 2px;
     background: #383838;
 }
@@ -131,6 +131,25 @@
 .search-badge-item.open .badge-expand-chevron {
     transform: rotate(90deg);
     color: #bbb;
+}
+
+/* Intermediate Reasoning Traces inside Activity accordion (text along the line, no icon) */
+.activity-thought-item {
+    position: relative;
+    padding: 3px 0 3px 38px;
+    font-size: 13.5px;
+    line-height: 1.5;
+    animation: popIn 0.3s ease;
+    z-index: 1;
+}
+
+.activity-thought-text {
+    color: #ffffff;
+    font-size: 13.5px;
+    line-height: 1.55;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-style: normal;
 }
 
 /* Icons & Progress Ring */

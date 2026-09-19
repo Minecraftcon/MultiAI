@@ -3,11 +3,26 @@ import { state } from "../state/index.js";
 import { logEvent } from "../utils/logger.js";
 import { extractText, formatToolResult, extractChatTitleAndContent } from "../utils/dom.js";
 import { tools, executeTool } from "../tools/index.js";
-import { addToolBadge, updateAIStream, finalizeStopped } from "../components/chat-ui.js";
+import { addToolBadge, addThoughtTrace, updateAIStream, finalizeStopped } from "../components/chat-ui.js";
 import { saveStoredChats } from "../services/storage.js";
 import { renderChatList } from "../components/side-panel.js";
 import { sanitizeMessage } from "./sanitizer.js";
 import { callChatModel } from "./chat-client.js";
+
+function isPromissoryAnnouncement(text) {
+    if (!text) return false;
+    const trimmed = text.trim();
+    if (trimmed.length === 0 || trimmed.length > 250) return false;
+
+    // Ends with colon, e.g. "Okay! Ive found the issue, lemme fix properly:"
+    if (/:\s*$/.test(trimmed)) return true;
+
+    // Starts with promissory phrasing and contains action verbs
+    const promissoryStart = /^(okay|ok|i see|i found|let me|lemme|now i will|i will|proceeding to|fixing|next step|next, i will|i'll)\b/i.test(trimmed);
+    const actionIntent = /\b(fix|modify|update|edit|run|check|inspect|investigate|implement|proceed|apply)\b/i.test(trimmed);
+
+    return promissoryStart && actionIntent;
+}
 
 const TITLE_SYSTEM_PROMPT = `\n\n[CONVERSATION TITLE GENERATION]:
 This is the first message of this conversation. You must generate a short, descriptive topic title for this chat (2 to 5 words, max 30 characters).
@@ -59,6 +74,7 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
     const overallStartTime = Date.now();
     let hasRunTools = false;
     let emptyRetryUsed = false;
+    let promissoryRetries = 0;
 
     logEvent("REQUEST_START", { chatId, model: selectedModel, userText, isFirstUserTurn });
 
@@ -132,6 +148,22 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
             if (toolCalls.length === 0) {
                 let finalDisplay = roundText.trim();
 
+                // If the model merely announced an action intent without calling tools
+                // (e.g. "Okay! Ive found the issue, lemme fix properly:"), route to activity trace and continue
+                const isPromissory = isPromissoryAnnouncement(finalDisplay);
+                if (isPromissory && (hasRunTools || round > 0) && round < 10 && promissoryRetries < 2) {
+                    promissoryRetries++;
+                    logEvent("PROMISSORY_CONTINUE", { round, model: selectedModel, text: finalDisplay });
+                    addThoughtTrace(currentAIMessage, finalDisplay);
+                    session.messages.push({
+                        role: "user",
+                        content: "Proceed with the action."
+                    });
+                    state.messages = session.messages;
+                    saveStoredChats();
+                    continue;
+                }
+
                 if (isFirstUserTurn) {
                     const extracted = extractChatTitleAndContent(finalDisplay);
                     if (extracted.title) {
@@ -184,6 +216,12 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
             }
 
             hasRunTools = true;
+
+            // Render live intermediate reasoning along the timeline line
+            if (roundText && roundText.trim()) {
+                addThoughtTrace(currentAIMessage, roundText);
+            }
+
             const calls = toolCalls.slice(0, MAX_TOOLS_PER_ROUND);
 
             for (let i = 0; i < calls.length; i++) {
