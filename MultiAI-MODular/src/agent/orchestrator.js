@@ -79,7 +79,10 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
 
     logEvent("REQUEST_START", { chatId, model: selectedModel, userText, isFirstUserTurn });
 
-    const maxRounds = state.config?.Agent?.MaxToolRounds || MAX_TOOL_ROUNDS;
+    const configuredRounds = state.config?.Agent?.MaxToolRounds;
+    const maxRounds = (configuredRounds === 0 || configuredRounds === "0" || configuredRounds === "unlimited" || configuredRounds === undefined)
+        ? Infinity
+        : (Number(configuredRounds) > 0 ? Number(configuredRounds) : Infinity);
     let stageStatus = "Thinking";
     const statusTimer = setInterval(() => {
         const activityLabel = currentAIMessage.querySelector(".activity-label");
@@ -173,7 +176,7 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
                 // If the response is purely reasoning/thinking with no answer content during an agent loop,
                 // route to activity thought trace and prompt the model to proceed with action or final response
                 const { thoughtHtml, content: actualContent } = extractThoughtAndContent(finalDisplay);
-                if ((hasRunTools || round > 0) && thoughtHtml && !actualContent && round < maxRounds - 1) {
+                if ((hasRunTools || round > 0) && thoughtHtml && !actualContent && (maxRounds === Infinity || round < maxRounds - 1)) {
                     addThoughtTrace(currentAIMessage, finalDisplay);
                     session.messages.push({
                         role: "user",

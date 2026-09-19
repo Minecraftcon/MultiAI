@@ -177,9 +177,9 @@ export function populateSettingsValues() {
 
     const maxToolRounds = document.getElementById("cfgMaxToolRounds");
     const maxToolRoundsVal = document.getElementById("cfgMaxToolRoundsVal");
-    const storedRounds = agent.MaxToolRounds || 50;
+    const storedRounds = agent.MaxToolRounds !== undefined ? agent.MaxToolRounds : 0;
     if (maxToolRounds) maxToolRounds.value = storedRounds;
-    if (maxToolRoundsVal) maxToolRoundsVal.textContent = storedRounds;
+    if (maxToolRoundsVal) maxToolRoundsVal.textContent = (storedRounds === 0 || storedRounds === "0" || storedRounds === Infinity) ? "Unlimited" : storedRounds;
 
     // 5. Appearance
     const themeSelect = document.getElementById("cfgTheme");
@@ -507,10 +507,12 @@ export function initSettingsView() {
     const maxToolRoundsVal = document.getElementById("cfgMaxToolRoundsVal");
     if (maxToolRounds && maxToolRoundsVal) {
         maxToolRounds.addEventListener("input", (e) => {
-            maxToolRoundsVal.textContent = e.target.value;
+            const val = parseInt(e.target.value, 10);
+            maxToolRoundsVal.textContent = val === 0 ? "Unlimited" : val;
         });
         maxToolRounds.addEventListener("change", (e) => {
-            saveSetting("Agent", "MaxToolRounds", parseInt(e.target.value, 10));
+            const val = parseInt(e.target.value, 10);
+            saveSetting("Agent", "MaxToolRounds", val);
         });
     }
 
@@ -656,7 +658,7 @@ export function initSettingsView() {
                         MaxChatHistory: 100
                     },
                     Agent: {
-                        MaxToolRounds: 50,
+                        MaxToolRounds: 0,
                         MaxToolsPerRound: 10,
                         AutoScroll: true,
                         StreamReasoning: true,

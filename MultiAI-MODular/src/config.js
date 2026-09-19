@@ -2,7 +2,7 @@
    APPLICATION CONFIGURATION & CONSTANTS
    ========================================================= */
 
-export const MAX_TOOL_ROUNDS = 50;
+export const MAX_TOOL_ROUNDS = Infinity;
 export const MAX_TOOLS_PER_ROUND = 10;
 
 export const CHATS_STORAGE_KEY = "multisearch_chats_v2";

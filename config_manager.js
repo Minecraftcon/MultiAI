@@ -18,7 +18,7 @@ const DEFAULT_CONFIG = {
         LogFile: "./logs.txt"
     },
     Agent: {
-        MaxToolRounds: 50,
+        MaxToolRounds: 0,
         MaxToolsPerRound: 10,
         AutoScroll: true,
         StreamReasoning: true,
