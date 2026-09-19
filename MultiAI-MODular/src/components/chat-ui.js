@@ -111,10 +111,6 @@ export function addToolBadge(element, toolName, args) {
         label = "Generated image";
         detail = args.prompt || "image generation";
         isCommandTask = true;
-    } else if (toolName === "end") {
-        icon = "check-circle";
-        label = "Completed task";
-        detail = "Delivered final answer";
     }
 
     const isTimer = toolName === "sleep" || toolName === "idle";
@@ -197,26 +193,6 @@ export function addToolBadge(element, toolName, args) {
     }
 
     renderIcons(item);
-    chat.scrollTop = chat.scrollHeight;
-    return item;
-}
-
-export function addThoughtTrace(element, text) {
-    if (!text || !text.trim()) return null;
-    const chat = document.getElementById("chat");
-    const wrapper = element.querySelector(".activity-wrapper");
-    const searchContainer = element.querySelector(".search-items-container");
-
-    if (wrapper.style.display !== "block") {
-        wrapper.style.display = "block";
-        wrapper.classList.add("open");
-    }
-
-    const item = document.createElement("div");
-    item.className = "activity-thought-item";
-    item.innerHTML = `<div class="activity-thought-text">${escapeHTML(text.trim())}</div>`;
-
-    searchContainer.appendChild(item);
     chat.scrollTop = chat.scrollHeight;
     return item;
 }

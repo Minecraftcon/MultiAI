@@ -3,26 +3,11 @@ import { state } from "../state/index.js";
 import { logEvent } from "../utils/logger.js";
 import { extractText, formatToolResult, extractChatTitleAndContent } from "../utils/dom.js";
 import { tools, executeTool } from "../tools/index.js";
-import { addToolBadge, addThoughtTrace, updateAIStream, finalizeStopped } from "../components/chat-ui.js";
+import { addToolBadge, updateAIStream, finalizeStopped } from "../components/chat-ui.js";
 import { saveStoredChats } from "../services/storage.js";
 import { renderChatList } from "../components/side-panel.js";
 import { sanitizeMessage } from "./sanitizer.js";
 import { callChatModel } from "./chat-client.js";
-
-function isPromissoryText(text) {
-    if (!text) return false;
-    const trimmed = text.trim();
-    if (trimmed.length === 0 || trimmed.length > 350) return false;
-
-    // Ends with colon, e.g. "Okay! Ive found the issue, lemme fix properly:"
-    if (/:\s*$/.test(trimmed)) return true;
-
-    // Starts with promissory phrasing and contains action verbs
-    const promissoryStart = /^(okay|ok|i see|i found|let me|lemme|now i will|i will|proceeding to|fixing|next step|next, i will|i'll)\b/i.test(trimmed);
-    const actionIntent = /\b(fix|modify|update|edit|run|check|inspect|investigate|implement|proceed|apply)\b/i.test(trimmed);
-
-    return promissoryStart && actionIntent;
-}
 
 const TITLE_SYSTEM_PROMPT = `\n\n[CONVERSATION TITLE GENERATION]:
 This is the first message of this conversation. You must generate a short, descriptive topic title for this chat (2 to 5 words, max 30 characters).
@@ -74,7 +59,6 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
     const overallStartTime = Date.now();
     let hasRunTools = false;
     let emptyRetryUsed = false;
-    let promissoryRetries = 0;
 
     logEvent("REQUEST_START", { chatId, model: selectedModel, userText, isFirstUserTurn });
 
@@ -148,22 +132,6 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
             if (toolCalls.length === 0) {
                 let finalDisplay = roundText.trim();
 
-                // Promissory Guard: if the model announced intent (e.g. "Okay! Ive found the issue, lemme fix properly:")
-                // without executing tools, continue the loop rather than halting prematurely.
-                const isPromissory = isPromissoryText(finalDisplay);
-                if (isPromissory && (hasRunTools || round > 0) && round < 10 && promissoryRetries < 2) {
-                    promissoryRetries++;
-                    logEvent("PROMISSORY_CONTINUE", { round, model: selectedModel, text: finalDisplay });
-                    addThoughtTrace(currentAIMessage, finalDisplay);
-                    session.messages.push({
-                        role: "user",
-                        content: "Proceed with the action. Execute the required tool call or call 'end' with your final_answer."
-                    });
-                    state.messages = session.messages;
-                    saveStoredChats();
-                    continue;
-                }
-
                 if (isFirstUserTurn) {
                     const extracted = extractChatTitleAndContent(finalDisplay);
                     if (extracted.title) {
@@ -216,12 +184,6 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
             }
 
             hasRunTools = true;
-
-            // Route intermediate thoughts and explanations into Activity accordion trace
-            if (roundText && roundText.trim()) {
-                addThoughtTrace(currentAIMessage, roundText);
-            }
-
             const calls = toolCalls.slice(0, MAX_TOOLS_PER_ROUND);
 
             for (let i = 0; i < calls.length; i++) {
@@ -238,55 +200,6 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
                     args = JSON.parse(call.function?.arguments || "{}");
                 } catch (err) {
                     args = {};
-                }
-
-                // Handle task completion and final answer via 'end' tool
-                if (toolName === "end") {
-                    addToolBadge(currentAIMessage, toolName, args);
-                    const finalAnswer = args.final_answer || roundText || "Task completed successfully.";
-                    let finalDisplay = finalAnswer.trim();
-
-                    session.messages.push({
-                        role: "tool",
-                        tool_call_id: call.id,
-                        name: "end",
-                        content: JSON.stringify({ status: "completed" })
-                    });
-                    session.messages.push({
-                        role: "assistant",
-                        content: finalDisplay
-                    });
-                    state.messages = session.messages;
-                    saveStoredChats();
-
-                    if (isFirstUserTurn) {
-                        const extracted = extractChatTitleAndContent(finalDisplay);
-                        if (extracted.title) {
-                            session.title = extracted.title.slice(0, 36);
-                            saveStoredChats();
-                            renderChatList();
-                        }
-                        if (extracted.content !== undefined && extracted.content !== null && extracted.title) {
-                            finalDisplay = extracted.content;
-                            session.messages[session.messages.length - 1].content = finalDisplay;
-                            state.messages = session.messages;
-                            saveStoredChats();
-                        }
-                    }
-
-                    logEvent("REQUEST_FINAL_END_TOOL", {
-                        chatId,
-                        model: selectedModel,
-                        userText,
-                        finalTextLength: finalDisplay.length,
-                        elapsedSeconds: ((Date.now() - overallStartTime) / 1000).toFixed(1)
-                    });
-
-                    updateAIStream(currentAIMessage, finalDisplay, true, overallStartTime, true);
-                    const chat = document.getElementById("chat");
-                    if (chat) session.chatHtml = chat.innerHTML;
-                    session.updatedAt = Date.now();
-                    return;
                 }
 
                 stageStatus = `Running ${toolName}`;
@@ -334,16 +247,6 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
                     role: "tool",
                     content: JSON.stringify({ error: `Maximum of ${MAX_TOOLS_PER_ROUND} tool calls per round reached.` })
                 });
-            }
-
-            // Loop >= 10 safeguard: Prompt model to finalize at round 10
-            if (round === 9) {
-                session.messages.push({
-                    role: "system",
-                    content: "Notice: You have reached turn 10. Conclude your actions and call the 'end' tool with your complete 'final_answer' now."
-                });
-                state.messages = session.messages;
-                saveStoredChats();
             }
         }
 
