@@ -135,7 +135,28 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
             saveStoredChats();
 
             const toolCalls = assistantMessage.tool_calls || [];
-            const roundText = extractText(response);
+            let roundText = extractText(response);
+
+            // Strip conversation title JSON if present in any round
+            if (roundText) {
+                const extractedTitle = extractChatTitleAndContent(roundText);
+                if (extractedTitle.title) {
+                    if (!session.title || session.title === "New Chat") {
+                        session.title = extractedTitle.title.slice(0, 36);
+                        saveStoredChats();
+                        renderChatList();
+                    }
+                    roundText = extractedTitle.content;
+                    assistantMessage.content = roundText;
+                    state.messages = session.messages;
+                    saveStoredChats();
+
+                    // Remove title generation instruction from system prompt once handled
+                    if (session.messages[0]?.role === "system" && session.messages[0].content.includes(TITLE_SYSTEM_PROMPT)) {
+                        session.messages[0].content = state.activeSystemPrompt;
+                    }
+                }
+            }
 
             logEvent("ROUND_COMPLETE", {
                 round,

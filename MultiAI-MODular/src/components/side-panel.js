@@ -2,7 +2,7 @@
    SIDE PANEL & CHAT HISTORY COMPONENT (DUCK.AI INSPIRED)
    ========================================================= */
 import { state } from "../state.js";
-import { escapeHTML, formatChatDate, wrapTablesForScroll } from "../utils/dom.js";
+import { escapeHTML, formatChatDate, wrapTablesForScroll, extractChatTitleAndContent } from "../utils/dom.js";
 import { renderIcons } from "../utils/icons.js";
 import { 
     saveStoredChats, 
@@ -621,10 +621,19 @@ export function switchToChat(id) {
             }
         });
 
-        // Re-hydrate any thought traces that contain unrendered markdown (e.g. from runs before marked was introduced)
+        // Re-hydrate any thought traces that contain unrendered markdown or leaked chatname JSON
         chat.querySelectorAll(".activity-thought-item").forEach(item => {
-            const raw = item.textContent || "";
-            if (raw.includes("**") || raw.includes("`")) {
+            let raw = item.textContent || "";
+            if (raw.includes('"chatname"') || raw.includes("'chatname'")) {
+                const extracted = extractChatTitleAndContent(raw);
+                if (extracted.title && (!session.title || session.title === "New Chat")) {
+                    session.title = extracted.title.slice(0, 36);
+                    saveStoredChats();
+                    renderChatList();
+                }
+                raw = extracted.content || "";
+            }
+            if (raw.includes("**") || raw.includes("`") || item.innerHTML.includes('"chatname"')) {
                 if (typeof marked !== "undefined" && typeof marked.parse === "function") {
                     try {
                         item.innerHTML = marked.parse(raw.trim());
