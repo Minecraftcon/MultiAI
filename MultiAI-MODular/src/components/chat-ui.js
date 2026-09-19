@@ -1,7 +1,7 @@
 /* =========================================================
    CHAT UI, BADGES, STREAM UPDATER & ACCORDIONS
    ========================================================= */
-import { escapeHTML, wrapTablesForScroll, extractChatTitleAndContent } from "../utils/dom.js";
+import { escapeHTML, wrapTablesForScroll } from "../utils/dom.js";
 import { renderIcons } from "../utils/icons.js";
 import { logEvent } from "../utils/logger.js";
 import { state } from "../state.js";
@@ -199,12 +199,6 @@ export function addToolBadge(element, toolName, args) {
 
 export function addThoughtTrace(element, text) {
     if (!text || !text.trim()) return null;
-    const extracted = extractChatTitleAndContent(text);
-    const cleanText = (extracted && extracted.title && extracted.content !== undefined)
-        ? extracted.content.trim()
-        : text.trim();
-    if (!cleanText) return null;
-
     const chat = document.getElementById("chat");
     const wrapper = element.querySelector(".activity-wrapper");
     const searchContainer = element.querySelector(".search-items-container");
@@ -217,9 +211,9 @@ export function addThoughtTrace(element, text) {
     const item = document.createElement("div");
     item.className = "activity-thought-item";
     if (typeof marked !== "undefined" && typeof marked.parse === "function") {
-        item.innerHTML = marked.parse(cleanText);
+        item.innerHTML = marked.parse(text.trim());
     } else {
-        item.innerHTML = parseMarkdown(cleanText);
+        item.innerHTML = parseMarkdown(text.trim());
     }
 
     searchContainer.appendChild(item);

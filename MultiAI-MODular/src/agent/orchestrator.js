@@ -185,23 +185,7 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
                     continue;
                 }
 
-                if (isFirstUserTurn) {
-                    const extracted = extractChatTitleAndContent(finalDisplay);
-                    if (extracted.title) {
-                        session.title = extracted.title.slice(0, 36);
-                        saveStoredChats();
-                        renderChatList();
-                    }
-                    if (extracted.content !== undefined && extracted.content !== null && extracted.title) {
-                        finalDisplay = extracted.content;
-                        if (session.messages.length > 0) {
-                            const lastMsg = session.messages[session.messages.length - 1];
-                            if (lastMsg.role === "assistant") {
-                                lastMsg.content = finalDisplay;
-                            }
-                        }
-                    }
-                }
+
 
                 if (!emptyRetryUsed && !hasRunTools && finalDisplay.length === 0) {
                     emptyRetryUsed = true;
