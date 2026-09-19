@@ -137,19 +137,62 @@
 .activity-thought-item {
     position: relative;
     padding: 3px 0 3px 38px;
-    font-size: 13.5px;
+    font-size: 13px;
     line-height: 1.5;
     animation: popIn 0.3s ease;
     z-index: 1;
 }
 
+.activity-thought-item::before {
+    content: "";
+    position: absolute;
+    left: 17px;
+    top: 11px;
+    width: 8px;
+    height: 1.5px;
+    background: #383838;
+}
+
 .activity-thought-text {
-    color: #ffffff;
-    font-size: 13.5px;
+    color: #d1d5db;
+    font-size: 13px;
     line-height: 1.55;
-    white-space: pre-wrap;
     word-break: break-word;
     font-style: normal;
+}
+
+.activity-thought-text p {
+    margin: 0 0 6px 0;
+}
+
+.activity-thought-text p:last-child {
+    margin-bottom: 0;
+}
+
+.activity-thought-text strong,
+.activity-thought-text b {
+    color: #ffffff;
+    font-weight: 600;
+}
+
+.activity-thought-text code:not(pre code) {
+    background: #202020;
+    border: 1px solid #333333;
+    color: #e2e8f0;
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.activity-thought-text ul,
+.activity-thought-text ol {
+    margin: 4px 0 6px 18px;
+    padding: 0;
+}
+
+.activity-thought-text li {
+    margin-bottom: 3px;
 }
 
 /* Icons & Progress Ring */
