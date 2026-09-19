@@ -210,10 +210,13 @@ export function addThoughtTrace(element, text) {
 
     const item = document.createElement("div");
     item.className = "activity-thought-item";
-    item.innerHTML = `<div class="activity-thought-text">${parseMarkdown(text.trim())}</div>`;
+    if (typeof marked !== "undefined" && typeof marked.parse === "function") {
+        item.innerHTML = marked.parse(text.trim());
+    } else {
+        item.innerHTML = parseMarkdown(text.trim());
+    }
 
     searchContainer.appendChild(item);
-    renderIcons(item);
     chat.scrollTop = chat.scrollHeight;
     return item;
 }
