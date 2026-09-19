@@ -9,7 +9,7 @@ import { renderChatList } from "../components/side-panel.js";
 import { sanitizeMessage } from "./sanitizer.js";
 import { callChatModel } from "./chat-client.js";
 import { extractThoughtAndContent } from "../components/renderer.js";
-import { shouldCompact, compactSessionContext } from "./compactor.js";
+import { shouldCompact, compactSessionContext, compileWorkingMessages } from "./compactor.js";
 
 function isPromissoryAnnouncement(text) {
     if (!text) return false;
@@ -100,8 +100,8 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
                 return;
             }
 
-            // Automatic context compaction via model if conversation exceeds token/message thresholds
-            if (shouldCompact(session)) {
+            // Automatic context compaction via model if conversation exceeds or is within 25k of native limit
+            if (shouldCompact(session, { model: selectedModel })) {
                 await compactSessionContext({
                     session,
                     currentAIMessage,
@@ -128,7 +128,8 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
                     finalizeStopped(currentAIMessage, overallStartTime, hasRunTools);
                     return;
                 }
-                response = await callChatModel(session.messages, { model: selectedModel, tools: tools });
+                const workingMessages = compileWorkingMessages(session);
+                response = await callChatModel(workingMessages, { model: selectedModel, tools: tools });
             } catch (err) {
                 if (genState.abortRequested || err.message === "Generation stopped by user") {
                     finalizeStopped(currentAIMessage, overallStartTime, hasRunTools);
@@ -147,7 +148,8 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
                     if (compacted && !genState.abortRequested) {
                         try {
                             stageStatus = `Synthesizing (round ${round + 1})`;
-                            response = await callChatModel(session.messages, { model: selectedModel, tools: tools });
+                            const workingMessagesRetry = compileWorkingMessages(session);
+                            response = await callChatModel(workingMessagesRetry, { model: selectedModel, tools: tools });
                         } catch (retryErr) {
                             logEvent("CHAT_CALL_RETRY_ERROR", { round, model: selectedModel, error: String(retryErr && retryErr.message || retryErr) });
                             throw retryErr;

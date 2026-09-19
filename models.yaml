@@ -228,6 +228,7 @@ providers:
         name: "DeepSeek V4.1 Flash (1M Context)"
         supports_tools: true
         supports_vision: false
+        max_context_tokens: 1000000
       - id: "deepseek/deepseek-v4-pro-0813"
         name: "DeepSeek V4 Pro"
         supports_tools: true

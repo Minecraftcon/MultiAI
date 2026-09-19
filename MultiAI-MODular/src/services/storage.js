@@ -107,10 +107,16 @@ export async function syncFromBackendDisk() {
                         if (existing.title && (!diskChat.title || diskChat.title === "Conversation")) {
                             diskChat.title = existing.title;
                         }
+                        if (existing.compactionState && !diskChat.compactionState) {
+                            diskChat.compactionState = existing.compactionState;
+                        }
                         state.chatSessions[diskChat.id] = diskChat;
                         changed = true;
                     } else if ((!existing.messages || existing.messages.length === 0) && diskChat.messages && diskChat.messages.length > 0) {
                         existing.messages = diskChat.messages;
+                        if (diskChat.compactionState && !existing.compactionState) {
+                            existing.compactionState = diskChat.compactionState;
+                        }
                         changed = true;
                     }
                 }

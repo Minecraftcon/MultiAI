@@ -6,7 +6,8 @@ export const MAX_TOOL_ROUNDS = Infinity;
 export const MAX_TOOLS_PER_ROUND = 10;
 
 // Automatic Context Compaction Configuration
-export const COMPACTION_TOKEN_THRESHOLD = 25000;
+// Distance in tokens near the model's native context limit (or exceeding it) that triggers compaction
+export const COMPACTION_BUFFER_TOKENS = 25000;
 export const COMPACTION_MIN_MESSAGES = 10;
 
 export const CHATS_STORAGE_KEY = "multisearch_chats_v2";

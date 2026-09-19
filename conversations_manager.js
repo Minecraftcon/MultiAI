@@ -166,6 +166,7 @@ function ensureChatWorkspace(chatId, dateStr) {
     const imagesDir = path.join(chatDir, "images");
     const metaFile = path.join(chatDir, "meta.json");
     const messagesFile = path.join(chatDir, "messages.jsonl");
+    const contextFile = path.join(chatDir, "context.json");
     const legacyChatFile = path.join(chatDir, "chat.json");
 
     try {
@@ -201,6 +202,7 @@ function ensureChatWorkspace(chatId, dateStr) {
         imagesDir,
         metaFile,
         messagesFile,
+        contextFile,
         chatFile: legacyChatFile,
         workspacePrompt
     };
@@ -235,6 +237,7 @@ function saveChat(chatSession) {
         createdAt: chatSession.createdAt || existingMeta.createdAt || Date.now(),
         updatedAt: chatSession.updatedAt || Date.now(),
         chatHtml: chatSession.chatHtml || existingMeta.chatHtml || "",
+        compactionState: chatSession.compactionState || existingMeta.compactionState || null,
         workspace: {
             chatDir: ws.chatDir,
             scratchDir: ws.scratchDir,
@@ -253,6 +256,13 @@ function saveChat(chatSession) {
     } else if (!fs.existsSync(ws.messagesFile)) {
         const lines = messages.map(m => JSON.stringify(m)).join("\n");
         fs.writeFileSync(ws.messagesFile, lines ? lines + "\n" : "", "utf8");
+    }
+
+    // 3. Persist separate compaction context state to context.json
+    if (chatSession.compactionState) {
+        try {
+            fs.writeFileSync(ws.contextFile, JSON.stringify(chatSession.compactionState, null, 2), "utf8");
+        } catch (_) {}
     }
 
     if (fs.existsSync(ws.chatFile)) {
@@ -330,10 +340,18 @@ function getChat(chatId) {
                     .filter(Boolean);
             }
 
+            let compactionState = meta.compactionState || null;
+            if (ws.contextFile && fs.existsSync(ws.contextFile)) {
+                try {
+                    compactionState = JSON.parse(fs.readFileSync(ws.contextFile, "utf8"));
+                } catch (_) {}
+            }
+
             const session = {
                 ...meta,
                 id: chatId,
-                messages
+                messages,
+                compactionState
             };
 
             return {
@@ -681,6 +699,7 @@ function ensureProjectChatWorkspace(projectId, chatId) {
         imagesDir,
         metaFile,
         messagesFile,
+        contextFile: path.join(chatDir, "context.json"),
         workspacePrompt
     };
 }
@@ -755,12 +774,20 @@ function getProjectChat(projectId, chatId) {
                     .filter(Boolean);
             }
 
+            let compactionState = meta.compactionState || null;
+            if (ws.contextFile && fs.existsSync(ws.contextFile)) {
+                try {
+                    compactionState = JSON.parse(fs.readFileSync(ws.contextFile, "utf8"));
+                } catch (_) {}
+            }
+
             const session = {
                 ...meta,
                 id: chatId,
                 projectId,
                 mode: "build",
-                messages
+                messages,
+                compactionState
             };
 
             return {
@@ -802,6 +829,7 @@ function saveProjectChat(projectId, chatSession) {
         createdAt: chatSession.createdAt || existingMeta.createdAt || Date.now(),
         updatedAt: chatSession.updatedAt || Date.now(),
         chatHtml: chatSession.chatHtml || existingMeta.chatHtml || "",
+        compactionState: chatSession.compactionState || existingMeta.compactionState || null,
         workspace: {
             chatDir: ws.chatDir,
             scratchDir: ws.scratchDir,
@@ -819,6 +847,12 @@ function saveProjectChat(projectId, chatSession) {
     } else if (!fs.existsSync(ws.messagesFile)) {
         const lines = messages.map(m => JSON.stringify(m)).join("\n");
         fs.writeFileSync(ws.messagesFile, lines ? lines + "\n" : "", "utf8");
+    }
+
+    if (chatSession.compactionState) {
+        try {
+            fs.writeFileSync(ws.contextFile, JSON.stringify(chatSession.compactionState, null, 2), "utf8");
+        } catch (_) {}
     }
 
     // Touch project.json timestamp so active project is updated

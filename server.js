@@ -42,6 +42,20 @@ function loadModelsConfig() {
     return { providers: {} };
 }
 
+function getModelDefaultContext(modelId, providerType) {
+    const m = String(modelId || "").toLowerCase();
+    const p = String(providerType || "").toLowerCase();
+    if (p.includes("gemini") || m.includes("gemini")) return 1000000;
+    if (m.includes("claude")) return 200000;
+    if (m.includes("1m") || m.includes("1000k") || m.includes("v4.1")) return 1000000;
+    if (m.includes("codestral")) return 32000;
+    if (m.includes("glm-4.5")) return 55000;
+    if (m.includes("glm-4") || m.includes("glm-5")) return 110000;
+    if (m.includes("o1") || m.includes("o3")) return 200000;
+    if (m.includes("gpt-4o") || m.includes("gpt-4") || m.includes("deepseek") || m.includes("qwen") || m.includes("llama") || m.includes("gemma") || m.includes("command-r")) return 128000;
+    return 128000;
+}
+
 // ---------------------------------------------------------
 // Universal Chat Message Normalization Layer
 // ---------------------------------------------------------
@@ -1984,6 +1998,7 @@ const server = http.createServer(async (req, res) => {
                     default: Boolean(m.default),
                     supports_tools: m.supports_tools !== false,
                     supports_vision: Boolean(m.supports_vision),
+                    max_context_tokens: m.max_context_tokens || provider.max_context_tokens || getModelDefaultContext(m.id, provider.type || providerId),
                     provider: providerId
                 }))
             });
