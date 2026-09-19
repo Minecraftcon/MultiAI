@@ -214,15 +214,71 @@ export function addThoughtTrace(element, text) {
 
     const item = document.createElement("div");
     item.className = "activity-thought-item";
+    let renderedHtml = cleanText;
     if (typeof marked !== "undefined" && typeof marked.parse === "function") {
-        item.innerHTML = marked.parse(cleanText);
+        try {
+            renderedHtml = marked.parse(cleanText);
+        } catch {
+            renderedHtml = parseMarkdown(cleanText);
+        }
     } else {
-        item.innerHTML = parseMarkdown(cleanText);
+        renderedHtml = parseMarkdown(cleanText);
+    }
+
+    const isHuge = cleanText.length > 350 || cleanText.split("\n").length > 5;
+    if (isHuge) {
+        item.classList.add("thought-collapsible");
+        item.innerHTML = `
+            <div class="thought-collapsed-body">
+                ${renderedHtml}
+            </div>
+            <button type="button" class="thought-expand-btn">
+                <span class="thought-expand-icon">...</span> expand
+            </button>
+        `;
+    } else {
+        item.innerHTML = renderedHtml;
     }
 
     searchContainer.appendChild(item);
     chat.scrollTop = chat.scrollHeight;
     return item;
+}
+
+export function wrapHugeThoughts(root) {
+    if (!root) return;
+
+    // Check .activity-thought-item
+    root.querySelectorAll(".activity-thought-item:not(.thought-collapsible)").forEach(item => {
+        const text = item.textContent || "";
+        if (text.length > 350 || text.split("\n").length > 5) {
+            item.classList.add("thought-collapsible");
+            item.innerHTML = `
+                <div class="thought-collapsed-body">
+                    ${item.innerHTML}
+                </div>
+                <button type="button" class="thought-expand-btn">
+                    <span class="thought-expand-icon">...</span> expand
+                </button>
+            `;
+        }
+    });
+
+    // Check .thought-content inside .thought-box
+    root.querySelectorAll(".thought-box .thought-content:not(.thought-collapsible)").forEach(contentEl => {
+        const text = contentEl.textContent || "";
+        if (text.length > 400 || text.split("\n").length > 6) {
+            contentEl.classList.add("thought-collapsible");
+            contentEl.innerHTML = `
+                <div class="thought-collapsed-body">
+                    ${contentEl.innerHTML}
+                </div>
+                <button type="button" class="thought-expand-btn">
+                    <span class="thought-expand-icon">...</span> expand
+                </button>
+            `;
+        }
+    });
 }
 
 export function updateAIStream(element, fullText, isDone, startTime, hasTools) {
@@ -299,6 +355,8 @@ export function updateAIStream(element, fullText, isDone, startTime, hasTools) {
                 lbl.textContent = `Thought for ${elapsed} seconds`;
             }
         });
+
+        wrapHugeThoughts(element);
 
         element.querySelectorAll("a").forEach(link => {
             link.target = "_blank";
@@ -441,6 +499,20 @@ export function initChatDelegation() {
         if (cmdBadge) {
             cmdBadge.classList.toggle("open");
             saveCurrentChatState();
+            return;
+        }
+
+        const thoughtExpandBtn = e.target.closest(".thought-expand-btn");
+        if (thoughtExpandBtn) {
+            e.stopPropagation();
+            const collapsible = thoughtExpandBtn.closest(".thought-collapsible");
+            if (collapsible) {
+                const isExpanded = collapsible.classList.toggle("is-expanded");
+                thoughtExpandBtn.innerHTML = isExpanded
+                    ? `<span class="thought-expand-icon">▴</span> collapse`
+                    : `<span class="thought-expand-icon">...</span> expand`;
+                saveCurrentChatState();
+            }
             return;
         }
 

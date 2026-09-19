@@ -23,6 +23,7 @@ import { updateSendButtonState, stopChatGeneration } from "./composer.js";
 import { updateModelPickerDisplay } from "./model-picker.js";
 import { openSettings } from "./settings-view.js";
 import { setStartPageMode } from "./chatbox.js";
+import { wrapHugeThoughts } from "./chat-ui.js";
 
 let currentSearchFilter = "";
 let activeMenuChatId = null;
@@ -477,6 +478,7 @@ export async function switchToBuildChat(projectId, chatId) {
         renderIcons(chat);
         renderMath(chat);
         bindAIImageCards(chat, true);
+        wrapHugeThoughts(chat);
         chat.scrollTop = chat.scrollHeight;
     }
 
@@ -627,6 +629,7 @@ export function switchToChat(id) {
         renderIcons(chat);
         renderMath(chat);
         bindAIImageCards(chat, true);
+        wrapHugeThoughts(chat);
 
         chat.scrollTop = chat.scrollHeight;
 

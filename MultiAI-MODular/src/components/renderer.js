@@ -215,7 +215,12 @@ export function formatThoughtHtml(content, durationStr = "") {
         innerFormatted = escapeHTML(innerFormatted);
     }
 
-    return `<details class="thought-box" open${rawDur ? ` data-duration="${escapeHTML(rawDur)}"` : ''}><summary class="thought-summary"><span class="thought-header">${brainSvg}<span class="thought-label">Thought for ${escapeHTML(durLabel)}</span><span class="thought-chevron">›</span></span></summary><div class="thought-body"><div class="thought-content">${innerFormatted}</div></div></details>`;
+    const isHuge = content.length > 400 || content.split("\n").length > 6;
+    const bodyHtml = isHuge
+        ? `<div class="thought-content thought-collapsible"><div class="thought-collapsed-body">${innerFormatted}</div><button type="button" class="thought-expand-btn"><span class="thought-expand-icon">...</span> expand</button></div>`
+        : `<div class="thought-content">${innerFormatted}</div>`;
+
+    return `<details class="thought-box" open${rawDur ? ` data-duration="${escapeHTML(rawDur)}"` : ''}><summary class="thought-summary"><span class="thought-header">${brainSvg}<span class="thought-label">Thought for ${escapeHTML(durLabel)}</span><span class="thought-chevron">›</span></span></summary><div class="thought-body">${bodyHtml}</div></details>`;
 }
 
 function cleanFollowupPrompt(q) {
