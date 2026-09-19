@@ -90,8 +90,21 @@ export function onToolComplete(name, args, badgeEl, data) {
                 } else {
                     outText = data.content || (data.entries ? JSON.stringify(data.entries, null, 2) : "");
                 }
-            } else if (name === "write_file") {
+            } else if (name === "write_file" || name === "search_and_replace") {
                 outText = data.message || JSON.stringify(data, null, 2);
+                if (data.syntax_warning) {
+                    outText += `\n\n[Warning]: ${data.syntax_warning}`;
+                }
+            } else if (name === "grep_search") {
+                if (data.matches && Array.isArray(data.matches)) {
+                    outText = `Found ${data.total_matches ?? data.matches.length} match(es) (${data.engine_used || "scan"}, ${data.elapsed_ms || 0}ms):\n` +
+                        data.matches.map(m => `${m.file}:${m.line_number}: ${m.line_content}`).join("\n");
+                } else if (data.files && Array.isArray(data.files)) {
+                    outText = `Found ${data.total_files ?? data.files.length} file(s) (${data.engine_used || "scan"}, ${data.elapsed_ms || 0}ms):\n` +
+                        data.files.join("\n");
+                } else {
+                    outText = JSON.stringify(data, null, 2);
+                }
             } else if (name === "generate_image") {
                 outText = `[Image Generated: ${data.model || "flux"} (${data.dimensions?.width || 1024}x${data.dimensions?.height || 1024})]\n${data.markdown || `![](${data.url})`}\nDirect URL: ${data.url}`;
                 if (data.url) {

@@ -814,6 +814,460 @@ async function handleFileWrite(args, chatId) {
     throw new Error(`Unknown action: '${action}' for write_file`);
 }
 
+async function validateSyntax(filePath) {
+    const ext = path.extname(filePath).toLowerCase();
+    try {
+        if ([".js", ".mjs", ".cjs"].includes(ext)) {
+            await new Promise((resolve, reject) => {
+                exec(`node -c "${filePath}"`, (err, stdout, stderr) => {
+                    if (err) return reject(new Error(stderr || err.message));
+                    resolve();
+                });
+            });
+            return { valid: true };
+        }
+        if (ext === ".json") {
+            const raw = await fs.promises.readFile(filePath, "utf-8");
+            JSON.parse(raw);
+            return { valid: true };
+        }
+        if (ext === ".py") {
+            await new Promise((resolve, reject) => {
+                exec(`python3 -m py_compile "${filePath}"`, (err, stdout, stderr) => {
+                    if (err) return reject(new Error(stderr || err.message));
+                    resolve();
+                });
+            });
+            return { valid: true };
+        }
+    } catch (e) {
+        return { valid: false, error: e.message };
+    }
+    return { valid: true };
+}
+
+function runRipgrep({ searchPath, query, isRegex, caseSensitive, include, filesOnly, maxResults }) {
+    return new Promise((resolve, reject) => {
+        const args = ["--color=never", "--no-heading", "--max-columns=500"];
+        if (!caseSensitive) args.push("-i");
+        if (!isRegex) args.push("-F");
+        if (filesOnly) {
+            args.push("-l");
+        } else {
+            args.push("-n");
+            args.push("--with-filename");
+        }
+
+        if (include) {
+            const globs = include.split(",").map(s => s.trim()).filter(Boolean);
+            for (const g of globs) {
+                args.push("-g", g);
+            }
+        }
+
+        args.push("-g", "!.git/**");
+        args.push("-g", "!node_modules/**");
+        args.push("-g", "!dist/**");
+        args.push("-g", "!.venv/**");
+
+        args.push("-e", query);
+        args.push(searchPath);
+
+        const startTime = Date.now();
+        const proc = spawn("rg", args);
+        let stdout = "";
+        let stderr = "";
+
+        proc.stdout.on("data", data => { stdout += data; });
+        proc.stderr.on("data", data => { stderr += data; });
+
+        proc.on("error", err => {
+            reject(err);
+        });
+
+        proc.on("close", code => {
+            if (code === 0 || code === 1) {
+                const elapsed = Date.now() - startTime;
+                const rawLines = stdout.trim().split("\n").filter(Boolean);
+                if (filesOnly) {
+                    const files = rawLines.slice(0, maxResults).map(f => {
+                        return path.relative(searchPath === "." ? process.cwd() : searchPath, f) || f;
+                    });
+                    return resolve({
+                        engine_used: "ripgrep",
+                        elapsed_ms: elapsed,
+                        query,
+                        is_regex: isRegex,
+                        case_sensitive: caseSensitive,
+                        total_files: files.length,
+                        files
+                    });
+                }
+
+                const matches = [];
+                for (const line of rawLines) {
+                    if (matches.length >= maxResults) break;
+                    const firstColon = line.indexOf(":");
+                    if (firstColon === -1) continue;
+                    const secondColon = line.indexOf(":", firstColon + 1);
+                    if (secondColon === -1) continue;
+
+                    const filePath = line.substring(0, firstColon);
+                    const lineNum = parseInt(line.substring(firstColon + 1, secondColon), 10);
+                    let lineContent = line.substring(secondColon + 1);
+                    if (lineContent.length > 500) {
+                        lineContent = lineContent.slice(0, 500) + "…";
+                    }
+
+                    const relPath = path.relative(searchPath === "." ? process.cwd() : searchPath, filePath) || filePath;
+                    matches.push({
+                        file: relPath,
+                        line_number: lineNum,
+                        line_content: lineContent
+                    });
+                }
+
+                return resolve({
+                    engine_used: "ripgrep",
+                    elapsed_ms: elapsed,
+                    query,
+                    is_regex: isRegex,
+                    case_sensitive: caseSensitive,
+                    total_matches: matches.length,
+                    matches
+                });
+            } else {
+                reject(new Error(`ripgrep exited with code ${code}: ${stderr}`));
+            }
+        });
+    });
+}
+
+function postJSON(port, reqPath, data, timeoutMs = 3000) {
+    return new Promise((resolve, reject) => {
+        const body = JSON.stringify(data);
+        const req = http.request({
+            hostname: "127.0.0.1",
+            port,
+            path: reqPath,
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Content-Length": Buffer.byteLength(body)
+            },
+            timeout: timeoutMs
+        }, (res) => {
+            let respBody = "";
+            res.on("data", chunk => { respBody += chunk; });
+            res.on("end", () => {
+                try {
+                    const json = JSON.parse(respBody || "{}");
+                    if (res.statusCode >= 200 && res.statusCode < 300) {
+                        resolve(json);
+                    } else {
+                        reject(new Error(json.error || `HTTP ${res.statusCode}`));
+                    }
+                } catch (e) {
+                    reject(e);
+                }
+            });
+        });
+        req.on("error", reject);
+        req.on("timeout", () => {
+            req.destroy(new Error("Request timed out"));
+        });
+        req.write(body);
+        req.end();
+    });
+}
+
+async function nodeGrepScan({ searchPath, query, isRegex, caseSensitive, include, filesOnly, maxResults }) {
+    const ignoreDirs = new Set([".git", "node_modules", "dist", ".venv", "venv", "__pycache__", ".mitm", ".idea", ".vscode"]);
+    let regex;
+    try {
+        const flags = caseSensitive ? "g" : "gi";
+        const pat = isRegex ? query : query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        regex = new RegExp(pat, flags);
+    } catch (e) {
+        throw new Error(`Invalid regular expression: ${e.message}`);
+    }
+
+    const globs = include ? include.split(",").map(s => s.trim()).filter(Boolean) : [];
+    function matchGlobs(fname, fullPath) {
+        if (globs.length === 0) return true;
+        return globs.some(g => {
+            const reStr = "^" + g.replace(/\./g, "\\.").replace(/\*/g, ".*").replace(/\?/g, ".") + "$";
+            return new RegExp(reStr).test(fname) || new RegExp(reStr).test(fullPath);
+        });
+    }
+
+    const matches = [];
+    const filesMatched = [];
+    let filesScanned = 0;
+    const startTime = Date.now();
+
+    async function walk(currentPath) {
+        if (matches.length >= maxResults || (filesOnly && filesMatched.length >= maxResults)) return;
+
+        let entries;
+        try {
+            entries = await fs.promises.readdir(currentPath, { withFileTypes: true });
+        } catch (_) {
+            return;
+        }
+
+        for (const entry of entries) {
+            if (matches.length >= maxResults || (filesOnly && filesMatched.length >= maxResults)) break;
+
+            const full = path.join(currentPath, entry.name);
+            if (entry.isDirectory()) {
+                if (ignoreDirs.has(entry.name) || entry.name.startsWith(".")) continue;
+                await walk(full);
+            } else if (entry.isFile()) {
+                if (entry.name.startsWith(".") && entry.name !== ".gitignore") continue;
+                if (!matchGlobs(entry.name, full)) continue;
+
+                try {
+                    const st = await fs.promises.stat(full);
+                    if (st.size > 5 * 1024 * 1024) continue;
+
+                    const fd = await fs.promises.open(full, "r");
+                    const buf = Buffer.alloc(512);
+                    const { bytesRead } = await fd.read(buf, 0, 512, 0);
+                    await fd.close();
+                    if (buf.subarray(0, bytesRead).includes(0)) continue;
+
+                    filesScanned++;
+                    const content = await fs.promises.readFile(full, "utf-8");
+                    const relPath = path.relative(searchPath === "." ? process.cwd() : searchPath, full) || full;
+
+                    if (filesOnly) {
+                        regex.lastIndex = 0;
+                        if (regex.test(content)) {
+                            filesMatched.push(relPath);
+                        }
+                    } else {
+                        const lines = content.split("\n");
+                        for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
+                            const line = lines[lineIdx];
+                            regex.lastIndex = 0;
+                            if (regex.test(line)) {
+                                let displayLine = line;
+                                if (displayLine.length > 500) {
+                                    displayLine = displayLine.slice(0, 500) + "…";
+                                }
+                                matches.push({
+                                    file: relPath,
+                                    line_number: lineIdx + 1,
+                                    line_content: displayLine
+                                });
+                                if (matches.length >= maxResults) break;
+                            }
+                        }
+                    }
+                } catch (_) {}
+            }
+        }
+    }
+
+    const stat = await fs.promises.stat(searchPath);
+    if (stat.isFile()) {
+        const full = path.resolve(searchPath);
+        const content = await fs.promises.readFile(full, "utf-8");
+        const relPath = path.basename(full);
+        if (filesOnly) {
+            if (regex.test(content)) filesMatched.push(relPath);
+        } else {
+            const lines = content.split("\n");
+            for (let i = 0; i < lines.length; i++) {
+                if (regex.test(lines[i])) {
+                    let displayLine = lines[i];
+                    if (displayLine.length > 500) displayLine = displayLine.slice(0, 500) + "…";
+                    matches.push({ file: relPath, line_number: i + 1, line_content: displayLine });
+                    if (matches.length >= maxResults) break;
+                }
+            }
+        }
+    } else {
+        await walk(searchPath);
+    }
+
+    const elapsed = Date.now() - startTime;
+    const responsePayload = {
+        engine_used: "node_scanner",
+        elapsed_ms: elapsed,
+        files_scanned: filesScanned,
+        query,
+        is_regex: isRegex,
+        case_sensitive: caseSensitive
+    };
+    if (filesOnly) {
+        responsePayload.total_files = filesMatched.length;
+        responsePayload.files = filesMatched;
+    } else {
+        responsePayload.total_matches = matches.length;
+        responsePayload.matches = matches;
+    }
+    return responsePayload;
+}
+
+async function handleCodeGrep(args, chatId) {
+    const rawQuery = args.query !== undefined ? args.query : (args.pattern !== undefined ? args.pattern : "");
+    const query = String(rawQuery || "").trim();
+    if (!query) throw new Error("Parameter 'query' is required");
+
+    const searchPath = resolveSafePath(args.path || ".", chatId);
+    if (!fs.existsSync(searchPath)) {
+        throw new Error(`Search path not found: ${args.path || "."}`);
+    }
+
+    const isRegex = Boolean(args.is_regex !== undefined ? args.is_regex : args.isRegex);
+    const caseSensitive = Boolean(args.case_sensitive !== undefined ? args.case_sensitive : args.caseSensitive);
+    const include = args.include || args.glob || null;
+    const filesOnly = Boolean(args.files_only !== undefined ? args.files_only : args.filesOnly);
+    const maxResults = Math.min(100, Math.max(1, parseInt(args.max_results, 10) || 50));
+
+    const scanOpts = { searchPath, query, isRegex, caseSensitive, include, filesOnly, maxResults };
+
+    // Tier 1: Try native ripgrep
+    try {
+        return await runRipgrep(scanOpts);
+    } catch (rgErr) {
+        // Ripgrep not installed or failed, proceed to Tier 2
+    }
+
+    // Tier 2: Try Python fast scanner at port 5000
+    try {
+        const pyResult = await postJSON(5000, "/api/code/grep", {
+            query,
+            path: searchPath,
+            is_regex: isRegex,
+            case_sensitive: caseSensitive,
+            include,
+            files_only: filesOnly,
+            max_results: maxResults
+        }, 3000);
+        return pyResult;
+    } catch (pyErr) {
+        // Python backend unreachable, proceed to Tier 3
+    }
+
+    // Tier 3: Pure in-process Node.js scanner
+    return await nodeGrepScan(scanOpts);
+}
+
+async function handleSearchAndReplace(args, chatId) {
+    const targetPath = resolveSafePath(args.path, chatId);
+    if (!fs.existsSync(targetPath)) {
+        throw new Error(`File not found: ${args.path}`);
+    }
+
+    const target = args.target !== undefined ? args.target : (args.old_string !== undefined ? args.old_string : args.old_text);
+    if (target === undefined || target === null || target === "") {
+        throw new Error("Missing 'old_string' or 'target' to replace");
+    }
+
+    const replacement = args.replacement !== undefined ? args.replacement : (args.new_string !== undefined ? args.new_string : (args.new_text ?? ""));
+    const allowMultiple = Boolean(args.allow_multiple || args.all);
+
+    const writeAtomic = async (filePath, text) => {
+        const tmpPath = filePath + ".tmp." + Math.random().toString(36).substring(2, 9);
+        await fs.promises.writeFile(tmpPath, text, "utf-8");
+        await fs.promises.rename(tmpPath, filePath);
+    };
+
+    const current = await fs.promises.readFile(targetPath, "utf-8");
+
+    // Line scoping if start_line or end_line provided
+    if (args.start_line !== undefined || args.end_line !== undefined) {
+        const lines = current.split("\n");
+        const s = Math.max(1, parseInt(args.start_line, 10) || 1) - 1;
+        const e = args.end_line !== undefined ? Math.min(lines.length, parseInt(args.end_line, 10)) : lines.length;
+        const chunk = lines.slice(s, e).join("\n");
+
+        const matchIndices = [];
+        let idx = 0;
+        while ((idx = chunk.indexOf(target, idx)) !== -1) {
+            matchIndices.push(idx);
+            idx += target.length;
+        }
+
+        if (matchIndices.length === 0) {
+            throw new Error(`Target text not found in ${args.path} within lines ${s + 1}-${e}. Please verify exact characters and indentation.`);
+        }
+
+        if (matchIndices.length > 1 && !allowMultiple) {
+            const lineNumbers = matchIndices.map(pos => {
+                return s + 1 + chunk.substring(0, pos).split("\n").length - 1;
+            });
+            throw new Error(`Found ${matchIndices.length} occurrences of target text in lines ${s + 1}-${e} of ${args.path} at line(s): ${lineNumbers.join(", ")}. Specify 'allow_multiple: true' to replace all occurrences, or narrow your target text.`);
+        }
+
+        const replacedChunk = allowMultiple ? chunk.replaceAll(target, replacement) : chunk.replace(target, replacement);
+        const newContent = [
+            lines.slice(0, s).join("\n"),
+            replacedChunk,
+            lines.slice(e).join("\n")
+        ].filter((val, i) => {
+            if (i === 0 && s === 0) return false;
+            if (i === 2 && e >= lines.length) return false;
+            return true;
+        }).join("\n");
+
+        await writeAtomic(targetPath, newContent);
+        const syntaxRes = await validateSyntax(targetPath);
+
+        return {
+            success: true,
+            path: args.path,
+            resolved_path: targetPath,
+            action: "search_and_replace",
+            matches: matchIndices.length,
+            occurrences_replaced: allowMultiple ? matchIndices.length : 1,
+            syntax_valid: syntaxRes.valid,
+            syntax_warning: syntaxRes.valid ? undefined : syntaxRes.error,
+            status: "success",
+            message: `Successfully replaced ${allowMultiple ? matchIndices.length : 1} occurrence(s) in ${args.path} (scoped to lines ${s + 1}-${e})`
+        };
+    }
+
+    // Full file replacement
+    const matchIndices = [];
+    let idx = 0;
+    while ((idx = current.indexOf(target, idx)) !== -1) {
+        matchIndices.push(idx);
+        idx += target.length;
+    }
+
+    if (matchIndices.length === 0) {
+        throw new Error(`Target text not found in ${args.path}. Please verify exact characters, whitespace, and indentation.`);
+    }
+
+    if (matchIndices.length > 1 && !allowMultiple) {
+        const lineNumbers = matchIndices.map(pos => {
+            return current.substring(0, pos).split("\n").length;
+        });
+        throw new Error(`Found ${matchIndices.length} occurrences of target text in ${args.path} at line(s): ${lineNumbers.join(", ")}. Specify 'allow_multiple: true' to replace all occurrences, or include more surrounding context to make the match unique.`);
+    }
+
+    const newContent = allowMultiple ? current.replaceAll(target, replacement) : current.replace(target, replacement);
+    await writeAtomic(targetPath, newContent);
+    const syntaxRes = await validateSyntax(targetPath);
+
+    return {
+        success: true,
+        path: args.path,
+        resolved_path: targetPath,
+        action: "search_and_replace",
+        matches: matchIndices.length,
+        occurrences_replaced: allowMultiple ? matchIndices.length : 1,
+        syntax_valid: syntaxRes.valid,
+        syntax_warning: syntaxRes.valid ? undefined : syntaxRes.error,
+        status: "success",
+        message: `Successfully replaced ${allowMultiple ? matchIndices.length : 1} occurrence(s) in ${args.path}`
+    };
+}
+
 function sendJSON(res, status, data) {
     const body = JSON.stringify(data);
     res.writeHead(status, {
@@ -1410,6 +1864,32 @@ const server = http.createServer(async (req, res) => {
             const args = JSON.parse(body || "{}");
             const chatId = req.headers["x-chat-id"] || args.chatId || args.chat_id || "";
             const result = await handleFileWrite(args, chatId);
+            return sendJSON(res, 200, result);
+        } catch (error) {
+            return sendJSON(res, 500, { error: error.message });
+        }
+    }
+
+    if (req.method === "POST" && req.url === "/api/file/search-replace") {
+        try {
+            let body = "";
+            for await (const chunk of req) body += chunk;
+            const args = JSON.parse(body || "{}");
+            const chatId = req.headers["x-chat-id"] || args.chatId || args.chat_id || "";
+            const result = await handleSearchAndReplace(args, chatId);
+            return sendJSON(res, 200, result);
+        } catch (error) {
+            return sendJSON(res, 500, { error: error.message });
+        }
+    }
+
+    if (req.method === "POST" && req.url === "/api/code/grep") {
+        try {
+            let body = "";
+            for await (const chunk of req) body += chunk;
+            const args = JSON.parse(body || "{}");
+            const chatId = req.headers["x-chat-id"] || args.chatId || args.chat_id || "";
+            const result = await handleCodeGrep(args, chatId);
             return sendJSON(res, 200, result);
         } catch (error) {
             return sendJSON(res, 500, { error: error.message });

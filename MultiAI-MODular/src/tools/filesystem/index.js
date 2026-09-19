@@ -1,7 +1,9 @@
 import { toolFetch } from "../http.js";
+import { grepSearchTool } from "./grep.js";
+import { searchAndReplaceTool } from "./replace.js";
 
 /* =========================================================
-   FILESYSTEM TOOLS (READ & WRITE)
+   FILESYSTEM TOOLS (READ, WRITE, GREP, REPLACE)
    ========================================================= */
 
 export const filesystemTools = [
@@ -121,5 +123,9 @@ export const filesystemTools = [
         handler: async (args, { genState }) => {
             return await toolFetch("/api/file/write", { method: "POST", body: args, genState });
         }
-    }
+    },
+    grepSearchTool,
+    searchAndReplaceTool
 ];
+
+export { grepSearchTool, searchAndReplaceTool };

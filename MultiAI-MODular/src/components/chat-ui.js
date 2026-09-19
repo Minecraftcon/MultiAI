@@ -107,6 +107,17 @@ export function addToolBadge(element, toolName, args) {
         label = act === "replace" ? "Replaced text" : (act === "inject" ? "Injected into file" : (act === "batch" ? "Batch modified" : "Wrote file"));
         detail = args.path || "file";
         isCommandTask = true;
+    } else if (toolName === "grep_search") {
+        icon = "search";
+        label = "Searched code";
+        const scope = args.path && args.path !== "." ? ` in ${args.path}` : "";
+        detail = `"${args.query || args.pattern || ""}"${scope}`;
+        isCommandTask = true;
+    } else if (toolName === "search_and_replace") {
+        icon = "edit-3";
+        label = "Replaced text";
+        detail = args.path || "file";
+        isCommandTask = true;
     } else if (toolName === "generate_image") {
         icon = "image";
         label = "Generated image";

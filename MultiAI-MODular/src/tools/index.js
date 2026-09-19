@@ -43,7 +43,7 @@ export async function executeTool(name, args, badgeEl, genState) {
     if (toolsConfig.EnableImageGeneration === false && name === "generate_image") {
         throw new Error("Image generation is disabled in config.ini");
     }
-    if (toolsConfig.EnableFileOperations === false && (name === "read_file" || name === "write_file")) {
+    if (toolsConfig.EnableFileOperations === false && (name === "read_file" || name === "write_file" || name === "search_and_replace" || name === "grep_search")) {
         throw new Error("File operations are disabled in config.ini");
     }
 

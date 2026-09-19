@@ -6,6 +6,8 @@ import uuid
 import time
 import os
 import signal
+import re
+import fnmatch
 
 app = Flask(__name__)
 
@@ -351,11 +353,119 @@ def idle_endpoint():
     else:
         # Standalone timer cooldown
         time.sleep(seconds)
-        return jsonify({
-            'status': 'timer_expired',
-            'elapsed_seconds': round(time.time() - start_time, 2),
-            'reason': reason
-        })
+@app.route('/api/code/grep', methods=['POST'])
+def grep_code_endpoint():
+    data = request.json or {}
+    query = str(data.get('query', '')).strip()
+    if not query:
+        return jsonify({'error': 'Parameter \"query\" is required'}), 400
+
+    search_path = os.path.expanduser(str(data.get('path', '.')))
+    if not os.path.exists(search_path):
+        return jsonify({'error': f'Path not found: {search_path}'}), 404
+
+    include_glob = data.get('include') or data.get('glob')
+    case_sensitive = bool(data.get('case_sensitive', False))
+    is_regex = bool(data.get('is_regex', True))
+    files_only = bool(data.get('files_only', False))
+    max_results = min(100, max(1, int(data.get('max_results', 50))))
+
+    try:
+        raw_pattern = query if is_regex else re.escape(query)
+        flags = 0 if case_sensitive else re.IGNORECASE
+        pattern = re.compile(raw_pattern.encode('utf-8'), flags)
+    except Exception as e:
+        return jsonify({'error': f'Invalid regular expression: {str(e)}'}), 400
+
+    import fnmatch
+    include_patterns = [p.strip() for p in include_glob.split(',') if p.strip()] if include_glob else []
+
+    ignore_dirs = {'.git', 'node_modules', 'dist', '.venv', 'venv', '__pycache__', '.mitm', '.idea', '.vscode'}
+    matches = []
+    files_matched = []
+    total_scanned = 0
+    start_time = time.perf_counter()
+
+    def check_file(file_path):
+        nonlocal total_scanned
+        try:
+            if not os.path.isfile(file_path):
+                return
+            # Skip files larger than 10MB to avoid excessive memory use
+            if os.path.getsize(file_path) > 10 * 1024 * 1024:
+                return
+            total_scanned += 1
+            with open(file_path, 'rb') as fh:
+                header = fh.read(1024)
+                if b'\x00' in header:
+                    return  # Binary file
+                fh.seek(0)
+                content = fh.read()
+
+            rel_file = os.path.relpath(file_path, start='.' if search_path == '.' else search_path)
+
+            if files_only:
+                if pattern.search(content):
+                    files_matched.append(rel_file)
+            else:
+                for m in pattern.finditer(content):
+                    line_no = content.count(b'\n', 0, m.start()) + 1
+                    line_start = content.rfind(b'\n', 0, m.start())
+                    line_start = 0 if line_start == -1 else line_start + 1
+                    line_end = content.find(b'\n', m.end())
+                    if line_end == -1:
+                        line_end = len(content)
+
+                    raw_line = content[line_start:line_end].decode('utf-8', errors='replace')
+                    # Trim oversized lines
+                    if len(raw_line) > 500:
+                        raw_line = raw_line[:500] + '…'
+
+                    matches.append({
+                        'file': rel_file,
+                        'line_number': line_no,
+                        'line_content': raw_line
+                    })
+                    if len(matches) >= max_results:
+                        return
+        except Exception:
+            pass
+
+    if os.path.isfile(search_path):
+        check_file(search_path)
+    else:
+        for root, dirs, files in os.walk(search_path):
+            dirs[:] = [d for d in dirs if d not in ignore_dirs and not d.startswith('.')]
+            for f in files:
+                if f.startswith('.') and f != '.gitignore':
+                    continue
+                if include_patterns:
+                    if not any(fnmatch.fnmatch(f, pat) or fnmatch.fnmatch(os.path.join(root, f), pat) for pat in include_patterns):
+                        continue
+                file_path = os.path.join(root, f)
+                check_file(file_path)
+                if not files_only and len(matches) >= max_results:
+                    break
+            if not files_only and len(matches) >= max_results:
+                break
+
+    elapsed_ms = round((time.perf_counter() - start_time) * 1000, 2)
+    response_payload = {
+        'engine_used': 'python_fast_scan',
+        'elapsed_ms': elapsed_ms,
+        'files_scanned': total_scanned,
+        'query': query,
+        'is_regex': is_regex,
+        'case_sensitive': case_sensitive
+    }
+    if files_only:
+        response_payload['total_files'] = len(files_matched)
+        response_payload['files'] = files_matched
+    else:
+        response_payload['total_matches'] = len(matches)
+        response_payload['matches'] = matches
+
+    return jsonify(response_payload)
 
 if __name__ == '__main__':
     # Run the Python backend silently on port 5000
