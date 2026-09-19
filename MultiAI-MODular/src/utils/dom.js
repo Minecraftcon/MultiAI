@@ -84,7 +84,10 @@ export function extractText(response) {
 }
 
 export function formatToolResult(data) {
-    if (typeof data === "object") return JSON.stringify(data);
+    if (data && typeof data === "object") {
+        if (typeof data.output === "string") return data.output;
+        return JSON.stringify(data);
+    }
     return String(data);
 }
 

@@ -18,8 +18,28 @@ providers:
         name: "Gemini Flash Latest"
         supports_tools: true
         supports_vision: true
+      - id: "gemini-flash-lite-latest"
+        name: "Gemini Flash-Lite Latest (Ultra Fast & Efficient)"
+        supports_tools: true
+        supports_vision: true
       - id: "gemini-2.5-flash-lite"
         name: "Gemini 2.5 Flash-Lite (High Speed)"
+        supports_tools: true
+        supports_vision: true
+      - id: "gemini-3.1-flash-lite"
+        name: "Gemini 3.1 Flash-Lite (Next-Gen Fast)"
+        supports_tools: true
+        supports_vision: true
+      - id: "gemini-3.1-flash-lite-preview"
+        name: "Gemini 3.1 Flash-Lite Preview"
+        supports_tools: true
+        supports_vision: true
+      - id: "gemini-3.1-flash-lite-image"
+        name: "Gemini 3.1 Flash-Lite Image (Nano Banana 2 Lite)"
+        supports_tools: true
+        supports_vision: true
+      - id: "gemini-3.5-flash-lite"
+        name: "Gemini 3.5 Flash-Lite"
         supports_tools: true
         supports_vision: true
       - id: "gemini-3.5-flash"

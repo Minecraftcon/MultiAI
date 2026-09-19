@@ -77,7 +77,13 @@ class GoogleProvider extends BaseProvider {
                     }
                 }
                 if (msg.content) {
-                    parts.unshift({ text: msg.content });
+                    // Strip synthetic <think> tags from history so Gemini does not mimic raw XML in subsequent turns
+                    const cleanedContent = typeof msg.content === "string"
+                        ? msg.content.replace(/<think>[\s\S]*?<\/think>\s*/gi, "").trim()
+                        : msg.content;
+                    if (cleanedContent) {
+                        parts.unshift({ text: cleanedContent });
+                    }
                 }
                 if (parts.length > 0) {
                     contents.push({ role: "model", parts });
@@ -112,6 +118,35 @@ class GoogleProvider extends BaseProvider {
                 }))
             }];
         }
+
+        const generationConfig = {};
+        if (config.default_max_tokens) {
+            generationConfig.maxOutputTokens = config.default_max_tokens;
+        }
+        if (typeof config.temperature === "number") {
+            generationConfig.temperature = config.temperature;
+        }
+
+        // Enable thought reasoning retention for Gemini 2.0+ / 2.5+ / 3.0+ thinking models
+        const isThinkingCapable = typeof model === "string" && (
+            model.includes("gemini-2.") ||
+            model.includes("gemini-3.") ||
+            model.includes("thinking") ||
+            model.includes("flash-latest") ||
+            model.includes("flash-lite-latest") ||
+            model.includes("pro-latest")
+        );
+
+        if (isThinkingCapable) {
+            generationConfig.thinkingConfig = {
+                includeThoughts: true
+            };
+        }
+
+        if (Object.keys(generationConfig).length > 0) {
+            payload.generationConfig = generationConfig;
+        }
+
         return payload;
     }
 
@@ -121,9 +156,13 @@ class GoogleProvider extends BaseProvider {
         let text = "";
         const toolCalls = [];
 
-        // Distinguish thought reasoning tokens from clean final response
+        // Extract thinking / reasoning parts if present
+        const thoughtParts = parts.filter(p => p.text && p.thought);
+        const thoughtText = thoughtParts.map(p => p.text).join("").trim();
+
+        // Distinguish non-thought response tokens
         const nonThoughtParts = parts.filter(p => p.text && !p.thought);
-        const textParts = nonThoughtParts.length > 0 ? nonThoughtParts : (parts.some(p => p.functionCall) ? [] : parts.filter(p => p.text));
+        const textParts = nonThoughtParts.length > 0 ? nonThoughtParts : (parts.some(p => p.functionCall) ? [] : parts.filter(p => p.text && !p.thought));
         for (const part of textParts) {
             text += part.text;
         }
@@ -146,9 +185,14 @@ class GoogleProvider extends BaseProvider {
             }
         }
 
+        let fullContent = text;
+        if (thoughtText) {
+            fullContent = `<think>\n${thoughtText}\n</think>\n\n${text}`.trimEnd();
+        }
+
         return {
             message: this.formatAssistantResponse({
-                content: text,
+                content: fullContent,
                 tool_calls: toolCalls
             })
         };

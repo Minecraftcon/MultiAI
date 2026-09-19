@@ -57,10 +57,10 @@ class TaskManager:
         return b.decode("latin-1", errors="replace")
 
     def _enqueue_output(self, out, queue_obj: queue.Queue, stream_name: str):
-        """Read lines from stdout/stderr pipe and push to thread-safe queue."""
+        """Read chunks from stdout/stderr pipe and push to thread-safe queue."""
         try:
-            for line in iter(out.readline, b""):
-                decoded = self._safe_decode(line)
+            for chunk in iter(lambda: out.read(1024), b""):
+                decoded = self._safe_decode(chunk)
                 queue_obj.put((stream_name, decoded))
         except (ValueError, OSError):
             pass
@@ -70,10 +70,16 @@ class TaskManager:
             except Exception:
                 pass
 
-    def run_task(self, command: str, shell_override: Optional[str] = None) -> str:
+    def run_task(self, command: str, shell_override: Optional[str] = None, scratch_dir: Optional[str] = None) -> str:
         """Spawn a new task subprocess with piped standard I/O."""
         task_id = str(uuid.uuid4())[:8]
         selected_shell = (shell_override or self.default_shell).lower()
+
+        env = os.environ.copy()
+        env['PYTHONUNBUFFERED'] = '1'
+        if scratch_dir:
+            env['SCRATCH'] = scratch_dir
+            env['SCRATCH_DIR'] = scratch_dir
 
         creationflags = 0
         if sys.platform == "win32":
@@ -99,7 +105,8 @@ class TaskManager:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 bufsize=0,
-                creationflags=creationflags
+                creationflags=creationflags,
+                env=env
             )
         else:
             # Standard cmd.exe - supports &&, ||, dir, etc.
@@ -110,7 +117,8 @@ class TaskManager:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 bufsize=0,
-                creationflags=creationflags
+                creationflags=creationflags,
+                env=env
             )
 
         output_queue = queue.Queue()
@@ -170,23 +178,130 @@ class TaskManager:
             "stderr": "".join(stderr_lines)
         }
 
-    def send_input(self, task_id: str, input_string: str) -> dict:
-        """Write input text into task standard input."""
+    def _resolve_combination(self, combo: str):
+        c = (combo or "").strip().lower().replace("control", "ctrl").replace(" ", "")
+        KEY_MAP = {
+            "ctrl+c": b"\x03",
+            "ctrl-c": b"\x03",
+            "ctrl+d": b"\x04",
+            "ctrl-d": b"\x04",
+            "ctrl+z": b"\x1a",
+            "ctrl-z": b"\x1a",
+            "ctrl+\\": b"\x1c",
+            "ctrl-\\": b"\x1c",
+            "enter": b"\n",
+            "return": b"\n",
+            "\n": b"\n",
+            "tab": b"\t",
+            "\t": b"\t",
+            "space": b" ",
+            "esc": b"\x1b",
+            "escape": b"\x1b",
+            "backspace": b"\x7f",
+            "bs": b"\x7f",
+            "delete": b"\x1b[3~",
+            "del": b"\x1b[3~",
+            "up": b"\x1b[A",
+            "arrowup": b"\x1b[A",
+            "down": b"\x1b[B",
+            "arrowdown": b"\x1b[B",
+            "right": b"\x1b[C",
+            "arrowright": b"\x1b[C",
+            "left": b"\x1b[D",
+            "arrowleft": b"\x1b[D",
+            "home": b"\x1b[H",
+            "end": b"\x1b[F",
+            "pageup": b"\x1b[5~",
+            "pgup": b"\x1b[5~",
+            "pagedown": b"\x1b[6~",
+            "pgdn": b"\x1b[6~",
+        }
+        if c in KEY_MAP:
+            return KEY_MAP[c]
+
+        # Dynamic Ctrl+<letter>
+        if (c.startswith("ctrl+") or c.startswith("ctrl-")) and len(c) == 6:
+            ch = c[5]
+            if "a" <= ch <= "z":
+                return bytes([ord(ch) - ord("a") + 1])
+
+        # Dynamic Alt+<letter>
+        if (c.startswith("alt+") or c.startswith("alt-")) and len(c) == 5:
+            ch = c[4]
+            return b"\x1b" + ch.encode("utf-8")
+
+        return combo.encode("utf-8")
+
+    def send_input(self, task_id: str, input_string: str = "", input_type: str = "text", combination: str = "", press_enter: bool = True) -> dict:
+        """Write input text or send keycode combinations into task standard input."""
         if task_id not in self.tasks:
             return {"error": f"Task {task_id} not found."}
 
         process = self.tasks[task_id]["process"]
         if process.poll() is not None:
-            return {"error": f"Task {task_id} is no longer running."}
+            out = self.get_output(task_id)
+            code = process.returncode
+            std_out = out.get("stdout", "")
+            std_err = out.get("stderr", "")
+            msg = f"Task {task_id} is no longer running (already exited with code {code})."
+            if std_out:
+                msg += f"\nstdout: {std_out.strip()}"
+            if std_err:
+                msg += f"\nstderr: {std_err.strip()}"
+            return {
+                "error": f"Task {task_id} is no longer running.",
+                "status": f"exited (code: {code})",
+                "running": False,
+                "exit_code": code,
+                "stdout": std_out,
+                "stderr": std_err,
+                "output": msg
+            }
 
-        try:
-            if not input_string.endswith("\n"):
-                input_string += "\n"
-            process.stdin.write(input_string.encode("utf-8"))
-            process.stdin.flush()
-            return {"status": "Input sent successfully."}
-        except Exception as e:
-            return {"error": f"Failed to send input: {str(e)}"}
+        input_type = (input_type or "text").lower().strip()
+
+        if input_type == "keycode" or combination:
+            combo_str = combination or input_string or ""
+            byte_seq = self._resolve_combination(combo_str)
+            try:
+                if byte_seq and process.stdin and not process.stdin.closed:
+                    process.stdin.write(byte_seq)
+                    process.stdin.flush()
+            except Exception as e:
+                return {"error": f"Failed to send keycode: {str(e)}"}
+        else:
+            try:
+                val = input_string if input_string is not None else ""
+                if press_enter and not val.endswith("\n"):
+                    val += "\n"
+                process.stdin.write(val.encode("utf-8"))
+                process.stdin.flush()
+            except Exception as e:
+                return {"error": f"Failed to send input: {str(e)}"}
+
+        time.sleep(0.06)
+        out = self.get_output(task_id)
+        is_running = out.get("running", False)
+        status_text = "running" if is_running else f"exited (code: {out.get('exit_code')})"
+        input_desc = combo_str if (input_type == "keycode" or combination) else input_string
+        std_err = out.get("stderr", "")
+        std_out = out.get("stdout", "")
+
+        formatted_output = f"input: ({input_desc}), sent successfully\nStatus: {status_text}\nstderr: {std_err}"
+        if std_out:
+            formatted_output += f"\nstdout: {std_out}"
+
+        return {
+            "task_id": task_id,
+            "status": status_text,
+            "running": is_running,
+            "exit_code": out.get("exit_code"),
+            "input": input_desc,
+            "type": "keycode" if (input_type == "keycode" or combination) else "text",
+            "stderr": std_err,
+            "stdout": std_out,
+            "output": formatted_output
+        }
 
     def kill_task(self, task_id: str) -> dict:
         """Terminate a running task and its child process tree."""
@@ -311,8 +426,10 @@ class WindowsTaskHTTPHandler(BaseHTTPRequestHandler):
 
         elif path.startswith("/api/task/input/"):
             task_id = path[len("/api/task/input/"):]
-            input_string = data.get("input_string", "")
-            res = manager.send_input(task_id, input_string)
+            input_type = data.get("type") or ("keycode" if "combination" in data else "text")
+            combination = data.get("combination", "")
+            input_string = data.get("field") if data.get("field") is not None else data.get("input_string", "")
+            res = manager.send_input(task_id, input_string=input_string, input_type=input_type, combination=combination)
             status_code = 404 if "not found" in res.get("error", "") else 200
             return self._send_json(status_code, res)
 
@@ -407,7 +524,10 @@ if HAS_FLASK:
     @flask_app.route("/api/task/input/<task_id>", methods=["POST"])
     def flask_input_task(task_id):
         data = request.json or {}
-        return jsonify(manager.send_input(task_id, data.get("input_string", "")))
+        input_type = data.get("type") or ("keycode" if "combination" in data else "text")
+        combination = data.get("combination", "")
+        input_string = data.get("field") if data.get("field") is not None else data.get("input_string", "")
+        return jsonify(manager.send_input(task_id, input_string=input_string, input_type=input_type, combination=combination))
 
     @flask_app.route("/api/task/kill/<task_id>", methods=["POST"])
     def flask_kill_task(task_id):

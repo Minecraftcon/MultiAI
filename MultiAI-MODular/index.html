@@ -96,6 +96,21 @@
             </button>
         </div>
 
+        <!-- Mode Switcher Pill (Chat / Build) -->
+        <div class="panel-mode-wrap">
+            <div class="mode-pill" role="tablist" aria-label="Mode selector">
+                <div class="mode-pill-thumb" aria-hidden="true"></div>
+                <button type="button" id="modeChatBtn" class="mode-pill-item active" role="tab" aria-selected="true" data-mode="chat" tabindex="0">
+                    <i data-lucide="message-square"></i>
+                    <span>Chat</span>
+                </button>
+                <button type="button" id="modeBuildBtn" class="mode-pill-item" role="tab" aria-selected="false" data-mode="build" tabindex="-1">
+                    <i data-lucide="hammer"></i>
+                    <span>Build</span>
+                </button>
+            </div>
+        </div>
+
         <!-- Quick Navigation Actions -->
         <div class="panel-nav">
             <button id="newChat" class="panel-nav-btn" type="button" title="Start a new chat">

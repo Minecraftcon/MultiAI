@@ -75,8 +75,10 @@ export function addToolBadge(element, toolName, args) {
         isCommandTask = true;
     } else if (toolName === "task_send_input") {
         icon = "keyboard";
-        label = "Sent input";
-        detail = `${args.task_id}: ${args.input_string || ""}`;
+        const isKeycode = args.type === "keycode" || !!args.combination;
+        label = isKeycode ? "Sent key" : "Sent input";
+        const val = isKeycode ? (args.combination || "key") : (args.field !== undefined ? args.field : (args.input_string || ""));
+        detail = `${args.task_id}: ${val}`;
         isCommandTask = true;
     } else if (toolName === "task_kill") {
         icon = "octagon";

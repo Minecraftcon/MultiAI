@@ -19,6 +19,7 @@ import { renderIcons } from "./utils/dom.js";
 import { setStartPageMode } from "./components/chatbox.js";
 import { initUiScale } from "./components/ui-scale.js";
 import { initAuroraTheme } from "./components/aurora-theme.js";
+import { initModeSwitcher } from "./components/mode-switcher.js";
 
 function initChatSessions() {
     loadStoredChats();
@@ -37,11 +38,18 @@ function initChatSessions() {
     }
 
     const chat = document.getElementById("chat");
-    state.currentChatId = null;
-    if (chat) chat.innerHTML = "";
-    state.messages = [{ role: "system", content: state.activeSystemPrompt }];
-    renderChatList();
-    setStartPageMode(true);
+    const activeId = state.currentChatId;
+
+    if (activeId && state.chatSessions[activeId]) {
+        state.currentChatId = null;
+        switchToChat(activeId);
+    } else {
+        state.currentChatId = null;
+        if (chat) chat.innerHTML = "";
+        state.messages = [{ role: "system", content: state.activeSystemPrompt }];
+        renderChatList();
+        setStartPageMode(true);
+    }
 }
 
 async function initConfig() {
@@ -82,6 +90,7 @@ async function bootstrap() {
     initComposer();
     initGestures();
     initSidePanel();
+    initModeSwitcher();
     initChatDelegation();
     initContextMenu();
     initBottomSheet();

@@ -1,32 +1,5 @@
 /* =========================================================
-   CENTRAL REACTIVE APPLICATION STATE
+   BACKWARD-COMPATIBLE RE-EXPORT FOR CENTRAL REACTIVE STATE
    ========================================================= */
-import { BASE_SYSTEM_PROMPT, DEFAULT_PERSONA_PROMPT } from "./config.js";
-
-export const state = {
-    config: {},
-    chatSessions: {},
-    currentChatId: null,
-    activeGenerations: {},
-    activePersonaPrompt: DEFAULT_PERSONA_PROMPT,
-    activeSystemPrompt: BASE_SYSTEM_PROMPT,
-    messages: [
-        { role: "system", content: BASE_SYSTEM_PROMPT }
-    ]
-};
-
-export function setActiveSystemPrompt(prompt) {
-    state.activeSystemPrompt = prompt;
-    if (state.messages.length > 0 && state.messages[0].role === "system") {
-        state.messages[0].content = prompt;
-    }
-    if (state.currentChatId && state.chatSessions[state.currentChatId]) {
-        if (state.chatSessions[state.currentChatId].messages?.[0]?.role === "system") {
-            state.chatSessions[state.currentChatId].messages[0].content = prompt;
-        }
-    }
-}
-
-export function getCurrentSession() {
-    return state.currentChatId ? state.chatSessions[state.currentChatId] : null;
-}
+export { state, setActiveSystemPrompt, getCurrentSession } from "./state/index.js";
+export * from "./state/index.js";

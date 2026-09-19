@@ -288,36 +288,50 @@ function logToFile(tag, data) {
 // ---------------------------------------------------------
 // Python Task Server Process Supervisor
 // ---------------------------------------------------------
-const pythonCmd = process.platform === "win32" ? "python" : "python3";
-const taskScript = (process.platform === "win32" && fs.existsSync("./task_server_windows.py"))
-    ? "./task_server_windows.py"
-    : "./task_server.py";
-const pythonProcess = spawn(pythonCmd, [taskScript], {
-    stdio: ["pipe", "pipe", "pipe"]
-});
+let pythonProcess = null;
+let isShuttingDown = false;
 
-console.log(`[PROCESS] Started ${taskScript} with PID: ${pythonProcess.pid}`);
+function startPythonTaskServer() {
+    if (isShuttingDown) return;
+    const pythonCmd = process.platform === "win32" ? "python" : "python3";
+    const taskScript = (process.platform === "win32" && fs.existsSync("./task_server_windows.py"))
+        ? "./task_server_windows.py"
+        : "./task_server.py";
 
-pythonProcess.stdout.on("data", (data) => {
-    const text = data.toString().trim();
-    if (text) console.log(`[PYTHON STDOUT] ${text}`);
-});
+    pythonProcess = spawn(pythonCmd, [taskScript], {
+        stdio: ["pipe", "pipe", "pipe"]
+    });
 
-pythonProcess.stderr.on("data", (data) => {
-    const text = data.toString().trim();
-    if (text) console.error(`[PYTHON STDERR] ${text}`);
-});
+    console.log(`[PROCESS] Started ${taskScript} with PID: ${pythonProcess.pid}`);
 
-pythonProcess.on("close", (code) => {
-    console.log(`[PROCESS] task_server.py exited with code ${code}`);
-});
+    pythonProcess.stdout.on("data", (data) => {
+        const text = data.toString().trim();
+        if (text) console.log(`[PYTHON STDOUT] ${text}`);
+    });
 
-pythonProcess.on("error", (err) => {
-    console.error(`[PROCESS ERROR] Failed to spawn task_server.py: ${err.message}`);
-});
+    pythonProcess.stderr.on("data", (data) => {
+        const text = data.toString().trim();
+        if (text) console.error(`[PYTHON STDERR] ${text}`);
+    });
+
+    pythonProcess.on("close", (code) => {
+        console.log(`[PROCESS] task_server.py exited with code ${code}`);
+        if (!isShuttingDown) {
+            console.log(`[PROCESS] Respawning ${taskScript} in 1s...`);
+            setTimeout(startPythonTaskServer, 1000);
+        }
+    });
+
+    pythonProcess.on("error", (err) => {
+        console.error(`[PROCESS ERROR] Failed to spawn task_server.py: ${err.message}`);
+    });
+}
+
+startPythonTaskServer();
 
 // Clean termination helper
 function cleanupAndExit(exitCode = 0) {
+    isShuttingDown = true;
     if (pythonProcess && !pythonProcess.killed) {
         console.log(`[PROCESS] Terminating task_server.py (PID: ${pythonProcess.pid})...`);
         try {
