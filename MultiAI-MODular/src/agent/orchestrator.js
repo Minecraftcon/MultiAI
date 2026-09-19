@@ -8,6 +8,7 @@ import { saveStoredChats } from "../services/storage.js";
 import { renderChatList } from "../components/side-panel.js";
 import { sanitizeMessage } from "./sanitizer.js";
 import { callChatModel } from "./chat-client.js";
+import { extractThoughtAndContent } from "../components/renderer.js";
 
 function isPromissoryAnnouncement(text) {
     if (!text) return false;
@@ -168,6 +169,20 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
 
             if (toolCalls.length === 0) {
                 let finalDisplay = roundText.trim();
+
+                // If the response is purely reasoning/thinking with no answer content during an agent loop,
+                // route to activity thought trace and prompt the model to proceed with action or final response
+                const { thoughtHtml, content: actualContent } = extractThoughtAndContent(finalDisplay);
+                if ((hasRunTools || round > 0) && thoughtHtml && !actualContent && round < maxRounds - 1) {
+                    addThoughtTrace(currentAIMessage, finalDisplay);
+                    session.messages.push({
+                        role: "user",
+                        content: "Continue with the required action or state your final response."
+                    });
+                    state.messages = session.messages;
+                    saveStoredChats();
+                    continue;
+                }
 
                 // If the model merely announced an action intent without calling tools
                 // (e.g. "Okay! Ive found the issue, lemme fix properly:"), route to activity trace and continue
