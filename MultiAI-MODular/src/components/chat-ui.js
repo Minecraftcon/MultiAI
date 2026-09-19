@@ -208,12 +208,16 @@ export function addThoughtTrace(element, text) {
         wrapper.classList.add("open");
     }
 
+    // Strip synthetic <think> tags so CommonMark does not treat content as unparsed HTML block
+    const cleanText = text.replace(/<\/?think>/gi, "").trim();
+    if (!cleanText) return null;
+
     const item = document.createElement("div");
     item.className = "activity-thought-item";
     if (typeof marked !== "undefined" && typeof marked.parse === "function") {
-        item.innerHTML = marked.parse(text.trim());
+        item.innerHTML = marked.parse(cleanText);
     } else {
-        item.innerHTML = parseMarkdown(text.trim());
+        item.innerHTML = parseMarkdown(cleanText);
     }
 
     searchContainer.appendChild(item);
