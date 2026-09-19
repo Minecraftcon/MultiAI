@@ -68,3 +68,40 @@ export function setAppMode(mode) {
     if (mode !== "chat" && mode !== "build") return;
     state.appMode = mode;
 }
+
+/**
+ * Sets the full list of Build Projects in state.
+ */
+export function setBuildProjects(projects) {
+    state.buildProjects = Array.isArray(projects) ? projects : [];
+}
+
+/**
+ * Sets the currently active Project ID in Build mode.
+ */
+export function setCurrentProjectId(projectId) {
+    state.currentProjectId = projectId;
+}
+
+/**
+ * Adds or updates a project in the state.buildProjects array.
+ */
+export function addBuildProject(project) {
+    if (!project || !project.id) return;
+    const idx = state.buildProjects.findIndex(p => p.id === project.id);
+    if (idx >= 0) {
+        state.buildProjects[idx] = { ...state.buildProjects[idx], ...project };
+    } else {
+        state.buildProjects.unshift(project);
+    }
+}
+
+/**
+ * Removes a project from state.buildProjects.
+ */
+export function removeBuildProjectState(projectId) {
+    state.buildProjects = state.buildProjects.filter(p => p.id !== projectId);
+    if (state.currentProjectId === projectId) {
+        state.currentProjectId = null;
+    }
+}

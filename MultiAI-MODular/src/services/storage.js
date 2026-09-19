@@ -141,9 +141,15 @@ export function saveStoredChats() {
         console.warn("Storage write error:", e);
     }
 
-    // Persist current chat to backend disk ($HOME/.MuktiAI/conversations/)
+    // Persist current chat to backend disk (~/.MultiAI/)
     if (state.currentChatId && state.chatSessions[state.currentChatId]) {
-        persistChatToDisk(state.chatSessions[state.currentChatId]);
+        const session = state.chatSessions[state.currentChatId];
+        const projectId = session.projectId || (state.appMode === "build" ? state.currentProjectId : null);
+        if (projectId) {
+            saveBuildChatToDisk(projectId, session);
+        } else {
+            persistChatToDisk(session);
+        }
     }
 }
 
@@ -201,8 +207,13 @@ export function createNewChatSession(initialUserText = "") {
     const title = raw ? (raw.slice(0, 34) + (raw.length > 34 ? "..." : "")) : "Conversation";
     const defaultModel = state.config?.General?.DefaultStartupLLM || "gemini-2.5-flash";
 
+    const isBuild = state.appMode === "build" && Boolean(state.currentProjectId);
+    const projectId = isBuild ? state.currentProjectId : undefined;
+
     state.chatSessions[id] = {
         id,
+        projectId,
+        mode: isBuild ? "build" : "chat",
         title,
         createdAt: Date.now(),
         updatedAt: Date.now(),
@@ -212,11 +223,15 @@ export function createNewChatSession(initialUserText = "") {
     };
     state.currentChatId = id;
 
-    // Auto-create workspace directories on disk and prompt AI
-    initChatWorkspace(id, Date.now());
-
-    if (state.config?.General?.RecordChatHistory !== false) {
-        saveStoredChats();
+    if (isBuild) {
+        initBuildChatWorkspace(projectId, id);
+        saveBuildChatToDisk(projectId, state.chatSessions[id]);
+    } else {
+        // Auto-create workspace directories on disk and prompt AI
+        initChatWorkspace(id, Date.now());
+        if (state.config?.General?.RecordChatHistory !== false) {
+            saveStoredChats();
+        }
     }
     return id;
 }
@@ -269,3 +284,144 @@ export function saveCurrentChatState() {
 
     saveStoredChats();
 }
+
+/* =========================================================
+   BUILD MODE: PROJECTS & NESTED CHATS STORAGE
+   ========================================================= */
+
+/**
+ * Synchronizes registered Build Projects from backend disk.
+ */
+export async function syncBuildProjectsFromDisk() {
+    try {
+        const res = await fetch("/api/build/projects");
+        if (!res.ok) return [];
+        const data = await res.json();
+        if (Array.isArray(data.projects)) {
+            state.buildProjects = data.projects;
+            document.dispatchEvent(new CustomEvent("projectsUpdated"));
+            return data.projects;
+        }
+    } catch (err) {
+        console.warn("[STORAGE] Build projects sync error:", err.message);
+    }
+    return state.buildProjects || [];
+}
+
+/**
+ * Registers a new project directory on disk.
+ */
+export async function addBuildProjectOnDisk(folderPath, customName = "") {
+    try {
+        const res = await fetch("/api/build/projects", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ path: folderPath, name: customName })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+            throw new Error(data.error || "Failed to add project");
+        }
+        if (data.project) {
+            const idx = state.buildProjects.findIndex(p => p.id === data.project.id);
+            if (idx >= 0) {
+                state.buildProjects[idx] = data.project;
+            } else {
+                state.buildProjects.unshift(data.project);
+            }
+            state.currentProjectId = data.project.id;
+            document.dispatchEvent(new CustomEvent("projectsUpdated"));
+            return data.project;
+        }
+    } catch (err) {
+        console.error("[STORAGE] Error adding project:", err);
+        throw err;
+    }
+}
+
+/**
+ * Removes a project registration from disk.
+ */
+export async function removeBuildProjectFromDisk(projectId) {
+    try {
+        const res = await fetch(`/api/build/projects/${encodeURIComponent(projectId)}`, {
+            method: "DELETE"
+        });
+        if (res.ok) {
+            state.buildProjects = state.buildProjects.filter(p => p.id !== projectId);
+            if (state.currentProjectId === projectId) {
+                state.currentProjectId = null;
+            }
+            document.dispatchEvent(new CustomEvent("projectsUpdated"));
+            return true;
+        }
+    } catch (err) {
+        console.error("[STORAGE] Error deleting project:", err);
+    }
+    return false;
+}
+
+/**
+ * Creates or updates a build chat nested inside a project.
+ */
+export async function saveBuildChatToDisk(projectId, chatSession) {
+    if (!projectId || !chatSession || !chatSession.id) return;
+    try {
+        const res = await fetch(`/api/build/projects/${encodeURIComponent(projectId)}/chats/save`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(chatSession)
+        });
+        if (res.ok) {
+            const data = await res.json();
+            // Update in-memory project nested chats
+            const project = state.buildProjects.find(p => p.id === projectId);
+            if (project) {
+                if (!project.chats) project.chats = [];
+                const idx = project.chats.findIndex(c => c.id === chatSession.id);
+                const chatMeta = {
+                    id: chatSession.id,
+                    projectId,
+                    mode: "build",
+                    title: chatSession.title || "Build Task",
+                    model: chatSession.model,
+                    updatedAt: Date.now()
+                };
+                if (idx >= 0) {
+                    project.chats[idx] = { ...project.chats[idx], ...chatMeta };
+                } else {
+                    project.chats.unshift(chatMeta);
+                }
+                document.dispatchEvent(new CustomEvent("projectsUpdated"));
+            }
+            return data.workspace;
+        }
+    } catch (err) {
+        console.warn("[STORAGE] Error saving build chat:", err.message);
+    }
+}
+
+/**
+ * Initializes workspace for a build chat in a project.
+ */
+export async function initBuildChatWorkspace(projectId, chatId) {
+    if (!projectId || !chatId) return null;
+    try {
+        const res = await fetch(`/api/build/projects/${encodeURIComponent(projectId)}/chats/session`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ chatId })
+        });
+        if (res.ok) {
+            const data = await res.json();
+            if (data.workspace) {
+                syncActiveWorkspacePrompt(data.workspace);
+                return data.workspace;
+            }
+        }
+    } catch (err) {
+        console.warn("[STORAGE] Error initializing build chat workspace:", err.message);
+    }
+    return null;
+}
+

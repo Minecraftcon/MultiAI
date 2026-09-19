@@ -1098,6 +1098,148 @@ const server = http.createServer(async (req, res) => {
         }
     }
 
+    // -------------------------------------------------------------
+    // Build Mode: Projects & Nested Chats Endpoints ($HOME/.MultiAI/build/)
+    // -------------------------------------------------------------
+    if (req.method === "GET" && req.url === "/api/build/projects") {
+        try {
+            const projects = conversationsManager.listProjects();
+            return sendJSON(res, 200, { success: true, projects });
+        } catch (err) {
+            return sendJSON(res, 500, { error: err.message });
+        }
+    }
+
+    if (req.method === "POST" && req.url === "/api/build/projects") {
+        try {
+            let body = "";
+            for await (const chunk of req) body += chunk;
+            const data = JSON.parse(body || "{}");
+            if (!data.path) {
+                return sendJSON(res, 400, { error: "Directory path is required." });
+            }
+            const project = conversationsManager.addProject(data.path, data.name);
+            return sendJSON(res, 200, { success: true, project });
+        } catch (err) {
+            return sendJSON(res, 400, { error: err.message });
+        }
+    }
+
+    if (req.method === "DELETE" && req.url.startsWith("/api/build/projects/") && !req.url.includes("/chats/")) {
+        const projectId = req.url.slice("/api/build/projects/".length).split("?")[0];
+        try {
+            const deleted = conversationsManager.removeProject(projectId);
+            return sendJSON(res, 200, { success: true, deleted });
+        } catch (err) {
+            return sendJSON(res, 500, { error: err.message });
+        }
+    }
+
+    if (req.method === "GET" && req.url.match(/^\/api\/build\/projects\/([^/]+)\/chats$/)) {
+        const match = req.url.match(/^\/api\/build\/projects\/([^/]+)\/chats$/);
+        const projectId = match[1];
+        try {
+            const chats = conversationsManager.listProjectChats(projectId);
+            return sendJSON(res, 200, { success: true, chats });
+        } catch (err) {
+            return sendJSON(res, 500, { error: err.message });
+        }
+    }
+
+    if (req.method === "GET" && req.url.match(/^\/api\/build\/projects\/([^/]+)\/chats\/([^/?]+)/)) {
+        const match = req.url.match(/^\/api\/build\/projects\/([^/]+)\/chats\/([^/?]+)/);
+        const projectId = match[1];
+        const chatId = match[2];
+        try {
+            const data = conversationsManager.getProjectChat(projectId, chatId);
+            if (!data) {
+                return sendJSON(res, 404, { error: `Chat '${chatId}' in project '${projectId}' not found.` });
+            }
+            return sendJSON(res, 200, { success: true, ...data });
+        } catch (err) {
+            return sendJSON(res, 500, { error: err.message });
+        }
+    }
+
+    if (req.method === "POST" && req.url.match(/^\/api\/build\/projects\/([^/]+)\/chats\/save$/)) {
+        const match = req.url.match(/^\/api\/build\/projects\/([^/]+)\/chats\/save$/);
+        const projectId = match[1];
+        try {
+            let body = "";
+            for await (const chunk of req) body += chunk;
+            const chatSession = JSON.parse(body || "{}");
+            if (!chatSession || !chatSession.id) {
+                return sendJSON(res, 400, { error: "Valid chat session with 'id' is required." });
+            }
+            const workspace = conversationsManager.saveProjectChat(projectId, chatSession);
+            return sendJSON(res, 200, { success: true, workspace });
+        } catch (err) {
+            return sendJSON(res, 500, { error: err.message });
+        }
+    }
+
+    if (req.method === "POST" && req.url.match(/^\/api\/build\/projects\/([^/]+)\/chats\/session$/)) {
+        const match = req.url.match(/^\/api\/build\/projects\/([^/]+)\/chats\/session$/);
+        const projectId = match[1];
+        try {
+            let body = "";
+            for await (const chunk of req) body += chunk;
+            const data = JSON.parse(body || "{}");
+            const chatId = data.chatId;
+            if (!chatId) {
+                return sendJSON(res, 400, { error: "Parameter 'chatId' is required." });
+            }
+            const workspace = conversationsManager.ensureProjectChatWorkspace(projectId, chatId);
+            return sendJSON(res, 200, { success: true, workspace });
+        } catch (err) {
+            return sendJSON(res, 500, { error: err.message });
+        }
+    }
+
+    if (req.method === "DELETE" && req.url.match(/^\/api\/build\/projects\/([^/]+)\/chats\/([^/?]+)/)) {
+        const match = req.url.match(/^\/api\/build\/projects\/([^/]+)\/chats\/([^/?]+)/);
+        const projectId = match[1];
+        const chatId = match[2];
+        try {
+            const deleted = conversationsManager.deleteProjectChat(projectId, chatId);
+            return sendJSON(res, 200, { success: true, deleted });
+        } catch (err) {
+            return sendJSON(res, 500, { error: err.message });
+        }
+    }
+
+    // Directory Validator Helper for Choosing Projects
+    if (req.method === "GET" && req.url.startsWith("/api/fs/validate-dir")) {
+        try {
+            const parsedUrl = new URL(req.url, `http://${req.headers.host || "localhost"}`);
+            const inputPath = parsedUrl.searchParams.get("path") || "";
+            if (!inputPath.trim()) {
+                const homeDir = os.homedir();
+                const suggestions = [process.cwd(), homeDir];
+                const docsDir = path.join(homeDir, "Documents");
+                if (fs.existsSync(docsDir)) suggestions.push(docsDir);
+                return sendJSON(res, 200, { valid: false, suggestions });
+            }
+
+            const resolved = conversationsManager.resolveHome(inputPath.trim());
+            if (!fs.existsSync(resolved)) {
+                return sendJSON(res, 200, { valid: false, error: "Directory does not exist." });
+            }
+            const stat = fs.statSync(resolved);
+            if (!stat.isDirectory()) {
+                return sendJSON(res, 200, { valid: false, error: "Path exists but is a file, not a directory." });
+            }
+
+            return sendJSON(res, 200, {
+                valid: true,
+                resolvedPath: resolved,
+                name: path.basename(resolved) || "Project"
+            });
+        } catch (err) {
+            return sendJSON(res, 500, { error: err.message });
+        }
+    }
+
     if (req.method === "POST" && req.url === "/api/log") {
         try {
             let body = "";

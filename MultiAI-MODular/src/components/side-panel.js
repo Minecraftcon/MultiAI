@@ -4,7 +4,17 @@
 import { state } from "../state.js";
 import { escapeHTML, formatChatDate, wrapTablesForScroll } from "../utils/dom.js";
 import { renderIcons } from "../utils/icons.js";
-import { saveStoredChats, saveCurrentChatState, initChatWorkspace } from "../services/storage.js";
+import { 
+    saveStoredChats, 
+    saveCurrentChatState, 
+    initChatWorkspace,
+    syncBuildProjectsFromDisk,
+    addBuildProjectOnDisk,
+    removeBuildProjectFromDisk,
+    saveBuildChatToDisk,
+    initBuildChatWorkspace,
+    generateChatId
+} from "../services/storage.js";
 import { syncActiveWorkspacePrompt } from "../services/system.js";
 import { closePanel } from "./gestures.js";
 import { hideMobileActions, showChatItemContextMenu } from "./context-menu.js";
@@ -16,6 +26,10 @@ import { setStartPageMode } from "./chatbox.js";
 
 let currentSearchFilter = "";
 let activeMenuChatId = null;
+let activeMenuProjectId = null;
+let activeMenuProjectChatId = null;
+const collapsedProjects = new Set();
+let validateTimer = null;
 
 export function setPanelSearchMode(enabled) {
     const sidePanel = document.getElementById("sidePanel");
@@ -58,7 +72,194 @@ export function setPanelSearchMode(enabled) {
     }
 }
 
+export function updateSidePanelView(mode = state.appMode) {
+    const isBuild = mode === "build";
+    const panelChatNav = document.getElementById("panelChatNav");
+    const panelBuildNav = document.getElementById("panelBuildNav");
+    const panelSectionLabel = document.getElementById("panelSectionLabel");
+    const panelSearchToggle = document.getElementById("panelSearchToggle");
+    const panelAddProjectHeaderBtn = document.getElementById("panelAddProjectHeaderBtn");
+    const chatList = document.getElementById("chatList");
+    const projectList = document.getElementById("projectList");
+
+    if (panelChatNav) panelChatNav.style.display = isBuild ? "none" : "";
+    if (panelBuildNav) panelBuildNav.style.display = isBuild ? "" : "none";
+    if (panelSectionLabel) panelSectionLabel.textContent = isBuild ? "Projects" : "Chats";
+    if (panelSearchToggle) panelSearchToggle.style.display = isBuild ? "none" : "";
+    if (panelAddProjectHeaderBtn) panelAddProjectHeaderBtn.style.display = isBuild ? "" : "none";
+    if (chatList) chatList.style.display = isBuild ? "none" : "";
+    if (projectList) projectList.style.display = isBuild ? "" : "none";
+
+    if (isBuild) {
+        renderProjectList(currentSearchFilter);
+    } else {
+        renderChatList(currentSearchFilter);
+    }
+}
+
+export function renderProjectList(filterQuery = currentSearchFilter) {
+    const projectList = document.getElementById("projectList");
+    if (!projectList) return;
+
+    const projects = state.buildProjects || [];
+
+    if (projects.length === 0) {
+        projectList.innerHTML = `
+            <div class="project-empty-state">
+                <div class="project-empty-icon">
+                    <i data-lucide="folder-code"></i>
+                </div>
+                <div class="project-empty-title">No Projects Added</div>
+                <p class="project-empty-desc">Choose a directory on your system to start building with contextual AI workspace.</p>
+                <button type="button" id="emptyAddProjectBtn" class="project-empty-btn">
+                    <i data-lucide="folder-plus"></i>
+                    <span>Add Project Directory</span>
+                </button>
+            </div>
+        `;
+        const emptyBtn = projectList.querySelector("#emptyAddProjectBtn");
+        if (emptyBtn) {
+            emptyBtn.addEventListener("click", () => openAddProjectModal());
+        }
+        renderIcons(projectList);
+        return;
+    }
+
+    projectList.innerHTML = "";
+
+    projects.forEach(project => {
+        let chats = Array.isArray(project.chats) ? [...project.chats] : [];
+        if (filterQuery) {
+            chats = chats.filter(c => (c.title || "").toLowerCase().includes(filterQuery.toLowerCase()));
+        }
+        chats.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+
+        const isCollapsed = collapsedProjects.has(project.id);
+        const displayName = project.name || (project.rootPath ? project.rootPath.split("/").filter(Boolean).pop() : "Project");
+
+        const group = document.createElement("div");
+        group.className = `project-group ${isCollapsed ? "is-collapsed" : ""}`;
+        group.dataset.projectId = project.id;
+
+        group.innerHTML = `
+            <div class="project-header" role="button" tabindex="0" title="${escapeHTML(project.rootPath || '')}">
+                <button type="button" class="project-collapse-btn" aria-label="Toggle project chats">
+                    <i data-lucide="chevron-down" class="project-chevron"></i>
+                </button>
+                <i data-lucide="folder" class="project-folder-icon"></i>
+                <div class="project-info">
+                    <span class="project-name">${escapeHTML(displayName)}</span>
+                    <span class="project-path">${escapeHTML(project.rootPath || '')}</span>
+                </div>
+                <div class="project-actions">
+                    <button type="button" class="project-action-btn project-add-chat-btn" title="New chat in this project" aria-label="New chat in this project">
+                        <i data-lucide="plus"></i>
+                    </button>
+                    <button type="button" class="project-action-btn project-more-btn" title="Project options" aria-label="Project options">
+                        <i data-lucide="more-horizontal"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="project-chats-container"></div>
+        `;
+
+        const header = group.querySelector(".project-header");
+        header.addEventListener("click", (e) => {
+            if (e.target.closest(".project-action-btn")) return;
+            if (collapsedProjects.has(project.id)) {
+                collapsedProjects.delete(project.id);
+                group.classList.remove("is-collapsed");
+            } else {
+                collapsedProjects.add(project.id);
+                group.classList.add("is-collapsed");
+            }
+        });
+
+        const addChatBtn = group.querySelector(".project-add-chat-btn");
+        if (addChatBtn) {
+            addChatBtn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                startFreshBuildChat(project.id);
+            });
+        }
+
+        const moreBtn = group.querySelector(".project-more-btn");
+        if (moreBtn) {
+            moreBtn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                showProjectMenu(project.id, moreBtn);
+            });
+        }
+
+        const chatsContainer = group.querySelector(".project-chats-container");
+        if (chats.length === 0) {
+            const noChats = document.createElement("div");
+            noChats.className = "project-no-chats";
+            noChats.innerHTML = `
+                <span>No chats yet</span>
+                <button type="button" class="project-inline-new-chat">+ New Chat</button>
+            `;
+            const inlineNew = noChats.querySelector(".project-inline-new-chat");
+            if (inlineNew) {
+                inlineNew.addEventListener("click", (e) => {
+                    e.stopPropagation();
+                    startFreshBuildChat(project.id);
+                });
+            }
+            chatsContainer.appendChild(noChats);
+        } else {
+            chats.forEach(chat => {
+                const isActive = chat.id === state.currentChatId;
+                const dateStr = formatChatDate(chat.updatedAt || chat.createdAt);
+
+                const item = document.createElement("div");
+                item.className = `project-chat-item ${isActive ? "active" : ""}`;
+                item.dataset.projectId = project.id;
+                item.dataset.chatId = chat.id;
+                item.setAttribute("role", "button");
+                item.setAttribute("tabindex", "0");
+
+                item.innerHTML = `
+                    <i data-lucide="message-square" class="project-chat-icon"></i>
+                    <span class="project-chat-title">${escapeHTML(chat.title || "Build Task")}</span>
+                    ${dateStr ? `<span class="project-chat-date">${escapeHTML(dateStr)}</span>` : ""}
+                    <button type="button" class="project-chat-more-btn" title="Options" aria-label="Conversation options">
+                        <i data-lucide="more-horizontal"></i>
+                    </button>
+                `;
+
+                item.addEventListener("click", (e) => {
+                    if (e.target.closest(".project-chat-more-btn")) return;
+                    if (chat.id !== state.currentChatId) {
+                        switchToBuildChat(project.id, chat.id);
+                    }
+                    closePanel(true);
+                });
+
+                const chatMoreBtn = item.querySelector(".project-chat-more-btn");
+                if (chatMoreBtn) {
+                    chatMoreBtn.addEventListener("click", (e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        showBuildChatMenu(project.id, chat.id, chatMoreBtn);
+                    });
+                }
+
+                chatsContainer.appendChild(item);
+            });
+        }
+
+        projectList.appendChild(group);
+    });
+
+    renderIcons(projectList);
+}
+
 export function renderChatList(filterQuery = currentSearchFilter) {
+    if (state.appMode === "build") {
+        renderProjectList(filterQuery);
+        return;
+    }
     const chatList = document.getElementById("chatList");
     if (!chatList) return;
 
@@ -140,7 +341,6 @@ export function renderChatList(filterQuery = currentSearchFilter) {
             const touch = e.touches[0];
             const dx = Math.abs(touch.clientX - startX);
             const dy = Math.abs(touch.clientY - startY);
-            // If moved more than 10px, it is scrolling, cancel hold
             if (dx > 10 || dy > 10) {
                 clearTimeout(holdTimer);
                 holdTimer = null;
@@ -205,6 +405,138 @@ export function renderChatList(filterQuery = currentSearchFilter) {
     if (panelBody) {
         panelBody.classList.toggle("scrolled-top", panelBody.scrollTop > 2);
     }
+}
+
+export async function switchToBuildChat(projectId, chatId) {
+    hideMobileActions();
+    hideChatItemMenu();
+    hideProjectMenu();
+
+    if (state.currentChatId && state.currentChatId !== chatId && state.chatSessions[state.currentChatId]) {
+        saveCurrentChatState();
+    }
+
+    state.currentProjectId = projectId;
+    state.currentChatId = chatId;
+
+    try {
+        const res = await fetch(`/api/build/projects/${encodeURIComponent(projectId)}/chats/${encodeURIComponent(chatId)}`);
+        if (res.ok) {
+            const data = await res.json();
+            if (data.session) {
+                state.chatSessions[chatId] = data.session;
+            }
+        }
+    } catch (e) {
+        console.warn("[BUILD] Failed to fetch chat session:", e);
+    }
+
+    const session = state.chatSessions[chatId] || { id: chatId, projectId, mode: "build", messages: [] };
+    const chat = document.getElementById("chat");
+    const modelSelect = document.getElementById("modelSelect");
+
+    await initBuildChatWorkspace(projectId, chatId);
+
+    state.messages = (session.messages && session.messages.length > 0)
+        ? JSON.parse(JSON.stringify(session.messages))
+        : [{ role: "system", content: state.activeSystemPrompt }];
+
+    if (state.messages[0]?.role === "system") {
+        state.messages[0].content = state.activeSystemPrompt;
+    }
+
+    if (session.model && modelSelect) {
+        modelSelect.value = session.model;
+        updateModelPickerDisplay();
+    }
+
+    if (chat) {
+        chat.innerHTML = session.chatHtml || "";
+
+        if ((!chat.innerHTML || !chat.innerHTML.trim()) && Array.isArray(session.messages) && session.messages.length > 0) {
+            session.messages.forEach(m => {
+                if (m.role === "user") {
+                    const div = document.createElement("div");
+                    div.className = "message user";
+                    div.dataset.rawText = m.content || "";
+                    div.innerHTML = `<div class="user-bubble-content"><div class="msg-bubble-text">${escapeHTML(m.content || "")}</div></div>`;
+                    chat.appendChild(div);
+                } else if (m.role === "assistant") {
+                    const div = document.createElement("div");
+                    div.className = "message ai";
+                    div.dataset.rawText = m.content || "";
+                    div.innerHTML = `<div class="pre-search-content">${parseMarkdown(m.content || "")}</div><div class="activity-wrapper" style="display:none;"><button type="button" class="activity-toggle"><span class="chevron">▶</span><span class="activity-label">Activity</span></button><div class="activity-collapse"><div class="activity-overflow"><div class="activity-content"><div class="search-items-container"></div></div></div></div></div><div class="final-content"></div><div class="followup-suggestions" style="display:none;"></div>`;
+                    chat.appendChild(div);
+                }
+            });
+        }
+
+        bindInteractiveCodeBlocks(chat);
+        renderMermaidInElement(chat);
+        wrapTablesForScroll(chat);
+        renderIcons(chat);
+        renderMath(chat);
+        bindAIImageCards(chat, true);
+        chat.scrollTop = chat.scrollHeight;
+    }
+
+    const hasUserMsg = Boolean(session.messages && session.messages.some(m => m.role === "user"));
+    setStartPageMode(!hasUserMsg);
+    updateSendButtonState(false);
+    renderProjectList();
+}
+
+export async function startFreshBuildChat(projectId) {
+    hideMobileActions();
+    hideChatItemMenu();
+    hideProjectMenu();
+
+    if (state.currentChatId && state.chatSessions[state.currentChatId]) {
+        saveCurrentChatState();
+    }
+
+    const project = state.buildProjects.find(p => p.id === projectId);
+    if (!project) return;
+
+    const chatId = generateChatId();
+    state.currentProjectId = projectId;
+    state.currentChatId = chatId;
+
+    const modelSelect = document.getElementById("modelSelect");
+    const defaultModel = state.config?.General?.DefaultStartupLLM || "gemini-2.5-flash";
+
+    const workspace = await initBuildChatWorkspace(projectId, chatId);
+
+    const newSession = {
+        id: chatId,
+        projectId: projectId,
+        mode: "build",
+        title: "Build in " + (project.name || "project"),
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        model: modelSelect ? modelSelect.value : defaultModel,
+        messages: [{ role: "system", content: state.activeSystemPrompt }],
+        chatHtml: "",
+        workspace
+    };
+
+    state.chatSessions[chatId] = newSession;
+    state.messages = [{ role: "system", content: state.activeSystemPrompt }];
+
+    await saveBuildChatToDisk(projectId, newSession);
+
+    const chat = document.getElementById("chat");
+    const input = document.getElementById("input");
+    if (chat) chat.innerHTML = "";
+    updateSendButtonState(false);
+    renderProjectList();
+    setStartPageMode(true);
+    if (input) {
+        input.value = "";
+        input.placeholder = `Build task in ${project.name}...`;
+        input.focus();
+    }
+    closePanel(true);
 }
 
 export function switchToChat(id) {
@@ -433,8 +765,175 @@ function showChatItemMenu(id, targetBtn) {
 
 export function hideChatItemMenu() {
     activeMenuChatId = null;
+    activeMenuProjectChatId = null;
     const menu = document.getElementById("chatItemMenu");
     if (menu) menu.style.display = "none";
+}
+
+function showProjectMenu(projectId, targetBtn) {
+    activeMenuProjectId = projectId;
+    const menu = document.getElementById("projectItemMenu");
+    if (!menu) return;
+
+    const rect = targetBtn.getBoundingClientRect();
+    menu.style.display = "flex";
+    menu.style.position = "fixed";
+    renderIcons(menu);
+
+    const mw = menu.offsetWidth || 150;
+    const mh = menu.offsetHeight || 100;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const GAP = 6;
+
+    let left = rect.right - mw;
+    let top = rect.bottom + GAP;
+
+    if (left + mw > vw - GAP) left = vw - mw - GAP;
+    if (left < GAP) left = GAP;
+    if (top + mh > vh - GAP) top = rect.top - mh - GAP;
+    if (top < GAP) top = GAP;
+
+    menu.style.left = `${Math.round(left)}px`;
+    menu.style.top = `${Math.round(top)}px`;
+}
+
+export function hideProjectMenu() {
+    activeMenuProjectId = null;
+    const menu = document.getElementById("projectItemMenu");
+    if (menu) menu.style.display = "none";
+}
+
+function showBuildChatMenu(projectId, chatId, targetBtn) {
+    activeMenuProjectId = projectId;
+    activeMenuProjectChatId = chatId;
+    activeMenuChatId = chatId;
+
+    const menu = document.getElementById("chatItemMenu");
+    if (!menu) return;
+
+    const rect = targetBtn.getBoundingClientRect();
+    menu.style.display = "flex";
+    menu.style.position = "fixed";
+    renderIcons(menu);
+
+    const mw = menu.offsetWidth || 150;
+    const mh = menu.offsetHeight || 100;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const GAP = 6;
+
+    let left = rect.right - mw;
+    let top = rect.bottom + GAP;
+
+    if (left + mw > vw - GAP) left = vw - mw - GAP;
+    if (left < GAP) left = GAP;
+    if (top + mh > vh - GAP) top = rect.top - mh - GAP;
+    if (top < GAP) top = GAP;
+
+    menu.style.left = `${Math.round(left)}px`;
+    menu.style.top = `${Math.round(top)}px`;
+}
+
+export function openAddProjectModal() {
+    const backdrop = document.getElementById("projectModalBackdrop");
+    const modal = document.getElementById("projectModal");
+    const pathInput = document.getElementById("projectPathInput");
+    const nameInput = document.getElementById("projectNameInput");
+    const statusEl = document.getElementById("projectPathStatus");
+    const confirmBtn = document.getElementById("projectModalConfirmBtn");
+    const suggestionsList = document.getElementById("projectSuggestionsList");
+
+    if (!modal) return;
+
+    if (backdrop) backdrop.style.display = "block";
+    modal.style.display = "flex";
+    if (pathInput) pathInput.value = "";
+    if (nameInput) nameInput.value = "";
+    if (statusEl) {
+        statusEl.textContent = "";
+        statusEl.className = "project-path-status";
+    }
+    if (confirmBtn) confirmBtn.disabled = true;
+
+    fetch("/api/fs/validate-dir")
+        .then(r => r.ok ? r.json() : null)
+        .then(data => {
+            if (suggestionsList && data && Array.isArray(data.suggestions)) {
+                suggestionsList.innerHTML = "";
+                data.suggestions.forEach(s => {
+                    const sPath = typeof s === "string" ? s : (s.path || "");
+                    const sName = typeof s === "string" ? (s.split("/").filter(Boolean).pop() || s) : (s.name || s.path);
+                    const chip = document.createElement("button");
+                    chip.type = "button";
+                    chip.className = "project-suggestion-chip";
+                    chip.innerHTML = `<i data-lucide="folder"></i><span>${escapeHTML(sName)}</span>`;
+                    chip.title = sPath;
+                    chip.addEventListener("click", () => {
+                        if (pathInput) {
+                            pathInput.value = sPath;
+                            validateDirectoryInput(sPath);
+                        }
+                    });
+                    suggestionsList.appendChild(chip);
+                });
+                renderIcons(suggestionsList);
+            }
+        })
+        .catch(() => {});
+
+    setTimeout(() => pathInput?.focus(), 50);
+}
+
+export function closeAddProjectModal() {
+    const backdrop = document.getElementById("projectModalBackdrop");
+    const modal = document.getElementById("projectModal");
+    if (backdrop) backdrop.style.display = "none";
+    if (modal) modal.style.display = "none";
+}
+
+async function validateDirectoryInput(pathStr) {
+    const statusEl = document.getElementById("projectPathStatus");
+    const confirmBtn = document.getElementById("projectModalConfirmBtn");
+    const nameInput = document.getElementById("projectNameInput");
+
+    const trimmed = (pathStr || "").trim();
+    if (!trimmed) {
+        if (statusEl) {
+            statusEl.textContent = "";
+            statusEl.className = "project-path-status";
+        }
+        if (confirmBtn) confirmBtn.disabled = true;
+        return;
+    }
+
+    try {
+        const res = await fetch(`/api/fs/validate-dir?path=${encodeURIComponent(trimmed)}`);
+        const data = await res.json();
+        if (data.valid) {
+            const normalized = data.resolvedPath || data.normalizedPath || trimmed;
+            if (statusEl) {
+                statusEl.textContent = `✓ Valid directory (${normalized})`;
+                statusEl.className = "project-path-status valid";
+            }
+            if (confirmBtn) confirmBtn.disabled = false;
+            if (nameInput && !nameInput.value.trim() && (data.name || data.basename)) {
+                nameInput.placeholder = data.name || data.basename;
+            }
+        } else {
+            if (statusEl) {
+                statusEl.textContent = data.error || "Directory does not exist";
+                statusEl.className = "project-path-status invalid";
+            }
+            if (confirmBtn) confirmBtn.disabled = true;
+        }
+    } catch (e) {
+        if (statusEl) {
+            statusEl.textContent = "Error checking directory";
+            statusEl.className = "project-path-status invalid";
+        }
+        if (confirmBtn) confirmBtn.disabled = true;
+    }
 }
 
 export let availableModels = [];
@@ -582,10 +1081,26 @@ export function initSidePanel() {
     const chatRenameBtn = document.getElementById("chatRenameBtn");
     const chatDeleteBtn = document.getElementById("chatDeleteBtn");
 
+    // Project Popover Controls
+    const projectCopyPathBtn = document.getElementById("projectCopyPathBtn");
+    const projectNewChatMenuBtn = document.getElementById("projectNewChatMenuBtn");
+    const projectRemoveBtn = document.getElementById("projectRemoveBtn");
+
+    // Project Modal Controls
+    const addProjectBtn = document.getElementById("addProjectBtn");
+    const panelAddProjectHeaderBtn = document.getElementById("panelAddProjectHeaderBtn");
+    const projectModalBackdrop = document.getElementById("projectModalBackdrop");
+    const projectModalCloseBtn = document.getElementById("projectModalCloseBtn");
+    const projectModalCancelBtn = document.getElementById("projectModalCancelBtn");
+    const projectModalConfirmBtn = document.getElementById("projectModalConfirmBtn");
+    const projectPathInput = document.getElementById("projectPathInput");
+    const projectNameInput = document.getElementById("projectNameInput");
+
     // Settings Button
     const panelSettingsBtn = document.getElementById("panelSettingsBtn");
 
     loadAvailableModels();
+    syncBuildProjectsFromDisk();
 
     // 1. New Chat
     if (newChatButton) {
@@ -664,7 +1179,11 @@ export function initSidePanel() {
     if (panelSearchInput) {
         panelSearchInput.addEventListener("input", () => {
             currentSearchFilter = panelSearchInput.value.trim().toLowerCase();
-            renderChatList(currentSearchFilter);
+            if (state.appMode === "build") {
+                renderProjectList(currentSearchFilter);
+            } else {
+                renderChatList(currentSearchFilter);
+            }
         });
 
         panelSearchInput.addEventListener("keydown", (e) => {
@@ -675,34 +1194,172 @@ export function initSidePanel() {
         });
     }
 
-    // 5. Chat Item Popover Actions
+    // 5. Add Project Controls & Modal
+    if (addProjectBtn) {
+        addProjectBtn.addEventListener("click", () => {
+            openAddProjectModal();
+        });
+    }
+
+    if (panelAddProjectHeaderBtn) {
+        panelAddProjectHeaderBtn.addEventListener("click", () => {
+            openAddProjectModal();
+        });
+    }
+
+    if (projectModalCloseBtn) {
+        projectModalCloseBtn.addEventListener("click", closeAddProjectModal);
+    }
+    if (projectModalCancelBtn) {
+        projectModalCancelBtn.addEventListener("click", closeAddProjectModal);
+    }
+    if (projectModalBackdrop) {
+        projectModalBackdrop.addEventListener("click", closeAddProjectModal);
+    }
+
+    if (projectPathInput) {
+        projectPathInput.addEventListener("input", () => {
+            clearTimeout(validateTimer);
+            validateTimer = setTimeout(() => {
+                validateDirectoryInput(projectPathInput.value);
+            }, 250);
+        });
+
+        projectPathInput.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" && projectModalConfirmBtn && !projectModalConfirmBtn.disabled) {
+                e.preventDefault();
+                projectModalConfirmBtn.click();
+            } else if (e.key === "Escape") {
+                e.preventDefault();
+                closeAddProjectModal();
+            }
+        });
+    }
+
+    if (projectModalConfirmBtn) {
+        projectModalConfirmBtn.addEventListener("click", async () => {
+            const pathVal = projectPathInput?.value.trim();
+            const nameVal = projectNameInput?.value.trim();
+            if (!pathVal) return;
+
+            projectModalConfirmBtn.disabled = true;
+            try {
+                const project = await addBuildProjectOnDisk(pathVal, nameVal);
+                closeAddProjectModal();
+                if (project && project.id) {
+                    collapsedProjects.delete(project.id);
+                    renderProjectList();
+                    startFreshBuildChat(project.id);
+                }
+            } catch (err) {
+                const statusEl = document.getElementById("projectPathStatus");
+                if (statusEl) {
+                    statusEl.textContent = err.message || "Failed to add project";
+                    statusEl.className = "project-path-status invalid";
+                }
+                projectModalConfirmBtn.disabled = false;
+            }
+        });
+    }
+
+    // 6. Project Popover Actions
+    if (projectCopyPathBtn) {
+        projectCopyPathBtn.addEventListener("click", () => {
+            const project = state.buildProjects?.find(p => p.id === activeMenuProjectId);
+            if (project?.rootPath) {
+                navigator.clipboard?.writeText(project.rootPath).catch(() => {});
+            }
+            hideProjectMenu();
+        });
+    }
+
+    if (projectNewChatMenuBtn) {
+        projectNewChatMenuBtn.addEventListener("click", () => {
+            const pid = activeMenuProjectId;
+            hideProjectMenu();
+            if (pid) startFreshBuildChat(pid);
+        });
+    }
+
+    if (projectRemoveBtn) {
+        projectRemoveBtn.addEventListener("click", () => {
+            const pid = activeMenuProjectId;
+            hideProjectMenu();
+            const project = state.buildProjects?.find(p => p.id === pid);
+            if (project && window.confirm(`Remove project "${project.name || project.rootPath}" from MultiAI?`)) {
+                removeBuildProjectFromDisk(pid);
+            }
+        });
+    }
+
+    // 7. Chat Item Popover Actions (Unified for normal chats and build chats)
     if (chatRenameBtn) {
         chatRenameBtn.addEventListener("click", () => {
-            if (activeMenuChatId) renameChatSession(activeMenuChatId);
+            if (activeMenuProjectChatId && activeMenuProjectId) {
+                hideChatItemMenu();
+                const pid = activeMenuProjectId;
+                const cid = activeMenuProjectChatId;
+                const project = state.buildProjects.find(p => p.id === pid);
+                const chat = project?.chats?.find(c => c.id === cid);
+                const oldTitle = chat?.title || state.chatSessions[cid]?.title || "Build Task";
+                const newTitle = window.prompt("Rename task:", oldTitle);
+                if (newTitle !== null && newTitle.trim()) {
+                    if (chat) chat.title = newTitle.trim();
+                    if (state.chatSessions[cid]) state.chatSessions[cid].title = newTitle.trim();
+                    saveBuildChatToDisk(pid, state.chatSessions[cid] || { id: cid, title: newTitle.trim(), projectId: pid, mode: "build" });
+                    renderProjectList();
+                }
+            } else if (activeMenuChatId) {
+                renameChatSession(activeMenuChatId);
+            }
         });
     }
 
     if (chatDeleteBtn) {
         chatDeleteBtn.addEventListener("click", () => {
-            if (activeMenuChatId) deleteChatSession(activeMenuChatId);
+            if (activeMenuProjectChatId && activeMenuProjectId) {
+                hideChatItemMenu();
+                const pid = activeMenuProjectId;
+                const cid = activeMenuProjectChatId;
+                fetch(`/api/build/projects/${encodeURIComponent(pid)}/chats/${encodeURIComponent(cid)}`, { method: "DELETE" }).catch(() => {});
+                const project = state.buildProjects.find(p => p.id === pid);
+                if (project && project.chats) {
+                    project.chats = project.chats.filter(c => c.id !== cid);
+                }
+                delete state.chatSessions[cid];
+                if (state.currentChatId === cid) {
+                    state.currentChatId = null;
+                    const chat = document.getElementById("chat");
+                    if (chat) chat.innerHTML = "";
+                    state.messages = [{ role: "system", content: state.activeSystemPrompt }];
+                    setStartPageMode(true);
+                }
+                renderProjectList();
+            } else if (activeMenuChatId) {
+                deleteChatSession(activeMenuChatId);
+            }
         });
     }
 
     document.addEventListener("click", (e) => {
-        if (!e.target.closest("#chatItemMenu") && !e.target.closest(".chat-item-more-btn")) {
+        if (!e.target.closest("#chatItemMenu") && !e.target.closest(".chat-item-more-btn") && !e.target.closest(".project-chat-more-btn")) {
             hideChatItemMenu();
+        }
+        if (!e.target.closest("#projectItemMenu") && !e.target.closest(".project-more-btn")) {
+            hideProjectMenu();
         }
     });
 
-    // 6. Settings Screen
+    // 8. Settings Screen
     if (panelSettingsBtn) {
         panelSettingsBtn.addEventListener("click", () => {
             hideChatItemMenu();
+            hideProjectMenu();
             openSettings("general");
         });
     }
 
-    // 7. Model select listener
+    // 9. Model select listener
     if (modelSelect) {
         modelSelect.addEventListener("change", () => {
             if (state.currentChatId && state.chatSessions[state.currentChatId]) {
@@ -714,12 +1371,24 @@ export function initSidePanel() {
         });
     }
 
-    // 8. Disk sync listener
+    // 10. External Event Listeners
     document.addEventListener("chatsUpdated", () => {
-        renderChatList();
+        if (state.appMode === "chat") {
+            renderChatList();
+        }
     });
 
-    // 9. Scroll gradient listener on panel body
+    document.addEventListener("projectsUpdated", () => {
+        if (state.appMode === "build") {
+            renderProjectList();
+        }
+    });
+
+    window.addEventListener("app-mode-changed", (e) => {
+        updateSidePanelView(e.detail?.mode || state.appMode);
+    });
+
+    // 11. Scroll gradient listener on panel body
     const panelBody = sidePanel?.querySelector(".panel-body");
     if (panelBody) {
         const updateScrollState = () => {
@@ -728,4 +1397,7 @@ export function initSidePanel() {
         panelBody.addEventListener("scroll", updateScrollState, { passive: true });
         updateScrollState();
     }
+
+    // Initialize side panel view according to active mode
+    updateSidePanelView(state.appMode);
 }

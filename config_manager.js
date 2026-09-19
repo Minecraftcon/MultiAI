@@ -11,7 +11,7 @@ const DEFAULT_CONFIG = {
         RecordDate: true,
         RecordChatHistory: true,
         MaxChatHistory: 100,
-        StorageDir: "~/.MuktiAI",
+        StorageDir: "~/.MultiAI",
         Port: 8080,
         Host: "0.0.0.0",
         LogLevel: "info",

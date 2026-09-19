@@ -45,3 +45,32 @@ export function getSessionById(chatId) {
 export function getAppMode() {
     return state.appMode || "chat";
 }
+
+/**
+ * Gets all registered build projects.
+ */
+export function getBuildProjects() {
+    return state.buildProjects || [];
+}
+
+/**
+ * Gets currently active project ID.
+ */
+export function getCurrentProjectId() {
+    return state.currentProjectId || null;
+}
+
+/**
+ * Gets the currently active project object.
+ */
+export function getCurrentProject() {
+    if (!state.currentProjectId) return null;
+    return state.buildProjects?.find(p => p.id === state.currentProjectId) || null;
+}
+
+/**
+ * Finds a project by ID.
+ */
+export function getProjectById(projectId) {
+    return state.buildProjects?.find(p => p.id === projectId) || null;
+}

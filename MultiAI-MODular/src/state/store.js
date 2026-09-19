@@ -11,6 +11,8 @@ export const state = {
     activePersonaPrompt: DEFAULT_PERSONA_PROMPT,
     activeSystemPrompt: BASE_SYSTEM_PROMPT,
     appMode: "chat",
+    buildProjects: [],
+    currentProjectId: null,
     messages: [
         { role: "system", content: BASE_SYSTEM_PROMPT }
     ]
