@@ -621,6 +621,20 @@ export function switchToChat(id) {
             }
         });
 
+        // Re-hydrate any thought traces that contain unrendered markdown (e.g. from runs before marked was introduced)
+        chat.querySelectorAll(".activity-thought-item").forEach(item => {
+            const raw = item.textContent || "";
+            if (raw.includes("**") || raw.includes("`")) {
+                if (typeof marked !== "undefined" && typeof marked.parse === "function") {
+                    try {
+                        item.innerHTML = marked.parse(raw.trim());
+                    } catch {
+                        // ignore
+                    }
+                }
+            }
+        });
+
         bindInteractiveCodeBlocks(chat);
         renderMermaidInElement(chat);
         wrapTablesForScroll(chat);
