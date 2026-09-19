@@ -87,7 +87,7 @@ class BaseProvider {
                 if (supportsTools) {
                     return {
                         role: "assistant",
-                        content: typeof msg.content === "string" ? msg.content : null,
+                        content: typeof msg.content === "string" ? this.cleanPromptContent(msg.content) : null,
                         tool_calls: msg.tool_calls.map(tc => {
                             const call = {
                                 id: String(tc.id || ("call_" + Math.random().toString(36).substring(2, 9))),
@@ -110,13 +110,13 @@ class BaseProvider {
                     const toolNames = msg.tool_calls.map(tc => tc.function?.name).filter(Boolean).join(", ");
                     return {
                         role: "assistant",
-                        content: msg.content || (toolNames ? `[Action taken: ${toolNames}]` : "[Action taken]")
+                        content: this.cleanPromptContent(msg.content) || (toolNames ? `[Action taken: ${toolNames}]` : "[Action taken]")
                     };
                 }
             }
             return {
                 role: "assistant",
-                content: typeof msg.content === "string" ? msg.content : String(msg.content || "")
+                content: typeof msg.content === "string" ? this.cleanPromptContent(msg.content) : String(msg.content || "")
             };
         }
 
@@ -262,27 +262,175 @@ class BaseProvider {
         }
     }
 
+    /**
+     * Cleans frontend thought-box markup and HTML tags from assistant messages
+     * before sending conversation history back to upstream LLMs.
+     * Prevents LLM context contamination and tag hallucination.
+     */
+    cleanPromptContent(text) {
+        if (!text || typeof text !== "string") return text;
+        let cleaned = text;
+        const thoughtBoxRegex = /<details class="thought-box"[^>]*>[\s\S]*?<div class="thought-content[^"]*">([\s\S]*?)<\/div>\s*<\/div>\s*<\/details>/gi;
+        cleaned = cleaned.replace(thoughtBoxRegex, (match, inner) => {
+            const cleanInner = inner.replace(/<[^>]+>/g, "").trim();
+            return cleanInner ? `<think>\n${cleanInner}\n</think>\n\n` : "";
+        });
+        cleaned = cleaned.replace(/<\/?(?:details|summary|svg|path|span)[^>]*>/gi, "");
+        return cleaned.trim();
+    }
+
+    /**
+     * Parses tool call argument string supporting standard JSON or delimited key:<|"|>val<|"|> syntax.
+     */
+    parseToolCallArgs(rawArgs) {
+        if (!rawArgs || typeof rawArgs !== "string") return {};
+        const trimmed = rawArgs.trim();
+        if ((trimmed.startsWith("{") && trimmed.endsWith("}")) || (trimmed.startsWith("[") && trimmed.endsWith("]"))) {
+            try {
+                return JSON.parse(trimmed);
+            } catch (_) {}
+        }
+        const argsObj = {};
+        const argRegex = /([a-zA-Z0-9_\-]+)\s*:\s*(?:<\|"\|>([\s\S]*?)<\|"\|>|"([^"]*)"|'([^']*)'|([^,}\s]+))/g;
+        let match;
+        let found = false;
+        while ((match = argRegex.exec(trimmed)) !== null) {
+            found = true;
+            const key = match[1];
+            let val = match[2] !== undefined ? match[2] : (match[3] !== undefined ? match[3] : (match[4] !== undefined ? match[4] : match[5]));
+            if (val === "true") val = true;
+            else if (val === "false") val = false;
+            else if (val === "null") val = null;
+            else if (!isNaN(Number(val)) && val !== "") val = Number(val);
+            argsObj[key] = val;
+        }
+        if (found) return argsObj;
+        return trimmed;
+    }
+
+    /**
+     * Extracts unparsed or leaked tool calls from raw response content or reasoning text.
+     * Supports:
+     * 1. <|tool_call>call:NAME{args}<|tool_call|> (Qwen / Command R / GLM / Hermes template tokens)
+     * 2. <tool_call> JSON </tool_call> (XML wrapped calls)
+     * 3. ```tool_call / ```json code blocks with tool calls
+     */
+    extractToolCallsFromText(text) {
+        if (!text || typeof text !== "string") return { cleanedText: text || "", toolCalls: [] };
+        const toolCalls = [];
+        let cleaned = text;
+
+        // 1. Template tokens: <|tool_call>call:NAME{...}<tool_call|> or call:NAME{...}
+        const callDelimRegex = /(?:<\|?(?:tool_call|tool)\|?>\s*)?call:([a-zA-Z0-9_\-]+)\s*\{([\s\S]*?)\}(?:\s*<\|?\/?(?:tool_call|tool)\|?>)?/gi;
+        let m;
+        while ((m = callDelimRegex.exec(cleaned)) !== null) {
+            const name = m[1];
+            const rawArgs = m[2];
+            const parsedArgs = this.parseToolCallArgs(rawArgs);
+            toolCalls.push({
+                id: "call_" + Math.random().toString(36).substring(2, 9),
+                type: "function",
+                function: {
+                    name,
+                    arguments: typeof parsedArgs === "string" ? parsedArgs : JSON.stringify(parsedArgs)
+                }
+            });
+            cleaned = cleaned.replace(m[0], "").trim();
+        }
+
+        // 2. XML wrapped calls: <tool_call> JSON </tool_call>
+        const xmlRegex = /<\|?(?:tool_call|tool)\|?>\s*([\s\S]*?)\s*<\|?\/(?:tool_call|tool)\|?>/gi;
+        while ((m = xmlRegex.exec(cleaned)) !== null) {
+            try {
+                const parsed = JSON.parse(m[1].trim());
+                const name = parsed.name || parsed.tool || parsed.function?.name;
+                const rawArgs = parsed.arguments !== undefined ? parsed.arguments : (parsed.args !== undefined ? parsed.args : parsed.parameters);
+                if (name) {
+                    toolCalls.push({
+                        id: "call_" + Math.random().toString(36).substring(2, 9),
+                        type: "function",
+                        function: {
+                            name,
+                            arguments: typeof rawArgs === "string" ? rawArgs : JSON.stringify(rawArgs || {})
+                        }
+                    });
+                    cleaned = cleaned.replace(m[0], "").trim();
+                }
+            } catch (_) {}
+        }
+
+        // 3. Fenced code block calls: ```tool_call ... ```
+        const codeBlockRegex = /```(?:tool_call|tool)\s*(\{[\s\S]*?\})\s*```/gi;
+        while ((m = codeBlockRegex.exec(cleaned)) !== null) {
+            try {
+                const parsed = JSON.parse(m[1].trim());
+                const name = parsed.name || parsed.tool || parsed.function?.name;
+                const rawArgs = parsed.arguments !== undefined ? parsed.arguments : (parsed.args !== undefined ? parsed.args : parsed.parameters);
+                if (name) {
+                    toolCalls.push({
+                        id: "call_" + Math.random().toString(36).substring(2, 9),
+                        type: "function",
+                        function: {
+                            name,
+                            arguments: typeof rawArgs === "string" ? rawArgs : JSON.stringify(rawArgs || {})
+                        }
+                    });
+                    cleaned = cleaned.replace(m[0], "").trim();
+                }
+            } catch (_) {}
+        }
+
+        return { cleanedText: cleaned, toolCalls };
+    }
+
     parseResponse(data) {
         const choice = data?.choices?.[0];
         const rawMessage = choice?.message || {};
         let content = rawMessage.content || "";
-        let reasoning = rawMessage.reasoning_content ? String(rawMessage.reasoning_content).trim() : "";
+        let reasoning = rawMessage.reasoning_content || rawMessage.reasoning ? String(rawMessage.reasoning_content || rawMessage.reasoning).trim() : "";
         if (reasoning === "null" || reasoning === "undefined" || reasoning === "{}" || reasoning === "[]") {
             reasoning = "";
+        }
+
+        let tool_calls = Array.isArray(rawMessage.tool_calls) ? [...rawMessage.tool_calls] : [];
+
+        // Check if model emitted raw tool calls in reasoning or content
+        if (tool_calls.length === 0) {
+            if (reasoning) {
+                const resR = this.extractToolCallsFromText(reasoning);
+                if (resR.toolCalls.length > 0) {
+                    tool_calls.push(...resR.toolCalls);
+                    reasoning = resR.cleanedText;
+                }
+            }
+            if (content) {
+                const resC = this.extractToolCallsFromText(content);
+                if (resC.toolCalls.length > 0) {
+                    tool_calls.push(...resC.toolCalls);
+                    content = resC.cleanedText;
+                }
+            }
+        }
+
+        // Clean any parroted thought-box envelopes from reasoning
+        if (reasoning) {
+            reasoning = reasoning.replace(/<details class="thought-box"[^>]*>[\s\S]*?<div class="thought-content[^"]*">([\s\S]*?)<\/div>\s*<\/div>\s*<\/details>/gi, "$1").trim();
+            reasoning = reasoning.replace(/<\/?(?:details|summary|svg|path|span)[^>]*>/gi, "").trim();
         }
 
         if (reasoning && content) {
             const durationStr = data?._durationSec ? `${data._durationSec} seconds` : "a few seconds";
             content = `<details class="thought-box" open data-duration="${data?._durationSec || ''}"><summary class="thought-summary"><span class="thought-header"><svg class="thought-brain-icon" viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/><path d="M12 5v13"/><path d="M12 8h4"/><path d="M12 12h3"/><path d="M12 16h4"/><path d="M8 8h4"/><path d="M9 12h3"/><path d="M8 16h4"/></svg><span class="thought-label">Thought for ${durationStr}</span><span class="thought-chevron">›</span></span></summary><div class="thought-body"><div class="thought-content">\n\n${reasoning}\n\n</div></div></details>\n\n${content.trim()}`;
         } else if (reasoning && !content) {
-            content = reasoning;
+            const durationStr = data?._durationSec ? `${data._durationSec} seconds` : "a few seconds";
+            content = `<details class="thought-box" open data-duration="${data?._durationSec || ''}"><summary class="thought-summary"><span class="thought-header"><svg class="thought-brain-icon" viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/><path d="M12 5v13"/><path d="M12 8h4"/><path d="M12 12h3"/><path d="M12 16h4"/><path d="M8 8h4"/><path d="M9 12h3"/><path d="M8 16h4"/></svg><span class="thought-label">Thought for ${durationStr}</span><span class="thought-chevron">›</span></span></summary><div class="thought-body"><div class="thought-content">\n\n${reasoning}\n\n</div></div></details>`;
         }
 
         return {
             message: this.formatAssistantResponse({
                 ...rawMessage,
                 content,
-                tool_calls: rawMessage.tool_calls
+                tool_calls: tool_calls.length > 0 ? tool_calls : undefined
             })
         };
     }
