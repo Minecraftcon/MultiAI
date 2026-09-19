@@ -7,10 +7,11 @@ import { terminalTools } from "./terminal/index.js";
 import { filesystemTools } from "./filesystem/index.js";
 import { webTools } from "./web/index.js";
 import { mediaTools } from "./media/index.js";
+import { endTools } from "./end/index.js";
 import { onToolStart, onToolComplete, onToolError } from "./badge-sync.js";
 
 // Register all domain tool definitions
-[...terminalTools, ...filesystemTools, ...webTools, ...mediaTools].forEach(registerTool);
+[...terminalTools, ...filesystemTools, ...webTools, ...mediaTools, ...endTools].forEach(registerTool);
 
 /**
  * Array of all tool schemas provided to LLM chat requests.

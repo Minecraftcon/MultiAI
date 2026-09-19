@@ -133,6 +133,51 @@
     color: #bbb;
 }
 
+/* Intermediate Thought Traces inside Activity accordion */
+.activity-thought-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    font-size: 13.5px;
+    line-height: 1.4;
+    animation: popIn 0.4s ease;
+    position: relative;
+    z-index: 1;
+}
+
+.activity-thought-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: #242424;
+    border: 1px solid #383838;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    color: #888;
+    transition: color 0.25s ease, border-color 0.25s ease;
+}
+
+.activity-thought-icon i svg,
+.activity-thought-icon > svg {
+    width: 16px;
+    height: 16px;
+    display: block;
+    position: relative;
+    z-index: 2;
+}
+
+.activity-thought-text {
+    color: #aaa;
+    font-size: 13px;
+    line-height: 1.5;
+    padding-top: 8px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-style: italic;
+}
+
 /* Icons & Progress Ring */
 .search-icon-circle {
     width: 36px;
