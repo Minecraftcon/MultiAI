@@ -5,6 +5,10 @@
 export const MAX_TOOL_ROUNDS = Infinity;
 export const MAX_TOOLS_PER_ROUND = 10;
 
+// Automatic Context Compaction Configuration
+export const COMPACTION_TOKEN_THRESHOLD = 25000;
+export const COMPACTION_MIN_MESSAGES = 10;
+
 export const CHATS_STORAGE_KEY = "multisearch_chats_v2";
 export const ACTIVE_CHAT_KEY = "multisearch_active_id_v2";
 

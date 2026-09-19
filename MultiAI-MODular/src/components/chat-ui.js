@@ -7,6 +7,7 @@ import { logEvent } from "../utils/logger.js";
 import { state } from "../state.js";
 import { chatbox } from "./chatbox.js";
 import { parseMarkdown, extractThoughtAndContent, bindInteractiveCodeBlocks, renderMermaidInElement, renderMath, bindAIImageCards } from "./renderer.js";
+import { saveCurrentChatState } from "../services/storage.js";
 
 export function createAIMessageShell() {
     const chat = document.getElementById("chat");
@@ -86,11 +87,11 @@ export function addToolBadge(element, toolName, args) {
         detail = args.task_id || "process";
     } else if (toolName === "sleep") {
         icon = "clock";
-        label = "Sleeping...";
+        label = "Sleeping…";
         detail = `${args.seconds || 1}s timer`;
     } else if (toolName === "idle") {
         icon = "hourglass";
-        label = args.task_id ? "Waiting for task..." : "Idling...";
+        label = args.task_id ? "Waiting for task…" : "Idling…";
         const targetTask = args.task_id ? ` (${args.task_id})` : "";
         detail = args.reason ? `${args.reason}${targetTask}` : `${args.seconds || 5}s timer${targetTask}`;
         isCommandTask = true;
@@ -120,32 +121,38 @@ export function addToolBadge(element, toolName, args) {
     const detailLines = String(detail || "").split("\n");
     const isDetailMulti = detailLines.length > 3;
     const compactDetail = isDetailMulti
-        ? detailLines.slice(0, 3).join("\n") + "\n..."
+        ? detailLines.slice(0, 3).join("\n") + "\n…"
         : detail;
 
     const isRunTaskWithTitle = toolName === "run_task" && (args.task_name || args.name);
     const codeIconHtml = isRunTaskWithTitle 
-        ? `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-code preview-icon" style="display:inline-block; vertical-align:-2px; margin: 0 4px; opacity:0.8;"><path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/></svg>` 
+        ? `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-code preview-icon" aria-hidden="true" style="display:inline-block; vertical-align:-2px; margin: 0 4px; opacity:0.8;"><path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/></svg>` 
         : ``;
 
     const item = document.createElement("div");
     item.className = "search-badge-item" + (hasRing ? " timer-badge" : "") + (isCommandTask ? " clickable-badge" : "") + (isDetailMulti ? " has-multiline" : "");
+    if (isCommandTask) {
+        item.setAttribute("role", "button");
+        item.setAttribute("tabindex", "0");
+        item.setAttribute("aria-expanded", "false");
+        item.setAttribute("aria-label", `Toggle ${label.toLowerCase()} output`);
+    }
 
     item.innerHTML = `
         <div class="search-icon-circle ${hasRing ? 'has-timer-ring' : ''}">
             ${hasRing ? `
-            <svg class="timer-ring-svg" viewBox="0 0 36 36">
+            <svg class="timer-ring-svg" viewBox="0 0 36 36" aria-hidden="true">
                 <circle class="timer-ring-bg" cx="18" cy="18" r="17.25" />
                 <circle class="timer-ring-bar" cx="18" cy="18" r="17.25" transform="rotate(-90 18 18)" />
             </svg>
             ` : ''}
-            <i data-lucide="${icon}"></i>
+            <i data-lucide="${icon}" aria-hidden="true"></i>
         </div>
         <div>
             <span class="search-label">${label}</span>
             ${codeIconHtml}
             <span class="search-query ${detailLines.length > 1 ? 'is-multiline' : ''}" data-full="${escapeHTML(detail)}" data-compact="${escapeHTML(compactDetail)}">${escapeHTML(compactDetail)}</span>
-            ${isCommandTask ? '<span class="badge-expand-chevron">▶</span>' : ''}
+            ${isCommandTask ? '<span class="badge-expand-chevron" aria-hidden="true">▶</span>' : ''}
         </div>
     `;
 
@@ -178,7 +185,7 @@ export function addToolBadge(element, toolName, args) {
         const cmdLines = String(displayCmd || "").split("\n");
         const isCmdMulti = cmdLines.length > 3;
         const compactCmd = isCmdMulti
-            ? cmdLines.slice(0, 3).join("\n") + "\n..."
+            ? cmdLines.slice(0, 3).join("\n") + "\n…"
             : displayCmd;
         
         collapseDiv.innerHTML = `
@@ -195,6 +202,116 @@ export function addToolBadge(element, toolName, args) {
     renderIcons(item);
     chat.scrollTop = chat.scrollHeight;
     return item;
+}
+
+export function addCompactionBadge(element, { messagesCount = 0, tokensBefore = 0 } = {}) {
+    const chat = document.getElementById("chat");
+    const wrapper = element.querySelector(".activity-wrapper");
+    const searchContainer = element.querySelector(".search-items-container");
+
+    if (wrapper && wrapper.style.display !== "block") {
+        wrapper.style.display = "block";
+        wrapper.classList.add("open");
+    }
+
+    const item = document.createElement("div");
+    item.className = "search-badge-item timer-badge clickable-badge";
+    item.setAttribute("role", "button");
+    item.setAttribute("tabindex", "0");
+    item.setAttribute("aria-expanded", "false");
+    item.setAttribute("aria-label", "Toggle compacted context briefing");
+    item.setAttribute("aria-live", "polite");
+
+    const compactDetail = `Distilling ${messagesCount} turns (~${Math.round(tokensBefore / 1000)}k tokens) via model…`;
+
+    item.innerHTML = `
+        <div class="search-icon-circle has-timer-ring">
+            <svg class="timer-ring-svg" viewBox="0 0 36 36" aria-hidden="true">
+                <circle class="timer-ring-bg" cx="18" cy="18" r="17.25" />
+                <circle class="timer-ring-bar" cx="18" cy="18" r="17.25" transform="rotate(-90 18 18)" style="stroke-dasharray: 108.39; stroke-dashoffset: 54; animation: timer-ring-spin 1.2s linear infinite; transform-origin: 18px 18px;" />
+            </svg>
+            <i data-lucide="layers" aria-hidden="true"></i>
+        </div>
+        <div>
+            <span class="search-label">Compacting</span>
+            <span class="search-query" data-full="${escapeHTML(compactDetail)}" data-compact="${escapeHTML(compactDetail)}">${escapeHTML(compactDetail)}</span>
+            <span class="badge-expand-chevron" aria-hidden="true">▶</span>
+        </div>
+    `;
+
+    searchContainer.appendChild(item);
+
+    const collapseDiv = document.createElement("div");
+    collapseDiv.className = "badge-collapse";
+    collapseDiv.innerHTML = `
+        <div class="badge-collapse-inner">
+            <div class="command-output-box">
+                <pre><div class="command-output-cmd"><div class="command-cmd-text">Compacted Context Briefing (${messagesCount} turns)</div></div><hr class="command-output-sep"><div class="command-output-res">Generating context briefing…</div></pre>
+            </div>
+        </div>
+    `;
+    searchContainer.appendChild(collapseDiv);
+    item._collapseDiv = collapseDiv;
+
+    renderIcons(item);
+    chat.scrollTop = chat.scrollHeight;
+
+    return {
+        item,
+        collapseDiv,
+        update({ status, summaryText, tokensSaved = 0, messagesCount = 0, error = null }) {
+            const ringBar = item.querySelector(".timer-ring-bar");
+            if (ringBar) {
+                ringBar.style.animation = "none";
+            }
+
+            if (status === "completed") {
+                item.classList.add("timer-finished");
+
+                const labelEl = item.querySelector(".search-label");
+                if (labelEl) labelEl.textContent = "Compacted";
+
+                const queryEl = item.querySelector(".search-query");
+                const savedStr = tokensSaved > 0 ? `Saved ~${Math.round(tokensSaved / 1000)}k tokens` : `Distilled`;
+                const finalDesc = `Reduced ${messagesCount} turns (${savedStr})`;
+                if (queryEl) {
+                    queryEl.textContent = finalDesc;
+                    queryEl.dataset.full = finalDesc;
+                    queryEl.dataset.compact = finalDesc;
+                }
+
+                const cmdTitle = collapseDiv.querySelector(".command-cmd-text");
+                if (cmdTitle) {
+                    cmdTitle.textContent = `Compacted Context Briefing (${messagesCount} turns, ${savedStr})`;
+                }
+
+                const resEl = collapseDiv.querySelector(".command-output-res");
+                if (resEl && summaryText) {
+                    resEl.textContent = summaryText;
+                }
+            } else if (status === "failed") {
+                item.classList.add("timer-finished");
+
+                const labelEl = item.querySelector(".search-label");
+                if (labelEl) labelEl.textContent = "Compaction";
+
+                const queryEl = item.querySelector(".search-query");
+                if (queryEl) {
+                    const failText = error ? `Skipped (${error})` : `Skipped — maintained full context`;
+                    queryEl.textContent = failText;
+                    queryEl.dataset.full = failText;
+                    queryEl.dataset.compact = failText;
+                }
+
+                const resEl = collapseDiv.querySelector(".command-output-res");
+                if (resEl) {
+                    resEl.textContent = error || "Compaction skipped. Context maintained without changes.";
+                }
+            }
+            saveCurrentChatState();
+            chat.scrollTop = chat.scrollHeight;
+        }
+    };
 }
 
 export function addThoughtTrace(element, text) {
@@ -232,8 +349,8 @@ export function addThoughtTrace(element, text) {
             <div class="thought-collapsed-body">
                 ${renderedHtml}
             </div>
-            <button type="button" class="thought-expand-btn">
-                <span class="thought-expand-icon">...</span> expand
+            <button type="button" class="thought-expand-btn" aria-expanded="false">
+                <span class="thought-expand-icon" aria-hidden="true">…</span> expand
             </button>
         `;
     } else {
@@ -257,8 +374,8 @@ export function wrapHugeThoughts(root) {
                 <div class="thought-collapsed-body">
                     ${item.innerHTML}
                 </div>
-                <button type="button" class="thought-expand-btn">
-                    <span class="thought-expand-icon">...</span> expand
+                <button type="button" class="thought-expand-btn" aria-expanded="false">
+                    <span class="thought-expand-icon" aria-hidden="true">…</span> expand
                 </button>
             `;
         }
@@ -273,8 +390,8 @@ export function wrapHugeThoughts(root) {
                 <div class="thought-collapsed-body">
                     ${contentEl.innerHTML}
                 </div>
-                <button type="button" class="thought-expand-btn">
-                    <span class="thought-expand-icon">...</span> expand
+                <button type="button" class="thought-expand-btn" aria-expanded="false">
+                    <span class="thought-expand-icon" aria-hidden="true">…</span> expand
                 </button>
             `;
         }
@@ -497,7 +614,8 @@ export function initChatDelegation() {
 
         const cmdBadge = e.target.closest(".search-badge-item.clickable-badge");
         if (cmdBadge) {
-            cmdBadge.classList.toggle("open");
+            const isOpen = cmdBadge.classList.toggle("open");
+            cmdBadge.setAttribute("aria-expanded", isOpen ? "true" : "false");
             saveCurrentChatState();
             return;
         }
@@ -508,9 +626,10 @@ export function initChatDelegation() {
             const collapsible = thoughtExpandBtn.closest(".thought-collapsible");
             if (collapsible) {
                 const isExpanded = collapsible.classList.toggle("is-expanded");
+                thoughtExpandBtn.setAttribute("aria-expanded", isExpanded ? "true" : "false");
                 thoughtExpandBtn.innerHTML = isExpanded
-                    ? `<span class="thought-expand-icon">▴</span> collapse`
-                    : `<span class="thought-expand-icon">...</span> expand`;
+                    ? `<span class="thought-expand-icon" aria-hidden="true">▴</span> collapse`
+                    : `<span class="thought-expand-icon" aria-hidden="true">…</span> expand`;
                 saveCurrentChatState();
             }
             return;
@@ -545,6 +664,18 @@ export function initChatDelegation() {
                 lb.classList.add("active");
             }
             return;
+        }
+    });
+
+    chat.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+            const badge = e.target.closest(".search-badge-item.clickable-badge");
+            if (badge && e.target === badge) {
+                e.preventDefault();
+                const isOpen = badge.classList.toggle("open");
+                badge.setAttribute("aria-expanded", isOpen ? "true" : "false");
+                saveCurrentChatState();
+            }
         }
     });
 }

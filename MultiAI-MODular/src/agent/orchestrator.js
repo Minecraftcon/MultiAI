@@ -9,6 +9,7 @@ import { renderChatList } from "../components/side-panel.js";
 import { sanitizeMessage } from "./sanitizer.js";
 import { callChatModel } from "./chat-client.js";
 import { extractThoughtAndContent } from "../components/renderer.js";
+import { shouldCompact, compactSessionContext } from "./compactor.js";
 
 function isPromissoryAnnouncement(text) {
     if (!text) return false;
@@ -99,6 +100,21 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
                 return;
             }
 
+            // Automatic context compaction via model if conversation exceeds token/message thresholds
+            if (shouldCompact(session)) {
+                await compactSessionContext({
+                    session,
+                    currentAIMessage,
+                    selectedModel,
+                    genState,
+                    overallStartTime
+                });
+                if (genState.abortRequested) {
+                    finalizeStopped(currentAIMessage, overallStartTime, hasRunTools);
+                    return;
+                }
+            }
+
             stageStatus = round === 0 ? "Thinking" : `Synthesizing (round ${round + 1})`;
             const activityLabel = currentAIMessage.querySelector(".activity-label");
             if (activityLabel) {
@@ -118,8 +134,31 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
                     finalizeStopped(currentAIMessage, overallStartTime, hasRunTools);
                     return;
                 }
-                logEvent("CHAT_CALL_ERROR", { round, model: selectedModel, error: String(err && err.message || err) });
-                throw err;
+                // Emergency context compaction if upstream model rejects due to context limits
+                if (/prompt exceeds max length|context length|context window|too many tokens|token limit|1214/i.test(err.message || "")) {
+                    logEvent("CONTEXT_LIMIT_TRIGGER_COMPACT", { round, model: selectedModel, error: err.message });
+                    const compacted = await compactSessionContext({
+                        session,
+                        currentAIMessage,
+                        selectedModel,
+                        genState,
+                        overallStartTime
+                    });
+                    if (compacted && !genState.abortRequested) {
+                        try {
+                            stageStatus = `Synthesizing (round ${round + 1})`;
+                            response = await callChatModel(session.messages, { model: selectedModel, tools: tools });
+                        } catch (retryErr) {
+                            logEvent("CHAT_CALL_RETRY_ERROR", { round, model: selectedModel, error: String(retryErr && retryErr.message || retryErr) });
+                            throw retryErr;
+                        }
+                    } else {
+                        throw err;
+                    }
+                } else {
+                    logEvent("CHAT_CALL_ERROR", { round, model: selectedModel, error: String(err && err.message || err) });
+                    throw err;
+                }
             }
 
             if (genState.abortRequested) {

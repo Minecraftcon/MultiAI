@@ -82,22 +82,27 @@ providers:
         name: "GLM 4.5 Flash (Fast & Reasoning)"
         supports_tools: true
         supports_vision: false
+        max_context_tokens: 55000
       - id: "glm-4.7-flash"
         name: "GLM 4.7 Flash"
         supports_tools: true
         supports_vision: false
+        max_context_tokens: 110000
       - id: "glm-5.3-flash"
         name: "GLM 5.3 Flash"
         supports_tools: true
         supports_vision: false
+        max_context_tokens: 110000
       - id: "glm-4.5"
         name: "GLM 4.5"
         supports_tools: true
         supports_vision: false
+        max_context_tokens: 110000
       - id: "glm-4.7"
         name: "GLM 4.7"
         supports_tools: true
         supports_vision: false
+        max_context_tokens: 110000
 
   llm7:
     name: "LLM7.io"
@@ -130,6 +135,7 @@ providers:
         name: "GLM 5.3 Flash (Logfare — Tools & Fast)"
         supports_tools: true
         supports_vision: false
+        max_context_tokens: 110000
       - id: "qwen-3.8-27b"
         name: "Qwen 3.8 27B (Logfare — Tools & Reasoning)"
         supports_tools: true
@@ -165,6 +171,7 @@ providers:
         name: "GLM 4.7 (ArliAI Trial)"
         supports_tools: true
         supports_vision: false
+        max_context_tokens: 110000
       - id: "(TRIAL) Gemma-4-31B-it"
         name: "Gemma 4 31B IT (ArliAI Trial)"
         supports_tools: true

@@ -194,10 +194,141 @@ class BaseProvider {
         return baseUrl.endsWith("/chat/completions") ? baseUrl : `${baseUrl.replace(/\/+$/, "")}/chat/completions`;
     }
 
-    formatPayload({ model, messages, tools, tool_choice, config = {}, supportsTools = true, supportsVision = false }) {
+    /**
+     * Estimates token count for a message.
+     * Uses conservative 3.0 characters/token ratio.
+     */
+    estimateMessageTokens(msg) {
+        if (!msg) return 0;
+        let chars = 0;
+        if (typeof msg.content === "string") {
+            chars += msg.content.length;
+        } else if (msg.content) {
+            chars += JSON.stringify(msg.content).length;
+        }
+        if (msg.tool_calls) {
+            chars += JSON.stringify(msg.tool_calls).length;
+        }
+        return Math.ceil(chars / 3.0);
+    }
+
+    /**
+     * Prunes conversation messages to fit within a target token budget while strictly preserving:
+     * 1. The system message (index 0).
+     * 2. The most recent user instruction and active agent turn.
+     * 3. Atomic tool-call integrity: assistant tool_calls and their matching tool result messages
+     *    are grouped and dropped together so no orphaned tool messages are left.
+     * 4. Caps oversized historical tool outputs in older turns to avoid token waste.
+     */
+    pruneMessagesForContext(messages, maxTokens = 60000, options = {}) {
+        if (!Array.isArray(messages) || messages.length <= 1) return messages;
+
+        const totalEstTokens = messages.reduce((acc, m) => acc + this.estimateMessageTokens(m), 0);
+        if (totalEstTokens <= maxTokens) {
+            return messages;
+        }
+
+        const maxToolChars = options.maxToolChars || 6000;
+        let systemMsg = null;
+        const nonSystem = [];
+
+        for (let i = 0; i < messages.length; i++) {
+            if (i === 0 && messages[i].role === "system") {
+                systemMsg = messages[i];
+            } else {
+                nonSystem.push(messages[i]);
+            }
+        }
+
+        if (nonSystem.length === 0) return messages;
+
+        // 1. Cap massive historical tool outputs in older turns (excluding recent turns)
+        const processed = nonSystem.map((m, idx) => {
+            const isRecent = idx >= nonSystem.length - 2;
+            if (!isRecent && m.role === "tool" && typeof m.content === "string" && m.content.length > maxToolChars) {
+                const half = Math.floor(maxToolChars / 2);
+                return {
+                    ...m,
+                    content: `${m.content.slice(0, half)}\n\n[... Output truncated to fit model context window ...]\n\n${m.content.slice(-half)}`
+                };
+            }
+            return m;
+        });
+
+        // 2. Group into atomic blocks:
+        // - user message block
+        // - assistant message (and all its corresponding tool result messages) block
+        const blocks = [];
+        let currentBlock = [];
+
+        for (let i = 0; i < processed.length; i++) {
+            const m = processed[i];
+            if (m.role === "user") {
+                if (currentBlock.length > 0) {
+                    blocks.push(currentBlock);
+                    currentBlock = [];
+                }
+                blocks.push([m]);
+            } else if (m.role === "assistant") {
+                if (currentBlock.length > 0) {
+                    blocks.push(currentBlock);
+                    currentBlock = [];
+                }
+                currentBlock.push(m);
+            } else if (m.role === "tool") {
+                if (currentBlock.length > 0 && (currentBlock[0].role === "assistant" || currentBlock[0].role === "tool")) {
+                    currentBlock.push(m);
+                } else {
+                    if (currentBlock.length > 0) blocks.push(currentBlock);
+                    currentBlock = [m];
+                }
+            } else {
+                if (currentBlock.length > 0) {
+                    blocks.push(currentBlock);
+                    currentBlock = [];
+                }
+                blocks.push([m]);
+            }
+        }
+        if (currentBlock.length > 0) {
+            blocks.push(currentBlock);
+        }
+
+        // 3. Keep blocks from newest to oldest until available token budget is filled
+        const sysTokens = systemMsg ? this.estimateMessageTokens(systemMsg) : 0;
+        const availableTokens = Math.max(maxTokens - sysTokens, 4000);
+
+        const keptBlocks = [];
+        let accumulatedTokens = 0;
+
+        for (let b = blocks.length - 1; b >= 0; b--) {
+            const blk = blocks[b];
+            const blkTokens = blk.reduce((acc, m) => acc + this.estimateMessageTokens(m), 0);
+
+            if (keptBlocks.length === 0 || accumulatedTokens + blkTokens <= availableTokens) {
+                keptBlocks.unshift(blk);
+                accumulatedTokens += blkTokens;
+            } else {
+                break;
+            }
+        }
+
+        const pruned = [];
+        if (systemMsg) pruned.push(systemMsg);
+        for (const blk of keptBlocks) {
+            pruned.push(...blk);
+        }
+
+        return pruned;
+    }
+
+    formatPayload({ model, messages, tools, tool_choice, config = {}, supportsTools = true, supportsVision = false, options = {} }) {
+        const maxContextTokens = options.maxContextTokens || config.max_context_tokens;
+        const msgsToNormalize = maxContextTokens ? this.pruneMessagesForContext(messages, maxContextTokens, options) : messages;
+
         const payload = {
             model,
-            messages: this.normalizeMessages(messages, supportsTools, supportsVision)
+            messages: this.normalizeMessages(msgsToNormalize, supportsTools, supportsVision)
         };
         if (config.default_max_tokens) {
             payload.max_tokens = config.default_max_tokens;
@@ -440,8 +571,11 @@ class BaseProvider {
         const supportsTools = modelMeta ? (modelMeta.supports_tools !== false) : true;
         const supportsVision = modelMeta ? Boolean(modelMeta.supports_vision) : false;
 
+        const maxContextTokens = options.maxContextTokens || modelMeta?.max_context_tokens || providerConfig.max_context_tokens;
+        const chatOptions = maxContextTokens ? { ...options, maxContextTokens } : options;
+
         const endpoint = this.getEndpoint(providerConfig, model, apiKey);
-        const headers = this.getHeaders(apiKey, { model, providerConfig, ...options });
+        const headers = this.getHeaders(apiKey, { model, providerConfig, ...chatOptions });
         const payload = this.formatPayload({
             model,
             messages,
@@ -450,11 +584,31 @@ class BaseProvider {
             config: providerConfig,
             supportsTools,
             supportsVision,
-            options
+            options: chatOptions
         });
 
         const res = await this.send({ endpoint, headers, payload });
         if (!res.ok) {
+            // General context overflow recovery: retry once with auto-pruned context window if prompt exceeds limits
+            const isContextOverflow = (res.status === 400 || res.status === 413) &&
+                typeof res.error === "string" &&
+                /prompt exceeds max length|context length|context window|maximum context|too many tokens|token limit|maximum prompt length|reduce your prompt|exceeds the limit of|1214/i.test(res.error);
+
+            if (isContextOverflow && !options._retriedContextOverflow) {
+                const currentBudget = chatOptions.maxContextTokens || 55000;
+                const retryBudget = Math.max(Math.floor(currentBudget * 0.5), 15000);
+                console.warn(`[${this.constructor.displayName || this.constructor.id}] Prompt exceeded context limit (${res.error}). Retrying with auto-pruned context window (${retryBudget} tokens)...`);
+                return this.handleChat({
+                    model,
+                    apiKey,
+                    providerConfig,
+                    messages,
+                    tools,
+                    tool_choice,
+                    options: { ...options, maxContextTokens: retryBudget, _retriedContextOverflow: true }
+                });
+            }
+
             return {
                 status: res.status,
                 error: res.error

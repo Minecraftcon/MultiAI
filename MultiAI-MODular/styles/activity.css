@@ -369,9 +369,20 @@
     border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 12px;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
     user-select: none;
     line-height: 1.5;
+}
+
+.thought-expand-btn:focus-visible {
+    outline: 2px solid #555555;
+    outline-offset: 2px;
+}
+
+.search-badge-item.clickable-badge:focus-visible {
+    outline: 2px solid #555555;
+    outline-offset: 3px;
+    border-radius: 4px;
 }
 
 .thought-expand-btn:hover {
@@ -417,4 +428,24 @@
     line-height: 1.6;
     color: #a3a3a3;
 }
+
+/* =========================================================
+   TIMER RING SPINNER (ANIMATED IN PROGRESS, STOPS WHEN FINISHED)
+   ========================================================= */
+@keyframes timer-ring-spin {
+    from {
+        transform: rotate(-90deg);
+    }
+    to {
+        transform: rotate(270deg);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .timer-ring-bar {
+        animation: none !important;
+    }
+}
+
+
 
