@@ -49,6 +49,7 @@ class WindowsTaskManager(BaseTaskManager):
         command: str,
         shell_override: Optional[str] = None,
         scratch_dir: Optional[str] = None,
+        artifacts_dir: Optional[str] = None,
     ) -> str:
         task_id = str(uuid.uuid4())[:8]
         selected_shell = (shell_override or self.default_shell).lower()
@@ -58,6 +59,9 @@ class WindowsTaskManager(BaseTaskManager):
         if scratch_dir:
             env["SCRATCH"] = scratch_dir
             env["SCRATCH_DIR"] = scratch_dir
+        if artifacts_dir:
+            env["ARTIFACTS"] = artifacts_dir
+            env["ARTIFACTS_DIR"] = artifacts_dir
 
         creationflags = 0
         if sys.platform == "win32":

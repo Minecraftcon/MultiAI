@@ -281,7 +281,7 @@ export function addCompactionBadge(element, { messagesCount = 0, tokensBefore = 
     return {
         item,
         collapseDiv,
-        update({ status, summaryText, tokensSaved = 0, messagesCount = 0, error = null }) {
+        update({ status, summaryText, tokensSaved = 0, messagesCount = 0, artifactPath = null, error = null }) {
             const ringBar = item.querySelector(".timer-ring-bar");
             if (ringBar) {
                 ringBar.style.animation = "none";
@@ -310,6 +310,21 @@ export function addCompactionBadge(element, { messagesCount = 0, tokensBefore = 
                 const resEl = collapseDiv.querySelector(".command-output-res");
                 if (resEl && summaryText) {
                     resEl.textContent = summaryText;
+                }
+
+                if (artifactPath) {
+                    let noteEl = collapseDiv.querySelector(".command-output-artifact-note");
+                    if (!noteEl) {
+                        noteEl = document.createElement("div");
+                        noteEl.className = "command-output-artifact-note";
+                        noteEl.style.marginTop = "10px";
+                        noteEl.style.paddingTop = "8px";
+                        noteEl.style.borderTop = "1px dashed var(--border-color, rgba(255, 255, 255, 0.15))";
+                        noteEl.style.fontSize = "0.85em";
+                        noteEl.style.opacity = "0.9";
+                        collapseDiv.querySelector(".badge-collapse-inner pre")?.appendChild(noteEl);
+                    }
+                    noteEl.innerHTML = `<span style="color:var(--text-muted, #aaa);">Permanent Milestone Snapshot:</span> <code>${escapeHTML(artifactPath)}</code>`;
                 }
             } else if (status === "failed") {
                 item.classList.add("timer-finished");

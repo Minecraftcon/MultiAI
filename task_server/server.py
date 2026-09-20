@@ -42,8 +42,9 @@ if HAS_FLASK:
             return jsonify({"error": "No command provided"}), 400
 
         scratch_dir = data.get("scratch_dir")
+        artifacts_dir = data.get("artifacts_dir")
         shell_override = data.get("shell")
-        task_id = manager.run_task(command, shell_override=shell_override, scratch_dir=scratch_dir)
+        task_id = manager.run_task(command, shell_override=shell_override, scratch_dir=scratch_dir, artifacts_dir=artifacts_dir)
 
         output = manager.wait_for_task(task_id, timeout_secs)
         return jsonify(output)
@@ -134,9 +135,10 @@ if HAS_FLASK:
         code = data.get("code", "")
         timeout = int(data.get("timeout", 30))
         scratch_dir = data.get("scratch_dir")
+        artifacts_dir = data.get("artifacts_dir")
         cwd = data.get("cwd")
 
-        res = execute_python_code(code=code, timeout=timeout, cwd=cwd, scratch_dir=scratch_dir)
+        res = execute_python_code(code=code, timeout=timeout, cwd=cwd, scratch_dir=scratch_dir, artifacts_dir=artifacts_dir)
         return jsonify(res)
 
 
@@ -196,7 +198,7 @@ class FallbackHandler(BaseHTTPRequestHandler):
             if not cmd:
                 return self._send_json(400, {"error": "No command provided"})
             timeout_sec = float(data.get("timeout") if data.get("timeout") is not None else (float(data.get("wait_ms", 1000)) / 1000.0 if "wait_ms" in data else 1.0))
-            tid = manager.run_task(cmd, shell_override=data.get("shell"), scratch_dir=data.get("scratch_dir"))
+            tid = manager.run_task(cmd, shell_override=data.get("shell"), scratch_dir=data.get("scratch_dir"), artifacts_dir=data.get("artifacts_dir"))
             return self._send_json(200, manager.wait_for_task(tid, timeout_sec))
 
         if path == "/api/task/idle":

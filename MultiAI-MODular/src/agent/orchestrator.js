@@ -136,8 +136,8 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
                     finalizeStopped(currentAIMessage, overallStartTime, hasRunTools);
                     return;
                 }
-                // Emergency context compaction if upstream model rejects due to context limits
-                if (/prompt exceeds max length|context length|context window|too many tokens|token limit|1214/i.test(err.message || "")) {
+                // Emergency context compaction if upstream model rejects due to context limits or gateway timeouts
+                if (/prompt exceeds max length|context length|context window|too many tokens|token limit|1214|504|Gateway Timeout|timed out/i.test(err.message || "")) {
                     logEvent("CONTEXT_LIMIT_TRIGGER_COMPACT", { round, model: selectedModel, error: err.message });
                     const compacted = await compactSessionContext({
                         session,

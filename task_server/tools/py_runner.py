@@ -14,20 +14,21 @@ from typing import Dict, Any, Optional
 
 def execute_python_code(
     code: str,
-    timeout: int = 30,
+    timeout: Optional[float] = 30.0,
     cwd: Optional[str] = None,
-    scratch_dir: Optional[str] = None
+    scratch_dir: Optional[str] = None,
+    artifacts_dir: Optional[str] = None,
 ) -> Dict[str, Any]:
-    raw_code = str(code or "").strip()
-    if not raw_code:
+    if not code or not code.strip():
         return {
             "success": False,
-            "error": "Parameter 'code' is required and cannot be empty",
             "stdout": "",
-            "stderr": "",
-            "result": None,
-            "execution_time_ms": 0
+            "stderr": "Error: Provided Python code snippet is empty.",
+            "return_value": None,
+            "exit_code": 1,
+            "elapsed_seconds": 0.0,
         }
+    raw_code = str(code or "").strip()
 
     timeout_sec = min(300, max(1, int(timeout or 30)))
     target_cwd = cwd or scratch_dir or os.getcwd()
@@ -37,6 +38,9 @@ def execute_python_code(
     if scratch_dir:
         env["SCRATCH"] = scratch_dir
         env["SCRATCH_DIR"] = scratch_dir
+    if artifacts_dir:
+        env["ARTIFACTS"] = artifacts_dir
+        env["ARTIFACTS_DIR"] = artifacts_dir
 
     # Wrapper runner script to capture execution and evaluate trailing expression
     runner_script = f"""

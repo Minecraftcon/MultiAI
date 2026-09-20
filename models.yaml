@@ -148,6 +148,7 @@ providers:
         name: "Logfare Auto (Smart Router)"
         supports_tools: true
         supports_vision: false
+        max_context_tokens: 32000
       - id: "moondream3.1"
         name: "Moondream 3.1 9B (Vision)"
         supports_tools: false

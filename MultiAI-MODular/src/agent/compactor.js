@@ -1,5 +1,5 @@
 // Automatic Context Compaction via Model
-import { COMPACTION_BUFFER_TOKENS, COMPACTION_MIN_MESSAGES } from "../config.js";
+import { COMPACTION_BUFFER_TOKENS, COMPACTION_MIN_MESSAGES, COMPACTION_TOKEN_THRESHOLD } from "../config.js";
 import { state } from "../state/index.js";
 import { logEvent } from "../utils/logger.js";
 import { extractText } from "../utils/dom.js";
@@ -8,6 +8,12 @@ import { addCompactionBadge } from "../components/chat-ui.js";
 import { saveStoredChats } from "../services/storage.js";
 import { extractThoughtAndContent } from "../components/renderer.js";
 import { availableModels } from "../components/side-panel.js";
+import {
+    extractUserDirectives,
+    extractTodos,
+    assessContext,
+    compileWorkingContext
+} from "./state-machine.js";
 
 /**
  * Converts dialogue messages into a clean, structured transcript text.
@@ -102,101 +108,34 @@ export function getModelContextLimit(modelId) {
 }
 
 /**
- * Calculates the compaction trigger threshold for a model.
- * Compaction triggers when the conversation reaches within 25k tokens of the native limit, or exceeds it.
+ * Calculates the compaction trigger threshold for a model, bounded by COMPACTION_TOKEN_THRESHOLD (32k).
+ * Compaction triggers when the conversation approaches the 32k ceiling or the model limit.
  * @param {string} modelId
  * @param {number} [bufferTokens]
  * @returns {number}
  */
 export function getCompactionThreshold(modelId, bufferTokens = COMPACTION_BUFFER_TOKENS) {
     const limit = getModelContextLimit(modelId);
-    if (limit <= 32000) {
-        return Math.max(4000, Math.min(limit - 4000, Math.floor(limit * 0.8)));
+    const effectiveLimit = Math.min(limit, COMPACTION_TOKEN_THRESHOLD);
+    if (effectiveLimit <= 32000) {
+        return Math.max(4000, Math.min(effectiveLimit - 2000, Math.floor(effectiveLimit * 0.85)));
     }
-    return Math.max(10000, limit - bufferTokens);
+    return Math.max(10000, effectiveLimit - bufferTokens);
 }
 
 /**
- * Compiles the working messages array for model inference.
- * If a compactionState exists, combines the system prompt, the compacted memory briefing,
- * and uncompacted active turns starting from compactedThroughIndex.
- * Guarantees that the active dialogue never starts on an orphan 'tool' or 'assistant' role.
- * All historical messages in session.messages remain completely preserved on disk.
+ * Compiles the working messages array for model inference using the Deep Agent state machine.
+ * Preserves historical messages in session.messages completely intact on disk.
  * @param {Object} session
  * @returns {Array<Object>}
  */
 export function compileWorkingMessages(session) {
-    if (!session || !Array.isArray(session.messages)) return [];
-    const msgs = session.messages;
-    const compaction = session.compactionState;
-
-    if (!compaction || !compaction.summary || typeof compaction.compactedThroughIndex !== "number") {
-        return msgs;
-    }
-
-    const systemMsg = msgs[0] || { role: "system", content: "" };
-    const briefingMsg = {
-        role: "system",
-        content: `[CONVERSATION HISTORY COMPACTED BY MODEL]:\n\n${compaction.summary}\n\n[INSTRUCTION]: The above briefing encapsulates prior goals, discoveries, and actions. Seamlessly continue the conversation from this point.`
-    };
-
-    // Calculate safe start index ensuring we never begin on an orphan 'tool' role
-    let startIndex = Math.max(1, compaction.compactedThroughIndex);
-
-    // If compactedThroughIndex exceeds current array length (e.g. from cache sync), recover last user turn
-    if (startIndex >= msgs.length) {
-        const lastUserIdx = msgs.map(m => m.role).lastIndexOf("user");
-        startIndex = lastUserIdx >= 1 ? lastUserIdx : Math.max(1, msgs.length - 2);
-    }
-
-    // Advance past any orphan 'tool' messages
-    while (startIndex < msgs.length && msgs[startIndex]?.role === "tool") {
-        startIndex++;
-    }
-
-    // If starting on an assistant message, include its preceding user prompt if available, or generate a safe bridge
-    let bridgeUserMsg = null;
-    if (startIndex < msgs.length && msgs[startIndex]?.role === "assistant") {
-        if (startIndex > 1 && msgs[startIndex - 1]?.role === "user") {
-            startIndex = startIndex - 1;
-        } else {
-            const userPromptMsg = msgs.slice(1, startIndex).reverse().find(m => m.role === "user");
-            const promptContent = userPromptMsg?.content;
-            const originalPromptText = typeof promptContent === "string"
-                ? promptContent
-                : (Array.isArray(promptContent) ? promptContent.map(c => c.text || "").join(" ") : "Continue previous instructions.");
-
-            bridgeUserMsg = {
-                role: "user",
-                content: `[ACTIVE EXECUTION CONTINUATION]\nOriginal user instruction: "${originalPromptText.slice(0, 1000)}"\n\nPlease continue executing the task seamlessly based on the context briefing above.`
-            };
-        }
-    }
-
-    const rawRecentTurns = msgs.slice(startIndex);
-
-    // Guard: ensure giant tool outputs in recentTurns don't overflow the context window
-    const safeRecentTurns = rawRecentTurns.map(m => {
-        if (m.role === "tool" && typeof m.content === "string" && m.content.length > 25000) {
-            const head = m.content.slice(0, 10000);
-            const tail = m.content.slice(-10000);
-            const omitted = m.content.length - 20000;
-            return {
-                ...m,
-                content: `${head}\n\n[... OMITTED ${omitted} CHARS OF TOOL OUTPUT FOR WORKING CONTEXT; FULL RECORD IS PRESERVED ON DISK ...] \n\n${tail}`
-            };
-        }
-        return m;
-    });
-
-    return bridgeUserMsg
-        ? [systemMsg, briefingMsg, bridgeUserMsg, ...safeRecentTurns]
-        : [systemMsg, briefingMsg, ...safeRecentTurns];
+    return compileWorkingContext(session);
 }
 
 /**
  * Checks whether the current session messages should undergo model compaction.
- * Triggers only if the working token count exceeds or is within 25k tokens of the model's native context limit.
+ * Delegates to the state machine context assessment (evaluates 32k threshold and rounds count).
  * @param {Object} session
  * @param {Object} [options]
  * @param {string} [options.model]
@@ -204,26 +143,7 @@ export function compileWorkingMessages(session) {
  * @returns {boolean}
  */
 export function shouldCompact(session, options = {}) {
-    if (!session || !Array.isArray(session.messages)) return false;
-    const msgs = session.messages;
-
-    // Minimum messages threshold
-    if (msgs.length < COMPACTION_MIN_MESSAGES) return false;
-
-    // Check if there are messages between system prompt and the current user turn
-    const lastUserIdx = msgs.map(m => m.role).lastIndexOf("user");
-    if (lastUserIdx <= 1 && msgs.length < 18) {
-        return false;
-    }
-
-    // Evaluate token count of the compiled working context
-    const workingMsgs = compileWorkingMessages(session);
-    const tokenCount = estimateMessagesTokens(workingMsgs);
-    const modelId = options.model || session.model;
-    const threshold = options.threshold || getCompactionThreshold(modelId);
-
-    // Trigger only if working tokens reach within 25k of native limit or exceed it
-    return tokenCount >= threshold;
+    return assessContext(session, options).shouldCompact;
 }
 
 /**
@@ -394,6 +314,22 @@ Be concise, clear, and omit conversational filler. Return ONLY the markdown brie
         const tokensAfter = estimateMessagesTokens(workingAfter);
         const tokensSaved = Math.max(0, tokensBefore - tokensAfter);
 
+        // Write persistent milestone artifact to $ARTIFACTS/
+        let artifactPath = null;
+        try {
+            artifactPath = await writeCompactionArtifact({
+                session,
+                summaryText,
+                sliceStartIdx,
+                sliceEndIdx,
+                tokensSaved
+            });
+        } catch (e) {
+            console.warn("Could not write milestone artifact:", e);
+        }
+
+        const parsedTodos = extractTodos(msgs, previousCompaction?.todos || []);
+
         session.compactionState = {
             summary: summaryText,
             compactedThroughIndex: sliceEndIdx,
@@ -401,7 +337,9 @@ Be concise, clear, and omit conversational filler. Return ONLY the markdown brie
             tokensAfter,
             tokensSaved,
             compactedAt: Date.now(),
-            model: selectedModel
+            model: selectedModel,
+            latestArtifactPath: artifactPath,
+            todos: parsedTodos
         };
 
         state.messages = session.messages;
@@ -413,14 +351,16 @@ Be concise, clear, and omit conversational filler. Return ONLY the markdown brie
             tokensAfter,
             tokensSaved,
             messagesCompactCount: newMessagesToCompact.length,
-            compactedThroughIndex: sliceEndIdx
+            compactedThroughIndex: sliceEndIdx,
+            artifactPath
         });
 
         badge.update({
             status: "completed",
             summaryText,
             tokensSaved,
-            messagesCount: newMessagesToCompact.length
+            messagesCount: newMessagesToCompact.length,
+            artifactPath
         });
 
         return true;
@@ -431,5 +371,92 @@ Be concise, clear, and omit conversational filler. Return ONLY the markdown brie
             error: err?.message || "Compaction failed"
         });
         return false;
+    }
+}
+
+/**
+ * Archives a timestamped milestone artifact in markdown format to $ARTIFACTS/.
+ *
+ * @param {Object} params
+ * @param {Object} params.session
+ * @param {string} params.summaryText
+ * @param {number} params.sliceStartIdx
+ * @param {number} params.sliceEndIdx
+ * @param {number} params.tokensSaved
+ * @returns {Promise<string|null>} Path of saved artifact, e.g. '$ARTIFACTS/milestone-178991823901.md'
+ */
+export async function writeCompactionArtifact({ session, summaryText, sliceStartIdx, sliceEndIdx, tokensSaved }) {
+    if (!session || !session.id) return null;
+
+    try {
+        const msgs = session.messages || [];
+        const { rootGoal, userDirectives } = extractUserDirectives(msgs);
+        const todos = extractTodos(msgs, session.compactionState?.todos || []);
+
+        const cleanTitle = (session.title || "milestone")
+            .toLowerCase()
+            .replace(/[^a-z0-9_-]/g, "_")
+            .replace(/_+/g, "_")
+            .slice(0, 30)
+            .replace(/^_+|_+$/g, "");
+
+        const fileName = `${cleanTitle || "milestone"}-${Date.now()}.md`;
+        const artifactPath = `$ARTIFACTS/${fileName}`;
+
+        const lines = [
+            `# Execution Milestone Artifact: ${session.title || "Session " + session.id}`,
+            ``,
+            `- **Timestamp**: ${new Date().toISOString()}`,
+            `- **Chat ID**: \`${session.id}\``,
+            `- **Archived Turns Range**: Turns ${sliceStartIdx} to ${sliceEndIdx}`,
+            `- **Estimated Context Reduction**: ~${Math.round(tokensSaved)} tokens`,
+            ``,
+            `---`,
+            ``,
+            `## 1. User Directives & Core Intent`,
+            `• **Root Objective**: "${rootGoal || "Execute requested tasks."}"`,
+        ];
+
+        if (userDirectives.length > 0) {
+            lines.push(`• **Steering Directives**:`);
+            userDirectives.forEach((d, i) => lines.push(`  ${i + 1}. "${d}"`));
+        }
+
+        lines.push(``, `## 2. Active Roadmap & Todos`);
+        if (todos.length > 0) {
+            todos.forEach(t => {
+                const mark = t.status === "completed" ? "[x]" : " ";
+                lines.push(`- [${mark}] ${t.task}`);
+            });
+        } else {
+            lines.push(`_No active checklist items pending._`);
+        }
+
+        lines.push(``, `## 3. Compacted Architecture & Discoveries Briefing`, ``, summaryText);
+
+        const content = lines.join("\n");
+
+        const res = await fetch("/api/file/write", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "x-chat-id": session.id
+            },
+            body: JSON.stringify({
+                path: artifactPath,
+                content: content
+            })
+        });
+
+        if (res.ok) {
+            logEvent("COMPACTION_ARTIFACT_SAVED", { chatId: session.id, path: artifactPath });
+            return artifactPath;
+        } else {
+            console.warn("Failed to write compaction artifact:", await res.text());
+            return null;
+        }
+    } catch (e) {
+        console.warn("Error saving compaction artifact:", e);
+        return null;
     }
 }

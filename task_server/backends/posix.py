@@ -35,6 +35,7 @@ class PosixTaskManager(BaseTaskManager):
         command: str,
         shell_override: Optional[str] = None,
         scratch_dir: Optional[str] = None,
+        artifacts_dir: Optional[str] = None,
     ) -> str:
         task_id = str(uuid.uuid4())[:8]
 
@@ -44,6 +45,9 @@ class PosixTaskManager(BaseTaskManager):
         if scratch_dir:
             env["SCRATCH"] = scratch_dir
             env["SCRATCH_DIR"] = scratch_dir
+        if artifacts_dir:
+            env["ARTIFACTS"] = artifacts_dir
+            env["ARTIFACTS_DIR"] = artifacts_dir
 
         process = subprocess.Popen(
             command,

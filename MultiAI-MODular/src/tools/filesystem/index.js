@@ -53,13 +53,13 @@ export const filesystemTools = [
             type: "function",
             function: {
                 name: "write_file",
-                description: "Create, overwrite, replace text, inject lines, or execute batched/nested atomic file modifications. Use '$SCRATCH/<filename>' for temporary scripts, scratch notes, or experimental files.",
+                description: "Create, overwrite, replace text, inject lines, or execute batched/nested atomic file modifications. Use '$SCRATCH/<filename>' for temporary scripts, or '$ARTIFACTS/<filename>' for persistent milestone archives and state snapshots.",
                 parameters: {
                     type: "object",
                     properties: {
                         path: {
                             type: "string",
-                            description: "Relative or absolute target file path. For temporary files, tests, or scratch notes, you can prefix with '$SCRATCH/' (e.g. '$SCRATCH/test_api.py') to place them in the conversation scratch directory."
+                            description: "Relative or absolute target file path. Supports '$SCRATCH/<filename>' for temporary scratch files, or '$ARTIFACTS/<filename>' for permanent milestone artifacts."
                         },
                         action: {
                             type: "string",

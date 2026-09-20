@@ -7,7 +7,8 @@ export const MAX_TOOLS_PER_ROUND = 10;
 
 // Automatic Context Compaction Configuration
 // Distance in tokens near the model's native context limit (or exceeding it) that triggers compaction
-export const COMPACTION_BUFFER_TOKENS = 25000;
+export const COMPACTION_TOKEN_THRESHOLD = 32000;
+export const COMPACTION_BUFFER_TOKENS = 32000;
 export const COMPACTION_MIN_MESSAGES = 10;
 
 export const CHATS_STORAGE_KEY = "multisearch_chats_v2";
@@ -35,11 +36,12 @@ Use read_file to inspect files, check file metadata/stats (action: "info"), exam
 Use grep_search to perform high-speed regex or literal text searches across files and directories (supports query, path, include glob, case_sensitive, is_regex, and files_only). Always use grep_search instead of running shell grep/find commands when searching for code patterns, symbols, or usages.
 Use search_and_replace for surgical find-and-replace in files. Employs a multi-stage cascade (exact match, CRLF/LF normalization, relative indentation tolerance with automatic replacement re-indentation, and fuzzy similarity matching >= 85%). Validates uniqueness to prevent ambiguous overwrites, supports optional line constraints (start_line, end_line), and supports allow_multiple: true when replacing all occurrences. Prefer search_and_replace or surgical write_file operations over rewriting entire files.
 Use write_file to modify or create files. You can write full contents (action: "write"), perform surgical string/code replacements with line-window targeting (action: "replace"), inject lines at specific 1-indexed line numbers (action: "inject"), or execute transactional multi-step file mutations (action: "batch").
-SCRATCHPAD & TEMPORARY FILES:
-- For one-off test scripts, scratch notes, temporary data, mock outputs, or benchmarks, you can place them in your dedicated conversation scratch directory using the '$SCRATCH/' prefix (e.g. '$SCRATCH/test_script.py', '$SCRATCH/benchmark.js', '$SCRATCH/notes.txt').
-- Paths prefixed with '$SCRATCH/' automatically route to your conversation's isolated scratch directory.
-- When running one-off test scripts via run_task, you can reference '$SCRATCH/<filename>'.
-- Regular relative paths resolve against the project workspace.
+COMPOSITE STORAGE & FILE ARCHIVAL ($SCRATCH & $ARTIFACTS):
+- Ephemeral Scratchpad ($SCRATCH): For one-off test scripts, scratch notes, temporary data, mock outputs, or benchmarks, write them using '$SCRATCH/<filename>'.
+- Persistent Artifacts ($ARTIFACTS): For milestone archives, architectural design docs, compaction snapshots, or permanent state briefs, write them using '$ARTIFACTS/<filename>'.
+- Paths starting with '$SCRATCH/' or '$ARTIFACTS/' automatically route to their dedicated conversation directory on disk.
+- In terminal commands with run_task, you can directly reference '$SCRATCH/<file>' or '$ARTIFACTS/<file>' (as well as '$SCRATCH_DIR', '$ARTIFACTS_DIR').
+- Regular relative paths resolve against the project workspace root.
 Use generate_image to create, draw, or synthesize artwork or images from detailed descriptive prompts. Generation runs in the background if it exceeds 15s (or if background: true is set), returning immediately with a task_id so you can proceed without getting blocked. Use get_image_status if you need to poll for completion.
 EXECUTION DISCIPLINE:
 - When you intend to perform an action, modify a file, or run a command, NEVER stop after merely announcing your intent (e.g. NEVER output "Okay! I found the issue, let me fix properly:" without actually calling the tool). You MUST issue the appropriate tool call in the same turn.

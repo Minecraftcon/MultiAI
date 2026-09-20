@@ -495,6 +495,15 @@ function getChatScratchDir(chatId) {
     return path.join(conversationsManager.getStorageRoot(), "scratch");
 }
 
+function getChatArtifactsDir(chatId) {
+    if (chatId) {
+        try {
+            return conversationsManager.ensureChatWorkspace(chatId).artifactsDir;
+        } catch (_) {}
+    }
+    return path.join(conversationsManager.getStorageRoot(), "artifacts");
+}
+
 function resolveSafePath(inputPath, chatId) {
     const raw = String(inputPath || "").trim();
     if (!raw) throw new Error("Path parameter is empty or missing");
@@ -520,6 +529,29 @@ function resolveSafePath(inputPath, chatId) {
             fs.mkdirSync(scratchDir, { recursive: true });
         }
         return rel ? path.resolve(scratchDir, rel) : scratchDir;
+    }
+
+    // Check if path is targeted at artifacts directory via $ARTIFACTS
+    const isArtifacts = raw === "$ARTIFACTS" || 
+                        raw === "${ARTIFACTS}" || 
+                        raw.startsWith("$ARTIFACTS/") || 
+                        raw.startsWith("${ARTIFACTS}/") ||
+                        raw.startsWith("$ARTIFACTS\\") || 
+                        raw.startsWith("${ARTIFACTS}\\");
+
+    if (isArtifacts) {
+        let rel = raw;
+        if (rel.startsWith("$ARTIFACTS/")) rel = rel.slice(11);
+        else if (rel.startsWith("${ARTIFACTS}/")) rel = rel.slice(12);
+        else if (rel.startsWith("$ARTIFACTS\\")) rel = rel.slice(11);
+        else if (rel.startsWith("${ARTIFACTS}\\")) rel = rel.slice(12);
+        else if (rel === "$ARTIFACTS" || rel === "${ARTIFACTS}") rel = "";
+
+        const artifactsDir = getChatArtifactsDir(chatId);
+        if (!fs.existsSync(artifactsDir)) {
+            fs.mkdirSync(artifactsDir, { recursive: true });
+        }
+        return rel ? path.resolve(artifactsDir, rel) : artifactsDir;
     }
 
     return path.isAbsolute(raw) ? path.normalize(raw) : path.resolve(process.cwd(), raw);
@@ -1192,9 +1224,12 @@ const server = http.createServer(async (req, res) => {
 
         const chatId = req.headers["x-chat-id"] || parsedBody.chatId || parsedBody.chat_id || "";
         let scratchDir = "";
+        let artifactsDir = "";
         if (chatId) {
             try {
-                scratchDir = conversationsManager.ensureChatWorkspace(chatId).scratchDir;
+                const ws = conversationsManager.ensureChatWorkspace(chatId);
+                scratchDir = ws.scratchDir;
+                artifactsDir = ws.artifactsDir;
             } catch (_) {}
         }
         if (!scratchDir) {
@@ -1203,9 +1238,16 @@ const server = http.createServer(async (req, res) => {
         if (!fs.existsSync(scratchDir)) {
             fs.mkdirSync(scratchDir, { recursive: true });
         }
+        if (!artifactsDir) {
+            artifactsDir = path.join(conversationsManager.getStorageRoot(), "artifacts");
+        }
+        if (!fs.existsSync(artifactsDir)) {
+            fs.mkdirSync(artifactsDir, { recursive: true });
+        }
 
         if (parsedBody && typeof parsedBody === "object") {
             parsedBody.scratch_dir = scratchDir;
+            parsedBody.artifacts_dir = artifactsDir;
             reqBody = JSON.stringify(parsedBody);
         }
 

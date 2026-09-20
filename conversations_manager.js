@@ -163,6 +163,7 @@ function ensureChatWorkspace(chatId, dateStr) {
     const chatsDir = path.join(dateDir, "chats");
     const chatDir = path.join(chatsDir, chatId);
     const scratchDir = path.join(chatDir, "scratch");
+    const artifactsDir = path.join(chatDir, "artifacts");
     const imagesDir = path.join(chatDir, "images");
     const metaFile = path.join(chatDir, "meta.json");
     const messagesFile = path.join(chatDir, "messages.jsonl");
@@ -173,6 +174,9 @@ function ensureChatWorkspace(chatId, dateStr) {
         if (!fs.existsSync(scratchDir)) {
             fs.mkdirSync(scratchDir, { recursive: true });
         }
+        if (!fs.existsSync(artifactsDir)) {
+            fs.mkdirSync(artifactsDir, { recursive: true });
+        }
         if (!fs.existsSync(imagesDir)) {
             fs.mkdirSync(imagesDir, { recursive: true });
         }
@@ -181,15 +185,16 @@ function ensureChatWorkspace(chatId, dateStr) {
     }
 
     const workspacePrompt = [
-        `[SCRATCHPAD & CONVERSATION WORKSPACE]:`,
+        `[SCRATCHPAD, ARTIFACTS & WORKSPACE]:`,
         `- Active Chat ID: ${chatId}`,
         `- Conversation Root: ${chatDir}`,
         `- Scratchsheet Directory ($SCRATCH): ${scratchDir}`,
+        `- Artifacts Directory ($ARTIFACTS): ${artifactsDir}`,
         `- Images Directory: ${imagesDir}`,
-        `- SCRATCHPAD & TEMPORARY FILE GUIDELINES:`,
-        `  1. You have a dedicated scratchsheet directory (${scratchDir}) for this conversation accessible via '$SCRATCH'.`,
-        `  2. For non-relevant, temporary scripts, one-off test files, mock data, scratchpad notes, or benchmarks, write them using '$SCRATCH/<filename>' (or the full path ${scratchDir}/<filename>). Paths starting with '$SCRATCH/' automatically resolve to this directory.`,
-        `  3. In run_task, you can directly use '$SCRATCH/<filename>' or '$SCRATCH_DIR/<filename>' in terminal commands.`,
+        `- STORAGE & WORKSPACE GUIDELINES:`,
+        `  1. You have a dedicated scratch directory (${scratchDir}) accessible via '$SCRATCH/<filename>' for temporary test scripts, scratch notes, or one-off benchmarks.`,
+        `  2. You have a dedicated artifacts directory (${artifactsDir}) accessible via '$ARTIFACTS/<filename>' for persistent milestone archives, architecture briefs, and state snapshots.`,
+        `  3. In run_task, you can directly use '$SCRATCH' or '$ARTIFACTS' (or '$SCRATCH_DIR', '$ARTIFACTS_DIR') in terminal commands.`,
         `  4. Regular relative paths resolve normally against the project workspace.`
     ].join("\n");
 
@@ -199,6 +204,7 @@ function ensureChatWorkspace(chatId, dateStr) {
         chatId,
         chatDir,
         scratchDir,
+        artifactsDir,
         imagesDir,
         metaFile,
         messagesFile,
@@ -726,12 +732,14 @@ function ensureProjectChatWorkspace(projectId, chatId) {
     const chatsDir = path.join(projectDir, "chats");
     const chatDir = path.join(chatsDir, chatId);
     const scratchDir = path.join(chatDir, "scratch");
+    const artifactsDir = path.join(chatDir, "artifacts");
     const imagesDir = path.join(chatDir, "images");
     const metaFile = path.join(chatDir, "meta.json");
     const messagesFile = path.join(chatDir, "messages.jsonl");
 
     try {
         if (!fs.existsSync(scratchDir)) fs.mkdirSync(scratchDir, { recursive: true });
+        if (!fs.existsSync(artifactsDir)) fs.mkdirSync(artifactsDir, { recursive: true });
         if (!fs.existsSync(imagesDir)) fs.mkdirSync(imagesDir, { recursive: true });
     } catch (err) {
         console.error(`[BUILD] Error creating workspace for project chat ${chatId}:`, err.message);
@@ -744,11 +752,13 @@ function ensureProjectChatWorkspace(projectId, chatId) {
         `- Active Project: ${project.name || projectId}`,
         `- Project Root Directory: ${rootPath}`,
         `- Conversation Scratch Directory ($SCRATCH): ${scratchDir}`,
+        `- Conversation Artifacts Directory ($ARTIFACTS): ${artifactsDir}`,
         `- Images Directory: ${imagesDir}`,
         `- BUILD MODE GUIDELINES:`,
         `  1. You are operating directly within the user's project directory (${rootPath}).`,
         `  2. Execute tasks, modify files, and run commands relative to this project root.`,
-        `  3. Use '$SCRATCH/<filename>' for temporary scratch notes or execution artifacts.`
+        `  3. Use '$SCRATCH/<filename>' for temporary scratch notes or one-off tests.`,
+        `  4. Use '$ARTIFACTS/<filename>' for persistent milestone archives and state snapshots.`
     ].join("\n");
 
     return {
@@ -758,6 +768,7 @@ function ensureProjectChatWorkspace(projectId, chatId) {
         chatId,
         chatDir,
         scratchDir,
+        artifactsDir,
         imagesDir,
         metaFile,
         messagesFile,

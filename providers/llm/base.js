@@ -114,10 +114,16 @@ class BaseProvider {
                     };
                 }
             }
-            return {
-                role: "assistant",
-                content: typeof msg.content === "string" ? this.cleanPromptContent(msg.content) : String(msg.content || "")
-            };
+            if (!hasToolCalls) {
+                const cleanedContent = typeof msg.content === "string" ? this.cleanPromptContent(msg.content) : String(msg.content || "");
+                if (!cleanedContent.trim()) {
+                    return null; // Scrub empty assistant turns
+                }
+                return {
+                    role: "assistant",
+                    content: cleanedContent
+                };
+            }
         }
 
         if (role === "tool") {
@@ -323,7 +329,7 @@ class BaseProvider {
     }
 
     formatPayload({ model, messages, tools, tool_choice, config = {}, supportsTools = true, supportsVision = false, options = {} }) {
-        const maxContextTokens = options.maxContextTokens || config.max_context_tokens;
+        const maxContextTokens = options.maxContextTokens || config.max_context_tokens || 32000;
         const msgsToNormalize = maxContextTokens ? this.pruneMessagesForContext(messages, maxContextTokens, options) : messages;
 
         const payload = {
