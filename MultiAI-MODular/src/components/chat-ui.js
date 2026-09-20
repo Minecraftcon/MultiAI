@@ -428,9 +428,11 @@ export function addCompactionBadge(element, { messagesCount = 0, tokensBefore = 
     const wrapper = element.querySelector(".activity-wrapper");
     const searchContainer = element.querySelector(".search-items-container");
 
-    if (wrapper && wrapper.style.display !== "block") {
+    if (wrapper) {
         wrapper.style.display = "block";
-        wrapper.classList.add("open");
+        if (!element.dataset.manuallyToggled) {
+            wrapper.classList.add("open");
+        }
     }
 
     const item = document.createElement("div");
