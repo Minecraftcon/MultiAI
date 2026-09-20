@@ -1,5 +1,5 @@
 // Automatic Context Compaction via Model
-import { COMPACTION_BUFFER_TOKENS, COMPACTION_MIN_MESSAGES, COMPACTION_TOKEN_THRESHOLD } from "../config.js";
+import { COMPACTION_BUFFER_TOKENS, COMPACTION_MIN_MESSAGES, COMPACTION_TOKEN_THRESHOLD, CHUNK_COMPACTION_TARGET_TOKENS } from "../config.js";
 import { state } from "../state/index.js";
 import { logEvent } from "../utils/logger.js";
 import { extractText } from "../utils/dom.js";
