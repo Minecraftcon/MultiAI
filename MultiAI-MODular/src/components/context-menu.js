@@ -59,7 +59,7 @@ export function showChatItemContextMenu(chatId, posX, posY) {
         x = window.innerWidth - menuWidth - 8;
     }
     if (y + menuHeight > window.innerHeight - 8) {
-        y = window.innerHeight - menuHeight - 8;
+        y = Math.max(8, (typeof posY === "number" ? posY : window.innerHeight) - menuHeight);
     }
 
     chatItemContextMenu.style.left = `${Math.max(8, Math.round(x))}px`;
@@ -822,21 +822,41 @@ export function initContextMenu() {
             }
 
             const menuRect = msgContextMenu.getBoundingClientRect();
-            const menuWidth = menuRect.width || 165;
-            const menuHeight = menuRect.height || 160;
+            const menuWidth = menuRect.width || 170;
+            const menuHeight = menuRect.height || 180;
+            const msgRect = msgEl.getBoundingClientRect();
+            const chatRect = chat.getBoundingClientRect();
 
             let posX = e.clientX;
             let posY = e.clientY;
 
-            if (posX + menuWidth > window.innerWidth) {
-                posX = window.innerWidth - menuWidth - 8;
-            }
-            if (posY + menuHeight > window.innerHeight) {
-                posY = window.innerHeight - menuHeight - 8;
+            // Constrain right boundary: for user messages (which are right-aligned),
+            // or if opening rightwards would spill past the chat column / viewport,
+            // open to the left of the click cursor so it hugs the message neatly.
+            const maxRight = isUser ? msgRect.right : Math.min(chatRect.right - 12, window.innerWidth - 12);
+
+            if (isUser || (posX + menuWidth > maxRight)) {
+                posX = e.clientX - menuWidth;
             }
 
-            msgContextMenu.style.left = `${Math.max(8, posX)}px`;
-            msgContextMenu.style.top = `${Math.max(8, posY)}px`;
+            // Clamp horizontal position within viewport
+            if (posX < 8) {
+                posX = Math.max(8, Math.min(e.clientX, window.innerWidth - menuWidth - 8));
+            } else if (posX + menuWidth > window.innerWidth - 8) {
+                posX = window.innerWidth - menuWidth - 8;
+            }
+
+            // Vertical flipping if near the bottom of viewport
+            if (posY + menuHeight > window.innerHeight - 8) {
+                posY = Math.max(8, e.clientY - menuHeight);
+            }
+
+            const flippedX = (posX < e.clientX);
+            const flippedY = (posY < e.clientY);
+            msgContextMenu.style.transformOrigin = `${flippedY ? "bottom" : "top"} ${flippedX ? "right" : "left"}`;
+
+            msgContextMenu.style.left = `${Math.round(posX)}px`;
+            msgContextMenu.style.top = `${Math.round(posY)}px`;
         });
     }
 
