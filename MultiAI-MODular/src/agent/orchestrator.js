@@ -78,6 +78,7 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
     let emptyRetryUsed = false;
     let emptyAfterToolsRetries = 0;
     let promissoryRetries = 0;
+    const fileReadCounts = new Map();
 
     logEvent("REQUEST_START", { chatId, model: selectedModel, userText, isFirstUserTurn });
 
@@ -136,8 +137,8 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
                     finalizeStopped(currentAIMessage, overallStartTime, hasRunTools);
                     return;
                 }
-                // Emergency context compaction if upstream model rejects due to context limits or gateway timeouts
-                if (/prompt exceeds max length|context length|context window|too many tokens|token limit|1214|504|Gateway Timeout|timed out/i.test(err.message || "")) {
+                // Emergency context compaction if upstream model rejects due to genuine context window limits
+                if (/prompt exceeds max length|context length|context window|too many tokens|token limit|maximum context|1214/i.test(err.message || "")) {
                     logEvent("CONTEXT_LIMIT_TRIGGER_COMPACT", { round, model: selectedModel, error: err.message });
                     const compacted = await compactSessionContext({
                         session,
@@ -346,8 +347,26 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
                 stageStatus = `Running ${toolName}`;
                 const badgeEl = addToolBadge(currentAIMessage, toolName, args);
 
+                let result;
+                const filePath = args.path || args.file_path;
+                if (toolName === "read_file" && filePath) {
+                    const count = (fileReadCounts.get(filePath) || 0) + 1;
+                    fileReadCounts.set(filePath, count);
+                    if (count > 2) {
+                        result = {
+                            path: filePath,
+                            status: "already_inspected",
+                            note: `[Anti-Loop Notice]: "${filePath}" has already been read ${count - 1} times previously in this session. Its contents are available in your conversation context. Do NOT re-read it; proceed directly to implementing the missing files, code, or tests using write_file or run_task.`
+                        };
+                    }
+                } else if (toolName === "write_file" || toolName === "search_and_replace") {
+                    if (filePath) fileReadCounts.delete(filePath);
+                }
+
                 try {
-                    const result = await executeTool(toolName, args, badgeEl, genState);
+                    if (!result) {
+                        result = await executeTool(toolName, args, badgeEl, genState);
+                    }
                     if (genState.abortRequested) {
                         finalizeStopped(currentAIMessage, overallStartTime, hasRunTools);
                         return;

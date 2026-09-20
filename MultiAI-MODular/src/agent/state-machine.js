@@ -144,7 +144,7 @@ export function microPruneToolOutputs(messages, activeWindowTurns = MICRO_PRUNE_
 
         return {
             ...m,
-            content: `[Historical tool output: ${stubSummary} — analyzed in earlier turn. Use tool again if detailed raw output needed.]`
+            content: `[Historical tool output: ${stubSummary} — content already reviewed; proceed with implementation.]`
         };
     });
 }
@@ -224,7 +224,9 @@ export function compileWorkingContext(session) {
             directivesContent += `  ${idx + 1}. "${dir}"\n`;
         });
     }
-    directivesContent += `\n[INVARIANT RULE]: Never deviate from or forget the above user objectives across tool execution cycles.`;
+    directivesContent += `\n[INVARIANT RULES]:\n`;
+    directivesContent += `1. Never deviate from or forget the above user objectives across tool execution cycles.\n`;
+    directivesContent += `2. Do not repeatedly re-read the same files in an inspection loop. Once you have inspected the repository or skeleton, proceed directly to implementation (writing missing source files with write_file, compiling, and testing).\n`;
 
     const directivesMsg = {
         role: "system",
@@ -273,7 +275,7 @@ export function compileWorkingContext(session) {
             const goalSnippet = rootGoal ? `In response to "${rootGoal}": ` : "";
             bridgeUserMsg = {
                 role: "user",
-                content: `[CONTINUATION DIRECTIVE]: ${goalSnippet}Please continue executing the next steps from the active roadmap and trajectory below.`
+                content: `[CONTINUATION DIRECTIVE]: ${goalSnippet}Please continue executing the next steps from the active roadmap and trajectory below. Do not re-read files you have already inspected; proceed directly to implementing the missing files and code.`
             };
         }
     }

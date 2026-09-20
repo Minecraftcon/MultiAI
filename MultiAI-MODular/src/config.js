@@ -14,9 +14,10 @@ export const COMPACTION_BUFFER_TOKENS = 15000;
 export const CHUNK_COMPACTION_TARGET_TOKENS = 45000;
 // Minimum new uncompacted turns required between compactions to prevent thrashing
 export const COMPACTION_COOLDOWN_TURNS = 16;
-// In-flight micro-pruning: completed tool results older than 6 turns have raw contents condensed
-export const MICRO_PRUNE_TOOL_AGE_TURNS = 6;
-export const MICRO_PRUNE_MAX_TOOL_CHARS = 1000;
+// In-flight micro-pruning: preserve full tool results in working memory for at least 30 turns
+// and only condense exceptionally oversized outputs (>12,000 chars / ~3,000 tokens)
+export const MICRO_PRUNE_TOOL_AGE_TURNS = 30;
+export const MICRO_PRUNE_MAX_TOOL_CHARS = 12000;
 export const COMPACTION_MIN_MESSAGES = 10;
 
 export const CHATS_STORAGE_KEY = "multisearch_chats_v2";
