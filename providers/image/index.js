@@ -67,7 +67,7 @@ function resolveImageProvider(identifier) {
     const cleanStr = str.toLowerCase().replace(/[\s\-_]+/g, "");
     for (const ProviderClass of registeredImageProviders) {
         const idClean = (ProviderClass.id || "").toLowerCase().replace(/[\s\-_]+/g, "");
-        if (idClean && cleanStr.includes(idClean)) {
+        if (idClean && (cleanStr.includes(idClean) || idClean.includes(cleanStr))) {
             return new ProviderClass();
         }
     }

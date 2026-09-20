@@ -2,7 +2,7 @@
    LOCAL STORAGE & DISK CONVERSATION PERSISTENCE
    Manages $HOME/.MuktiAI/conversations/{Date}/chats/{id}/
    ========================================================= */
-import { CHATS_STORAGE_KEY, ACTIVE_CHAT_KEY } from "../config.js";
+import { CHATS_STORAGE_KEY, ACTIVE_CHAT_KEY, ACTIVE_BUILD_PROJECT_KEY, ACTIVE_BUILD_CHAT_KEY } from "../config.js";
 import { state } from "../state.js";
 import { syncActiveWorkspacePrompt } from "./system.js";
 
@@ -136,18 +136,56 @@ export async function syncFromBackendDisk() {
 
 export function saveStoredChats() {
     if (state.config?.General?.RecordChatHistory === false) return;
+
+    // 1. Reliably save the active keys first in their own try/catch block
+    try {
+        if (state.appMode === "build") {
+            if (state.currentProjectId) {
+                localStorage.setItem(ACTIVE_BUILD_PROJECT_KEY, state.currentProjectId);
+            } else {
+                localStorage.removeItem(ACTIVE_BUILD_PROJECT_KEY);
+            }
+            if (state.currentChatId) {
+                localStorage.setItem(ACTIVE_BUILD_CHAT_KEY, state.currentChatId);
+            } else {
+                localStorage.removeItem(ACTIVE_BUILD_CHAT_KEY);
+            }
+        } else {
+            if (state.currentChatId) {
+                localStorage.setItem(ACTIVE_CHAT_KEY, state.currentChatId);
+            } else {
+                localStorage.removeItem(ACTIVE_CHAT_KEY);
+            }
+        }
+    } catch (_) {}
+
+    // 2. Persist full chatSessions with quota-safe lightweight fallback
     try {
         localStorage.setItem(CHATS_STORAGE_KEY, JSON.stringify(state.chatSessions));
-        if (state.currentChatId) {
-            localStorage.setItem(ACTIVE_CHAT_KEY, state.currentChatId);
-        } else {
-            localStorage.removeItem(ACTIVE_CHAT_KEY);
-        }
     } catch (e) {
-        console.warn("Storage write error:", e);
+        console.warn("[STORAGE] Full chat storage quota exceeded, falling back to lightweight cache:", e.message);
+        try {
+            const lightweight = {};
+            for (const [id, sess] of Object.entries(state.chatSessions)) {
+                if (!sess) continue;
+                lightweight[id] = {
+                    id: sess.id,
+                    mode: sess.mode || "chat",
+                    title: sess.title,
+                    model: sess.model,
+                    createdAt: sess.createdAt,
+                    updatedAt: sess.updatedAt,
+                    workspace: sess.workspace,
+                    compactionState: sess.compactionState,
+                    messages: sess.messages?.slice(-10) || [],
+                    chatHtml: "" // strip heavy DOM to ensure it fits in quota
+                };
+            }
+            localStorage.setItem(CHATS_STORAGE_KEY, JSON.stringify(lightweight));
+        } catch (_) {}
     }
 
-    // Persist current chat to backend disk (~/.MultiAI/)
+    // 3. Persist current chat to backend disk (~/.MultiAI/)
     if (state.currentChatId && state.chatSessions[state.currentChatId]) {
         const session = state.chatSessions[state.currentChatId];
         const projectId = session.projectId || (state.appMode === "build" ? state.currentProjectId : null);

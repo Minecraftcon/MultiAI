@@ -14,15 +14,20 @@ class PollinationsImageProvider extends BaseImageProvider {
         /^turbo$/i
     ];
 
-    async generateImage({ prompt, model = "flux", aspectRatio = "1:1", width, height, options = {} }) {
+    async generateImage({ prompt, model = "turbo", aspectRatio = "1:1", width, height, options = {} }) {
         if (!prompt || typeof prompt !== "string") {
             throw new Error("Prompt is required for image generation.");
         }
 
         const dims = this.getDimensions(aspectRatio, width, height);
+        // Free-tier Pollinations Sana/Turbo works best at <= 768px to avoid 402 pollen charges and queue limits
+        const safeWidth = Math.min(dims.width, 768);
+        const safeHeight = Math.min(dims.height, 768);
+
         let usedSeed = options.seed || Math.floor(Math.random() * 10000000);
-        const safeModel = String(model || "flux").toLowerCase();
-        const effectiveModel = (safeModel.includes("turbo")) ? "turbo" : (safeModel.includes("anime") ? "anime" : "flux");
+        const rawModel = String(model || "").toLowerCase();
+        // flux on Pollinations now requires paid pollen credits; map to turbo unless anime or specifically overridden
+        const effectiveModel = rawModel.includes("anime") ? "anime" : "turbo";
 
         const cleanPrompt = prompt.trim();
         const urlPrompt = cleanPrompt.length > 800 ? cleanPrompt.slice(0, 800) : cleanPrompt;
@@ -35,23 +40,22 @@ class PollinationsImageProvider extends BaseImageProvider {
         } catch (_) {}
 
         let localUrl = null;
-        let finalPollinationsUrl = null;
         let lastError = null;
 
-        // Pollinations queue & edge-cache resiliency:
-        // Fetch server-side to guarantee valid image bytes and avoid Cloudflare 0-byte caching / IP concurrency locks
-        for (let attempt = 0; attempt < 3; attempt++) {
+        // Fast 8s timeout with 2 attempts max (turbo then no-model fallback)
+        for (let attempt = 0; attempt < 2; attempt++) {
             try {
                 if (attempt > 0) {
                     usedSeed = Math.floor(Math.random() * 10000000);
-                    await new Promise(r => setTimeout(r, 1200));
+                    await new Promise(r => setTimeout(r, 600));
                 }
 
                 const encodedPrompt = encodeURIComponent(urlPrompt);
-                finalPollinationsUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${dims.width}&height=${dims.height}&model=${effectiveModel}&seed=${usedSeed}&nologo=true`;
+                const modelParam = attempt === 0 ? `&model=${effectiveModel}` : "";
+                const finalPollinationsUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${safeWidth}&height=${safeHeight}${modelParam}&seed=${usedSeed}&nologo=true`;
 
                 const controller = new AbortController();
-                const timeout = setTimeout(() => controller.abort(), 45000);
+                const timeout = setTimeout(() => controller.abort(), 15000);
 
                 const res = await fetch(finalPollinationsUrl, {
                     method: "GET",
@@ -86,11 +90,15 @@ class PollinationsImageProvider extends BaseImageProvider {
                 break;
             } catch (err) {
                 lastError = err;
-                console.warn(`[POLLINATIONS] Server-side fetch attempt ${attempt + 1} failed: ${err.message}`);
+                console.warn(`[POLLINATIONS] Fetch attempt ${attempt + 1} failed: ${err.message}`);
             }
         }
 
-        const deliveryUrl = localUrl || finalPollinationsUrl;
+        if (!localUrl) {
+            throw new Error(`Pollinations failed: ${lastError?.message || "Service unavailable"}`);
+        }
+
+        const deliveryUrl = localUrl;
 
         return {
             success: true,

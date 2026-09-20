@@ -28,6 +28,33 @@ export const terminalTools = [
         }
     },
     {
+        name: "run_python",
+        schema: {
+            type: "function",
+            function: {
+                name: "run_python",
+                description: "Execute Python code directly in the environment. Automatically captures stdout, stderr, execution time, and evaluates the value of the final expression if present (like Jupyter).",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        code: {
+                            type: "string",
+                            description: "The complete Python code snippet to execute."
+                        },
+                        timeout: {
+                            type: "integer",
+                            description: "Maximum execution seconds before timeout (default: 30)."
+                        }
+                    },
+                    required: ["code"]
+                }
+            }
+        },
+        handler: async (args, { genState }) => {
+            return await toolFetch("/api/python/run", { method: "POST", body: args, genState });
+        }
+    },
+    {
         name: "task_stdout",
         schema: {
             type: "function",

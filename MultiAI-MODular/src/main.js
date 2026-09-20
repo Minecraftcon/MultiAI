@@ -3,10 +3,11 @@
    ========================================================= */
 import { state } from "./state.js";
 window.state = state;
+import { ACTIVE_CHAT_KEY } from "./config.js";
 import { initSystemEnvironment } from "./services/system.js";
-import { loadStoredChats, saveStoredChats } from "./services/storage.js";
+import { loadStoredChats, saveStoredChats, syncFromBackendDisk, syncBuildProjectsFromDisk } from "./services/storage.js";
 import { initGestures } from "./components/gestures.js";
-import { initSidePanel, renderChatList, switchToChat } from "./components/side-panel.js";
+import { initSidePanel, renderChatList, switchToChat, syncActiveModeConversation } from "./components/side-panel.js";
 import { initChatDelegation } from "./components/chat-ui.js";
 import { initComposer } from "./components/composer.js";
 import { initContextMenu } from "./components/context-menu.js";
@@ -21,8 +22,14 @@ import { initUiScale } from "./components/ui-scale.js";
 import { initAuroraTheme } from "./components/aurora-theme.js";
 import { initModeSwitcher } from "./components/mode-switcher.js";
 
-function initChatSessions() {
+async function initChatSessions() {
     loadStoredChats();
+
+    // Await backend disk sync to guarantee all persistent chats and build projects from ~/.MultiAI/ are in memory
+    try {
+        await syncFromBackendDisk();
+        await syncBuildProjectsFromDisk();
+    } catch (_) {}
 
     let hasCleaned = false;
     for (const id of Object.keys(state.chatSessions)) {
@@ -37,19 +44,8 @@ function initChatSessions() {
         saveStoredChats();
     }
 
-    const chat = document.getElementById("chat");
-    const activeId = state.currentChatId;
-
-    if (activeId && state.chatSessions[activeId]) {
-        state.currentChatId = null;
-        switchToChat(activeId);
-    } else {
-        state.currentChatId = null;
-        if (chat) chat.innerHTML = "";
-        state.messages = [{ role: "system", content: state.activeSystemPrompt }];
-        renderChatList();
-        setStartPageMode(true);
-    }
+    // Activate the appropriate conversation according to the active mode (Chat vs Build)
+    await syncActiveModeConversation(state.appMode);
 }
 
 async function initConfig() {
@@ -100,7 +96,7 @@ async function bootstrap() {
 
     await initConfig();
     initSystemEnvironment();
-    initChatSessions();
+    await initChatSessions();
 }
 
 if (document.readyState === "loading") {

@@ -11,6 +11,7 @@
 import { renderIcons } from "../utils/icons.js";
 import { isMobileBrowser } from "../utils/dom.js";
 import { onStartPageModeChange } from "./aurora-theme.js";
+import { state } from "../state.js";
 
 class ChatBoxComponent {
     constructor() {
@@ -33,10 +34,14 @@ class ChatBoxComponent {
      * Includes start page hero header and footer model selector for new chats.
      */
     renderTemplate() {
+        const isBuild = (state && state.appMode === "build") || (document.documentElement.getAttribute("data-app-mode") === "build");
+        const heroTitleHtml = isBuild 
+            ? `<span>Lets Build</span> <i data-lucide="hammer" class="start-page-title-icon"></i>` 
+            : `How can I assist you today?`;
         return `
         <!-- Start Page Hero Header (Visible only when in start page mode) -->
         <div class="start-page-hero" id="startPageHero">
-            <h1 class="start-page-title">How can I assist you today?</h1>
+            <h1 class="start-page-title" id="startPageTitle">${heroTitleHtml}</h1>
         </div>
 
         <div class="composer-dock composer composer-compact" id="chatboxDock">
@@ -114,6 +119,7 @@ class ChatBoxComponent {
 
         this.bindEvents();
         this.updateLayoutMode();
+        updateStartPageHeroTitle();
         renderIcons(this.container);
     }
 
@@ -357,12 +363,35 @@ export const chatbox = new ChatBoxComponent();
  *   - The hero title and hero model selector are hidden.
  *   - Chat messages are visible.
  */
+/**
+ * Dynamically updates the hero title between Chat and Build modes.
+ */
+export function updateStartPageHeroTitle() {
+    const titleEl = document.getElementById("startPageTitle");
+    if (!titleEl) return;
+    const isBuild = (state && state.appMode === "build") || (document.documentElement.getAttribute("data-app-mode") === "build");
+    if (isBuild) {
+        titleEl.innerHTML = `<span>Lets Build</span> <i data-lucide="hammer" class="start-page-title-icon"></i>`;
+        renderIcons(titleEl);
+    } else {
+        titleEl.textContent = "How can I assist you today?";
+    }
+}
+
+// Automatically sync start page hero title when app mode switches
+if (typeof window !== "undefined") {
+    window.addEventListener("app-mode-changed", (e) => {
+        updateStartPageHeroTitle();
+    });
+}
+
 export function setStartPageMode(isStartPage) {
     const shell = document.getElementById("appShell");
     if (!shell) return;
 
     if (isStartPage) {
         shell.classList.add("is-start-page");
+        updateStartPageHeroTitle();
         chatbox.handleInputResize();
     } else {
         shell.classList.remove("is-start-page");

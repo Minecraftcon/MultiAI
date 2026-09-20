@@ -1,15 +1,19 @@
 // Logfare Image Generation Provider
+const fs = require("fs");
+const path = require("path");
 const BaseImageProvider = require("./base");
 
 class LogflareImageProvider extends BaseImageProvider {
     static id = "logflare_image";
     static displayName = "Logfare Images";
     static matchPatterns = [
-        /^log[-_]?f[l]?a[r]?e[-_]?image$/i,
+        /^log[-_]?f[l]?a[r]?e([-_\s]?image)?$/i,
         /^sdxl[-_]?lightning$/i,
         /^flux[-_]?[12]/i,
         /^phoenix[-_]?1\.?0?$/i,
         /^lucid[-_]?origin$/i,
+        "logflare",
+        "logfare",
         "logflare_image",
         "logfare_image"
     ];
@@ -18,10 +22,13 @@ class LogflareImageProvider extends BaseImageProvider {
         if (!prompt || typeof prompt !== "string") {
             throw new Error("Prompt is required for Logfare image generation.");
         }
+        if (!apiKey) {
+            throw new Error("Logfare API key is required for image generation.");
+        }
 
         const cleanPrompt = prompt.trim();
         const dim = this.getDimensions(aspectRatio, width, height);
-        const safeModel = model || "sdxl-lightning";
+        const safeModel = (model && /sdxl|phoenix|flux|lucid/i.test(model)) ? model : "sdxl-lightning";
 
         const payload = {
             model: safeModel,
@@ -31,7 +38,7 @@ class LogflareImageProvider extends BaseImageProvider {
         };
 
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 60000);
+        const timeout = setTimeout(() => controller.abort(), 15000);
 
         try {
             const res = await fetch("https://logfare.ai/v1/images/generations", {
@@ -55,7 +62,16 @@ class LogflareImageProvider extends BaseImageProvider {
             let imageUrl = item?.url;
 
             if (!imageUrl && item?.b64_json) {
-                imageUrl = `data:image/png;base64,${item.b64_json}`;
+                const imagesDir = path.join(process.cwd(), "generated_images");
+                try {
+                    if (!fs.existsSync(imagesDir)) {
+                        fs.mkdirSync(imagesDir, { recursive: true });
+                    }
+                } catch (_) {}
+                const filename = `logflare_${Date.now()}_${Math.floor(Math.random() * 1000000)}.png`;
+                const localPath = path.join(imagesDir, filename);
+                fs.writeFileSync(localPath, Buffer.from(item.b64_json, "base64"));
+                imageUrl = `/generated_images/${filename}`;
             }
 
             if (!imageUrl) {

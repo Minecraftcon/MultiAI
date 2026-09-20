@@ -3,12 +3,16 @@ const fs = require("fs");
 const path = require("path");
 const url = require("url");
 const os = require("os");
-const { spawn, exec } = require("child_process");
+const { spawn, exec, execFile } = require("child_process");
 const YAML = require("yaml");
 const { resolveProvider, resolveImageProvider } = require("./providers");
 const { getConfig, saveConfig } = require("./config_manager");
 const conversationsManager = require("./conversations_manager");
 const { createAgentGraph } = require("./agent_graph");
+const { handleCodeGrep, handleSearchAndReplace, handleWriteFile } = require("./code_tools");
+
+// In-memory registry for background image generation tasks
+const imageGenTasks = new Map();
 
 function getEnvKey(keyName) {
     if (!keyName) return null;
@@ -646,315 +650,7 @@ async function handleFileRead(args, chatId) {
 }
 
 async function handleFileWrite(args, chatId) {
-    const targetPath = resolveSafePath(args.path, chatId);
-    await fs.promises.mkdir(path.dirname(targetPath), { recursive: true });
-    const isScratch = targetPath.includes(path.sep + "scratch" + path.sep) || targetPath.endsWith(path.sep + "scratch");
-
-    let action = args.action;
-    if (!action) {
-        if (Array.isArray(args.operations)) action = "batch";
-        else if (args.target !== undefined) action = "replace";
-        else if (args.line !== undefined) action = "inject";
-        else action = "write";
-    }
-
-    const writeAtomic = async (filePath, text) => {
-        const tmpPath = filePath + ".tmp." + Math.random().toString(36).substring(2, 9);
-        await fs.promises.writeFile(tmpPath, text, "utf-8");
-        await fs.promises.rename(tmpPath, filePath);
-    };
-
-    if (action === "write") {
-        if (fs.existsSync(targetPath) && args.overwrite === false) {
-            throw new Error(`File already exists: ${args.path} and overwrite is false`);
-        }
-        const textToWrite = args.content ?? "";
-        await writeAtomic(targetPath, textToWrite);
-        return {
-            success: true,
-            path: args.path,
-            resolved_path: targetPath,
-            is_scratch: isScratch,
-            action: "write",
-            bytes_written: Buffer.byteLength(textToWrite),
-            status: "success",
-            message: isScratch
-                ? `Successfully wrote file to conversation scratch directory: ${args.path}`
-                : `Successfully wrote file: ${args.path}`
-        };
-    }
-
-    if (action === "replace") {
-        if (!fs.existsSync(targetPath)) {
-            throw new Error(`File not found for replacement: ${args.path}`);
-        }
-        const current = await fs.promises.readFile(targetPath, "utf-8");
-        const target = args.target;
-        if (target === undefined || target === null) {
-            throw new Error("Missing 'target' string to replace");
-        }
-        const replacement = args.replacement ?? "";
-
-        // If line constraints are provided
-        if (args.start_line || args.end_line) {
-            const lines = current.split("\n");
-            const s = Math.max(1, parseInt(args.start_line, 10) || 1) - 1;
-            const e = args.end_line ? Math.min(lines.length, parseInt(args.end_line, 10)) : lines.length;
-            const chunk = lines.slice(s, e).join("\n");
-            const count = chunk.split(target).length - 1;
-            if (count === 0) {
-                throw new Error(`Target string not found within lines ${s + 1}-${e} of ${args.path}.`);
-            }
-            if (count > 1 && !args.all) {
-                throw new Error(`Found ${count} occurrences of target string within lines ${s + 1}-${e} of ${args.path}. Specify 'all: true' or provide more context.`);
-            }
-            const replacedChunk = args.all ? chunk.replaceAll(target, replacement) : chunk.replace(target, replacement);
-            const newContent = [lines.slice(0, s).join("\n"), replacedChunk, lines.slice(e).join("\n")].filter(Boolean).join("\n");
-            await writeAtomic(targetPath, newContent);
-            return {
-                success: true,
-                path: args.path,
-                resolved_path: targetPath,
-                action: "replace",
-                matches: count,
-                occurrences_replaced: args.all ? count : 1,
-                status: "success",
-                message: `Successfully replaced text in ${args.path} (lines ${s + 1}-${e})`
-            };
-        } else {
-            const count = current.split(target).length - 1;
-            if (count === 0) {
-                throw new Error(`Target string not found in ${args.path}. Please verify the exact text to replace.`);
-            }
-            if (count > 1 && !args.all) {
-                throw new Error(`Found ${count} occurrences of target string in ${args.path}. Specify 'all: true' or provide more surrounding context to make the match unique.`);
-            }
-            const newContent = args.all ? current.replaceAll(target, replacement) : current.replace(target, replacement);
-            await writeAtomic(targetPath, newContent);
-            return {
-                success: true,
-                path: args.path,
-                resolved_path: targetPath,
-                action: "replace",
-                matches: count,
-                occurrences_replaced: args.all ? count : 1,
-                status: "success",
-                message: `Successfully replaced ${args.all ? count : 1} occurrence(s) in ${args.path}`
-            };
-        }
-    }
-
-    if (action === "inject") {
-        if (!fs.existsSync(targetPath)) {
-            throw new Error(`File not found for line injection: ${args.path}`);
-        }
-        const current = await fs.promises.readFile(targetPath, "utf-8");
-        const lines = current.split("\n");
-        const targetLine = parseInt(args.line, 10);
-        const injectContent = String(args.content ?? "");
-
-        if (isNaN(targetLine) || targetLine < 0 || targetLine >= lines.length) {
-            lines.push(injectContent);
-        } else if (targetLine <= 1) {
-            lines.unshift(injectContent);
-        } else {
-            lines.splice(targetLine, 0, injectContent);
-        }
-        await writeAtomic(targetPath, lines.join("\n"));
-        return {
-            success: true,
-            path: args.path,
-            resolved_path: targetPath,
-            action: "inject",
-            line_injected: targetLine,
-            status: "success",
-            message: `Successfully injected content at line ${targetLine} in ${args.path}`
-        };
-    }
-
-    if (action === "batch") {
-        if (!fs.existsSync(targetPath)) {
-            throw new Error(`File not found for batch operations: ${args.path}`);
-        }
-        const ops = Array.isArray(args.operations) ? args.operations : [];
-        if (ops.length === 0) {
-            throw new Error("No operations provided for batch action");
-        }
-        let current = await fs.promises.readFile(targetPath, "utf-8");
-
-        for (let i = 0; i < ops.length; i++) {
-            const op = ops[i];
-            const opAction = op.action || (op.target !== undefined ? "replace" : (op.line !== undefined ? "inject" : "write"));
-
-            if (opAction === "replace") {
-                const target = op.target;
-                if (target === undefined || target === null) throw new Error(`Batch operation #${i + 1}: Missing 'target' string`);
-                const replacement = op.replacement ?? "";
-                const count = current.split(target).length - 1;
-                if (count === 0) throw new Error(`Batch operation #${i + 1}: Target string not found in ${args.path}`);
-                if (count > 1 && !op.all) throw new Error(`Batch operation #${i + 1}: Found ${count} occurrences of target string in ${args.path}. Specify 'all: true' or provide more surrounding context.`);
-                current = op.all ? current.replaceAll(target, replacement) : current.replace(target, replacement);
-            } else if (opAction === "inject") {
-                const lines = current.split("\n");
-                const targetLine = parseInt(op.line, 10);
-                const injectContent = String(op.content ?? "");
-                if (isNaN(targetLine) || targetLine < 0 || targetLine >= lines.length) {
-                    lines.push(injectContent);
-                } else if (targetLine <= 1) {
-                    lines.unshift(injectContent);
-                } else {
-                    lines.splice(targetLine, 0, injectContent);
-                }
-                current = lines.join("\n");
-            } else if (opAction === "write") {
-                current = op.content ?? "";
-            } else {
-                throw new Error(`Batch operation #${i + 1}: Unsupported action '${opAction}'`);
-            }
-        }
-
-        await writeAtomic(targetPath, current);
-        return {
-            success: true,
-            path: args.path,
-            resolved_path: targetPath,
-            action: "batch",
-            operations_applied: ops.length,
-            status: "success",
-            message: `Successfully applied ${ops.length} batch operations to ${args.path}`
-        };
-    }
-
-    throw new Error(`Unknown action: '${action}' for write_file`);
-}
-
-async function validateSyntax(filePath) {
-    const ext = path.extname(filePath).toLowerCase();
-    try {
-        if ([".js", ".mjs", ".cjs"].includes(ext)) {
-            await new Promise((resolve, reject) => {
-                exec(`node -c "${filePath}"`, (err, stdout, stderr) => {
-                    if (err) return reject(new Error(stderr || err.message));
-                    resolve();
-                });
-            });
-            return { valid: true };
-        }
-        if (ext === ".json") {
-            const raw = await fs.promises.readFile(filePath, "utf-8");
-            JSON.parse(raw);
-            return { valid: true };
-        }
-        if (ext === ".py") {
-            await new Promise((resolve, reject) => {
-                exec(`python3 -m py_compile "${filePath}"`, (err, stdout, stderr) => {
-                    if (err) return reject(new Error(stderr || err.message));
-                    resolve();
-                });
-            });
-            return { valid: true };
-        }
-    } catch (e) {
-        return { valid: false, error: e.message };
-    }
-    return { valid: true };
-}
-
-function runRipgrep({ searchPath, query, isRegex, caseSensitive, include, filesOnly, maxResults }) {
-    return new Promise((resolve, reject) => {
-        const args = ["--color=never", "--no-heading", "--max-columns=500"];
-        if (!caseSensitive) args.push("-i");
-        if (!isRegex) args.push("-F");
-        if (filesOnly) {
-            args.push("-l");
-        } else {
-            args.push("-n");
-            args.push("--with-filename");
-        }
-
-        if (include) {
-            const globs = include.split(",").map(s => s.trim()).filter(Boolean);
-            for (const g of globs) {
-                args.push("-g", g);
-            }
-        }
-
-        args.push("-g", "!.git/**");
-        args.push("-g", "!node_modules/**");
-        args.push("-g", "!dist/**");
-        args.push("-g", "!.venv/**");
-
-        args.push("-e", query);
-        args.push(searchPath);
-
-        const startTime = Date.now();
-        const proc = spawn("rg", args);
-        let stdout = "";
-        let stderr = "";
-
-        proc.stdout.on("data", data => { stdout += data; });
-        proc.stderr.on("data", data => { stderr += data; });
-
-        proc.on("error", err => {
-            reject(err);
-        });
-
-        proc.on("close", code => {
-            if (code === 0 || code === 1) {
-                const elapsed = Date.now() - startTime;
-                const rawLines = stdout.trim().split("\n").filter(Boolean);
-                if (filesOnly) {
-                    const files = rawLines.slice(0, maxResults).map(f => {
-                        return path.relative(searchPath === "." ? process.cwd() : searchPath, f) || f;
-                    });
-                    return resolve({
-                        engine_used: "ripgrep",
-                        elapsed_ms: elapsed,
-                        query,
-                        is_regex: isRegex,
-                        case_sensitive: caseSensitive,
-                        total_files: files.length,
-                        files
-                    });
-                }
-
-                const matches = [];
-                for (const line of rawLines) {
-                    if (matches.length >= maxResults) break;
-                    const firstColon = line.indexOf(":");
-                    if (firstColon === -1) continue;
-                    const secondColon = line.indexOf(":", firstColon + 1);
-                    if (secondColon === -1) continue;
-
-                    const filePath = line.substring(0, firstColon);
-                    const lineNum = parseInt(line.substring(firstColon + 1, secondColon), 10);
-                    let lineContent = line.substring(secondColon + 1);
-                    if (lineContent.length > 500) {
-                        lineContent = lineContent.slice(0, 500) + "…";
-                    }
-
-                    const relPath = path.relative(searchPath === "." ? process.cwd() : searchPath, filePath) || filePath;
-                    matches.push({
-                        file: relPath,
-                        line_number: lineNum,
-                        line_content: lineContent
-                    });
-                }
-
-                return resolve({
-                    engine_used: "ripgrep",
-                    elapsed_ms: elapsed,
-                    query,
-                    is_regex: isRegex,
-                    case_sensitive: caseSensitive,
-                    total_matches: matches.length,
-                    matches
-                });
-            } else {
-                reject(new Error(`ripgrep exited with code ${code}: ${stderr}`));
-            }
-        });
-    });
+    return await handleWriteFile(args, chatId, { resolveSafePath });
 }
 
 function postJSON(port, reqPath, data, timeoutMs = 3000) {
@@ -993,293 +689,6 @@ function postJSON(port, reqPath, data, timeoutMs = 3000) {
         req.write(body);
         req.end();
     });
-}
-
-async function nodeGrepScan({ searchPath, query, isRegex, caseSensitive, include, filesOnly, maxResults }) {
-    const ignoreDirs = new Set([".git", "node_modules", "dist", ".venv", "venv", "__pycache__", ".mitm", ".idea", ".vscode"]);
-    let regex;
-    try {
-        const flags = caseSensitive ? "g" : "gi";
-        const pat = isRegex ? query : query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-        regex = new RegExp(pat, flags);
-    } catch (e) {
-        throw new Error(`Invalid regular expression: ${e.message}`);
-    }
-
-    const globs = include ? include.split(",").map(s => s.trim()).filter(Boolean) : [];
-    function matchGlobs(fname, fullPath) {
-        if (globs.length === 0) return true;
-        return globs.some(g => {
-            const reStr = "^" + g.replace(/\./g, "\\.").replace(/\*/g, ".*").replace(/\?/g, ".") + "$";
-            return new RegExp(reStr).test(fname) || new RegExp(reStr).test(fullPath);
-        });
-    }
-
-    const matches = [];
-    const filesMatched = [];
-    let filesScanned = 0;
-    const startTime = Date.now();
-
-    async function walk(currentPath) {
-        if (matches.length >= maxResults || (filesOnly && filesMatched.length >= maxResults)) return;
-
-        let entries;
-        try {
-            entries = await fs.promises.readdir(currentPath, { withFileTypes: true });
-        } catch (_) {
-            return;
-        }
-
-        for (const entry of entries) {
-            if (matches.length >= maxResults || (filesOnly && filesMatched.length >= maxResults)) break;
-
-            const full = path.join(currentPath, entry.name);
-            if (entry.isDirectory()) {
-                if (ignoreDirs.has(entry.name) || entry.name.startsWith(".")) continue;
-                await walk(full);
-            } else if (entry.isFile()) {
-                if (entry.name.startsWith(".") && entry.name !== ".gitignore") continue;
-                if (!matchGlobs(entry.name, full)) continue;
-
-                try {
-                    const st = await fs.promises.stat(full);
-                    if (st.size > 5 * 1024 * 1024) continue;
-
-                    const fd = await fs.promises.open(full, "r");
-                    const buf = Buffer.alloc(512);
-                    const { bytesRead } = await fd.read(buf, 0, 512, 0);
-                    await fd.close();
-                    if (buf.subarray(0, bytesRead).includes(0)) continue;
-
-                    filesScanned++;
-                    const content = await fs.promises.readFile(full, "utf-8");
-                    const relPath = path.relative(searchPath === "." ? process.cwd() : searchPath, full) || full;
-
-                    if (filesOnly) {
-                        regex.lastIndex = 0;
-                        if (regex.test(content)) {
-                            filesMatched.push(relPath);
-                        }
-                    } else {
-                        const lines = content.split("\n");
-                        for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
-                            const line = lines[lineIdx];
-                            regex.lastIndex = 0;
-                            if (regex.test(line)) {
-                                let displayLine = line;
-                                if (displayLine.length > 500) {
-                                    displayLine = displayLine.slice(0, 500) + "…";
-                                }
-                                matches.push({
-                                    file: relPath,
-                                    line_number: lineIdx + 1,
-                                    line_content: displayLine
-                                });
-                                if (matches.length >= maxResults) break;
-                            }
-                        }
-                    }
-                } catch (_) {}
-            }
-        }
-    }
-
-    const stat = await fs.promises.stat(searchPath);
-    if (stat.isFile()) {
-        const full = path.resolve(searchPath);
-        const content = await fs.promises.readFile(full, "utf-8");
-        const relPath = path.basename(full);
-        if (filesOnly) {
-            if (regex.test(content)) filesMatched.push(relPath);
-        } else {
-            const lines = content.split("\n");
-            for (let i = 0; i < lines.length; i++) {
-                if (regex.test(lines[i])) {
-                    let displayLine = lines[i];
-                    if (displayLine.length > 500) displayLine = displayLine.slice(0, 500) + "…";
-                    matches.push({ file: relPath, line_number: i + 1, line_content: displayLine });
-                    if (matches.length >= maxResults) break;
-                }
-            }
-        }
-    } else {
-        await walk(searchPath);
-    }
-
-    const elapsed = Date.now() - startTime;
-    const responsePayload = {
-        engine_used: "node_scanner",
-        elapsed_ms: elapsed,
-        files_scanned: filesScanned,
-        query,
-        is_regex: isRegex,
-        case_sensitive: caseSensitive
-    };
-    if (filesOnly) {
-        responsePayload.total_files = filesMatched.length;
-        responsePayload.files = filesMatched;
-    } else {
-        responsePayload.total_matches = matches.length;
-        responsePayload.matches = matches;
-    }
-    return responsePayload;
-}
-
-async function handleCodeGrep(args, chatId) {
-    const rawQuery = args.query !== undefined ? args.query : (args.pattern !== undefined ? args.pattern : "");
-    const query = String(rawQuery || "").trim();
-    if (!query) throw new Error("Parameter 'query' is required");
-
-    const searchPath = resolveSafePath(args.path || ".", chatId);
-    if (!fs.existsSync(searchPath)) {
-        throw new Error(`Search path not found: ${args.path || "."}`);
-    }
-
-    const isRegex = Boolean(args.is_regex !== undefined ? args.is_regex : args.isRegex);
-    const caseSensitive = Boolean(args.case_sensitive !== undefined ? args.case_sensitive : args.caseSensitive);
-    const include = args.include || args.glob || null;
-    const filesOnly = Boolean(args.files_only !== undefined ? args.files_only : args.filesOnly);
-    const maxResults = Math.min(100, Math.max(1, parseInt(args.max_results, 10) || 50));
-
-    const scanOpts = { searchPath, query, isRegex, caseSensitive, include, filesOnly, maxResults };
-
-    // Tier 1: Try native ripgrep
-    try {
-        return await runRipgrep(scanOpts);
-    } catch (rgErr) {
-        // Ripgrep not installed or failed, proceed to Tier 2
-    }
-
-    // Tier 2: Try Python fast scanner at port 5000
-    try {
-        const pyResult = await postJSON(5000, "/api/code/grep", {
-            query,
-            path: searchPath,
-            is_regex: isRegex,
-            case_sensitive: caseSensitive,
-            include,
-            files_only: filesOnly,
-            max_results: maxResults
-        }, 3000);
-        return pyResult;
-    } catch (pyErr) {
-        // Python backend unreachable, proceed to Tier 3
-    }
-
-    // Tier 3: Pure in-process Node.js scanner
-    return await nodeGrepScan(scanOpts);
-}
-
-async function handleSearchAndReplace(args, chatId) {
-    const targetPath = resolveSafePath(args.path, chatId);
-    if (!fs.existsSync(targetPath)) {
-        throw new Error(`File not found: ${args.path}`);
-    }
-
-    const target = args.target !== undefined ? args.target : (args.old_string !== undefined ? args.old_string : args.old_text);
-    if (target === undefined || target === null || target === "") {
-        throw new Error("Missing 'old_string' or 'target' to replace");
-    }
-
-    const replacement = args.replacement !== undefined ? args.replacement : (args.new_string !== undefined ? args.new_string : (args.new_text ?? ""));
-    const allowMultiple = Boolean(args.allow_multiple || args.all);
-
-    const writeAtomic = async (filePath, text) => {
-        const tmpPath = filePath + ".tmp." + Math.random().toString(36).substring(2, 9);
-        await fs.promises.writeFile(tmpPath, text, "utf-8");
-        await fs.promises.rename(tmpPath, filePath);
-    };
-
-    const current = await fs.promises.readFile(targetPath, "utf-8");
-
-    // Line scoping if start_line or end_line provided
-    if (args.start_line !== undefined || args.end_line !== undefined) {
-        const lines = current.split("\n");
-        const s = Math.max(1, parseInt(args.start_line, 10) || 1) - 1;
-        const e = args.end_line !== undefined ? Math.min(lines.length, parseInt(args.end_line, 10)) : lines.length;
-        const chunk = lines.slice(s, e).join("\n");
-
-        const matchIndices = [];
-        let idx = 0;
-        while ((idx = chunk.indexOf(target, idx)) !== -1) {
-            matchIndices.push(idx);
-            idx += target.length;
-        }
-
-        if (matchIndices.length === 0) {
-            throw new Error(`Target text not found in ${args.path} within lines ${s + 1}-${e}. Please verify exact characters and indentation.`);
-        }
-
-        if (matchIndices.length > 1 && !allowMultiple) {
-            const lineNumbers = matchIndices.map(pos => {
-                return s + 1 + chunk.substring(0, pos).split("\n").length - 1;
-            });
-            throw new Error(`Found ${matchIndices.length} occurrences of target text in lines ${s + 1}-${e} of ${args.path} at line(s): ${lineNumbers.join(", ")}. Specify 'allow_multiple: true' to replace all occurrences, or narrow your target text.`);
-        }
-
-        const replacedChunk = allowMultiple ? chunk.replaceAll(target, replacement) : chunk.replace(target, replacement);
-        const newContent = [
-            lines.slice(0, s).join("\n"),
-            replacedChunk,
-            lines.slice(e).join("\n")
-        ].filter((val, i) => {
-            if (i === 0 && s === 0) return false;
-            if (i === 2 && e >= lines.length) return false;
-            return true;
-        }).join("\n");
-
-        await writeAtomic(targetPath, newContent);
-        const syntaxRes = await validateSyntax(targetPath);
-
-        return {
-            success: true,
-            path: args.path,
-            resolved_path: targetPath,
-            action: "search_and_replace",
-            matches: matchIndices.length,
-            occurrences_replaced: allowMultiple ? matchIndices.length : 1,
-            syntax_valid: syntaxRes.valid,
-            syntax_warning: syntaxRes.valid ? undefined : syntaxRes.error,
-            status: "success",
-            message: `Successfully replaced ${allowMultiple ? matchIndices.length : 1} occurrence(s) in ${args.path} (scoped to lines ${s + 1}-${e})`
-        };
-    }
-
-    // Full file replacement
-    const matchIndices = [];
-    let idx = 0;
-    while ((idx = current.indexOf(target, idx)) !== -1) {
-        matchIndices.push(idx);
-        idx += target.length;
-    }
-
-    if (matchIndices.length === 0) {
-        throw new Error(`Target text not found in ${args.path}. Please verify exact characters, whitespace, and indentation.`);
-    }
-
-    if (matchIndices.length > 1 && !allowMultiple) {
-        const lineNumbers = matchIndices.map(pos => {
-            return current.substring(0, pos).split("\n").length;
-        });
-        throw new Error(`Found ${matchIndices.length} occurrences of target text in ${args.path} at line(s): ${lineNumbers.join(", ")}. Specify 'allow_multiple: true' to replace all occurrences, or include more surrounding context to make the match unique.`);
-    }
-
-    const newContent = allowMultiple ? current.replaceAll(target, replacement) : current.replace(target, replacement);
-    await writeAtomic(targetPath, newContent);
-    const syntaxRes = await validateSyntax(targetPath);
-
-    return {
-        success: true,
-        path: args.path,
-        resolved_path: targetPath,
-        action: "search_and_replace",
-        matches: matchIndices.length,
-        occurrences_replaced: allowMultiple ? matchIndices.length : 1,
-        syntax_valid: syntaxRes.valid,
-        syntax_warning: syntaxRes.valid ? undefined : syntaxRes.error,
-        status: "success",
-        message: `Successfully replaced ${allowMultiple ? matchIndices.length : 1} occurrence(s) in ${args.path}`
-    };
 }
 
 function sendJSON(res, status, data) {
@@ -1720,6 +1129,55 @@ const server = http.createServer(async (req, res) => {
         }
     }
 
+    // Intercept image generation background tasks if queried via task APIs
+    if (req.url.startsWith("/api/task/stdout/")) {
+        const taskId = decodeURIComponent(req.url.replace("/api/task/stdout/", "")).trim();
+        if (taskId.startsWith("gen_") && imageGenTasks.has(taskId)) {
+            const task = imageGenTasks.get(taskId);
+            if (task.status === "completed") {
+                return sendJSON(res, 200, {
+                    task_id: taskId,
+                    status: "completed",
+                    done: true,
+                    output: task.result?.markdown || `![${task.prompt}](${task.result?.url})`,
+                    url: task.result?.url,
+                    result: task.result
+                });
+            } else if (task.status === "failed") {
+                return sendJSON(res, 200, {
+                    task_id: taskId,
+                    status: "failed",
+                    done: true,
+                    error: task.error,
+                    output: `Image generation failed: ${task.error}`
+                });
+            } else {
+                const elapsed = ((Date.now() - task.created_at) / 1000).toFixed(1);
+                return sendJSON(res, 200, {
+                    task_id: taskId,
+                    status: "running",
+                    done: false,
+                    output: `Image generation in progress in background (${elapsed}s elapsed)...`
+                });
+            }
+        }
+    }
+
+    if (req.url.startsWith("/api/task/status/")) {
+        const taskId = decodeURIComponent(req.url.replace("/api/task/status/", "")).trim();
+        if (taskId.startsWith("gen_") && imageGenTasks.has(taskId)) {
+            const task = imageGenTasks.get(taskId);
+            return sendJSON(res, 200, {
+                task_id: taskId,
+                status: task.status,
+                running: task.status === "running",
+                created_at: task.created_at,
+                result: task.result,
+                error: task.error
+            });
+        }
+    }
+
     // Proxy terminal tasks to the supervised Python backend with large-output scratch logging
     if (req.url.startsWith("/api/task/")) {
         let reqBody = "";
@@ -1890,24 +1348,45 @@ const server = http.createServer(async (req, res) => {
             for await (const chunk of req) body += chunk;
             const args = JSON.parse(body || "{}");
             const chatId = req.headers["x-chat-id"] || args.chatId || args.chat_id || "";
-            const result = await handleSearchAndReplace(args, chatId);
+            const result = await handleSearchAndReplace(args, chatId, { resolveSafePath });
             return sendJSON(res, 200, result);
         } catch (error) {
             return sendJSON(res, 500, { error: error.message });
         }
     }
 
-    if (req.method === "POST" && req.url === "/api/code/grep") {
+        if (req.method === "POST" && req.url === "/api/python/run") {
+        try {
+            let body = "";
+            for await (const chunk of req) body += chunk;
+            const args = JSON.parse(body || "{}");
+            const result = await postJSON(5000, "/api/python/run", args, 35000);
+            return sendJSON(res, 200, result);
+        } catch (error) {
+            return sendJSON(res, 500, { error: error.message });
+        }
+    }
+
+if (req.method === "POST" && req.url === "/api/code/grep") {
         try {
             let body = "";
             for await (const chunk of req) body += chunk;
             const args = JSON.parse(body || "{}");
             const chatId = req.headers["x-chat-id"] || args.chatId || args.chat_id || "";
-            const result = await handleCodeGrep(args, chatId);
+            const result = await handleCodeGrep(args, chatId, { resolveSafePath, postJSON });
             return sendJSON(res, 200, result);
         } catch (error) {
             return sendJSON(res, 500, { error: error.message });
         }
+    }
+
+    if (req.method === "GET" && req.url.startsWith("/api/image/status/")) {
+        const taskId = decodeURIComponent(req.url.replace("/api/image/status/", "")).trim();
+        const task = imageGenTasks.get(taskId);
+        if (!task) {
+            return sendJSON(res, 404, { error: `Image task '${taskId}' not found` });
+        }
+        return sendJSON(res, 200, task);
     }
 
     if (req.method === "POST" && req.url === "/api/image/generate") {
@@ -1915,61 +1394,127 @@ const server = http.createServer(async (req, res) => {
             let body = "";
             for await (const chunk of req) body += chunk;
             const data = JSON.parse(body || "{}");
-            const { prompt, model, provider, aspect_ratio, width, height, seed, negative_prompt } = data;
+            const { prompt, model, provider, aspect_ratio, width, height, seed, negative_prompt, background } = data;
 
             if (!prompt || typeof prompt !== "string" || !prompt.trim()) {
                 return sendJSON(res, 400, { error: "Parameter 'prompt' is required for image generation." });
             }
 
-            const defaultImageProvider = getConfig().General?.DefaultImageProvider || "pollinations";
-            const targetProviderKey = provider || model || defaultImageProvider;
+            const logflareKey = getEnvKey("LOGFLARE_API_KEY") || getEnvKey("LOGFARE_API_KEY");
+            const openaiKey = getEnvKey("OPENAI_API_KEY") || getEnvKey("OPENAI_KEY");
+
+            const defaultImageProvider = getConfig().General?.DefaultImageProvider || (logflareKey ? "logflare_image" : "pollinations");
+            let targetProviderKey = provider || model || defaultImageProvider;
             const { resolveImageProvider: getImgProvider } = require("./providers");
-            const imageHandler = getImgProvider(targetProviderKey);
 
             let apiKey = null;
             if (targetProviderKey.toLowerCase().includes("openai") || targetProviderKey.toLowerCase().includes("dall")) {
-                apiKey = getEnvKey("OPENAI_API_KEY") || getEnvKey("OPENAI_KEY");
-                if (!apiKey) {
-                    console.warn("[IMAGE API] OpenAI API key not found for DALL-E. Falling back to Pollinations AI...");
-                    const fallbackHandler = getImgProvider("pollinations");
-                    const result = await fallbackHandler.generateImage({
+                apiKey = openaiKey;
+            } else if (targetProviderKey.toLowerCase().includes("logf") || targetProviderKey.toLowerCase().includes("sdxl")) {
+                apiKey = logflareKey;
+            } else if (logflareKey && (targetProviderKey === "pollinations" || !provider)) {
+                targetProviderKey = "logflare_image";
+                apiKey = logflareKey;
+            }
+
+            let imageHandler = getImgProvider(targetProviderKey);
+
+            const activeChatId = data.chatId || data.chat_id;
+            const genTaskId = "gen_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 7);
+            const chosenModel = model || (targetProviderKey.includes("logf") ? "sdxl-lightning" : "turbo");
+
+            const taskRecord = {
+                task_id: genTaskId,
+                prompt: prompt.trim(),
+                provider: targetProviderKey,
+                model: chosenModel,
+                status: "running",
+                created_at: Date.now(),
+                chat_id: activeChatId,
+                result: null,
+                error: null
+            };
+            imageGenTasks.set(genTaskId, taskRecord);
+
+            const genPromise = (async () => {
+                try {
+                    const result = await imageHandler.generateImage({
                         prompt: prompt.trim(),
-                        model: "flux",
+                        model: chosenModel,
                         aspectRatio: aspect_ratio || "1:1",
                         width,
                         height,
+                        apiKey,
                         options: { seed, negative_prompt }
                     });
-                    return sendJSON(res, 200, result);
+
+                    if (activeChatId && result.url && result.url.startsWith("/generated_images/")) {
+                        try {
+                            const localImgPath = path.join(process.cwd(), result.url.slice(1));
+                            if (fs.existsSync(localImgPath)) {
+                                const filename = path.basename(localImgPath);
+                                const ws = conversationsManager.ensureChatWorkspace(activeChatId);
+                                fs.copyFileSync(localImgPath, path.join(ws.imagesDir, filename));
+                                result.chatImagePath = path.join(ws.imagesDir, filename);
+                            }
+                        } catch (e) {
+                            console.warn(`[IMAGE API] Failed to copy image to chat ${activeChatId}:`, e.message);
+                        }
+                    }
+
+                    taskRecord.status = "completed";
+                    taskRecord.result = result;
+                    taskRecord.completed_at = Date.now();
+                    return result;
+                } catch (err) {
+                    console.error(`[IMAGE API] Task ${genTaskId} error:`, err.message);
+                    taskRecord.status = "failed";
+                    taskRecord.error = err.message;
+                    taskRecord.completed_at = Date.now();
+                    throw err;
                 }
+            })();
+
+            // If background execution requested explicitly:
+            if (background === true) {
+                return sendJSON(res, 200, {
+                    status: "in_progress",
+                    background: true,
+                    task_id: genTaskId,
+                    prompt: `Image generation is running in the background (task_id: ${genTaskId}). The model can continue with other tasks now without waiting.`,
+                    message: `Image generation started in background with task_id: ${genTaskId}`
+                });
             }
 
-            const result = await imageHandler.generateImage({
-                prompt: prompt.trim(),
-                model,
-                aspectRatio: aspect_ratio || "1:1",
-                width,
-                height,
-                apiKey,
-                options: { seed, negative_prompt }
+            // Otherwise wait up to 15 seconds:
+            const timeoutPromise = new Promise((resolve) => {
+                setTimeout(() => resolve({ __timedOut: true }), 15000);
             });
 
-            const activeChatId = data.chatId || data.chat_id;
-            if (activeChatId && result.url && result.url.startsWith("/generated_images/")) {
-                try {
-                    const localImgPath = path.join(process.cwd(), result.url.slice(1));
-                    if (fs.existsSync(localImgPath)) {
-                        const filename = path.basename(localImgPath);
-                        const ws = conversationsManager.ensureChatWorkspace(activeChatId);
-                        fs.copyFileSync(localImgPath, path.join(ws.imagesDir, filename));
-                        result.chatImagePath = path.join(ws.imagesDir, filename);
-                    }
-                } catch (e) {
-                    console.warn(`[IMAGE API] Failed to copy image to chat ${activeChatId}:`, e.message);
+            try {
+                const outcome = await Promise.race([genPromise, timeoutPromise]);
+                if (outcome && outcome.__timedOut) {
+                    // Exceeded 15s - background it and let model continue!
+                    return sendJSON(res, 200, {
+                        status: "in_progress",
+                        background: true,
+                        task_id: genTaskId,
+                        prompt: `Image generation is taking longer than 15s and is running in the background (task_id: ${genTaskId}). The model may continue other tasks without waiting. When complete, the image will be saved to the conversation images.`,
+                        message: `Image generation backgrounded with task_id: ${genTaskId}`
+                    });
                 }
-            }
 
-            return sendJSON(res, 200, result);
+                return sendJSON(res, 200, {
+                    ...outcome,
+                    task_id: genTaskId
+                });
+            } catch (err) {
+                // Return exact error without wired-up fallback
+                return sendJSON(res, 500, {
+                    task_id: genTaskId,
+                    error: err.message
+                });
+            }
         } catch (error) {
             console.error("[IMAGE API ERROR]", error);
             return sendJSON(res, 500, { error: error.message });

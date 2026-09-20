@@ -927,6 +927,10 @@ body.drag-over .composer {
 }
 
 .start-page-title {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
     font-size: clamp(26px, 3.8vw, 36px);
     font-weight: 600;
     letter-spacing: -0.035em;
@@ -939,6 +943,18 @@ body.drag-over .composer {
     filter: drop-shadow(0 2px 14px rgba(0, 0, 0, 0.95)) drop-shadow(0 0 28px rgba(0, 0, 0, 0.8));
     position: relative;
     z-index: 10;
+}
+
+.start-page-title-icon,
+.start-page-title svg {
+    width: 0.88em;
+    height: 0.88em;
+    stroke: #e2e8f0;
+    stroke-width: 2.2;
+    flex-shrink: 0;
+    display: inline-block;
+    filter: drop-shadow(0 2px 8px rgba(255, 255, 255, 0.25));
+    -webkit-text-fill-color: initial;
 }
 
 #appShell.is-start-page .composer-dock {

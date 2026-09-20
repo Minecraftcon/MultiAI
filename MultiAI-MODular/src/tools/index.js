@@ -40,7 +40,7 @@ export async function executeTool(name, args, badgeEl, genState) {
     if (toolsConfig.EnableWebSearch === false && (name === "web_search" || name === "fetch_web_content" || name === "web_fetch")) {
         throw new Error("Web search is disabled in config.ini");
     }
-    if (toolsConfig.EnableImageGeneration === false && name === "generate_image") {
+    if (toolsConfig.EnableImageGeneration === false && (name === "generate_image" || name === "get_image_status")) {
         throw new Error("Image generation is disabled in config.ini");
     }
     if (toolsConfig.EnableFileOperations === false && (name === "read_file" || name === "write_file" || name === "search_and_replace" || name === "grep_search")) {

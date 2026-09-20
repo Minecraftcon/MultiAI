@@ -1,6 +1,7 @@
 /* =========================================================
    SIDE PANEL & CHAT HISTORY COMPONENT (DUCK.AI INSPIRED)
    ========================================================= */
+import { CHATS_STORAGE_KEY, ACTIVE_CHAT_KEY, ACTIVE_BUILD_PROJECT_KEY, ACTIVE_BUILD_CHAT_KEY } from "../config.js";
 import { state } from "../state.js";
 import { escapeHTML, formatChatDate, wrapTablesForScroll } from "../utils/dom.js";
 import { renderIcons } from "../utils/icons.js";
@@ -419,6 +420,10 @@ export async function switchToBuildChat(projectId, chatId) {
 
     state.currentProjectId = projectId;
     state.currentChatId = chatId;
+    try {
+        localStorage.setItem(ACTIVE_BUILD_PROJECT_KEY, projectId);
+        localStorage.setItem(ACTIVE_BUILD_CHAT_KEY, chatId);
+    } catch (_) {}
 
     try {
         const res = await fetch(`/api/build/projects/${encodeURIComponent(projectId)}/chats/${encodeURIComponent(chatId)}`);
@@ -503,6 +508,10 @@ export async function startFreshBuildChat(projectId) {
     const chatId = generateChatId();
     state.currentProjectId = projectId;
     state.currentChatId = chatId;
+    try {
+        localStorage.setItem(ACTIVE_BUILD_PROJECT_KEY, projectId);
+        localStorage.setItem(ACTIVE_BUILD_CHAT_KEY, chatId);
+    } catch (_) {}
 
     const modelSelect = document.getElementById("modelSelect");
     const defaultModel = state.config?.General?.DefaultStartupLLM || "gemini-2.5-flash";
@@ -551,6 +560,9 @@ export function switchToChat(id) {
     }
 
     state.currentChatId = id;
+    try {
+        localStorage.setItem(ACTIVE_CHAT_KEY, id);
+    } catch (_) {}
     const session = state.chatSessions[id];
     const chat = document.getElementById("chat");
     const modelSelect = document.getElementById("modelSelect");
@@ -1388,7 +1400,9 @@ export function initSidePanel() {
     });
 
     window.addEventListener("app-mode-changed", (e) => {
-        updateSidePanelView(e.detail?.mode || state.appMode);
+        const mode = e.detail?.mode || state.appMode;
+        updateSidePanelView(mode);
+        syncActiveModeConversation(mode);
     });
 
     // 11. Scroll gradient listener on panel body
@@ -1403,4 +1417,77 @@ export function initSidePanel() {
 
     // Initialize side panel view according to active mode
     updateSidePanelView(state.appMode);
+}
+
+/**
+ * Automatically activates and renders the appropriate conversation context
+ * when switching between Chat and Build modes or when reloading the page.
+ */
+export async function syncActiveModeConversation(mode = state.appMode) {
+    const isBuild = mode === "build";
+    const chat = document.getElementById("chat");
+
+    if (isBuild) {
+        const activeProjectId = localStorage.getItem(ACTIVE_BUILD_PROJECT_KEY);
+        const activeBuildChatId = localStorage.getItem(ACTIVE_BUILD_CHAT_KEY);
+
+        if (activeProjectId && activeBuildChatId) {
+            await switchToBuildChat(activeProjectId, activeBuildChatId);
+            return;
+        }
+
+        // Fallback: Check if any project has chats
+        const allProjects = state.buildProjects || [];
+        let mostRecentProject = null;
+        let mostRecentChat = null;
+
+        for (const proj of allProjects) {
+            if (Array.isArray(proj.chats) && proj.chats.length > 0) {
+                for (const c of proj.chats) {
+                    if (!mostRecentChat || (c.updatedAt || c.createdAt || 0) > (mostRecentChat.updatedAt || mostRecentChat.createdAt || 0)) {
+                        mostRecentChat = c;
+                        mostRecentProject = proj;
+                    }
+                }
+            }
+        }
+
+        if (mostRecentProject && mostRecentChat) {
+            await switchToBuildChat(mostRecentProject.id, mostRecentChat.id);
+            return;
+        }
+
+        if (allProjects.length > 0) {
+            await startFreshBuildChat(allProjects[0].id);
+            return;
+        }
+
+        // Truly empty build mode: show start page with Lets Build
+        state.currentProjectId = null;
+        state.currentChatId = null;
+        if (chat) chat.innerHTML = "";
+        state.messages = [{ role: "system", content: state.activeSystemPrompt }];
+        setStartPageMode(true);
+        updateSidePanelView("build");
+    } else {
+        const activeId = localStorage.getItem(ACTIVE_CHAT_KEY);
+        if (activeId && state.chatSessions[activeId] && !state.chatSessions[activeId].projectId && state.chatSessions[activeId].mode !== "build") {
+            state.currentChatId = null;
+            switchToChat(activeId);
+            return;
+        }
+
+        const validSessions = Object.values(state.chatSessions).filter(s => 
+            s && !s.projectId && (s.mode !== "build") && (s.messages?.some(m => m.role === "user") || (s.chatHtml && s.chatHtml.trim()))
+        );
+
+        if (validSessions.length > 0) {
+            validSessions.sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
+            state.currentChatId = null;
+            switchToChat(validSessions[0].id);
+            return;
+        }
+
+        startFreshChat();
+    }
 }

@@ -105,24 +105,29 @@ export function onToolComplete(name, args, badgeEl, data) {
                 } else {
                     outText = JSON.stringify(data, null, 2);
                 }
-            } else if (name === "generate_image") {
-                outText = `[Image Generated: ${data.model || "flux"} (${data.dimensions?.width || 1024}x${data.dimensions?.height || 1024})]\n${data.markdown || `![](${data.url})`}\nDirect URL: ${data.url}`;
-                if (data.url) {
-                    let imgPreview = badgeEl._collapseDiv.querySelector(".tool-image-preview");
-                    if (!imgPreview) {
-                        imgPreview = document.createElement("img");
-                        imgPreview.className = "tool-image-preview";
-                        imgPreview.style.maxWidth = "100%";
-                        imgPreview.style.maxHeight = "320px";
-                        imgPreview.style.borderRadius = "8px";
-                        imgPreview.style.marginTop = "10px";
-                        imgPreview.style.display = "block";
-                        imgPreview.style.objectFit = "contain";
-                        imgPreview.style.boxShadow = "0 4px 12px rgba(0,0,0,0.15)";
-                        badgeEl._collapseDiv.appendChild(imgPreview);
+            } else if (name === "generate_image" || name === "get_image_status") {
+                if (data.background || data.status === "in_progress" || data.status === "running") {
+                    outText = `[Image Generation In Progress (Task ID: ${data.task_id})]\n${data.prompt || data.message || "Generating in background..."}`;
+                } else {
+                    const imgData = data.result || data;
+                    outText = `[Image Generated: ${imgData.model || "flux"} (${imgData.dimensions?.width || 1024}x${imgData.dimensions?.height || 1024})]\n${imgData.markdown || (imgData.url ? `![](${imgData.url})` : "")}\nDirect URL: ${imgData.url || ""}`;
+                    if (imgData.url && badgeEl._collapseDiv) {
+                        let imgPreview = badgeEl._collapseDiv.querySelector(".tool-image-preview");
+                        if (!imgPreview) {
+                            imgPreview = document.createElement("img");
+                            imgPreview.className = "tool-image-preview";
+                            imgPreview.style.maxWidth = "100%";
+                            imgPreview.style.maxHeight = "320px";
+                            imgPreview.style.borderRadius = "8px";
+                            imgPreview.style.marginTop = "10px";
+                            imgPreview.style.display = "block";
+                            imgPreview.style.objectFit = "contain";
+                            imgPreview.style.boxShadow = "0 4px 12px rgba(0,0,0,0.15)";
+                            badgeEl._collapseDiv.appendChild(imgPreview);
+                        }
+                        imgPreview.src = imgData.url;
+                        imgPreview.alt = imgData.prompt || "Generated image";
                     }
-                    imgPreview.src = data.url;
-                    imgPreview.alt = data.prompt || "Generated image";
                 }
             } else if (name === "task_send_input") {
                 outText = data.output || `input: (${data.input || (args.type === "keycode" || args.combination ? (args.combination || "key") : (args.field !== undefined ? args.field : (args.input_string || "")))}), sent successfully\nStatus: ${data.status || (data.running ? "running" : "finished")}\nstderr: ${data.stderr || ""}${data.stdout ? `\nstdout: ${data.stdout}` : ""}`;

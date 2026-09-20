@@ -246,17 +246,22 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
 
 
 
-                if (!emptyRetryUsed && !hasRunTools && finalDisplay.length === 0) {
+                if (!emptyRetryUsed && finalDisplay.length === 0) {
                     emptyRetryUsed = true;
-                    logEvent("EMPTY_REPLY_RETRY", { model: selectedModel, userText, round });
+                    logEvent("EMPTY_REPLY_RETRY", { model: selectedModel, userText, round, hasRunTools });
+                    const retryPrompt = hasRunTools
+                        ? "All requested tool actions have finished executing. Please provide a clear summary of the results and your final answer."
+                        : "Your previous reply was empty. Provide an immediate direct answer or perform the required tool action.";
                     session.messages.push({
-                        role: "system",
-                        content: "Your previous reply was empty. Provide an immediate direct answer or perform the required tool action."
+                        role: "user",
+                        content: retryPrompt
                     });
+                    state.messages = session.messages;
+                    saveStoredChats();
                     continue;
                 }
 
-                if (finalDisplay.length === 0) {
+                if (finalDisplay.length === 0 && !hasRunTools) {
                     const err = new Error("Model returned an empty response.");
                     err.statusCode = 204;
                     throw err;

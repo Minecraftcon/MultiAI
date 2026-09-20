@@ -10,7 +10,7 @@ export const searchAndReplaceTool = {
         type: "function",
         function: {
             name: "search_and_replace",
-            description: "Surgically find and replace text in a file. Matches exact character sequences (including whitespace and indentation). Validates that the target string is unique in the file (or within the specified line range) to prevent accidental overwrites. Performs atomic writes and syntax validation.",
+            description: "Surgically find and replace text in a file using an intelligent 4-stage matching cascade (exact matching, CRLF/LF normalization, relative indentation tolerance with automatic replacement re-indentation, and fuzzy similarity matching >= 85%). Validates uniqueness to prevent accidental overwrites, performs atomic writes, and executes post-write syntax checks.",
             parameters: {
                 type: "object",
                 properties: {
@@ -20,7 +20,7 @@ export const searchAndReplaceTool = {
                     },
                     old_string: {
                         type: "string",
-                        description: "The exact text or code snippet to replace. Must match character-for-character including indentation."
+                        description: "The text or code snippet to replace. Matches exact, normalized indentation, or high-similarity fuzzy candidates."
                     },
                     new_string: {
                         type: "string",

@@ -118,11 +118,22 @@ export function addToolBadge(element, toolName, args) {
         label = "Replaced text";
         detail = args.path || "file";
         isCommandTask = true;
+    } else if (toolName === "run_python") {
+        icon = "terminal";
+        label = "Ran Python";
+        const snippet = (args.code || "").trim().split("\n")[0].slice(0, 45);
+        detail = snippet ? `\`${snippet}\`` : "Python snippet";
+        isCommandTask = true;
     } else if (toolName === "generate_image") {
         icon = "image";
         label = "Generated image";
         detail = args.prompt || "image generation";
         isCommandTask = true;
+    } else if (toolName === "get_image_status") {
+        icon = "image";
+        label = "Checked image";
+        detail = args.task_id || "image status";
+        isCommandTask = false;
     }
 
     const isTimer = toolName === "sleep" || toolName === "idle";

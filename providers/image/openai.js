@@ -45,7 +45,7 @@ class OpenAIImageProvider extends BaseImageProvider {
         };
 
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 60000);
+        const timeout = setTimeout(() => controller.abort(), 15000);
 
         try {
             const res = await fetch("https://api.openai.com/v1/images/generations", {
