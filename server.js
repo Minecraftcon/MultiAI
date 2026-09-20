@@ -1641,13 +1641,6 @@ if (req.method === "POST" && req.url === "/api/code/grep") {
     }
 
     if (req.method === "POST" && req.url === "/api/chat") {
-        const clientAbort = new AbortController();
-        req.on("close", () => {
-            if (!res.writableEnded) {
-                clientAbort.abort();
-            }
-        });
-
         try {
             let body = "";
             for await (const chunk of req) body += chunk;
@@ -1684,11 +1677,8 @@ if (req.method === "POST" && req.url === "/api/code/grep") {
                 providerConfig: provider,
                 messages,
                 tools,
-                tool_choice,
-                options: { signal: clientAbort.signal }
+                tool_choice
             });
-
-            if (res.writableEnded) return;
 
             if (chatResult.status !== 200) {
                 return sendJSON(res, chatResult.status || 500, { error: chatResult.error || "Provider error" });
