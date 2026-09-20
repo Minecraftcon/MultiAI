@@ -2,7 +2,7 @@ import { MAX_TOOL_ROUNDS, MAX_TOOLS_PER_ROUND } from "../config.js";
 import { state } from "../state/index.js";
 import { logEvent } from "../utils/logger.js";
 import { extractText, formatToolResult, extractChatTitleAndContent } from "../utils/dom.js";
-import { tools, executeTool } from "../tools/index.js";
+import { tools, executeTool, onToolStart, onToolComplete, onToolError } from "../tools/index.js";
 import { addToolBadge, addThoughtTrace, updateAIStream, finalizeStopped } from "../components/chat-ui.js";
 import { saveStoredChats } from "../services/storage.js";
 import { renderChatList } from "../components/side-panel.js";
@@ -358,22 +358,31 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
                 let result;
                 const filePath = args.path || args.file_path;
                 if (toolName === "read_file" && filePath) {
-                    const count = (fileReadCounts.get(filePath) || 0) + 1;
-                    fileReadCounts.set(filePath, count);
-                    if (count > 2) {
+                    // Track per slice so pagination (e.g. lines 1-400 vs 401-800) is never falsely blocked
+                    const sliceKey = `${filePath}:${args.action || "read"}:${args.start_line || 1}:${args.end_line || "all"}`;
+                    const count = (fileReadCounts.get(sliceKey) || 0) + 1;
+                    fileReadCounts.set(sliceKey, count);
+                    if (count > 5) {
                         result = {
                             path: filePath,
                             status: "already_inspected",
-                            note: `[Anti-Loop Notice]: "${filePath}" has already been read ${count - 1} times previously in this session. Its contents are available in your conversation context. Do NOT re-read it; proceed directly to implementing the missing files, code, or tests using write_file or run_task.`
+                            note: `[Anti-Loop Notice]: The exact same slice of "${filePath}" (lines ${args.start_line || 1}–${args.end_line || "end"}) has already been read ${count - 1} times previously in this session without modifications. Its contents are available in your conversation context. Do NOT re-read the identical slice; proceed with your edits or actions.`
                         };
                     }
                 } else if (toolName === "write_file" || toolName === "search_and_replace") {
-                    if (filePath) fileReadCounts.delete(filePath);
+                    if (filePath) {
+                        for (const key of fileReadCounts.keys()) {
+                            if (key.startsWith(filePath + ":")) fileReadCounts.delete(key);
+                        }
+                    }
                 }
 
                 try {
                     if (!result) {
                         result = await executeTool(toolName, args, badgeEl, genState);
+                    } else {
+                        onToolStart(toolName, args, badgeEl);
+                        onToolComplete(toolName, args, badgeEl, result);
                     }
                     if (genState.abortRequested) {
                         finalizeStopped(currentAIMessage, overallStartTime, hasRunTools);
@@ -393,6 +402,7 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
                         finalizeStopped(currentAIMessage, overallStartTime, hasRunTools);
                         return;
                     }
+                    onToolError(toolName, badgeEl, error);
                     logEvent("TOOL_ERROR", { toolName, args, error: String(error && error.message || error) });
                     session.messages.push({
                         role: "tool",

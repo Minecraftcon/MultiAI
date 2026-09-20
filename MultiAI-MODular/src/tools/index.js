@@ -59,7 +59,7 @@ export async function executeTool(name, args, badgeEl, genState) {
     try {
         data = await tool.handler(args, { badgeEl, genState });
     } catch (err) {
-        onToolError(name, badgeEl);
+        onToolError(name, badgeEl, err);
         throw err;
     }
 
@@ -73,5 +73,8 @@ export {
     registerTool,
     getTool,
     getAllToolSchemas,
-    hasTool
+    hasTool,
+    onToolStart,
+    onToolComplete,
+    onToolError
 };

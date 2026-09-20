@@ -87,8 +87,12 @@ export function onToolComplete(name, args, badgeEl, data) {
                     outText = `[Image View: ${data.path} (${data.mime}, ${data.human_size})]\n${data.markdown || ""}`;
                 } else if (data.action === "info") {
                     outText = JSON.stringify(data, null, 2);
+                } else if (data.content !== undefined) {
+                    outText = data.content || (data.entries ? JSON.stringify(data.entries, null, 2) : "(Empty file or directory)");
+                } else if (data.note || data.status || data.error) {
+                    outText = data.note || data.error || data.status;
                 } else {
-                    outText = data.content || (data.entries ? JSON.stringify(data.entries, null, 2) : "");
+                    outText = JSON.stringify(data, null, 2);
                 }
             } else if (name === "write_file" || name === "search_and_replace") {
                 outText = data.message || JSON.stringify(data, null, 2);
@@ -153,9 +157,17 @@ export function onToolComplete(name, args, badgeEl, data) {
 /**
  * Marks badge as finished/failed on error.
  */
-export function onToolError(name, badgeEl) {
+export function onToolError(name, badgeEl, error = null) {
     if (!badgeEl) return;
     if (name === "run_task" || name === "idle") {
         badgeEl.classList.add("timer-finished");
+    }
+    if (badgeEl._collapseDiv) {
+        const resEl = badgeEl._collapseDiv.querySelector(".command-output-res");
+        if (resEl) {
+            const errStr = error && error.message ? error.message : (error ? String(error) : "Execution failed");
+            resEl.textContent = `Error: ${errStr}`;
+            resEl.style.color = "#f87171";
+        }
     }
 }
