@@ -395,7 +395,9 @@ class BaseProvider {
             if (err.name === "AbortError") {
                 return { ok: false, status: 504, error: `${this.constructor.displayName || this.constructor.id} request timed out after ${timeoutMs / 1000}s` };
             }
-            return { ok: false, status: 500, error: err.message };
+            const causeDetail = err.cause ? (err.cause.message || err.cause.code || String(err.cause)) : "";
+            const detailMsg = causeDetail ? `${err.message} (${causeDetail})` : (err.message || "Unknown network error");
+            return { ok: false, status: 502, error: `${this.constructor.displayName || this.constructor.id} upstream connection failed: ${detailMsg}` };
         }
     }
 
