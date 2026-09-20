@@ -31,7 +31,9 @@ function getElements() {
 
 export function getPanelWidth() {
     const { sidePanel } = getElements();
-    return (sidePanel ? sidePanel.getBoundingClientRect().width : 0) || 280;
+    if (!sidePanel) return 336;
+    // Prefer offsetWidth (unscaled layout CSS pixels) over getBoundingClientRect to avoid CSS zoom distortion
+    return sidePanel.offsetWidth || (sidePanel.getBoundingClientRect ? sidePanel.getBoundingClientRect().width : 0) || 336;
 }
 
 export function renderTransform(x, withAnimation = false) {
@@ -50,6 +52,22 @@ export function renderTransform(x, withAnimation = false) {
         sidePanel.classList.remove("animate-transition");
         appShell.classList.remove("animate-transition");
         backdrop.classList.remove("animate-transition");
+    }
+
+    if (clampedX === 0) {
+        sidePanel.style.transform = "";
+        appShell.style.transform = "";
+        backdrop.style.opacity = "0";
+        backdrop.style.pointerEvents = "none";
+        return;
+    }
+
+    if (clampedX === width) {
+        sidePanel.style.transform = "translate3d(0, 0, 0)";
+        appShell.style.transform = `translate3d(${width}px, 0, 0)`;
+        backdrop.style.opacity = "1";
+        backdrop.style.pointerEvents = "auto";
+        return;
     }
 
     sidePanel.style.transform = `translate3d(${clampedX - width}px, 0, 0)`;
@@ -109,6 +127,7 @@ export function getIsPanelOpen() {
 }
 
 export function initGestures() {
+    closePanel(false);
     const { panelToggle, panelClose, backdrop } = getElements();
 
     let lastToggleTime = 0;
@@ -192,6 +211,9 @@ export function initGestures() {
         }
 
         if (!isHorizontal) return;
+
+        const { sidePanel } = getElements();
+        if (sidePanel) sidePanel.setAttribute("aria-hidden", "false");
 
         if (e.cancelable) {
             e.preventDefault();

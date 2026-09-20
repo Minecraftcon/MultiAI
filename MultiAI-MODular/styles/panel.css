@@ -24,8 +24,25 @@
     font-family: inherit;
 }
 
+#sidePanel[aria-hidden="true"],
+.side-panel[aria-hidden="true"] {
+    visibility: hidden;
+    pointer-events: none;
+    transform: translateX(-100%);
+}
+
+#sidePanel[aria-hidden="false"],
+.side-panel[aria-hidden="false"] {
+    visibility: visible;
+    pointer-events: auto;
+}
+
 #sidePanel.animate-transition {
-    transition: transform var(--panel-speed) var(--panel-ease);
+    transition: transform var(--panel-speed) var(--panel-ease), visibility 0s var(--panel-speed);
+}
+
+#sidePanel.animate-transition[aria-hidden="false"] {
+    transition: transform var(--panel-speed) var(--panel-ease), visibility 0s 0s;
 }
 
 /* Panel Header (Clean MultiAI Title without badge + Collapse Button) */
