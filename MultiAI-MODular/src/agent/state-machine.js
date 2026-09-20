@@ -10,6 +10,7 @@ import {
     COMPACTION_MIN_MESSAGES,
     COMPACTION_BUFFER_TOKENS,
     CHUNK_COMPACTION_TARGET_TOKENS,
+    EMERGENCY_TRIM_TARGET_TOKENS,
     COMPACTION_COOLDOWN_TURNS
 } from "../config.js";
 import { estimateMessagesTokens, getCompactionThreshold } from "./compactor.js";
@@ -130,11 +131,11 @@ export function assessContext(session, options = {}) {
     // Cooldown check: prevent thrashing if we recently compacted and still under critical ceiling
     const lastCompactedIdx = session.compactionState?.compactedThroughIndex || 0;
     const newTurns = msgs.length - lastCompactedIdx;
-    if (lastCompactedIdx > 0 && newTurns < COMPACTION_COOLDOWN_TURNS && tokenCount < threshold * 1.05) {
+    if (lastCompactedIdx > 0 && newTurns < COMPACTION_COOLDOWN_TURNS && tokenCount < threshold * 1.05 && tokenCount < COMPACTION_TOKEN_THRESHOLD) {
         return { shouldCompact: false, tokenCount, threshold, reason: "cooldown" };
     }
 
-    // Trigger only when working context genuinely reaches the threshold (e.g. ~85k for 100k models)
+    // Trigger when working context reaches threshold (e.g. 50k tokens for 65k ceiling)
     const should = tokenCount >= threshold;
     return { shouldCompact: should, tokenCount, threshold };
 }

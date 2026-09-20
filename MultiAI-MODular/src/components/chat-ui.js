@@ -476,7 +476,7 @@ export function addCompactionBadge(element, { messagesCount = 0, tokensBefore = 
     return {
         item,
         collapseDiv,
-        update({ status, summaryText, tokensSaved = 0, messagesCount = 0, artifactPath = null, checkpointNum = null, sliceStartIdx = 0, sliceEndIdx = 0, error = null }) {
+        update({ status, summaryText, tokensSaved = 0, messagesCount = 0, artifactPath = null, checkpointNum = null, sliceStartIdx = 0, sliceEndIdx = 0, error = null, isEmergencyTrim = false }) {
             const ringBar = item.querySelector(".timer-ring-bar");
             if (ringBar) {
                 ringBar.style.animation = "none";
@@ -484,16 +484,21 @@ export function addCompactionBadge(element, { messagesCount = 0, tokensBefore = 
 
             if (status === "completed") {
                 item.classList.add("timer-finished");
+                if (isEmergencyTrim) {
+                    item.classList.add("emergency-trim-badge");
+                }
 
                 const labelEl = item.querySelector(".search-label");
                 if (labelEl) {
-                    labelEl.textContent = checkpointNum ? `Checkpoint #${checkpointNum}` : "Checkpoint";
+                    labelEl.textContent = isEmergencyTrim
+                        ? (checkpointNum ? `Emergency Trim #${checkpointNum}` : "Emergency Trim")
+                        : (checkpointNum ? `Checkpoint #${checkpointNum}` : "Checkpoint");
                 }
 
                 const queryEl = item.querySelector(".search-query");
                 const savedStr = tokensSaved > 0 ? `Saved ~${Math.round(tokensSaved / 1000)}k tokens` : `Distilled`;
                 const finalDesc = sliceEndIdx > 0
-                    ? `Archived Turns ${sliceStartIdx}–${sliceEndIdx} (${savedStr}) • Trajectory Retained`
+                    ? `${isEmergencyTrim ? "Emergency Trimmed" : "Archived"} Turns ${sliceStartIdx}–${sliceEndIdx} (${savedStr}) • Trajectory Retained`
                     : `Reduced ${messagesCount} turns (${savedStr})`;
                 if (queryEl) {
                     queryEl.textContent = finalDesc;
@@ -503,7 +508,9 @@ export function addCompactionBadge(element, { messagesCount = 0, tokensBefore = 
 
                 const cmdTitle = collapseDiv.querySelector(".command-cmd-text");
                 if (cmdTitle) {
-                    cmdTitle.textContent = `Checkpoint #${checkpointNum || 1} Briefing (Turns ${sliceStartIdx}–${sliceEndIdx}, ${savedStr})`;
+                    cmdTitle.textContent = isEmergencyTrim
+                        ? `Emergency Checkpoint #${checkpointNum || 1} (Turns ${sliceStartIdx}–${sliceEndIdx}, ${savedStr})`
+                        : `Checkpoint #${checkpointNum || 1} Briefing (Turns ${sliceStartIdx}–${sliceEndIdx}, ${savedStr})`;
                 }
 
                 const resEl = collapseDiv.querySelector(".command-output-res");
