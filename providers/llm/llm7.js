@@ -41,9 +41,9 @@ class LLM7Provider extends BaseProvider {
             options
         });
 
-        // Ensure sufficient token budget for reasoning models (e.g. minimax-m2.7)
+        // Ensure sufficient token budget for reasoning models (e.g. minimax-m2.7, 64k default for non-fixed providers)
         if (!payload.max_tokens && !payload.max_completion_tokens) {
-            payload.max_tokens = config.default_max_tokens || 4096;
+            payload.max_tokens = config.default_max_tokens || 65536;
         }
 
         return payload;

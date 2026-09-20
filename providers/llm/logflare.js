@@ -31,9 +31,9 @@ class LogflareProvider extends BaseProvider {
             options
         });
 
-        // Ensure sufficient token budget for reasoning models
+        // Ensure sufficient token budget for reasoning models (64k default for non-fixed providers)
         if (!payload.max_tokens && !payload.max_completion_tokens) {
-            payload.max_tokens = config.default_max_tokens || 8192;
+            payload.max_tokens = config.default_max_tokens || 65536;
         }
 
         return payload;

@@ -76,7 +76,7 @@ providers:
     type: "zai"
     api_key_env: "Z_AI_API_KEY"
     base_url: "https://api.z.ai/api/paas/v4"
-    default_max_tokens: 4096
+    default_max_tokens: 65536
     models:
       - id: "glm-4.5-flash"
         name: "GLM 4.5 Flash (Fast & Reasoning)"
@@ -109,7 +109,7 @@ providers:
     type: "llm7"
     api_key_env: "LLM7_API_KEY"
     base_url: "https://api.llm7.io/v1"
-    default_max_tokens: 4096
+    default_max_tokens: 65536
     models:
       - id: "minimax-m2.7"
         name: "MiniMax M2.7 (Reasoning & Tools)"
@@ -129,7 +129,7 @@ providers:
     type: "logflare"
     api_key_env: "LOGFLARE_API_KEY"
     base_url: "https://logfare.ai/v1"
-    default_max_tokens: 4096
+    default_max_tokens: 65536
     models:
       - id: "glm-5.3-flash"
         name: "GLM 5.3 Flash (Logfare — Tools & Fast)"
@@ -152,12 +152,13 @@ providers:
         name: "Moondream 3.1 9B (Vision)"
         supports_tools: false
         supports_vision: true
+
   arliai:
     name: "ArliAI"
     type: "arliai"
     api_key_env: "ARLIAI_API_KEY"
     base_url: "https://api.arliai.com/v1"
-    default_max_tokens: 4096
+    default_max_tokens: 65536
     models:
       - id: "Qwen3.5-27B-Derestricted"
         name: "Qwen 3.5 27B Derestricted (ArliAI — Reasoning)"

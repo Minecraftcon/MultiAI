@@ -48,9 +48,9 @@ class ZAIProvider extends BaseProvider {
             options: { ...options, maxContextTokens }
         });
 
-        // Ensure sufficient token budget for reasoning models (e.g. glm-4.5-flash) so thinking steps don't truncate output
+        // Ensure sufficient token budget for reasoning models (e.g. glm-4.5-flash) so thinking steps don't truncate output (64k default for non-fixed providers)
         if (!payload.max_tokens && !payload.max_completion_tokens) {
-            payload.max_tokens = config.default_max_tokens || 4096;
+            payload.max_tokens = config.default_max_tokens || 65536;
         }
 
         return payload;
