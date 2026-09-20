@@ -88,10 +88,6 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
         : (Number(configuredRounds) > 0 ? Number(configuredRounds) : Infinity);
     let stageStatus = "Thinking";
     const statusTimer = setInterval(() => {
-        const activityWrapper = currentAIMessage.querySelector(".activity-wrapper");
-        if (activityWrapper && activityWrapper.style.display !== "block") {
-            activityWrapper.style.display = "block";
-        }
         const activityLabel = currentAIMessage.querySelector(".activity-label");
         if (activityLabel) {
             const sec = ((Date.now() - overallStartTime) / 1000).toFixed(1);

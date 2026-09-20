@@ -43,9 +43,11 @@ export function addToolBadge(element, toolName, args) {
     const wrapper = element.querySelector(".activity-wrapper");
     const searchContainer = element.querySelector(".search-items-container");
     
-    if (wrapper.style.display !== "block") {
+    if (wrapper) {
         wrapper.style.display = "block";
-        wrapper.classList.add("open");
+        if (!element.dataset.manuallyToggled) {
+            wrapper.classList.add("open");
+        }
     }
 
     let icon = "terminal";
@@ -599,9 +601,11 @@ export function addThoughtTrace(element, text) {
     const wrapper = element.querySelector(".activity-wrapper");
     const searchContainer = element.querySelector(".search-items-container");
 
-    if (wrapper.style.display !== "block") {
+    if (wrapper) {
         wrapper.style.display = "block";
-        wrapper.classList.add("open");
+        if (!element.dataset.manuallyToggled) {
+            wrapper.classList.add("open");
+        }
     }
 
     // Strip synthetic <think> tags so CommonMark does not treat content as unparsed HTML block
@@ -694,13 +698,7 @@ export function updateAIStream(element, fullText, isDone, startTime, hasTools) {
         if (activityWrapper && activityWrapper.classList.contains("open") && !element.dataset.manuallyToggled) {
             activityWrapper.classList.remove("open");
         }
-        if (!hasTools && activityWrapper) {
-            activityWrapper.style.display = "none";
-        }
     } else {
-        if (activityWrapper && activityWrapper.style.display !== "block") {
-            activityWrapper.style.display = "block";
-        }
         activityLabel.textContent = `Working... (${elapsed}s)`;
     }
 
@@ -820,9 +818,6 @@ export function finalizeStopped(element, startTime, hasTools) {
     }
     if (activityWrapper && activityWrapper.classList.contains("open") && !element.dataset.manuallyToggled) {
         activityWrapper.classList.remove("open");
-    }
-    if (!hasTools && activityWrapper) {
-        activityWrapper.style.display = "none";
     }
 
     const targetContent = hasTools ? finalContent : (preContent || finalContent);
