@@ -525,7 +525,7 @@
 }
 
 .checkpoint-modal-dialog {
-    width: min(840px, calc(100vw - 32px));
+    width: min(840px, calc(100% - 32px));
     max-height: calc(100vh - 64px);
     background: #141416;
     border: 1px solid #27272a;
