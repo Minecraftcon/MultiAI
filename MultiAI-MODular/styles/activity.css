@@ -506,6 +506,26 @@
     letter-spacing: 0.03em;
 }
 
+/* Artifact Badges & Buttons */
+.artifact-badge-item .search-icon-circle {
+    background: rgba(139, 92, 246, 0.18);
+    color: #c4b5fd;
+    border: 1px solid rgba(139, 92, 246, 0.35);
+}
+
+.artifact-open-btn {
+    background: rgba(139, 92, 246, 0.18);
+    border: 1px solid rgba(139, 92, 246, 0.38);
+    color: #ddd6fe;
+}
+
+.artifact-open-btn:hover {
+    background: rgba(139, 92, 246, 0.32);
+    border-color: rgba(167, 139, 250, 0.65);
+    color: #ffffff;
+    box-shadow: 0 0 10px rgba(139, 92, 246, 0.35);
+}
+
 /* Modal Backdrop & Dialog */
 .checkpoint-modal-backdrop {
     position: fixed;

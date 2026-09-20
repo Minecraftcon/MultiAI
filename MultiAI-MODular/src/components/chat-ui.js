@@ -102,9 +102,10 @@ export function addToolBadge(element, toolName, args) {
         detail = `${args.path || "file"}${lineSpan}`;
         isCommandTask = true;
     } else if (toolName === "write_file") {
+        const isArtifact = (args.path || "").startsWith("$ARTIFACTS/") || (args.path || "").startsWith("${ARTIFACTS}/");
         const act = args.action || (args.operations ? "batch" : (args.target !== undefined ? "replace" : (args.line !== undefined ? "inject" : "write")));
-        icon = act === "replace" ? "edit-3" : (act === "inject" ? "plus-circle" : (act === "batch" ? "layers" : "file-edit"));
-        label = act === "replace" ? "Replaced text" : (act === "inject" ? "Injected into file" : (act === "batch" ? "Batch modified" : "Wrote file"));
+        icon = isArtifact ? "file-code" : (act === "replace" ? "edit-3" : (act === "inject" ? "plus-circle" : (act === "batch" ? "layers" : "file-edit")));
+        label = isArtifact ? (act === "replace" ? "Updated artifact" : "Created artifact") : (act === "replace" ? "Replaced text" : (act === "inject" ? "Injected into file" : (act === "batch" ? "Batch modified" : "Wrote file")));
         detail = args.path || "file";
         isCommandTask = true;
     } else if (toolName === "grep_search") {
@@ -160,6 +161,12 @@ export function addToolBadge(element, toolName, args) {
         item.setAttribute("aria-label", `Toggle ${label.toLowerCase()} output`);
     }
 
+    const isArtifact = toolName === "write_file" && ((args.path || "").startsWith("$ARTIFACTS/") || (args.path || "").startsWith("${ARTIFACTS}/"));
+    if (isArtifact) {
+        item.dataset.artifactPath = args.path;
+        item.classList.add("artifact-badge-item");
+    }
+
     item.innerHTML = `
         <div class="search-icon-circle ${hasRing ? 'has-timer-ring' : ''}">
             ${hasRing ? `
@@ -174,6 +181,14 @@ export function addToolBadge(element, toolName, args) {
             <span class="search-label">${label}</span>
             ${codeIconHtml}
             <span class="search-query ${detailLines.length > 1 ? 'is-multiline' : ''}" data-full="${escapeHTML(detail)}" data-compact="${escapeHTML(compactDetail)}">${escapeHTML(compactDetail)}</span>
+            ${isArtifact ? `
+            <span class="checkpoint-badge-actions" style="margin-left: 6px;">
+                <button type="button" class="checkpoint-view-btn artifact-open-btn" data-path="${escapeHTML(args.path)}" title="View artifact modal" aria-label="View artifact">
+                    <i data-lucide="eye"></i>
+                    <span>View</span>
+                </button>
+            </span>
+            ` : ''}
             ${isCommandTask ? '<span class="badge-expand-chevron" aria-hidden="true">▶</span>' : ''}
         </div>
     `;
@@ -217,6 +232,28 @@ export function addToolBadge(element, toolName, args) {
                 </div>
             </div>
         `;
+
+        if (isArtifact) {
+            const noteEl = document.createElement("div");
+            noteEl.className = "command-output-artifact-note";
+            noteEl.style.marginTop = "10px";
+            noteEl.style.paddingTop = "8px";
+            noteEl.style.borderTop = "1px dashed var(--border-color, rgba(255, 255, 255, 0.15))";
+            noteEl.style.fontSize = "0.85em";
+            noteEl.style.display = "flex";
+            noteEl.style.alignItems = "center";
+            noteEl.style.justifyContent = "space-between";
+            noteEl.style.gap = "10px";
+            noteEl.innerHTML = `
+                <span><i data-lucide="file-code" style="vertical-align:-2px; margin-right:4px;"></i> Persistent Project Artifact: <code>${escapeHTML(args.path)}</code></span>
+                <button type="button" class="checkpoint-view-btn artifact-open-btn" data-path="${escapeHTML(args.path)}" title="Open Artifact in Modal">
+                    <i data-lucide="eye"></i>
+                    <span>Open Full Document</span>
+                </button>
+            `;
+            collapseDiv.querySelector(".badge-collapse-inner pre")?.appendChild(noteEl);
+        }
+
         searchContainer.appendChild(collapseDiv);
         item._collapseDiv = collapseDiv;
     }
@@ -299,9 +336,24 @@ export async function showCheckpointModal({
     const bodyEl = backdrop.querySelector(".checkpoint-modal-body");
     const copyBtn = backdrop.querySelector(".checkpoint-copy-path-btn");
 
-    if (badgeEl) badgeEl.innerHTML = `<i data-lucide="layers"></i> Checkpoint #${checkpointNum}`;
-    if (titleEl) titleEl.textContent = `Context Checkpoint #${checkpointNum}`;
-    if (subtitleEl) subtitleEl.textContent = `Turns ${sliceStartIdx}–${sliceEndIdx} • Saved ~${Math.round(tokensSaved / 1000)}k tokens • Live Trajectory Retained`;
+    const isGenericArtifact = artifactPath && !artifactPath.includes("checkpoint_");
+    const fileName = artifactPath ? artifactPath.split("/").pop() : "document.md";
+
+    if (badgeEl) {
+        badgeEl.innerHTML = isGenericArtifact 
+            ? `<i data-lucide="file-code"></i> Project Artifact` 
+            : `<i data-lucide="layers"></i> Checkpoint #${checkpointNum}`;
+    }
+    if (titleEl) {
+        titleEl.textContent = isGenericArtifact 
+            ? fileName 
+            : `Context Checkpoint #${checkpointNum}`;
+    }
+    if (subtitleEl) {
+        subtitleEl.textContent = isGenericArtifact 
+            ? `Persistent Project Document • Saved to $ARTIFACTS/` 
+            : `Turns ${sliceStartIdx}–${sliceEndIdx} • Saved ~${Math.round(tokensSaved / 1000)}k tokens • Live Trajectory Retained`;
+    }
     if (pathEl) pathEl.innerHTML = `<i data-lucide="file-text"></i> ${escapeHTML(artifactPath || "$ARTIFACTS/checkpoint.md")}`;
 
     if (copyBtn) {
