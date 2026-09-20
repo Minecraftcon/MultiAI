@@ -15,6 +15,7 @@
 }
 
 .badge-collapse-inner {
+    min-height: 0;
     overflow: hidden;
 }
 
@@ -23,8 +24,7 @@
     border: 1px solid #2d2d2d;
     border-radius: 8px;
     margin: 2px 0 4px 0;
-    overflow: hidden;
-    display: inline-block;
+    display: block;
     max-width: 100%;
 }
 
@@ -39,6 +39,9 @@
     word-break: break-all;
     max-height: 220px;
     overflow-y: auto;
+    border-radius: 7px;
+    transform: translateZ(0);
+    will-change: transform;
 }
 
 .command-output-box pre::-webkit-scrollbar { width: 4px; height: 4px; }

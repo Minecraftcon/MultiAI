@@ -50,6 +50,7 @@
 }
 
 .activity-overflow {
+    min-height: 0;
     overflow: hidden;
 }
 

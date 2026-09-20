@@ -638,6 +638,11 @@ export function initChatDelegation() {
         if (cmdBadge) {
             const isOpen = cmdBadge.classList.toggle("open");
             cmdBadge.setAttribute("aria-expanded", isOpen ? "true" : "false");
+            if (isOpen) {
+                const collapse = cmdBadge.nextElementSibling;
+                const pre = collapse?.querySelector?.("pre");
+                if (pre) pre.scrollTop = 0;
+            }
             saveCurrentChatState();
             return;
         }
@@ -696,6 +701,11 @@ export function initChatDelegation() {
                 e.preventDefault();
                 const isOpen = badge.classList.toggle("open");
                 badge.setAttribute("aria-expanded", isOpen ? "true" : "false");
+                if (isOpen) {
+                    const collapse = badge.nextElementSibling;
+                    const pre = collapse?.querySelector?.("pre");
+                    if (pre) pre.scrollTop = 0;
+                }
                 saveCurrentChatState();
             }
         }
