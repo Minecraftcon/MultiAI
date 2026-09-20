@@ -184,7 +184,7 @@ export function addToolBadge(element, toolName, args) {
             ${codeIconHtml}
             <span class="search-query ${detailLines.length > 1 ? 'is-multiline' : ''}" data-full="${escapeHTML(detail)}" data-compact="${escapeHTML(compactDetail)}">${escapeHTML(compactDetail)}</span>
             ${isArtifact ? `
-            <span class="checkpoint-badge-actions" style="margin-left: 6px;">
+            <span class="checkpoint-badge-actions">
                 <button type="button" class="checkpoint-view-btn artifact-open-btn" data-path="${escapeHTML(args.path)}" title="View artifact modal" aria-label="View artifact">
                     <i data-lucide="eye"></i>
                     <span>View</span>
@@ -238,14 +238,6 @@ export function addToolBadge(element, toolName, args) {
         if (isArtifact) {
             const noteEl = document.createElement("div");
             noteEl.className = "command-output-artifact-note";
-            noteEl.style.marginTop = "10px";
-            noteEl.style.paddingTop = "8px";
-            noteEl.style.borderTop = "1px dashed var(--border-color, rgba(255, 255, 255, 0.15))";
-            noteEl.style.fontSize = "0.85em";
-            noteEl.style.display = "flex";
-            noteEl.style.alignItems = "center";
-            noteEl.style.justifyContent = "space-between";
-            noteEl.style.gap = "10px";
             noteEl.innerHTML = `
                 <span><i data-lucide="file-code" style="vertical-align:-2px; margin-right:4px;"></i> Persistent Project Artifact: <code>${escapeHTML(args.path)}</code></span>
                 <button type="button" class="checkpoint-view-btn artifact-open-btn" data-path="${escapeHTML(args.path)}" title="Open Artifact in Modal">
@@ -550,23 +542,14 @@ export function addCompactionBadge(element, { messagesCount = 0, tokensBefore = 
                     if (!noteEl) {
                         noteEl = document.createElement("div");
                         noteEl.className = "command-output-artifact-note";
-                        noteEl.style.marginTop = "10px";
-                        noteEl.style.paddingTop = "8px";
-                        noteEl.style.borderTop = "1px dashed var(--border-color, rgba(255, 255, 255, 0.15))";
-                        noteEl.style.fontSize = "0.85em";
-                        noteEl.style.opacity = "0.9";
-                        noteEl.style.display = "flex";
-                        noteEl.style.alignItems = "center";
-                        noteEl.style.justifyContent = "space-between";
-                        noteEl.style.gap = "10px";
                         collapseDiv.querySelector(".badge-collapse-inner pre")?.appendChild(noteEl);
                     }
                     noteEl.innerHTML = `
                         <div>
-                            <span style="color:var(--text-muted, #aaa);">Permanent Snapshot:</span>
-                            <code style="color:#60a5fa; cursor:pointer;" class="checkpoint-artifact-link" data-path="${escapeHTML(artifactPath)}" data-checkpoint-num="${checkpointNum || 1}" data-slice-start="${sliceStartIdx}" data-slice-end="${sliceEndIdx}" data-tokens-saved="${tokensSaved}" title="Click to view">${escapeHTML(artifactPath)}</code>
+                            <span class="checkpoint-note-label">Permanent Snapshot:</span>
+                            <code class="checkpoint-artifact-link" data-path="${escapeHTML(artifactPath)}" data-checkpoint-num="${checkpointNum || 1}" data-slice-start="${sliceStartIdx}" data-slice-end="${sliceEndIdx}" data-tokens-saved="${tokensSaved}" title="Click to view">${escapeHTML(artifactPath)}</code>
                         </div>
-                        <button type="button" class="checkpoint-open-doc-btn" data-path="${escapeHTML(artifactPath)}" data-checkpoint-num="${checkpointNum || 1}" data-slice-start="${sliceStartIdx}" data-slice-end="${sliceEndIdx}" data-tokens-saved="${tokensSaved}" style="background:#2563eb; color:#fff; border:none; border-radius:4px; padding:3px 8px; font-size:11px; cursor:pointer;">Open Document</button>
+                        <button type="button" class="checkpoint-open-doc-btn" data-path="${escapeHTML(artifactPath)}" data-checkpoint-num="${checkpointNum || 1}" data-slice-start="${sliceStartIdx}" data-slice-end="${sliceEndIdx}" data-tokens-saved="${tokensSaved}">Open Document</button>
                     `;
                 }
 

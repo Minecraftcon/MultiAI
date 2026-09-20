@@ -469,61 +469,149 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    background: rgba(37, 99, 235, 0.18);
-    border: 1px solid rgba(59, 130, 246, 0.35);
-    color: #93c5fd;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #e4e4e7;
     border-radius: 6px;
-    padding: 2px 8px;
+    padding: 2.5px 8px;
     font-size: 11.5px;
     font-weight: 500;
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
     user-select: none;
     line-height: 1.3;
+    font-family: inherit;
 }
 
 .checkpoint-view-btn:hover {
-    background: rgba(37, 99, 235, 0.32);
-    border-color: rgba(96, 165, 250, 0.6);
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.22);
     color: #ffffff;
-    box-shadow: 0 0 8px rgba(59, 130, 246, 0.3);
+}
+
+.checkpoint-view-btn:active {
+    transform: scale(0.98);
+}
+
+.checkpoint-view-btn:focus-visible {
+    outline: 2px solid rgba(255, 255, 255, 0.5);
+    outline-offset: 2px;
 }
 
 .checkpoint-view-btn svg,
 .checkpoint-view-btn i {
     width: 13px;
     height: 13px;
+    flex-shrink: 0;
 }
 
 .checkpoint-pill-tag {
-    background: #2563eb;
-    color: #ffffff;
+    background: rgba(255, 255, 255, 0.12);
+    color: #f4f4f5;
     font-size: 9.5px;
     font-weight: 600;
     padding: 1px 5px;
     border-radius: 4px;
     text-transform: uppercase;
-    letter-spacing: 0.03em;
+    letter-spacing: 0.04em;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.checkpoint-view-btn:hover .checkpoint-pill-tag {
+    background: #ffffff;
+    color: #09090b;
 }
 
 /* Artifact Badges & Buttons */
 .artifact-badge-item .search-icon-circle {
-    background: rgba(139, 92, 246, 0.18);
-    color: #c4b5fd;
-    border: 1px solid rgba(139, 92, 246, 0.35);
+    background: #242424;
+    color: #d4d4d8;
+    border: 1px solid #383838;
 }
 
 .artifact-open-btn {
-    background: rgba(139, 92, 246, 0.18);
-    border: 1px solid rgba(139, 92, 246, 0.38);
-    color: #ddd6fe;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #e4e4e7;
 }
 
 .artifact-open-btn:hover {
-    background: rgba(139, 92, 246, 0.32);
-    border-color: rgba(167, 139, 250, 0.65);
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.22);
     color: #ffffff;
-    box-shadow: 0 0 10px rgba(139, 92, 246, 0.35);
+}
+
+/* In-Accordion Snapshot Action Note */
+.command-output-artifact-note {
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px dashed rgba(255, 255, 255, 0.12);
+    font-size: 0.85em;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.checkpoint-note-label {
+    color: #a1a1aa;
+    margin-right: 6px;
+}
+
+.checkpoint-artifact-link {
+    color: #e4e4e7;
+    text-decoration: underline;
+    text-decoration-color: rgba(255, 255, 255, 0.28);
+    text-underline-offset: 3px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.9em;
+    padding: 2px 4px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: color 0.15s ease, text-decoration-color 0.15s ease, background 0.15s ease;
+}
+
+.checkpoint-artifact-link:hover {
+    color: #ffffff;
+    text-decoration-color: #ffffff;
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.checkpoint-artifact-link:focus-visible {
+    outline: 2px solid rgba(255, 255, 255, 0.5);
+    outline-offset: 2px;
+}
+
+.checkpoint-open-doc-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: #ffffff;
+    color: #09090b;
+    border: 1px solid transparent;
+    border-radius: 5px;
+    padding: 3px 9px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    line-height: 1.3;
+    user-select: none;
+    font-family: inherit;
+    transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
+}
+
+.checkpoint-open-doc-btn:hover {
+    background: #e4e4e7;
+    color: #000000;
+}
+
+.checkpoint-open-doc-btn:active {
+    transform: scale(0.97);
+}
+
+.checkpoint-open-doc-btn:focus-visible {
+    outline: 2px solid rgba(255, 255, 255, 0.6);
+    outline-offset: 2px;
 }
 
 /* Modal Backdrop & Dialog */
@@ -577,12 +665,12 @@
 .checkpoint-modal-badge {
     display: inline-flex;
     align-items: center;
-    gap: 5px;
+    gap: 6px;
     font-size: 11px;
     font-weight: 600;
-    color: #60a5fa;
+    color: #a1a1aa;
     text-transform: uppercase;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.05em;
 }
 
 .checkpoint-modal-badge svg,
@@ -603,6 +691,7 @@
     font-size: 12.5px;
     color: #a1a1aa;
     margin-top: 2px;
+    font-variant-numeric: tabular-nums;
 }
 
 .checkpoint-modal-actions {
@@ -623,7 +712,7 @@
     border-radius: 7px;
     color: #a1a1aa;
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
 }
 
 .checkpoint-copy-path-btn:hover,
@@ -631,6 +720,17 @@
     background: #27272a;
     border-color: #3f3f46;
     color: #ffffff;
+}
+
+.checkpoint-copy-path-btn:active,
+.checkpoint-modal-close-btn:active {
+    transform: scale(0.94);
+}
+
+.checkpoint-copy-path-btn:focus-visible,
+.checkpoint-modal-close-btn:focus-visible {
+    outline: 2px solid rgba(255, 255, 255, 0.45);
+    outline-offset: 2px;
 }
 
 .checkpoint-copy-path-btn svg,
@@ -655,7 +755,7 @@
     align-items: center;
     gap: 6px;
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-    color: #93c5fd;
+    color: #d4d4d8;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -668,14 +768,26 @@
 }
 
 .checkpoint-badge-status {
-    background: rgba(34, 197, 94, 0.15);
-    color: #4ade80;
-    border: 1px solid rgba(74, 222, 128, 0.3);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255, 255, 255, 0.06);
+    color: #d4d4d8;
+    border: 1px solid rgba(255, 255, 255, 0.12);
     font-size: 10.5px;
-    font-weight: 600;
-    padding: 2px 7px;
-    border-radius: 4px;
+    font-weight: 500;
+    padding: 2px 8px;
+    border-radius: 9999px;
     flex-shrink: 0;
+    letter-spacing: 0.02em;
+}
+
+.checkpoint-badge-status::before {
+    content: "";
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: #a1a1aa;
 }
 
 .checkpoint-modal-body {
@@ -708,11 +820,12 @@
 }
 
 .checkpoint-modal-body code:not(pre code) {
-    background: #27272a;
-    color: #93c5fd;
-    padding: 2px 5px;
+    background: rgba(255, 255, 255, 0.07);
+    color: #f4f4f5;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 2px 6px;
     border-radius: 4px;
-    font-size: 0.9em;
+    font-size: 0.88em;
 }
 
 .checkpoint-modal-footer {
@@ -739,11 +852,20 @@
     font-size: 13px;
     font-weight: 500;
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
     flex-shrink: 0;
 }
 
 .checkpoint-close-footer-btn:hover {
     background: #3f3f46;
     color: #ffffff;
+}
+
+.checkpoint-close-footer-btn:active {
+    transform: scale(0.98);
+}
+
+.checkpoint-close-footer-btn:focus-visible {
+    outline: 2px solid rgba(255, 255, 255, 0.45);
+    outline-offset: 2px;
 }
