@@ -10,7 +10,7 @@ import { state } from "../state/index.js";
  * @param {Object} [options.genState]
  * @returns {Promise<any>}
  */
-export async function toolFetch(url, { method = "POST", body = null, genState = null } = {}) {
+export async function toolFetch(url, { method = "POST", body = null, genState = null, timeoutMs = 120000 } = {}) {
     if (genState && genState.abortRequested) {
         throw new Error("Generation stopped by user");
     }
@@ -23,9 +23,13 @@ export async function toolFetch(url, { method = "POST", body = null, genState = 
         }
     };
 
-    if (genState && genState.abortController) {
-        opts.signal = genState.abortController.signal;
+    // Combine user-stop signal with a per-request deadline so stalled servers
+    // never leave badges stuck at "Running..." indefinitely.
+    const signals = [AbortSignal.timeout(timeoutMs)];
+    if (genState && genState.abortController && genState.abortController.signal) {
+        signals.push(genState.abortController.signal);
     }
+    opts.signal = signals.length > 1 ? AbortSignal.any(signals) : signals[0];
 
     if (method === "POST" && body !== null && body !== undefined) {
         opts.body = JSON.stringify(body);
@@ -37,6 +41,9 @@ export async function toolFetch(url, { method = "POST", body = null, genState = 
     } catch (e) {
         if ((genState && genState.abortRequested) || e.name === "AbortError") {
             throw new Error("Generation stopped by user");
+        }
+        if (e.name === "TimeoutError") {
+            throw new Error(`Tool request timed out after ${Math.round(timeoutMs / 1000)}s — server may be unavailable.`);
         }
         throw e;
     }

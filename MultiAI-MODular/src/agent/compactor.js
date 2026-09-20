@@ -110,10 +110,13 @@ export function getModelContextLimit(modelId) {
  */
 export function getCompactionThreshold(modelId, bufferTokens = COMPACTION_BUFFER_TOKENS) {
     const limit = getModelContextLimit(modelId);
+    // Account for system prompt + compaction briefing overhead (~5000 tokens)
+    // so small-context models don't overflow again right after compaction.
+    const systemOverhead = 5000;
     if (limit <= 32000) {
-        return Math.max(4000, Math.min(limit - 4000, Math.floor(limit * 0.8)));
+        return Math.max(4000, Math.min(limit - 4000 - systemOverhead, Math.floor(limit * 0.7)));
     }
-    return Math.max(10000, limit - bufferTokens);
+    return Math.max(10000, limit - bufferTokens - systemOverhead);
 }
 
 /**

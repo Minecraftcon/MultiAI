@@ -24,19 +24,11 @@ function spliceLines(lines, s, e, replacementText) {
     if (s > e) {
         throw new Error(`Invalid line bounds: start_line (${s + 1}) must be <= end_line (${e})`);
     }
-
-    const before = lines.slice(0, s).join("\n");
-    const after = lines.slice(e).join("\n");
-
-    let result = "";
-    if (s > 0) {
-        result += before + "\n";
-    }
-    result += replacementText;
-    if (e < lines.length) {
-        result += "\n" + after;
-    }
-    return result;
+    // Split replacement into lines and splice into the array — avoids double-newline
+    // artifacts at join boundaries caused by string concatenation.
+    const replLines = replacementText.split("\n");
+    const result = [...lines.slice(0, s), ...replLines, ...lines.slice(e)];
+    return result.join("\n");
 }
 
 // ---------------------------------------------------------
@@ -190,10 +182,10 @@ async function handleWriteFile(args, chatId, { resolveSafePath }) {
         const targetLine = parseInt(args.line, 10);
         const injectContent = String(args.content ?? "");
 
-        if (isNaN(targetLine) || targetLine < 0 || targetLine >= lines.length) {
-            lines.push(injectContent);
+        if (targetLine === -1 || isNaN(targetLine) || targetLine > lines.length) {
+            lines.push(injectContent); // append
         } else if (targetLine <= 1) {
-            lines.unshift(injectContent);
+            lines.unshift(injectContent); // prepend (line:0 and line:1 both prepend)
         } else {
             lines.splice(targetLine, 0, injectContent);
         }
@@ -235,10 +227,10 @@ async function handleWriteFile(args, chatId, { resolveSafePath }) {
                 const lines = current.split("\n");
                 const targetLine = parseInt(op.line, 10);
                 const injectContent = String(op.content ?? "");
-                if (isNaN(targetLine) || targetLine < 0 || targetLine >= lines.length) {
-                    lines.push(injectContent);
+                if (targetLine === -1 || isNaN(targetLine) || targetLine > lines.length) {
+                    lines.push(injectContent); // append
                 } else if (targetLine <= 1) {
-                    lines.unshift(injectContent);
+                    lines.unshift(injectContent); // prepend
                 } else {
                     lines.splice(targetLine, 0, injectContent);
                 }
@@ -542,7 +534,7 @@ async function handleCodeGrep(args, chatId, { resolveSafePath, postJSON }) {
                 include: opts.include,
                 files_only: opts.filesOnly,
                 max_results: opts.maxResults
-            }, 3000);
+            }, 10000);
             return pyResult;
         } catch (_) {}
 

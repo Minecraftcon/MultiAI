@@ -14,6 +14,20 @@ const { handleCodeGrep, handleSearchAndReplace, handleWriteFile } = require("./c
 // In-memory registry for background image generation tasks
 const imageGenTasks = new Map();
 
+// Periodically evict completed/failed tasks older than 30min, running tasks older than 2h
+setInterval(() => {
+    const now = Date.now();
+    for (const [id, task] of imageGenTasks.entries()) {
+        const age = now - (task.created_at || 0);
+        if ((task.status === "completed" || task.status === "failed") && age > 30 * 60 * 1000) {
+            imageGenTasks.delete(id);
+        } else if (task.status === "running" && age > 2 * 60 * 60 * 1000) {
+            // Stale zombie task — server restart or crash mid-generation
+            imageGenTasks.delete(id);
+        }
+    }
+}, 60 * 60 * 1000); // Run hourly
+
 function getEnvKey(keyName) {
     if (!keyName) return null;
     if (process.env[keyName]) return process.env[keyName];
@@ -451,12 +465,12 @@ function getMimeType(ext) {
         ".md": "text/markdown",
         ".js": "text/javascript",
         ".mjs": "text/javascript",
-        ".ts": "text/typescript",
+        ".cjs": "text/javascript",
+        ".ts": "text/typescript",   // TypeScript source (NOT video transport stream)
+        ".tsx": "text/typescript",
         ".html": "text/html",
+        ".htm": "text/html",
         ".css": "text/css",
-        ".avif": "image/avif",
-        ".tiff": "image/tiff",
-        ".tif": "image/tiff",
         ".mp4": "video/mp4",
         ".webm": "video/webm",
         ".ogv": "video/ogg",
@@ -471,8 +485,8 @@ function getMimeType(ext) {
         ".flv": "video/x-flv",
         ".3gp": "video/3gpp",
         ".3gpp": "video/3gpp",
-        ".ts": "video/mp2t",
-        ".m2ts": "video/mp2t",
+        ".m2ts": "video/mp2t",      // MPEG-2 transport stream (explicit)
+        ".mts": "video/mp2t",
         ".mp3": "audio/mpeg",
         ".wav": "audio/wav",
         ".oga": "audio/ogg",
@@ -657,6 +671,33 @@ async function handleFileRead(args, chatId) {
             is_dir: true,
             entry_count: entries.length,
             content: entries.map(e => `${e.isDirectory() ? "[DIR] " : "      "}${e.name}`).join("\n")
+        };
+    }
+
+    // Guard: detect binary files before reading as UTF-8 to prevent context corruption
+    const BINARY_EXTS = new Set([
+        ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".ico", ".avif", ".tiff", ".tif",
+        ".mp4", ".webm", ".mov", ".avi", ".mkv", ".m4v", ".mpg", ".mpeg", ".flv", ".3gp",
+        ".mp3", ".wav", ".flac", ".ogg", ".opus", ".m4a", ".aac", ".wma",
+        ".zip", ".tar", ".gz", ".bz2", ".xz", ".7z", ".rar",
+        ".exe", ".dll", ".so", ".dylib", ".bin", ".dat",
+        ".wasm", ".pyc", ".class", ".o", ".obj", ".pdb",
+        ".ttf", ".otf", ".woff", ".woff2", ".eot",
+        ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx",
+        ".sqlite", ".db"
+    ]);
+    const fileExt = path.extname(targetPath).toLowerCase();
+    if (BINARY_EXTS.has(fileExt)) {
+        const mime = getMimeType(fileExt);
+        const viewable = [".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".ico", ".avif", ".pdf"].includes(fileExt);
+        return {
+            path: args.path,
+            resolved_path: targetPath,
+            is_binary: true,
+            mime_type: mime,
+            size_bytes: stat.size,
+            human_size: formatBytes(stat.size),
+            message: `Binary file (${mime}, ${formatBytes(stat.size)}). Cannot read as text.${viewable ? ' Use action: "view" to render as embedded preview.' : ' Use action: "info" for metadata only.'}`
         };
     }
 

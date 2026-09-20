@@ -159,9 +159,8 @@ export function onToolComplete(name, args, badgeEl, data) {
  */
 export function onToolError(name, badgeEl, error = null) {
     if (!badgeEl) return;
-    if (name === "run_task" || name === "idle") {
-        badgeEl.classList.add("timer-finished");
-    }
+    // Always mark as visually complete so the badge never stays in a "Running..." state
+    badgeEl.classList.add("timer-finished");
     if (badgeEl._collapseDiv) {
         const resEl = badgeEl._collapseDiv.querySelector(".command-output-res");
         if (resEl) {

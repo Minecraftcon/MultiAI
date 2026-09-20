@@ -385,6 +385,18 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
                         onToolComplete(toolName, args, badgeEl, result);
                     }
                     if (genState.abortRequested) {
+                        // Fill synthetic cancelled results for remaining tool calls
+                        const remainingCalls = calls.slice(i + 1);
+                        for (const remainingCall of remainingCalls) {
+                            session.messages.push({
+                                role: "tool",
+                                tool_call_id: remainingCall.id,
+                                name: remainingCall.function?.name,
+                                content: JSON.stringify({ error: "Execution cancelled by user" })
+                            });
+                        }
+                        state.messages = session.messages;
+                        saveStoredChats();
                         finalizeStopped(currentAIMessage, overallStartTime, hasRunTools);
                         return;
                     }
@@ -399,6 +411,19 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
                     saveStoredChats();
                 } catch (error) {
                     if (genState.abortRequested || error.message === "Generation stopped by user") {
+                        // Push synthetic cancelled results for the current tool and any remaining ones
+                        // so the message history stays structurally valid (assistant N tool_calls = N tool results)
+                        const remainingCalls = calls.slice(i);
+                        for (const remainingCall of remainingCalls) {
+                            session.messages.push({
+                                role: "tool",
+                                tool_call_id: remainingCall.id,
+                                name: remainingCall.function?.name,
+                                content: JSON.stringify({ error: "Execution cancelled by user" })
+                            });
+                        }
+                        state.messages = session.messages;
+                        saveStoredChats();
                         finalizeStopped(currentAIMessage, overallStartTime, hasRunTools);
                         return;
                     }

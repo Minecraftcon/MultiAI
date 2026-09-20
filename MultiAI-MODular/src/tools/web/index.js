@@ -61,15 +61,14 @@ export const webTools = [
             return await toolFetch("/api/fetch", { method: "POST", body: payload, genState });
         }
     },
-    {
-        name: "web_fetch",
-        schema: null, // internal alias
-        handler: async (args, { genState }) => {
-            const payload = { ...args };
-            if (!payload.urls && payload.url) {
-                payload.urls = [payload.url];
-            }
-            return await toolFetch("/api/fetch", { method: "POST", body: payload, genState });
-        }
-    }
 ];
+
+// Internal alias handler — not registered as a tool (no schema), kept for backward compat
+// fetch_web_content is the canonical public tool.
+export async function webFetchAlias(args, { genState }) {
+    const payload = { ...args };
+    if (!payload.urls && payload.url) {
+        payload.urls = [payload.url];
+    }
+    return await toolFetch("/api/fetch", { method: "POST", body: payload, genState });
+}

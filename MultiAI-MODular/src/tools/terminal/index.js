@@ -112,9 +112,9 @@ export const terminalTools = [
         },
         handler: async (args, { genState }) => {
             const payload = { ...args };
-            if (payload.field !== undefined && payload.input_string === undefined) {
-                payload.input_string = payload.field;
-            }
+            // Unify field/input_string aliases to input_string (what the Python backend expects)
+            payload.input_string = payload.field ?? payload.input_string ?? "";
+            delete payload.field;
             if (payload.combination && !payload.type) {
                 payload.type = "keycode";
             }
@@ -173,7 +173,8 @@ export const terminalTools = [
             }
         },
         handler: async (args, { genState }) => {
-            return await toolFetch("/api/task/idle", { method: "POST", body: args, genState });
+            const waitSeconds = Math.max(1, parseInt(args.seconds, 10) || 5);
+            return await toolFetch("/api/task/idle", { method: "POST", body: args, genState, timeoutMs: (waitSeconds + 10) * 1000 });
         }
     },
     {
