@@ -76,6 +76,7 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
     const overallStartTime = Date.now();
     let hasRunTools = false;
     let emptyRetryUsed = false;
+    let emptyAfterToolsRetries = 0;
     let promissoryRetries = 0;
 
     logEvent("REQUEST_START", { chatId, model: selectedModel, userText, isFirstUserTurn });
@@ -246,6 +247,37 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
 
 
 
+                // If model returns an empty completion after tools have executed:
+                // Remove the empty assistant message so it doesn't pollute history,
+                // and re-send the tool results to the model before the empty call happened.
+                if (hasRunTools && finalDisplay.length === 0 && emptyAfterToolsRetries < 2) {
+                    emptyAfterToolsRetries++;
+                    logEvent("EMPTY_AFTER_TOOLS_RETRY", { model: selectedModel, round, attempt: emptyAfterToolsRetries });
+
+                    // Pop the empty assistant message off session.messages
+                    if (session.messages.length > 0 && session.messages[session.messages.length - 1].role === "assistant") {
+                        session.messages.pop();
+                    }
+
+                    if (emptyAfterToolsRetries === 1) {
+                        // First retry: silently re-send the tool results directly as they were before the empty call
+                        stageStatus = "Re-synthesizing tool results";
+                        state.messages = session.messages;
+                        saveStoredChats();
+                        continue;
+                    } else {
+                        // Second retry: nudge model to write the summary if it was unsure
+                        stageStatus = "Synthesizing final answer";
+                        session.messages.push({
+                            role: "user",
+                            content: "All requested tool actions have finished executing. Please provide a clear summary of the results and your final answer."
+                        });
+                        state.messages = session.messages;
+                        saveStoredChats();
+                        continue;
+                    }
+                }
+
                 if (!emptyRetryUsed && finalDisplay.length === 0) {
                     emptyRetryUsed = true;
                     logEvent("EMPTY_REPLY_RETRY", { model: selectedModel, userText, round, hasRunTools });
@@ -285,6 +317,8 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
             }
 
             hasRunTools = true;
+            emptyRetryUsed = false;
+            emptyAfterToolsRetries = 0;
 
             // Render live intermediate reasoning along the timeline line
             if (roundText && roundText.trim()) {

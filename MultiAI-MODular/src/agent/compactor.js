@@ -10,6 +10,51 @@ import { extractThoughtAndContent } from "../components/renderer.js";
 import { availableModels } from "../components/side-panel.js";
 
 /**
+ * Converts dialogue messages into a clean, structured transcript text.
+ * Prevents passing raw 'tool' role objects to callChatModel when tools are empty,
+ * and bounds oversized tool outputs so the summarizer prompt never overflows.
+ * @param {Array<Object>} messages
+ * @returns {string}
+ */
+export function formatMessagesToTranscript(messages) {
+    if (!Array.isArray(messages)) return "";
+    return messages.map(m => {
+        const role = m.role || "unknown";
+        if (role === "user") {
+            const text = typeof m.content === "string" 
+                ? m.content 
+                : (Array.isArray(m.content) ? m.content.map(c => c.text || "[Image]").join(" ") : JSON.stringify(m.content));
+            return `[User]:\n${text}`;
+        }
+        if (role === "assistant") {
+            let t = `[Assistant]:\n${m.content || ""}`;
+            if (m.tool_calls && Array.isArray(m.tool_calls) && m.tool_calls.length > 0) {
+                const calls = m.tool_calls.map(tc => {
+                    const fnName = tc.function?.name || "tool";
+                    const argsStr = typeof tc.function?.arguments === "string" 
+                        ? tc.function.arguments.slice(0, 300) 
+                        : JSON.stringify(tc.function?.arguments || {}).slice(0, 300);
+                    return `${fnName}(${argsStr})`;
+                }).join("; ");
+                t += `\n[Tool Invocations]: ${calls}`;
+            }
+            return t;
+        }
+        if (role === "tool") {
+            const raw = typeof m.content === "string" ? m.content : JSON.stringify(m.content);
+            const preview = raw.length > 4000 
+                ? raw.slice(0, 2000) + "\n... [output truncated for summary] ...\n" + raw.slice(-2000) 
+                : raw;
+            return `[Tool Result (${m.name || m.tool_call_id || "tool"})]:\n${preview}`;
+        }
+        if (role === "system") {
+            return `[System Note]:\n${typeof m.content === "string" ? m.content : JSON.stringify(m.content)}`;
+        }
+        return `[${role}]:\n${typeof m.content === "string" ? m.content : JSON.stringify(m.content)}`;
+    }).filter(Boolean).join("\n\n---\n\n");
+}
+
+/**
  * Estimates the token count for an array of messages using a conservative 3.2 chars/token ratio.
  * @param {Array<Object>} messages
  * @returns {number}
@@ -75,7 +120,8 @@ export function getCompactionThreshold(modelId, bufferTokens = COMPACTION_BUFFER
  * Compiles the working messages array for model inference.
  * If a compactionState exists, combines the system prompt, the compacted memory briefing,
  * and uncompacted active turns starting from compactedThroughIndex.
- * All historical messages in session.messages remain completely preserved and unpruned.
+ * Guarantees that the active dialogue never starts on an orphan 'tool' or 'assistant' role.
+ * All historical messages in session.messages remain completely preserved on disk.
  * @param {Object} session
  * @returns {Array<Object>}
  */
@@ -91,14 +137,61 @@ export function compileWorkingMessages(session) {
     const systemMsg = msgs[0] || { role: "system", content: "" };
     const briefingMsg = {
         role: "system",
-        content: `[CONVERSATION HISTORY COMPACTED BY MODEL]:\n\n${compaction.summary}`
+        content: `[CONVERSATION HISTORY COMPACTED BY MODEL]:\n\n${compaction.summary}\n\n[INSTRUCTION]: The above briefing encapsulates prior goals, discoveries, and actions. Seamlessly continue the conversation from this point.`
     };
 
-    // Uncompacted active turns starting from compactedThroughIndex
-    const startIndex = Math.max(1, Math.min(compaction.compactedThroughIndex, msgs.length));
-    const recentTurns = msgs.slice(startIndex);
+    // Calculate safe start index ensuring we never begin on an orphan 'tool' role
+    let startIndex = Math.max(1, compaction.compactedThroughIndex);
 
-    return [systemMsg, briefingMsg, ...recentTurns];
+    // If compactedThroughIndex exceeds current array length (e.g. from cache sync), recover last user turn
+    if (startIndex >= msgs.length) {
+        const lastUserIdx = msgs.map(m => m.role).lastIndexOf("user");
+        startIndex = lastUserIdx >= 1 ? lastUserIdx : Math.max(1, msgs.length - 2);
+    }
+
+    // Advance past any orphan 'tool' messages
+    while (startIndex < msgs.length && msgs[startIndex]?.role === "tool") {
+        startIndex++;
+    }
+
+    // If starting on an assistant message, include its preceding user prompt if available, or generate a safe bridge
+    let bridgeUserMsg = null;
+    if (startIndex < msgs.length && msgs[startIndex]?.role === "assistant") {
+        if (startIndex > 1 && msgs[startIndex - 1]?.role === "user") {
+            startIndex = startIndex - 1;
+        } else {
+            const userPromptMsg = msgs.slice(1, startIndex).reverse().find(m => m.role === "user");
+            const promptContent = userPromptMsg?.content;
+            const originalPromptText = typeof promptContent === "string"
+                ? promptContent
+                : (Array.isArray(promptContent) ? promptContent.map(c => c.text || "").join(" ") : "Continue previous instructions.");
+
+            bridgeUserMsg = {
+                role: "user",
+                content: `[ACTIVE EXECUTION CONTINUATION]\nOriginal user instruction: "${originalPromptText.slice(0, 1000)}"\n\nPlease continue executing the task seamlessly based on the context briefing above.`
+            };
+        }
+    }
+
+    const rawRecentTurns = msgs.slice(startIndex);
+
+    // Guard: ensure giant tool outputs in recentTurns don't overflow the context window
+    const safeRecentTurns = rawRecentTurns.map(m => {
+        if (m.role === "tool" && typeof m.content === "string" && m.content.length > 25000) {
+            const head = m.content.slice(0, 10000);
+            const tail = m.content.slice(-10000);
+            const omitted = m.content.length - 20000;
+            return {
+                ...m,
+                content: `${head}\n\n[... OMITTED ${omitted} CHARS OF TOOL OUTPUT FOR WORKING CONTEXT; FULL RECORD IS PRESERVED ON DISK ...] \n\n${tail}`
+            };
+        }
+        return m;
+    });
+
+    return bridgeUserMsg
+        ? [systemMsg, briefingMsg, bridgeUserMsg, ...safeRecentTurns]
+        : [systemMsg, briefingMsg, ...safeRecentTurns];
 }
 
 /**
@@ -157,18 +250,65 @@ export async function compactSessionContext({ session, currentAIMessage, selecte
     const workingBefore = compileWorkingMessages(session);
     const tokensBefore = estimateMessagesTokens(workingBefore);
 
-    // Identify the slice of session.messages to compact:
-    // Keep active user prompt and following assistant/tool turns uncompacted.
-    const lastUserIdx = msgs.map(m => m.role).lastIndexOf("user");
-    let sliceEndIdx = lastUserIdx > 1 ? lastUserIdx : Math.max(1, msgs.length - 3);
+    // Identify user indices in session.messages
+    const userIndices = [];
+    for (let i = 1; i < msgs.length; i++) {
+        if (msgs[i].role === "user") userIndices.push(i);
+    }
 
-    // If previously compacted up to an index, compact from there forward to avoid re-compacting
+    let sliceEndIdx = 1;
+    const threshold = getCompactionThreshold(selectedModel);
+
+    if (userIndices.length >= 3) {
+        // Try keeping the last 2 user turns uncompacted for seamless context grounding
+        const twoTurnsIdx = userIndices[userIndices.length - 2];
+        const tokensRemaining = estimateMessagesTokens(msgs.slice(twoTurnsIdx));
+        if (tokensRemaining < threshold * 0.5) {
+            sliceEndIdx = twoTurnsIdx;
+        } else {
+            sliceEndIdx = userIndices[userIndices.length - 1];
+        }
+    } else if (userIndices.length >= 2) {
+        sliceEndIdx = userIndices[userIndices.length - 1];
+    } else if (userIndices.length === 1) {
+        // Long single-turn agent loop: compact earlier tool cycles while keeping recent ones intact
+        const targetRecent = Math.max(2, msgs.length - 6);
+        let candidateIdx = targetRecent;
+        while (candidateIdx > 1 && msgs[candidateIdx]?.role !== "assistant") {
+            candidateIdx--;
+        }
+        if (candidateIdx > 1 && msgs[candidateIdx]?.role === "assistant") {
+            sliceEndIdx = candidateIdx;
+        } else {
+            sliceEndIdx = userIndices[0];
+        }
+    } else {
+        sliceEndIdx = Math.max(1, msgs.length - 2);
+    }
+
+    // Previous compaction check
     const previousCompaction = session.compactionState;
     const sliceStartIdx = (previousCompaction && typeof previousCompaction.compactedThroughIndex === "number")
         ? Math.max(1, previousCompaction.compactedThroughIndex)
         : 1;
 
-    // Messages to compact in this cycle
+    // Safety: ensure sliceEndIdx is strictly greater than sliceStartIdx
+    if (sliceEndIdx <= sliceStartIdx) {
+        if (msgs.length - 4 > sliceStartIdx) {
+            let candidate = msgs.length - 4;
+            while (candidate > sliceStartIdx && msgs[candidate]?.role !== "assistant" && msgs[candidate]?.role !== "user") {
+                candidate--;
+            }
+            if (candidate > sliceStartIdx) {
+                sliceEndIdx = candidate;
+            } else {
+                return false;
+            }
+        } else {
+            return false;
+        }
+    }
+
     const newMessagesToCompact = msgs.slice(sliceStartIdx, sliceEndIdx);
     if (newMessagesToCompact.length < 2 && !previousCompaction?.summary) {
         return false; // Not enough new messages to justify compaction
@@ -178,7 +318,7 @@ export async function compactSessionContext({ session, currentAIMessage, selecte
         chatId: session.id,
         model: selectedModel,
         modelLimit: getModelContextLimit(selectedModel),
-        compactionThreshold: getCompactionThreshold(selectedModel),
+        compactionThreshold: threshold,
         tokensBefore,
         messagesCount: newMessagesToCompact.length,
         sliceStartIdx,
@@ -199,10 +339,11 @@ export async function compactSessionContext({ session, currentAIMessage, selecte
     });
 
     try {
-        // Build compaction prompt incorporating any prior summary and new turns
         const priorContextItem = previousCompaction?.summary
-            ? [{ role: "system", content: `[PRIOR CONTEXT BRIEFING]:\n${previousCompaction.summary}` }]
-            : [];
+            ? `[PRIOR CONTEXT BRIEFING]:\n${previousCompaction.summary}\n\n`
+            : "";
+
+        const transcriptText = formatMessagesToTranscript(newMessagesToCompact);
 
         const compactionPrompt = [
             {
@@ -216,11 +357,9 @@ Preserve without loss:
 - **Current Execution State**: What has been completed, what is currently underway, and immediate next steps.
 Be concise, clear, and omit conversational filler. Return ONLY the markdown briefing.`
             },
-            ...priorContextItem,
-            ...newMessagesToCompact,
             {
                 role: "user",
-                content: "Please generate the structured context briefing summarizing the conversation history above."
+                content: `${priorContextItem}Please generate the structured context briefing summarizing the conversation history transcript below:\n\n${transcriptText}`
             }
         ];
 
@@ -243,12 +382,15 @@ Be concise, clear, and omit conversational filler. Return ONLY the markdown brie
 
         // CRITICAL: NEVER SPLICING OR PRUNING session.messages!
         // Older messages remain 100% intact in session.messages and chatHtml for full UI reload.
-        // Instead, we update session.compactionState which is used by compileWorkingMessages for model inference.
-        const workingAfter = [
-            msgs[0] || { role: "system", content: "" },
-            { role: "system", content: `[CONVERSATION HISTORY COMPACTED BY MODEL]:\n\n${summaryText}` },
-            ...msgs.slice(sliceEndIdx)
-        ];
+        // We update session.compactionState which compileWorkingMessages reads.
+        const previewSession = {
+            ...session,
+            compactionState: {
+                summary: summaryText,
+                compactedThroughIndex: sliceEndIdx
+            }
+        };
+        const workingAfter = compileWorkingMessages(previewSession);
         const tokensAfter = estimateMessagesTokens(workingAfter);
         const tokensSaved = Math.max(0, tokensBefore - tokensAfter);
 

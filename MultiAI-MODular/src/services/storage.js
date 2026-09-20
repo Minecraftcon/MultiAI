@@ -69,6 +69,24 @@ export function loadStoredChats() {
         } else {
             initChatWorkspace(state.currentChatId, sess.createdAt);
         }
+
+        // If messages are empty or missing in memory (e.g. loaded from lightweight cache), re-hydrate from disk
+        if (!Array.isArray(sess.messages) || !sess.messages.some(m => m.role === "user")) {
+            const fetchUrl = sess.projectId
+                ? `/api/build/projects/${encodeURIComponent(sess.projectId)}/chats/${encodeURIComponent(state.currentChatId)}`
+                : `/api/chats/${encodeURIComponent(state.currentChatId)}`;
+            fetch(fetchUrl)
+                .then(r => r.ok ? r.json() : null)
+                .then(d => {
+                    if (d?.session?.messages && d.session.messages.length > 0) {
+                        sess.messages = d.session.messages;
+                        state.messages = JSON.parse(JSON.stringify(d.session.messages));
+                        if (d.session.compactionState) sess.compactionState = d.session.compactionState;
+                        document.dispatchEvent(new CustomEvent("chatsUpdated"));
+                    }
+                })
+                .catch(() => {});
+        }
     }
 
     // Asynchronously fetch persistent chats from backend disk
@@ -177,7 +195,7 @@ export function saveStoredChats() {
                     updatedAt: sess.updatedAt,
                     workspace: sess.workspace,
                     compactionState: sess.compactionState,
-                    messages: sess.messages?.slice(-10) || [],
+                    messages: [], // Do NOT store a truncated slice in localStorage; full history lives on disk
                     chatHtml: "" // strip heavy DOM to ensure it fits in quota
                 };
             }
@@ -188,6 +206,10 @@ export function saveStoredChats() {
     // 3. Persist current chat to backend disk (~/.MultiAI/)
     if (state.currentChatId && state.chatSessions[state.currentChatId]) {
         const session = state.chatSessions[state.currentChatId];
+        // Ensure in-memory session has current messages if state.messages has real turns
+        if ((!session.messages || session.messages.length === 0) && state.messages && state.messages.length > 0) {
+            session.messages = JSON.parse(JSON.stringify(state.messages));
+        }
         const projectId = session.projectId || (state.appMode === "build" ? state.currentProjectId : null);
         if (projectId) {
             saveBuildChatToDisk(projectId, session);
@@ -203,6 +225,10 @@ export function saveStoredChats() {
 export async function persistChatToDisk(session) {
     if (!session || !session.id) return;
     try {
+        // Guard against sending empty messages if state has real turns for this session
+        if ((!session.messages || session.messages.length === 0) && state.messages && state.messages.length > 0 && state.currentChatId === session.id) {
+            session.messages = JSON.parse(JSON.stringify(state.messages));
+        }
         const res = await fetch("/api/chats/save", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -411,6 +437,9 @@ export async function removeBuildProjectFromDisk(projectId) {
 export async function saveBuildChatToDisk(projectId, chatSession) {
     if (!projectId || !chatSession || !chatSession.id) return;
     try {
+        if ((!chatSession.messages || chatSession.messages.length === 0) && state.messages && state.messages.length > 0 && state.currentChatId === chatSession.id) {
+            chatSession.messages = JSON.parse(JSON.stringify(state.messages));
+        }
         const res = await fetch(`/api/build/projects/${encodeURIComponent(projectId)}/chats/save`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },

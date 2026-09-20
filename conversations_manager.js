@@ -209,6 +209,74 @@ function ensureChatWorkspace(chatId, dateStr) {
 }
 
 /**
+ * Safely writes messages to messages.jsonl, protecting existing disk history
+ * from being truncated if incoming payload is a smaller client-side cache slice.
+ */
+function safelyWriteMessages(messagesFile, incomingMessages, hasMeaningfulMessages) {
+    if (!hasMeaningfulMessages) {
+        if (!fs.existsSync(messagesFile)) {
+            const lines = incomingMessages.map(m => JSON.stringify(m)).join("\n");
+            fs.writeFileSync(messagesFile, lines ? lines + "\n" : "", "utf8");
+        }
+        return incomingMessages.length;
+    }
+
+    if (fs.existsSync(messagesFile)) {
+        try {
+            const existingRaw = fs.readFileSync(messagesFile, "utf8");
+            const existingLines = existingRaw.split("\n").map(l => l.trim()).filter(Boolean);
+            if (existingLines.length > incomingMessages.length) {
+                const existingParsed = existingLines.map(l => {
+                    try { return JSON.parse(l); } catch (_) { return null; }
+                }).filter(Boolean);
+
+                const sameMsg = (a, b) => {
+                    if (!a || !b) return false;
+                    if (a.role !== b.role) return false;
+                    const ca = typeof a.content === "string" ? a.content : JSON.stringify(a.content || "");
+                    const cb = typeof b.content === "string" ? b.content : JSON.stringify(b.content || "");
+                    return ca === cb;
+                };
+
+                const lastIncoming = incomingMessages[incomingMessages.length - 1];
+                const lastExisting = existingParsed[existingParsed.length - 1];
+
+                if (sameMsg(lastIncoming, lastExisting)) {
+                    // Disk already has more complete history and ends with the same message. Do not truncate!
+                    return existingLines.length;
+                }
+
+                // Check if new turns were appended to a truncated slice
+                let matchIdx = -1;
+                for (let i = incomingMessages.length - 1; i >= 0; i--) {
+                    for (let j = existingParsed.length - 1; j >= 0; j--) {
+                        if (sameMsg(incomingMessages[i], existingParsed[j])) {
+                            matchIdx = i;
+                            break;
+                        }
+                    }
+                    if (matchIdx !== -1) break;
+                }
+
+                if (matchIdx !== -1 && matchIdx < incomingMessages.length - 1) {
+                    const newTurns = incomingMessages.slice(matchIdx + 1);
+                    const merged = [...existingLines, ...newTurns.map(m => JSON.stringify(m))];
+                    fs.writeFileSync(messagesFile, merged.join("\n") + "\n", "utf8");
+                    return merged.length;
+                }
+
+                // Preserve existing disk history if incoming is just a subset
+                return existingLines.length;
+            }
+        } catch (_) {}
+    }
+
+    const lines = incomingMessages.map(m => JSON.stringify(m)).join("\n");
+    fs.writeFileSync(messagesFile, lines + "\n", "utf8");
+    return incomingMessages.length;
+}
+
+/**
  * Persists chat session into meta.json and messages.jsonl.
  */
 function saveChat(chatSession) {
@@ -228,7 +296,10 @@ function saveChat(chatSession) {
     const messages = Array.isArray(chatSession.messages) ? chatSession.messages : [];
     const hasMeaningfulMessages = messages.some(m => m.role !== "system");
 
-    // 1. Write metadata to meta.json
+    // 1. Safely write messages without truncating existing disk history
+    const actualMsgCount = safelyWriteMessages(ws.messagesFile, messages, hasMeaningfulMessages);
+
+    // 2. Write metadata to meta.json
     const metaPayload = {
         id: chatId,
         mode: "chat",
@@ -244,19 +315,10 @@ function saveChat(chatSession) {
             imagesDir: ws.imagesDir,
             dateStr: ws.dateStr
         },
-        messageCount: hasMeaningfulMessages ? messages.length : (existingMeta.messageCount || messages.length),
+        messageCount: Math.max(actualMsgCount || 0, existingMeta.messageCount || 0, messages.length),
         savedAt: Date.now()
     };
     fs.writeFileSync(ws.metaFile, JSON.stringify(metaPayload, null, 2), "utf8");
-
-    // 2. Write messages line-by-line to messages.jsonl
-    if (hasMeaningfulMessages) {
-        const lines = messages.map(m => JSON.stringify(m)).join("\n");
-        fs.writeFileSync(ws.messagesFile, lines + "\n", "utf8");
-    } else if (!fs.existsSync(ws.messagesFile)) {
-        const lines = messages.map(m => JSON.stringify(m)).join("\n");
-        fs.writeFileSync(ws.messagesFile, lines ? lines + "\n" : "", "utf8");
-    }
 
     // 3. Persist separate compaction context state to context.json
     if (chatSession.compactionState) {
@@ -839,15 +901,11 @@ function saveProjectChat(projectId, chatSession) {
         messageCount: hasMeaningfulMessages ? messages.length : (existingMeta.messageCount || messages.length),
         savedAt: Date.now()
     };
-    fs.writeFileSync(ws.metaFile, JSON.stringify(metaPayload, null, 2), "utf8");
 
-    if (hasMeaningfulMessages) {
-        const lines = messages.map(m => JSON.stringify(m)).join("\n");
-        fs.writeFileSync(ws.messagesFile, lines + "\n", "utf8");
-    } else if (!fs.existsSync(ws.messagesFile)) {
-        const lines = messages.map(m => JSON.stringify(m)).join("\n");
-        fs.writeFileSync(ws.messagesFile, lines ? lines + "\n" : "", "utf8");
-    }
+    // 1. Safely write messages without truncating existing disk history
+    const actualMsgCount = safelyWriteMessages(ws.messagesFile, messages, hasMeaningfulMessages);
+    metaPayload.messageCount = Math.max(actualMsgCount || 0, existingMeta.messageCount || 0, messages.length);
+    fs.writeFileSync(ws.metaFile, JSON.stringify(metaPayload, null, 2), "utf8");
 
     if (chatSession.compactionState) {
         try {
