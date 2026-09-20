@@ -1,5 +1,5 @@
-// Automatic Context Compaction via Model (Clean Dual-Layer Architecture)
-import { COMPACTION_BUFFER_TOKENS, COMPACTION_MIN_MESSAGES, COMPACTION_TOKEN_THRESHOLD, EMERGENCY_TRIM_TARGET_TOKENS } from "../config.js";
+// Automatic Context Compaction via Model
+import { COMPACTION_BUFFER_TOKENS, COMPACTION_MIN_MESSAGES } from "../config.js";
 import { state } from "../state/index.js";
 import { logEvent } from "../utils/logger.js";
 import { extractText } from "../utils/dom.js";
@@ -102,19 +102,18 @@ export function getModelContextLimit(modelId) {
 }
 
 /**
- * Calculates the compaction trigger threshold for a model, bounded by COMPACTION_TOKEN_THRESHOLD (65k).
- * Compaction triggers when the conversation reaches within bufferTokens (15k) of the ceiling (~50k tokens).
+ * Calculates the compaction trigger threshold for a model.
+ * Compaction triggers when the conversation reaches within 25k tokens of the native limit, or exceeds it.
  * @param {string} modelId
  * @param {number} [bufferTokens]
  * @returns {number}
  */
 export function getCompactionThreshold(modelId, bufferTokens = COMPACTION_BUFFER_TOKENS) {
     const limit = getModelContextLimit(modelId);
-    const effectiveLimit = Math.min(limit, COMPACTION_TOKEN_THRESHOLD);
-    if (effectiveLimit <= 32000) {
-        return Math.max(4000, Math.min(effectiveLimit - 2000, Math.floor(effectiveLimit * 0.8)));
+    if (limit <= 32000) {
+        return Math.max(4000, Math.min(limit - 4000, Math.floor(limit * 0.8)));
     }
-    return Math.max(10000, effectiveLimit - bufferTokens);
+    return Math.max(10000, limit - bufferTokens);
 }
 
 /**
@@ -144,7 +143,7 @@ export function compileWorkingMessages(session) {
     // Calculate safe start index ensuring we never begin on an orphan 'tool' role
     let startIndex = Math.max(1, compaction.compactedThroughIndex);
 
-    // If compactedThroughIndex exceeds current array length, recover last user turn
+    // If compactedThroughIndex exceeds current array length (e.g. from cache sync), recover last user turn
     if (startIndex >= msgs.length) {
         const lastUserIdx = msgs.map(m => m.role).lastIndexOf("user");
         startIndex = lastUserIdx >= 1 ? lastUserIdx : Math.max(1, msgs.length - 2);
@@ -199,7 +198,7 @@ export const compileWorkingContext = compileWorkingMessages;
 
 /**
  * Checks whether the current session messages should undergo model compaction.
- * Triggers when the working token count reaches or exceeds the threshold (50k tokens).
+ * Triggers only if the working token count exceeds or is within 25k tokens of the model's native context limit.
  * @param {Object} session
  * @param {Object} [options]
  * @param {string} [options.model]
@@ -215,7 +214,7 @@ export function shouldCompact(session, options = {}) {
 
     // Check if there are messages between system prompt and the current user turn
     const lastUserIdx = msgs.map(m => m.role).lastIndexOf("user");
-    if (lastUserIdx <= 1 && msgs.length < 14) {
+    if (lastUserIdx <= 1 && msgs.length < 18) {
         return false;
     }
 
@@ -225,7 +224,7 @@ export function shouldCompact(session, options = {}) {
     const modelId = options.model || session.model;
     const threshold = options.threshold || getCompactionThreshold(modelId);
 
-    // Trigger when working tokens reach threshold
+    // Trigger only if working tokens reach within 25k of native limit or exceed it
     return tokenCount >= threshold;
 }
 
@@ -239,10 +238,9 @@ export function shouldCompact(session, options = {}) {
  * @param {string} params.selectedModel
  * @param {Object} params.genState
  * @param {number} params.overallStartTime
- * @param {boolean} [params.forceEmergencyTrim=false]
  * @returns {Promise<boolean>} Whether compaction was executed
  */
-export async function compactSessionContext({ session, currentAIMessage, selectedModel, genState, overallStartTime, forceEmergencyTrim = false }) {
+export async function compactSessionContext({ session, currentAIMessage, selectedModel, genState, overallStartTime }) {
     if (!session || !Array.isArray(session.messages) || session.messages.length <= 3) {
         return false;
     }
@@ -253,18 +251,6 @@ export async function compactSessionContext({ session, currentAIMessage, selecte
     const msgs = session.messages;
     const workingBefore = compileWorkingMessages(session);
     const tokensBefore = estimateMessagesTokens(workingBefore);
-
-    // Fast-path: Force emergency trimming immediately if context window already overflowing
-    if (forceEmergencyTrim) {
-        logEvent("EMERGENCY_TRIM_FORCED", { chatId: session.id, model: selectedModel, tokensBefore });
-        return await emergencyTrimContext({
-            session,
-            currentAIMessage,
-            selectedModel,
-            failureReason: "Forced emergency trim on context limit",
-            tokensBefore
-        });
-    }
 
     // Identify user indices in session.messages
     const userIndices = [];
@@ -287,7 +273,7 @@ export async function compactSessionContext({ session, currentAIMessage, selecte
     } else if (userIndices.length >= 2) {
         sliceEndIdx = userIndices[userIndices.length - 1];
     } else if (userIndices.length === 1) {
-        // Long single-turn agent loop: compact earlier tool cycles while keeping recent 6-8 tool turns intact
+        // Long single-turn agent loop: compact earlier tool cycles while keeping recent ones intact
         const targetRecent = Math.max(2, msgs.length - 6);
         let candidateIdx = targetRecent;
         while (candidateIdx > 1 && msgs[candidateIdx]?.role !== "assistant") {
@@ -393,15 +379,11 @@ Be concise, clear, and omit conversational filler. Return ONLY the markdown brie
         const summaryText = (cleanText || rawText).replace(/<\/?think>/gi, "").trim();
 
         if (!summaryText) {
-            logEvent("CONTEXT_COMPACTION_EMPTY_FALLBACK_EMERGENCY", { chatId: session.id });
-            return await emergencyTrimContext({
-                session,
-                currentAIMessage,
-                selectedModel,
-                failureReason: "Model returned empty summary",
-                badge,
-                tokensBefore
+            badge.update({
+                status: "failed",
+                error: "Model returned empty summary"
             });
+            return false;
         }
 
         // CRITICAL: NEVER SPLICING OR PRUNING session.messages!
@@ -418,48 +400,14 @@ Be concise, clear, and omit conversational filler. Return ONLY the markdown brie
         const tokensAfter = estimateMessagesTokens(workingAfter);
         const tokensSaved = Math.max(0, tokensBefore - tokensAfter);
 
-        // Write persistent milestone artifact to $ARTIFACTS/
-        const prevCheckpoints = Array.isArray(previousCompaction?.checkpoints) ? previousCompaction.checkpoints : [];
-        const checkpointNum = prevCheckpoints.length + 1;
-
-        let artifactPath = null;
-        try {
-            artifactPath = await writeCompactionArtifact({
-                session,
-                summaryText,
-                sliceStartIdx,
-                sliceEndIdx,
-                tokensSaved,
-                checkpointNum
-            });
-        } catch (e) {
-            console.warn("Could not write checkpoint artifact:", e);
-        }
-
-        const combinedSummary = previousCompaction?.summary
-            ? `${previousCompaction.summary}\n\n---\n\n### Checkpoint #${checkpointNum} (Turns ${sliceStartIdx}–${sliceEndIdx}):\n${summaryText}`
-            : `### Checkpoint #1 (Turns ${sliceStartIdx}–${sliceEndIdx}):\n${summaryText}`;
-
         session.compactionState = {
-            summary: combinedSummary,
+            summary: summaryText,
             compactedThroughIndex: sliceEndIdx,
             tokensBefore,
             tokensAfter,
             tokensSaved,
             compactedAt: Date.now(),
-            model: selectedModel,
-            latestArtifactPath: artifactPath,
-            checkpoints: [
-                ...prevCheckpoints,
-                {
-                    checkpointNum,
-                    path: artifactPath,
-                    sliceStartIdx,
-                    sliceEndIdx,
-                    tokensSaved,
-                    timestamp: Date.now()
-                }
-            ]
+            model: selectedModel
         };
 
         state.messages = session.messages;
@@ -471,333 +419,23 @@ Be concise, clear, and omit conversational filler. Return ONLY the markdown brie
             tokensAfter,
             tokensSaved,
             messagesCompactCount: newMessagesToCompact.length,
-            compactedThroughIndex: sliceEndIdx,
-            artifactPath,
-            checkpointNum
+            compactedThroughIndex: sliceEndIdx
         });
 
         badge.update({
             status: "completed",
             summaryText,
             tokensSaved,
-            messagesCount: newMessagesToCompact.length,
-            artifactPath,
-            checkpointNum,
-            sliceStartIdx,
-            sliceEndIdx
+            messagesCount: newMessagesToCompact.length
         });
 
         return true;
     } catch (err) {
-        logEvent("CONTEXT_COMPACTION_ERROR_FALLBACK_EMERGENCY", { error: err?.message || String(err) });
-        try {
-            return await emergencyTrimContext({
-                session,
-                currentAIMessage,
-                selectedModel,
-                failureReason: `Model compaction failed: ${err?.message || String(err)}`,
-                badge,
-                tokensBefore
-            });
-        } catch (emergencyErr) {
-            logEvent("EMERGENCY_TRIM_CRITICAL_FAILURE", { error: emergencyErr?.message || String(emergencyErr) });
-            badge.update({
-                status: "failed",
-                error: err?.message || "Compaction failed"
-            });
-            return false;
-        }
-    }
-}
-
-/**
- * Emergency context trimming fallback: deterministically slices ~15k tokens (EMERGENCY_TRIM_TARGET_TOKENS)
- * of historical turns and permanently archives them as a structured artifact to $ARTIFACTS/.
- * Advances compaction boundary without requiring an upstream model call, rescuing the session from 65k context limit failures.
- *
- * @param {Object} params
- * @param {Object} params.session
- * @param {HTMLElement} [params.currentAIMessage]
- * @param {string} [params.selectedModel]
- * @param {string} [params.failureReason]
- * @param {Object} [params.badge]
- * @param {number} [params.tokensBefore]
- * @param {number} [params.tokensToTrim]
- * @returns {Promise<boolean>}
- */
-export async function emergencyTrimContext({
-    session,
-    currentAIMessage,
-    selectedModel,
-    failureReason = "Model compaction unavailable",
-    badge = null,
-    tokensBefore = 0,
-    tokensToTrim = EMERGENCY_TRIM_TARGET_TOKENS
-}) {
-    if (!session || !Array.isArray(session.messages) || session.messages.length <= 4) {
+        logEvent("CONTEXT_COMPACTION_ERROR", { error: err?.message || String(err) });
+        badge.update({
+            status: "failed",
+            error: err?.message || "Compaction failed"
+        });
         return false;
-    }
-
-    const msgs = session.messages;
-    const previousCompaction = session.compactionState;
-    const sliceStartIdx = (previousCompaction && typeof previousCompaction.compactedThroughIndex === "number")
-        ? Math.max(1, previousCompaction.compactedThroughIndex)
-        : 1;
-
-    let trimmedTokens = 0;
-    let sliceEndIdx = sliceStartIdx;
-    const minLiveTurns = 6;
-    const maxSafeIdx = Math.max(sliceStartIdx + 1, msgs.length - minLiveTurns);
-
-    while (sliceEndIdx < maxSafeIdx && trimmedTokens < tokensToTrim) {
-        trimmedTokens += estimateMessagesTokens([msgs[sliceEndIdx]]);
-        sliceEndIdx++;
-    }
-
-    while (sliceEndIdx < msgs.length - 2 && msgs[sliceEndIdx]?.role === "tool") {
-        trimmedTokens += estimateMessagesTokens([msgs[sliceEndIdx]]);
-        sliceEndIdx++;
-    }
-
-    if (sliceEndIdx <= sliceStartIdx) {
-        logEvent("EMERGENCY_TRIM_SKIPPED", { reason: "Not enough older messages to trim safely" });
-        return false;
-    }
-
-    const trimmedMessages = msgs.slice(sliceStartIdx, sliceEndIdx);
-    const prevCheckpoints = Array.isArray(previousCompaction?.checkpoints) ? previousCompaction.checkpoints : [];
-    const checkpointNum = prevCheckpoints.length + 1;
-
-    let artifactPath = null;
-    try {
-        artifactPath = await writeEmergencyTrimArtifact({
-            session,
-            trimmedMessages,
-            sliceStartIdx,
-            sliceEndIdx,
-            trimmedTokens,
-            checkpointNum,
-            failureReason
-        });
-    } catch (e) {
-        console.warn("Could not write emergency checkpoint artifact:", e);
-    }
-
-    const summaryText = `Emergency trimmed ~${Math.round(trimmedTokens)} tokens into artifact \`${artifactPath || "disk"}\` after model compaction failed (${failureReason}). Active trajectory resumes from turn ${sliceEndIdx}.`;
-
-    const combinedSummary = previousCompaction?.summary
-        ? `${previousCompaction.summary}\n\n---\n\n### Checkpoint #${checkpointNum} [EMERGENCY TRIM] (Turns ${sliceStartIdx}–${sliceEndIdx}):\n${summaryText}`
-        : `### Checkpoint #${checkpointNum} [EMERGENCY TRIM] (Turns ${sliceStartIdx}–${sliceEndIdx}):\n${summaryText}`;
-
-    const estBefore = tokensBefore || estimateMessagesTokens(compileWorkingMessages(session));
-    const tokensSaved = Math.round(trimmedTokens);
-
-    session.compactionState = {
-        summary: combinedSummary,
-        compactedThroughIndex: sliceEndIdx,
-        tokensBefore: estBefore,
-        tokensAfter: Math.max(0, estBefore - tokensSaved),
-        tokensSaved,
-        compactedAt: Date.now(),
-        model: selectedModel,
-        latestArtifactPath: artifactPath,
-        checkpoints: [
-            ...prevCheckpoints,
-            {
-                checkpointNum,
-                path: artifactPath,
-                sliceStartIdx,
-                sliceEndIdx,
-                tokensSaved,
-                isEmergencyTrim: true,
-                failureReason,
-                timestamp: Date.now()
-            }
-        ]
-    };
-
-    state.messages = session.messages;
-    saveStoredChats();
-
-    logEvent("EMERGENCY_TRIM_COMPLETE", {
-        chatId: session.id,
-        trimmedTokens: tokensSaved,
-        sliceStartIdx,
-        sliceEndIdx,
-        artifactPath,
-        checkpointNum,
-        failureReason
-    });
-
-    let activeBadge = badge;
-    if (!activeBadge && currentAIMessage) {
-        try {
-            activeBadge = addCompactionBadge(currentAIMessage, {
-                messagesCount: trimmedMessages.length,
-                tokensBefore: estBefore
-            });
-        } catch (e) {
-            // Ignore UI badge creation if element unmounted
-        }
-    }
-
-    if (activeBadge && typeof activeBadge.update === "function") {
-        activeBadge.update({
-            status: "completed",
-            summaryText,
-            tokensSaved,
-            messagesCount: trimmedMessages.length,
-            artifactPath,
-            checkpointNum,
-            sliceStartIdx,
-            sliceEndIdx,
-            isEmergencyTrim: true
-        });
-    }
-
-    return true;
-}
-
-/**
- * Archives a timestamped milestone checkpoint in markdown format to $ARTIFACTS/.
- */
-export async function writeCompactionArtifact({ session, summaryText, sliceStartIdx, sliceEndIdx, tokensSaved, checkpointNum = 1 }) {
-    if (!session || !session.id) return null;
-
-    try {
-        const msgs = session.messages || [];
-        const rootUserMsg = msgs.find(m => m.role === "user");
-        const rootGoal = typeof rootUserMsg?.content === "string" ? rootUserMsg.content : "Execute requested tasks.";
-
-        const fileName = `checkpoint_${checkpointNum}_turns_${sliceStartIdx}_to_${sliceEndIdx}_${Date.now()}.md`;
-        const artifactPath = `$ARTIFACTS/${fileName}`;
-
-        const lines = [
-            `# Execution Milestone Checkpoint #${checkpointNum}: Turns ${sliceStartIdx} to ${sliceEndIdx}`,
-            ``,
-            `- **Timestamp**: ${new Date().toISOString()}`,
-            `- **Session ID**: \`${session.id}\``,
-            `- **Archived Turns Range**: Turns ${sliceStartIdx} to ${sliceEndIdx}`,
-            `- **Context Reduction**: ~${Math.round(tokensSaved)} tokens`,
-            `- **Active Trajectory**: Turns ${sliceEndIdx} to ${msgs.length} remain LIVE in working memory.`,
-            ``,
-            `---`,
-            ``,
-            `## 1. Core Objective`,
-            `"${rootGoal}"`,
-            ``,
-            `## 2. Compacted Architecture & Discoveries Briefing`,
-            ``,
-            summaryText,
-            ``,
-            `---`,
-            `## 3. History Inspection Pointer`,
-            ``,
-            `This checkpoint is archived on disk at \`${artifactPath}\`. The full conversation history is preserved at \`messages.jsonl\`. If detailed past tool outputs are needed, use \`read_file('${artifactPath}')\`.`
-        ];
-
-        const content = lines.join("\n");
-
-        const res = await fetch("/api/file/write", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "x-chat-id": session.id
-            },
-            body: JSON.stringify({
-                path: artifactPath,
-                content: content
-            })
-        });
-
-        if (res.ok) {
-            logEvent("COMPACTION_ARTIFACT_SAVED", { chatId: session.id, path: artifactPath, checkpointNum });
-            return artifactPath;
-        } else {
-            console.warn("Failed to write compaction artifact:", await res.text());
-            return null;
-        }
-    } catch (e) {
-        console.warn("Error saving compaction artifact:", e);
-        return null;
-    }
-}
-
-/**
- * Archives emergency trimmed turns (~15k tokens) to $ARTIFACTS/ with full structured transcript.
- */
-export async function writeEmergencyTrimArtifact({
-    session,
-    trimmedMessages,
-    sliceStartIdx,
-    sliceEndIdx,
-    trimmedTokens,
-    checkpointNum = 1,
-    failureReason = "Standard model compaction failed"
-}) {
-    if (!session || !session.id) return null;
-
-    try {
-        const msgs = session.messages || [];
-        const rootUserMsg = msgs.find(m => m.role === "user");
-        const rootGoal = typeof rootUserMsg?.content === "string" ? rootUserMsg.content : "Execute requested tasks.";
-
-        const fileName = `checkpoint_emergency_${checkpointNum}_turns_${sliceStartIdx}_to_${sliceEndIdx}_${Date.now()}.md`;
-        const artifactPath = `$ARTIFACTS/${fileName}`;
-
-        const transcript = formatMessagesToTranscript(trimmedMessages);
-
-        const lines = [
-            `# Emergency Context Checkpoint #${checkpointNum}: Turns ${sliceStartIdx} to ${sliceEndIdx}`,
-            ``,
-            `- **Timestamp**: ${new Date().toISOString()}`,
-            `- **Session ID**: \`${session.id}\``,
-            `- **Trigger**: Emergency Context Trimming (~${Math.round(trimmedTokens)} tokens)`,
-            `- **Reason**: ${failureReason}`,
-            `- **Operational Context Ceiling**: 65,000 tokens`,
-            `- **Archived Turns Range**: Turns ${sliceStartIdx} to ${sliceEndIdx}`,
-            `- **Active Trajectory**: Turns ${sliceEndIdx} to ${msgs.length} remain LIVE in working memory.`,
-            ``,
-            `---`,
-            ``,
-            `## 1. Core Objective`,
-            `"${rootGoal}"`,
-            ``,
-            `## 2. Emergency Trimmed Transcript Archive`,
-            ``,
-            `> **NOTE**: The following turns were trimmed from active working memory to protect the 65k context ceiling. Full historical data is preserved permanently here and in \`messages.jsonl\`.`,
-            ``,
-            transcript,
-            ``,
-            `---`,
-            `## 3. History Inspection Pointer`,
-            ``,
-            `This emergency checkpoint is permanently stored at \`${artifactPath}\`. The entire conversation log is retained at \`messages.jsonl\`. If past tool outputs from these turns are needed, use \`read_file('${artifactPath}')\`.`
-        ];
-
-        const content = lines.join("\n");
-
-        const res = await fetch("/api/file/write", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "x-chat-id": session.id
-            },
-            body: JSON.stringify({
-                path: artifactPath,
-                content: content
-            })
-        });
-
-        if (res.ok) {
-            logEvent("EMERGENCY_ARTIFACT_SAVED", { chatId: session.id, path: artifactPath, checkpointNum });
-            return artifactPath;
-        } else {
-            console.warn("Failed to write emergency compaction artifact:", await res.text());
-            return null;
-        }
-    } catch (e) {
-        console.warn("Error saving emergency compaction artifact:", e);
-        return null;
     }
 }

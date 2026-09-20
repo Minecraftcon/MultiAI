@@ -153,8 +153,7 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
                         currentAIMessage,
                         selectedModel,
                         genState,
-                        overallStartTime,
-                        forceEmergencyTrim: true
+                        overallStartTime
                     });
                     if (compacted && !genState.abortRequested) {
                         try {
