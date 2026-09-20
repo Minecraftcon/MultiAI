@@ -346,7 +346,7 @@ class BaseProvider {
         return payload;
     }
 
-    async send({ endpoint, headers, payload, timeoutMs = 120000 }) {
+    async send({ endpoint, headers, payload, timeoutMs = 300000 }) {
         const startTime = Date.now();
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), timeoutMs);
@@ -593,7 +593,8 @@ class BaseProvider {
             options: chatOptions
         });
 
-        const res = await this.send({ endpoint, headers, payload });
+        const timeoutMs = chatOptions.timeoutMs || providerConfig.timeout_ms || 300000;
+        const res = await this.send({ endpoint, headers, payload, timeoutMs });
         if (!res.ok) {
             // General context overflow recovery: retry once with auto-pruned context window if prompt exceeds limits
             const isContextOverflow = (res.status === 400 || res.status === 413) &&
