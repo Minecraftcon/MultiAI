@@ -12,7 +12,7 @@ import { sanitizeMessage, cleanErrorMessage } from "./sanitizer.js";
  * @param {Array<Object>} options.tools
  * @returns {Promise<Object>}
  */
-export async function callChatModel(messages, { model, tools }) {
+export async function callChatModel(messages, { model, tools, signal } = {}) {
     let effectiveModel = model;
     if (effectiveModel === "dots-3-note-preview:free") {
         effectiveModel = "dots-studio/dots-3-note-preview:free";
@@ -52,6 +52,8 @@ export async function callChatModel(messages, { model, tools }) {
         }
     }
 
+    const activeSignal = signal || (state.currentChatId && state.activeGenerations[state.currentChatId]?.abortController?.signal);
+
     let res;
     try {
         res = await fetch("/api/chat", {
@@ -62,9 +64,15 @@ export async function callChatModel(messages, { model, tools }) {
                 provider,
                 messages: cleanedMessages,
                 tools
-            })
+            }),
+            signal: activeSignal
         });
     } catch (netErr) {
+        if (netErr.name === "AbortError" || activeSignal?.aborted) {
+            const err = new Error("Generation stopped by user");
+            err.name = "AbortError";
+            throw err;
+        }
         const err = new Error("Network connection failed or backend server unreachable.");
         err.statusCode = 0;
         throw err;

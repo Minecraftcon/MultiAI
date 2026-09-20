@@ -88,6 +88,10 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
         : (Number(configuredRounds) > 0 ? Number(configuredRounds) : Infinity);
     let stageStatus = "Thinking";
     const statusTimer = setInterval(() => {
+        const activityWrapper = currentAIMessage.querySelector(".activity-wrapper");
+        if (activityWrapper && activityWrapper.style.display !== "block") {
+            activityWrapper.style.display = "block";
+        }
         const activityLabel = currentAIMessage.querySelector(".activity-label");
         if (activityLabel) {
             const sec = ((Date.now() - overallStartTime) / 1000).toFixed(1);
@@ -131,9 +135,13 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
                     return;
                 }
                 const workingMessages = compileWorkingMessages(session);
-                response = await callChatModel(workingMessages, { model: selectedModel, tools: tools });
+                response = await callChatModel(workingMessages, {
+                    model: selectedModel,
+                    tools: tools,
+                    signal: genState?.abortController?.signal
+                });
             } catch (err) {
-                if (genState.abortRequested || err.message === "Generation stopped by user") {
+                if (genState.abortRequested || err.name === "AbortError" || err.message === "Generation stopped by user") {
                     finalizeStopped(currentAIMessage, overallStartTime, hasRunTools);
                     return;
                 }
@@ -152,7 +160,11 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
                         try {
                             stageStatus = `Synthesizing (round ${round + 1})`;
                             const workingMessagesRetry = compileWorkingMessages(session);
-                            response = await callChatModel(workingMessagesRetry, { model: selectedModel, tools: tools });
+                            response = await callChatModel(workingMessagesRetry, {
+                                model: selectedModel,
+                                tools: tools,
+                                signal: genState?.abortController?.signal
+                            });
                         } catch (retryErr) {
                             logEvent("CHAT_CALL_RETRY_ERROR", { round, model: selectedModel, error: String(retryErr && retryErr.message || retryErr) });
                             throw retryErr;

@@ -379,7 +379,11 @@ Be concise, clear, and omit conversational filler. Return ONLY the markdown brie
             }
         ];
 
-        const compactRes = await callChatModel(compactionPrompt, { model: selectedModel, tools: [] });
+        const compactRes = await callChatModel(compactionPrompt, {
+            model: selectedModel,
+            tools: [],
+            signal: genState?.abortController?.signal
+        });
         if (genState && genState.abortRequested) {
             return false;
         }

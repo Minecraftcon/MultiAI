@@ -691,10 +691,16 @@ export function updateAIStream(element, fullText, isDone, startTime, hasTools) {
 
     if (isDone) {
         activityLabel.textContent = `Worked for ${elapsed} seconds`;
-        if (activityWrapper.classList.contains("open") && !element.dataset.manuallyToggled) {
+        if (activityWrapper && activityWrapper.classList.contains("open") && !element.dataset.manuallyToggled) {
             activityWrapper.classList.remove("open");
         }
+        if (!hasTools && activityWrapper) {
+            activityWrapper.style.display = "none";
+        }
     } else {
+        if (activityWrapper && activityWrapper.style.display !== "block") {
+            activityWrapper.style.display = "block";
+        }
         activityLabel.textContent = `Working... (${elapsed}s)`;
     }
 
@@ -814,6 +820,9 @@ export function finalizeStopped(element, startTime, hasTools) {
     }
     if (activityWrapper && activityWrapper.classList.contains("open") && !element.dataset.manuallyToggled) {
         activityWrapper.classList.remove("open");
+    }
+    if (!hasTools && activityWrapper) {
+        activityWrapper.style.display = "none";
     }
 
     const targetContent = hasTools ? finalContent : (preContent || finalContent);

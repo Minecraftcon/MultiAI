@@ -346,10 +346,22 @@ class BaseProvider {
         return payload;
     }
 
-    async send({ endpoint, headers, payload, timeoutMs = 300000 }) {
+    async send({ endpoint, headers, payload, timeoutMs = 300000, signal }) {
         const startTime = Date.now();
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+        if (signal) {
+            if (signal.aborted) {
+                clearTimeout(timeout);
+                controller.abort();
+            } else {
+                signal.addEventListener("abort", () => {
+                    clearTimeout(timeout);
+                    controller.abort();
+                }, { once: true });
+            }
+        }
 
         try {
             const res = await fetch(endpoint, {
@@ -393,6 +405,9 @@ class BaseProvider {
         } catch (err) {
             clearTimeout(timeout);
             if (err.name === "AbortError") {
+                if (signal?.aborted) {
+                    return { ok: false, status: 499, error: "Client cancelled request" };
+                }
                 return { ok: false, status: 504, error: `${this.constructor.displayName || this.constructor.id} request timed out after ${timeoutMs / 1000}s` };
             }
             const causeDetail = err.cause ? (err.cause.message || err.cause.code || String(err.cause)) : "";
@@ -596,7 +611,13 @@ class BaseProvider {
         });
 
         const timeoutMs = chatOptions.timeoutMs || providerConfig.timeout_ms || 300000;
-        const res = await this.send({ endpoint, headers, payload, timeoutMs });
+        const res = await this.send({
+            endpoint,
+            headers,
+            payload,
+            timeoutMs,
+            signal: chatOptions.signal || options.signal
+        });
         if (!res.ok) {
             // General context overflow recovery: retry once with auto-pruned context window if prompt exceeds limits
             const isContextOverflow = (res.status === 400 || res.status === 413) &&
