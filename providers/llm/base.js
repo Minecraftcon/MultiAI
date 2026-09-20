@@ -329,7 +329,7 @@ class BaseProvider {
     }
 
     formatPayload({ model, messages, tools, tool_choice, config = {}, supportsTools = true, supportsVision = false, options = {} }) {
-        const maxContextTokens = options.maxContextTokens || config.max_context_tokens || 32000;
+        const maxContextTokens = options.maxContextTokens || config.max_context_tokens || 100000;
         const msgsToNormalize = maxContextTokens ? this.pruneMessagesForContext(messages, maxContextTokens, options) : messages;
 
         const payload = {

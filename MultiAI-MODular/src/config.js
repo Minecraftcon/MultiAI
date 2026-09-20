@@ -6,9 +6,17 @@ export const MAX_TOOL_ROUNDS = Infinity;
 export const MAX_TOOLS_PER_ROUND = 10;
 
 // Automatic Context Compaction Configuration
-// Distance in tokens near the model's native context limit (or exceeding it) that triggers compaction
-export const COMPACTION_TOKEN_THRESHOLD = 32000;
-export const COMPACTION_BUFFER_TOKENS = 32000;
+// Maximum operational context ceiling (100k tokens for deep non-blind agent reasoning)
+export const COMPACTION_TOKEN_THRESHOLD = 100000;
+// Buffer tokens before limit to trigger compaction (100k - 15k = 85k trigger)
+export const COMPACTION_BUFFER_TOKENS = 15000;
+// Target token volume to slice and compact per chunk (compacts oldest ~45k, keeps recent 40k+ live)
+export const CHUNK_COMPACTION_TARGET_TOKENS = 45000;
+// Minimum new uncompacted turns required between compactions to prevent thrashing
+export const COMPACTION_COOLDOWN_TURNS = 16;
+// In-flight micro-pruning: completed tool results older than 6 turns have raw contents condensed
+export const MICRO_PRUNE_TOOL_AGE_TURNS = 6;
+export const MICRO_PRUNE_MAX_TOOL_CHARS = 1000;
 export const COMPACTION_MIN_MESSAGES = 10;
 
 export const CHATS_STORAGE_KEY = "multisearch_chats_v2";

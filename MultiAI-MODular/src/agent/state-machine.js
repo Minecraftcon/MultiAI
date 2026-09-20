@@ -5,7 +5,15 @@
  * roadmap/todos tracking, and layered context compilation with 32K ceilings.
  */
 
-import { COMPACTION_TOKEN_THRESHOLD, COMPACTION_MIN_MESSAGES } from "../config.js";
+import {
+    COMPACTION_TOKEN_THRESHOLD,
+    COMPACTION_MIN_MESSAGES,
+    COMPACTION_BUFFER_TOKENS,
+    CHUNK_COMPACTION_TARGET_TOKENS,
+    COMPACTION_COOLDOWN_TURNS,
+    MICRO_PRUNE_TOOL_AGE_TURNS,
+    MICRO_PRUNE_MAX_TOOL_CHARS
+} from "../config.js";
 import { estimateMessagesTokens, getCompactionThreshold } from "./compactor.js";
 
 /**
@@ -83,13 +91,72 @@ export function extractTodos(messages, existingTodos = []) {
 }
 
 /**
- * Evaluates whether the current agent state exceeds context thresholds and requires compaction.
+ * In-flight micro-pruner for working context.
+ * Completed tool outputs older than activeWindowTurns are condensed to lightweight semantic stubs.
+ * Leaves recent tool outputs (the active reasoning window) 100% untouched.
+ * Does not mutate session.messages on disk.
+ *
+ * @param {Array<Object>} messages
+ * @param {number} [activeWindowTurns=6]
+ * @returns {Array<Object>}
+ */
+export function microPruneToolOutputs(messages, activeWindowTurns = MICRO_PRUNE_TOOL_AGE_TURNS) {
+    if (!Array.isArray(messages) || messages.length <= activeWindowTurns) return messages;
+
+    const cutoffIndex = Math.max(1, messages.length - activeWindowTurns);
+    let hasPrunable = false;
+    for (let i = 0; i < cutoffIndex; i++) {
+        if (messages[i]?.role === "tool") {
+            const raw = typeof messages[i].content === "string" ? messages[i].content : JSON.stringify(messages[i].content || "");
+            if (raw.length > MICRO_PRUNE_MAX_TOOL_CHARS) {
+                hasPrunable = true;
+                break;
+            }
+        }
+    }
+    if (!hasPrunable) return messages;
+
+    return messages.map((m, idx) => {
+        if (idx >= cutoffIndex || m.role !== "tool") return m;
+
+        const rawContent = typeof m.content === "string" ? m.content : JSON.stringify(m.content || "");
+        if (rawContent.length <= MICRO_PRUNE_MAX_TOOL_CHARS) return m;
+
+        // Extract high-signal summary for surgical stub
+        let stubSummary = "";
+        try {
+            const parsed = typeof m.content === "object" ? m.content : JSON.parse(rawContent);
+            if (parsed.path) {
+                const lines = parsed.lines || (typeof parsed.content === "string" ? parsed.content.split("\n").length : null);
+                stubSummary = `read_file: ${parsed.path} (${lines ? lines + " lines" : "analyzed"})`;
+            } else if (parsed.command) {
+                stubSummary = `run_task: ${parsed.command.slice(0, 80)}`;
+            } else if (parsed.matches !== undefined) {
+                stubSummary = `grep_search: ${parsed.matches} matches found`;
+            }
+        } catch (_) {}
+
+        if (!stubSummary) {
+            const toolName = m.name || m.tool_call_id || "tool";
+            const preview = rawContent.slice(0, 150).replace(/\s+/g, " ");
+            stubSummary = `${toolName}: ${preview}...`;
+        }
+
+        return {
+            ...m,
+            content: `[Historical tool output: ${stubSummary} — analyzed in earlier turn. Use tool again if detailed raw output needed.]`
+        };
+    });
+}
+
+/**
+ * Evaluates whether the current agent state exceeds context thresholds and requires chunk compaction.
  *
  * @param {Object} session
  * @param {Object} options
  * @param {string} [options.model]
  * @param {number} [options.threshold]
- * @returns {{ shouldCompact: boolean, tokenCount: number, threshold: number }}
+ * @returns {{ shouldCompact: boolean, tokenCount: number, threshold: number, reason?: string }}
  */
 export function assessContext(session, options = {}) {
     if (!session || !Array.isArray(session.messages)) {
@@ -101,29 +168,36 @@ export function assessContext(session, options = {}) {
         return { shouldCompact: false, tokenCount: 0, threshold: COMPACTION_TOKEN_THRESHOLD };
     }
 
-    // Evaluate token count of current working messages
+    // Evaluate token count of current working messages (with micro-pruning applied)
     const workingMsgs = session.compactionState?.summary
         ? compileWorkingContext(session)
-        : msgs;
+        : microPruneToolOutputs(msgs);
 
     const tokenCount = estimateMessagesTokens(workingMsgs);
     const modelId = options.model || session.model;
-    const threshold = options.threshold || Math.min(getCompactionThreshold(modelId), COMPACTION_TOKEN_THRESHOLD);
+    const threshold = options.threshold || getCompactionThreshold(modelId);
 
-    // Trigger if working tokens exceed 32k threshold, or if round is very deep (>24) with >= 20k tokens
-    const should = tokenCount >= threshold || (msgs.length >= 24 && tokenCount >= 20000);
+    // Cooldown check: prevent thrashing if we recently compacted and still under critical ceiling
+    const lastCompactedIdx = session.compactionState?.compactedThroughIndex || 0;
+    const newTurns = msgs.length - lastCompactedIdx;
+    if (lastCompactedIdx > 0 && newTurns < COMPACTION_COOLDOWN_TURNS && tokenCount < threshold * 1.05) {
+        return { shouldCompact: false, tokenCount, threshold, reason: "cooldown" };
+    }
+
+    // Trigger only when working context genuinely reaches the threshold (e.g. ~85k for 100k models)
+    const should = tokenCount >= threshold;
     return { shouldCompact: should, tokenCount, threshold };
 }
 
 /**
  * Compiles the multi-layer working context for model inference:
- * Layer 0: System Persona, Tools & Protocols
+ * Layer 0: System Persona, Tools & Protocols (Static KV-Cache Frozen Prefix)
  * Layer 1: Pinned [PERSISTENT USER GOALS & DIRECTIVES LEDGER] (Inviolable intent)
  * Layer 2: Pinned [ACTIVE ROADMAP & TODOS] (if present)
- * Layer 3: Pinned [COMPACTED ARCHITECTURE & MILESTONES] + $ARTIFACTS pointer
- * Layer 4: Sanitized active turns since last compaction index
+ * Layer 3: Pinned [HISTORICAL CHECKPOINTS & COMPACTED ARCHITECTURE BRIEFING] + $ARTIFACTS pointer
+ * Layer 4 & 5: Active Rolling Trajectory (micro-pruned older tool stubs + live recent turns)
  *
- * FAST PATH: If no compaction has occurred yet, returns session.messages directly!
+ * FAST PATH: If no compaction has occurred yet, returns micro-pruned session messages.
  *
  * @param {Object} session
  * @returns {Array<Object>}
@@ -133,9 +207,9 @@ export function compileWorkingContext(session) {
     const msgs = session.messages;
     const compaction = session.compactionState;
 
-    // FAST PATH: Small chats and fresh conversations bypass layering completely
+    // FAST PATH: Fresh conversations without compaction
     if (!compaction || !compaction.summary || typeof compaction.compactedThroughIndex !== "number") {
-        return msgs;
+        return microPruneToolOutputs(msgs);
     }
 
     const systemMsg = msgs[0] || { role: "system", content: "" };
@@ -169,17 +243,17 @@ export function compileWorkingContext(session) {
         todosMsg = { role: "system", content: todosContent.trim() };
     }
 
-    // 3. Compacted Architecture & Milestones Briefing
-    let briefingContent = `[COMPACTED ARCHITECTURE & MILESTONES BRIEFING]:\n\n${compaction.summary}`;
+    // 3. Compacted Architecture & Historical Checkpoint Briefing
+    let briefingContent = `[HISTORICAL CHECKPOINTS & COMPACTED ARCHITECTURE BRIEFING]:\n\n${compaction.summary}`;
     if (compaction.latestArtifactPath) {
-        briefingContent += `\n\n[PERMANENT ARTIFACT ARCHIVE]: A full milestone snapshot was archived to ${compaction.latestArtifactPath}. Inspect via read_file('${compaction.latestArtifactPath}') if specific function implementations or line numbers are needed.`;
+        briefingContent += `\n\n[PERMANENT CHECKPOINT ARCHIVE]: Earlier execution turns were archived to ${compaction.latestArtifactPath}. Full raw logs are preserved on disk at messages.jsonl. If deep historical analysis is required, use read_file('${compaction.latestArtifactPath}').`;
     }
     const briefingMsg = {
         role: "system",
         content: briefingContent
     };
 
-    // 4. Safe Active Turns
+    // 4. Safe Active Turns (Rolling Trajectory)
     let startIndex = Math.max(1, compaction.compactedThroughIndex);
     if (startIndex >= msgs.length) {
         const lastUserIdx = msgs.map(m => m.role).lastIndexOf("user");
@@ -196,21 +270,22 @@ export function compileWorkingContext(session) {
         if (startIndex > 1 && msgs[startIndex - 1]?.role === "user") {
             startIndex = startIndex - 1;
         } else {
+            const goalSnippet = rootGoal ? `In response to "${rootGoal}": ` : "";
             bridgeUserMsg = {
                 role: "user",
-                content: `[CONTINUATION DIRECTIVE]: Continue executing the next steps from the active roadmap and briefing above.`
+                content: `[CONTINUATION DIRECTIVE]: ${goalSnippet}Please continue executing the next steps from the active roadmap and trajectory below.`
             };
         }
     }
 
-    const rawRecentTurns = msgs.slice(startIndex);
+    const rawActiveTurns = msgs.slice(startIndex);
+    const prunedActiveTurns = microPruneToolOutputs(rawActiveTurns);
 
     // Sanitize active turns:
     // - Bound oversized tool outputs (>15,000 chars)
     // - Scrub empty assistant messages
-    // - Ensure unique tool call IDs
-    const safeRecentTurns = [];
-    for (const m of rawRecentTurns) {
+    const safeTurns = [];
+    for (const m of prunedActiveTurns) {
         if (m.role === "assistant") {
             const hasTools = m.tool_calls && Array.isArray(m.tool_calls) && m.tool_calls.length > 0;
             const contentStr = typeof m.content === "string" ? m.content.trim() : "";
@@ -222,20 +297,22 @@ export function compileWorkingContext(session) {
             const head = m.content.slice(0, 6000);
             const tail = m.content.slice(-6000);
             const omitted = m.content.length - 12000;
-            safeRecentTurns.push({
+            safeTurns.push({
                 ...m,
                 content: `${head}\n\n[... OMITTED ${omitted} CHARS OF LARGE TOOL OUTPUT FOR WORKING CONTEXT; FULL CONTENT SAVED ON DISK ...] \n\n${tail}`
             });
             continue;
         }
-        safeRecentTurns.push(m);
+        safeTurns.push(m);
     }
 
     const working = [systemMsg, directivesMsg];
     if (todosMsg) working.push(todosMsg);
     working.push(briefingMsg);
     if (bridgeUserMsg) working.push(bridgeUserMsg);
-    working.push(...safeRecentTurns);
+    working.push(...safeTurns);
 
     return working;
 }
+
+export const compileWorkingMessages = compileWorkingContext;

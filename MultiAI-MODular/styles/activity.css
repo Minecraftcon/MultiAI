@@ -449,4 +449,281 @@
 }
 
 
+/* =========================================================
+   CONTEXT CHECKPOINT BADGES & PREVIEW MODAL
+   ========================================================= */
+.compaction-badge-content {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
 
+.checkpoint-badge-actions {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 6px;
+}
+
+.checkpoint-view-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(37, 99, 235, 0.18);
+    border: 1px solid rgba(59, 130, 246, 0.35);
+    color: #93c5fd;
+    border-radius: 6px;
+    padding: 2px 8px;
+    font-size: 11.5px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    user-select: none;
+    line-height: 1.3;
+}
+
+.checkpoint-view-btn:hover {
+    background: rgba(37, 99, 235, 0.32);
+    border-color: rgba(96, 165, 250, 0.6);
+    color: #ffffff;
+    box-shadow: 0 0 8px rgba(59, 130, 246, 0.3);
+}
+
+.checkpoint-view-btn svg,
+.checkpoint-view-btn i {
+    width: 13px;
+    height: 13px;
+}
+
+.checkpoint-pill-tag {
+    background: #2563eb;
+    color: #ffffff;
+    font-size: 9.5px;
+    font-weight: 600;
+    padding: 1px 5px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+/* Modal Backdrop & Dialog */
+.checkpoint-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.82);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    z-index: 9999;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    animation: ctxFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.checkpoint-modal-backdrop.open {
+    display: flex;
+}
+
+.checkpoint-modal-dialog {
+    width: min(840px, calc(100vw - 32px));
+    max-height: calc(100vh - 64px);
+    background: #141416;
+    border: 1px solid #27272a;
+    border-radius: 14px;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(255, 255, 255, 0.05);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    color: #e4e4e7;
+    font-family: inherit;
+    animation: popIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.checkpoint-modal-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    padding: 18px 24px 14px;
+    border-bottom: 1px solid #202024;
+    gap: 16px;
+}
+
+.checkpoint-modal-title-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.checkpoint-modal-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #60a5fa;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.checkpoint-modal-badge svg,
+.checkpoint-modal-badge i {
+    width: 14px;
+    height: 14px;
+}
+
+.checkpoint-modal-title {
+    font-size: 17px;
+    font-weight: 700;
+    color: #ffffff;
+    margin: 0;
+    letter-spacing: -0.01em;
+}
+
+.checkpoint-modal-subtitle {
+    font-size: 12.5px;
+    color: #a1a1aa;
+    margin-top: 2px;
+}
+
+.checkpoint-modal-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.checkpoint-copy-path-btn,
+.checkpoint-modal-close-btn {
+    width: 32px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 7px;
+    color: #a1a1aa;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.checkpoint-copy-path-btn:hover,
+.checkpoint-modal-close-btn:hover {
+    background: #27272a;
+    border-color: #3f3f46;
+    color: #ffffff;
+}
+
+.checkpoint-copy-path-btn svg,
+.checkpoint-modal-close-btn svg {
+    width: 16px;
+    height: 16px;
+}
+
+.checkpoint-modal-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 24px;
+    background: #18181b;
+    border-bottom: 1px solid #27272a;
+    font-size: 12px;
+    gap: 12px;
+}
+
+.checkpoint-path-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    color: #93c5fd;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.checkpoint-path-label svg {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+}
+
+.checkpoint-badge-status {
+    background: rgba(34, 197, 94, 0.15);
+    color: #4ade80;
+    border: 1px solid rgba(74, 222, 128, 0.3);
+    font-size: 10.5px;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 4px;
+    flex-shrink: 0;
+}
+
+.checkpoint-modal-body {
+    padding: 20px 24px;
+    overflow-y: auto;
+    max-height: calc(80vh - 170px);
+    font-size: 14px;
+    line-height: 1.65;
+}
+
+.checkpoint-modal-body h1,
+.checkpoint-modal-body h2,
+.checkpoint-modal-body h3 {
+    color: #f4f4f5;
+    margin-top: 18px;
+    margin-bottom: 8px;
+}
+
+.checkpoint-modal-body h1:first-child,
+.checkpoint-modal-body h2:first-child {
+    margin-top: 0;
+}
+
+.checkpoint-modal-body pre {
+    background: #09090b;
+    border: 1px solid #27272a;
+    border-radius: 8px;
+    padding: 12px 14px;
+    overflow-x: auto;
+}
+
+.checkpoint-modal-body code:not(pre code) {
+    background: #27272a;
+    color: #93c5fd;
+    padding: 2px 5px;
+    border-radius: 4px;
+    font-size: 0.9em;
+}
+
+.checkpoint-modal-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 24px 16px;
+    border-top: 1px solid #202024;
+    background: #141416;
+    gap: 16px;
+}
+
+.checkpoint-footer-hint {
+    font-size: 12px;
+    color: #71717a;
+}
+
+.checkpoint-close-footer-btn {
+    background: #27272a;
+    border: 1px solid #3f3f46;
+    color: #e4e4e7;
+    border-radius: 7px;
+    padding: 6px 14px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+}
+
+.checkpoint-close-footer-btn:hover {
+    background: #3f3f46;
+    color: #ffffff;
+}

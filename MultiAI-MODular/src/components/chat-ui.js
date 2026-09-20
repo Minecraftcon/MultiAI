@@ -226,6 +226,149 @@ export function addToolBadge(element, toolName, args) {
     return item;
 }
 
+export async function showCheckpointModal({
+    artifactPath = "",
+    summaryText = "",
+    checkpointNum = 1,
+    sliceStartIdx = 0,
+    sliceEndIdx = 0,
+    tokensSaved = 0
+} = {}) {
+    let backdrop = document.getElementById("checkpointModalBackdrop");
+    if (!backdrop) {
+        backdrop = document.createElement("div");
+        backdrop.id = "checkpointModalBackdrop";
+        backdrop.className = "checkpoint-modal-backdrop";
+        backdrop.innerHTML = `
+            <div class="checkpoint-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="checkpointModalTitle">
+                <div class="checkpoint-modal-header">
+                    <div class="checkpoint-modal-title-group">
+                        <div class="checkpoint-modal-badge"><i data-lucide="layers"></i> Checkpoint #${checkpointNum}</div>
+                        <h3 id="checkpointModalTitle" class="checkpoint-modal-title">Context Checkpoint</h3>
+                        <div class="checkpoint-modal-subtitle">Turns ${sliceStartIdx}–${sliceEndIdx} • Saved ~${Math.round(tokensSaved / 1000)}k tokens • Live Trajectory Retained</div>
+                    </div>
+                    <div class="checkpoint-modal-actions">
+                        <button type="button" class="checkpoint-copy-path-btn" title="Copy Artifact Path" aria-label="Copy artifact path">
+                            <i data-lucide="copy"></i>
+                        </button>
+                        <button type="button" class="checkpoint-modal-close-btn" title="Close" aria-label="Close modal">
+                            <i data-lucide="x"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="checkpoint-modal-meta">
+                    <span class="checkpoint-path-label"><i data-lucide="file-text"></i> ${escapeHTML(artifactPath || "$ARTIFACTS/checkpoint.md")}</span>
+                    <span class="checkpoint-badge-status">Snapshot Stored</span>
+                </div>
+                <div class="checkpoint-modal-body markdown-body">
+                    <div class="checkpoint-modal-loading">Loading checkpoint artifact…</div>
+                </div>
+                <div class="checkpoint-modal-footer">
+                    <div class="checkpoint-footer-hint">
+                        <span>💡 <strong>Deep History Inspection:</strong> The agent and user can read past checkpoints via <code>read_file</code> tool.</span>
+                    </div>
+                    <button type="button" class="checkpoint-close-footer-btn">Close</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(backdrop);
+
+        const closeBtn = backdrop.querySelector(".checkpoint-modal-close-btn");
+        const footerCloseBtn = backdrop.querySelector(".checkpoint-close-footer-btn");
+        const closeModal = () => {
+            backdrop.style.display = "none";
+            backdrop.classList.remove("open");
+        };
+
+        if (closeBtn) closeBtn.addEventListener("click", closeModal);
+        if (footerCloseBtn) footerCloseBtn.addEventListener("click", closeModal);
+        backdrop.addEventListener("click", (e) => {
+            if (e.target === backdrop) closeModal();
+        });
+        document.addEventListener("keydown", (e) => {
+            if (e.key === "Escape" && backdrop.classList.contains("open")) {
+                closeModal();
+            }
+        });
+    }
+
+    const titleEl = backdrop.querySelector("#checkpointModalTitle");
+    const badgeEl = backdrop.querySelector(".checkpoint-modal-badge");
+    const subtitleEl = backdrop.querySelector(".checkpoint-modal-subtitle");
+    const pathEl = backdrop.querySelector(".checkpoint-path-label");
+    const bodyEl = backdrop.querySelector(".checkpoint-modal-body");
+    const copyBtn = backdrop.querySelector(".checkpoint-copy-path-btn");
+
+    if (badgeEl) badgeEl.innerHTML = `<i data-lucide="layers"></i> Checkpoint #${checkpointNum}`;
+    if (titleEl) titleEl.textContent = `Context Checkpoint #${checkpointNum}`;
+    if (subtitleEl) subtitleEl.textContent = `Turns ${sliceStartIdx}–${sliceEndIdx} • Saved ~${Math.round(tokensSaved / 1000)}k tokens • Live Trajectory Retained`;
+    if (pathEl) pathEl.innerHTML = `<i data-lucide="file-text"></i> ${escapeHTML(artifactPath || "$ARTIFACTS/checkpoint.md")}`;
+
+    if (copyBtn) {
+        copyBtn.onclick = async () => {
+            try {
+                await navigator.clipboard.writeText(artifactPath);
+                copyBtn.innerHTML = '<i data-lucide="check"></i>';
+                renderIcons(copyBtn);
+                setTimeout(() => {
+                    copyBtn.innerHTML = '<i data-lucide="copy"></i>';
+                    renderIcons(copyBtn);
+                }, 1500);
+            } catch (err) {
+                console.warn("Could not copy path:", err);
+            }
+        };
+    }
+
+    if (bodyEl) {
+        bodyEl.innerHTML = `<div style="color:var(--text-muted, #888); font-style: italic;">Loading checkpoint contents…</div>`;
+    }
+
+    renderIcons(backdrop);
+    backdrop.style.display = "flex";
+    backdrop.classList.add("open");
+
+    // Fetch full markdown content from backend
+    let rawContent = "";
+    if (artifactPath) {
+        try {
+            const res = await fetch("/api/file/read", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    path: artifactPath,
+                    chatId: state.currentChatId,
+                    numbered: false,
+                    end_line: 5000
+                })
+            });
+            if (res.ok) {
+                const data = await res.json();
+                if (data && data.content) {
+                    rawContent = data.content;
+                }
+            }
+        } catch (e) {
+            console.warn("Could not read artifact file over API:", e);
+        }
+    }
+
+    if (!rawContent && summaryText) {
+        rawContent = `# Context Checkpoint #${checkpointNum}\n\n` +
+            `**Archived Turns:** ${sliceStartIdx}–${sliceEndIdx}\n` +
+            `**Tokens Saved:** ~${Math.round(tokensSaved / 1000)}k\n` +
+            `**Artifact File:** \`${artifactPath}\`\n\n` +
+            `## Context & Discoveries Briefing\n\n${summaryText}`;
+    }
+
+    if (bodyEl) {
+        bodyEl.innerHTML = parseMarkdown(rawContent || "No checkpoint artifact content found.");
+        bindInteractiveCodeBlocks(bodyEl);
+        renderMath(bodyEl);
+        renderMermaidInElement(bodyEl);
+    }
+}
+
 export function addCompactionBadge(element, { messagesCount = 0, tokensBefore = 0 } = {}) {
     const chat = document.getElementById("chat");
     const wrapper = element.querySelector(".activity-wrapper");
@@ -237,14 +380,14 @@ export function addCompactionBadge(element, { messagesCount = 0, tokensBefore = 
     }
 
     const item = document.createElement("div");
-    item.className = "search-badge-item timer-badge clickable-badge";
+    item.className = "search-badge-item timer-badge clickable-badge compaction-badge-item";
     item.setAttribute("role", "button");
     item.setAttribute("tabindex", "0");
     item.setAttribute("aria-expanded", "false");
-    item.setAttribute("aria-label", "Toggle compacted context briefing");
+    item.setAttribute("aria-label", "Toggle context checkpoint briefing");
     item.setAttribute("aria-live", "polite");
 
-    const compactDetail = `Distilling ${messagesCount} turns (~${Math.round(tokensBefore / 1000)}k tokens) via model…`;
+    const compactDetail = `Archiving context slice (~${Math.round(tokensBefore / 1000)}k total tokens)…`;
 
     item.innerHTML = `
         <div class="search-icon-circle has-timer-ring">
@@ -254,8 +397,8 @@ export function addCompactionBadge(element, { messagesCount = 0, tokensBefore = 
             </svg>
             <i data-lucide="layers" aria-hidden="true"></i>
         </div>
-        <div>
-            <span class="search-label">Compacting</span>
+        <div class="compaction-badge-content">
+            <span class="search-label">Checkpoint</span>
             <span class="search-query" data-full="${escapeHTML(compactDetail)}" data-compact="${escapeHTML(compactDetail)}">${escapeHTML(compactDetail)}</span>
             <span class="badge-expand-chevron" aria-hidden="true">▶</span>
         </div>
@@ -268,7 +411,7 @@ export function addCompactionBadge(element, { messagesCount = 0, tokensBefore = 
     collapseDiv.innerHTML = `
         <div class="badge-collapse-inner">
             <div class="command-output-box">
-                <pre><div class="command-output-cmd"><div class="command-cmd-text">Compacted Context Briefing (${messagesCount} turns)</div></div><hr class="command-output-sep"><div class="command-output-res">Generating context briefing…</div></pre>
+                <pre><div class="command-output-cmd"><div class="command-cmd-text">Context Checkpoint Briefing</div></div><hr class="command-output-sep"><div class="command-output-res">Distilling context briefing and archiving checkpoint…</div></pre>
             </div>
         </div>
     `;
@@ -281,7 +424,7 @@ export function addCompactionBadge(element, { messagesCount = 0, tokensBefore = 
     return {
         item,
         collapseDiv,
-        update({ status, summaryText, tokensSaved = 0, messagesCount = 0, artifactPath = null, error = null }) {
+        update({ status, summaryText, tokensSaved = 0, messagesCount = 0, artifactPath = null, checkpointNum = null, sliceStartIdx = 0, sliceEndIdx = 0, error = null }) {
             const ringBar = item.querySelector(".timer-ring-bar");
             if (ringBar) {
                 ringBar.style.animation = "none";
@@ -291,11 +434,15 @@ export function addCompactionBadge(element, { messagesCount = 0, tokensBefore = 
                 item.classList.add("timer-finished");
 
                 const labelEl = item.querySelector(".search-label");
-                if (labelEl) labelEl.textContent = "Compacted";
+                if (labelEl) {
+                    labelEl.textContent = checkpointNum ? `Checkpoint #${checkpointNum}` : "Checkpoint";
+                }
 
                 const queryEl = item.querySelector(".search-query");
                 const savedStr = tokensSaved > 0 ? `Saved ~${Math.round(tokensSaved / 1000)}k tokens` : `Distilled`;
-                const finalDesc = `Reduced ${messagesCount} turns (${savedStr})`;
+                const finalDesc = sliceEndIdx > 0
+                    ? `Archived Turns ${sliceStartIdx}–${sliceEndIdx} (${savedStr}) • Trajectory Retained`
+                    : `Reduced ${messagesCount} turns (${savedStr})`;
                 if (queryEl) {
                     queryEl.textContent = finalDesc;
                     queryEl.dataset.full = finalDesc;
@@ -304,13 +451,36 @@ export function addCompactionBadge(element, { messagesCount = 0, tokensBefore = 
 
                 const cmdTitle = collapseDiv.querySelector(".command-cmd-text");
                 if (cmdTitle) {
-                    cmdTitle.textContent = `Compacted Context Briefing (${messagesCount} turns, ${savedStr})`;
+                    cmdTitle.textContent = `Checkpoint #${checkpointNum || 1} Briefing (Turns ${sliceStartIdx}–${sliceEndIdx}, ${savedStr})`;
                 }
 
                 const resEl = collapseDiv.querySelector(".command-output-res");
                 if (resEl && summaryText) {
                     resEl.textContent = summaryText;
                 }
+
+                // Store metadata on dataset for persistence
+                item.dataset.artifactPath = artifactPath || "";
+                item.dataset.checkpointNum = String(checkpointNum || 1);
+                item.dataset.sliceStart = String(sliceStartIdx || 0);
+                item.dataset.sliceEnd = String(sliceEndIdx || 0);
+                item.dataset.tokensSaved = String(tokensSaved || 0);
+
+                const fileName = artifactPath ? artifactPath.split("/").pop() : `checkpoint_${Date.now()}.md`;
+
+                let actionContainer = item.querySelector(".checkpoint-badge-actions");
+                if (!actionContainer) {
+                    actionContainer = document.createElement("span");
+                    actionContainer.className = "checkpoint-badge-actions";
+                    item.querySelector(".compaction-badge-content")?.appendChild(actionContainer);
+                }
+                actionContainer.innerHTML = `
+                    <button type="button" class="checkpoint-view-btn" data-path="${escapeHTML(artifactPath || '')}" data-checkpoint-num="${checkpointNum || 1}" data-slice-start="${sliceStartIdx}" data-slice-end="${sliceEndIdx}" data-tokens-saved="${tokensSaved}" title="View checkpoint artifact modal" aria-label="View checkpoint artifact">
+                        <i data-lucide="file-text"></i>
+                        <span>${escapeHTML(fileName)}</span>
+                        <span class="checkpoint-pill-tag">View</span>
+                    </button>
+                `;
 
                 if (artifactPath) {
                     let noteEl = collapseDiv.querySelector(".command-output-artifact-note");
@@ -322,15 +492,28 @@ export function addCompactionBadge(element, { messagesCount = 0, tokensBefore = 
                         noteEl.style.borderTop = "1px dashed var(--border-color, rgba(255, 255, 255, 0.15))";
                         noteEl.style.fontSize = "0.85em";
                         noteEl.style.opacity = "0.9";
+                        noteEl.style.display = "flex";
+                        noteEl.style.alignItems = "center";
+                        noteEl.style.justifyContent = "space-between";
+                        noteEl.style.gap = "10px";
                         collapseDiv.querySelector(".badge-collapse-inner pre")?.appendChild(noteEl);
                     }
-                    noteEl.innerHTML = `<span style="color:var(--text-muted, #aaa);">Permanent Milestone Snapshot:</span> <code>${escapeHTML(artifactPath)}</code>`;
+                    noteEl.innerHTML = `
+                        <div>
+                            <span style="color:var(--text-muted, #aaa);">Permanent Snapshot:</span>
+                            <code style="color:#60a5fa; cursor:pointer;" class="checkpoint-artifact-link" data-path="${escapeHTML(artifactPath)}" data-checkpoint-num="${checkpointNum || 1}" data-slice-start="${sliceStartIdx}" data-slice-end="${sliceEndIdx}" data-tokens-saved="${tokensSaved}" title="Click to view">${escapeHTML(artifactPath)}</code>
+                        </div>
+                        <button type="button" class="checkpoint-open-doc-btn" data-path="${escapeHTML(artifactPath)}" data-checkpoint-num="${checkpointNum || 1}" data-slice-start="${sliceStartIdx}" data-slice-end="${sliceEndIdx}" data-tokens-saved="${tokensSaved}" style="background:#2563eb; color:#fff; border:none; border-radius:4px; padding:3px 8px; font-size:11px; cursor:pointer;">Open Document</button>
+                    `;
                 }
+
+                renderIcons(item);
+                renderIcons(collapseDiv);
             } else if (status === "failed") {
                 item.classList.add("timer-finished");
 
                 const labelEl = item.querySelector(".search-label");
-                if (labelEl) labelEl.textContent = "Compaction";
+                if (labelEl) labelEl.textContent = "Checkpoint";
 
                 const queryEl = item.querySelector(".search-query");
                 if (queryEl) {
@@ -342,7 +525,7 @@ export function addCompactionBadge(element, { messagesCount = 0, tokensBefore = 
 
                 const resEl = collapseDiv.querySelector(".command-output-res");
                 if (resEl) {
-                    resEl.textContent = error || "Compaction skipped. Context maintained without changes.";
+                    resEl.textContent = error || "Checkpoint skipped. Context maintained without changes.";
                 }
             }
             saveCurrentChatState();
@@ -646,6 +829,29 @@ export function initChatDelegation() {
                 }
                 saveCurrentChatState();
             }
+            return;
+        }
+
+        const viewBtn = e.target.closest(".checkpoint-view-btn, .checkpoint-open-doc-btn, .checkpoint-artifact-link");
+        if (viewBtn) {
+            e.stopPropagation();
+            const badge = viewBtn.closest(".search-badge-item.clickable-badge") || viewBtn.closest(".badge-collapse")?.previousElementSibling;
+            const artifactPath = viewBtn.dataset.path || badge?.dataset?.artifactPath || "";
+            const checkpointNum = parseInt(viewBtn.dataset.checkpointNum || badge?.dataset?.checkpointNum || "1", 10);
+            const sliceStartIdx = parseInt(viewBtn.dataset.sliceStart || badge?.dataset?.sliceStart || "0", 10);
+            const sliceEndIdx = parseInt(viewBtn.dataset.sliceEnd || badge?.dataset?.sliceEnd || "0", 10);
+            const tokensSaved = parseInt(viewBtn.dataset.tokensSaved || badge?.dataset?.tokensSaved || "0", 10);
+            const collapse = badge?._collapseDiv || badge?.nextElementSibling;
+            const summaryText = collapse?.querySelector?.(".command-output-res")?.textContent || "";
+
+            showCheckpointModal({
+                artifactPath,
+                summaryText,
+                checkpointNum,
+                sliceStartIdx,
+                sliceEndIdx,
+                tokensSaved
+            });
             return;
         }
 
