@@ -10,9 +10,7 @@ import {
     COMPACTION_MIN_MESSAGES,
     COMPACTION_BUFFER_TOKENS,
     CHUNK_COMPACTION_TARGET_TOKENS,
-    COMPACTION_COOLDOWN_TURNS,
-    MICRO_PRUNE_TOOL_AGE_TURNS,
-    MICRO_PRUNE_MAX_TOOL_CHARS
+    COMPACTION_COOLDOWN_TURNS
 } from "../config.js";
 import { estimateMessagesTokens, getCompactionThreshold } from "./compactor.js";
 
@@ -91,62 +89,14 @@ export function extractTodos(messages, existingTodos = []) {
 }
 
 /**
- * In-flight micro-pruner for working context.
- * Completed tool outputs older than activeWindowTurns are condensed to lightweight semantic stubs.
- * Leaves recent tool outputs (the active reasoning window) 100% untouched.
- * Does not mutate session.messages on disk.
+ * Pass-through helper (passive micro-pruning removed).
+ * Preserves full tool outputs in active memory without in-flight clearing.
  *
  * @param {Array<Object>} messages
- * @param {number} [activeWindowTurns=6]
  * @returns {Array<Object>}
  */
-export function microPruneToolOutputs(messages, activeWindowTurns = MICRO_PRUNE_TOOL_AGE_TURNS) {
-    if (!Array.isArray(messages) || messages.length <= activeWindowTurns) return messages;
-
-    const cutoffIndex = Math.max(1, messages.length - activeWindowTurns);
-    let hasPrunable = false;
-    for (let i = 0; i < cutoffIndex; i++) {
-        if (messages[i]?.role === "tool") {
-            const raw = typeof messages[i].content === "string" ? messages[i].content : JSON.stringify(messages[i].content || "");
-            if (raw.length > MICRO_PRUNE_MAX_TOOL_CHARS) {
-                hasPrunable = true;
-                break;
-            }
-        }
-    }
-    if (!hasPrunable) return messages;
-
-    return messages.map((m, idx) => {
-        if (idx >= cutoffIndex || m.role !== "tool") return m;
-
-        const rawContent = typeof m.content === "string" ? m.content : JSON.stringify(m.content || "");
-        if (rawContent.length <= MICRO_PRUNE_MAX_TOOL_CHARS) return m;
-
-        // Extract high-signal summary for surgical stub
-        let stubSummary = "";
-        try {
-            const parsed = typeof m.content === "object" ? m.content : JSON.parse(rawContent);
-            if (parsed.path) {
-                const lines = parsed.lines || (typeof parsed.content === "string" ? parsed.content.split("\n").length : null);
-                stubSummary = `read_file: ${parsed.path} (${lines ? lines + " lines" : "analyzed"})`;
-            } else if (parsed.command) {
-                stubSummary = `run_task: ${parsed.command.slice(0, 80)}`;
-            } else if (parsed.matches !== undefined) {
-                stubSummary = `grep_search: ${parsed.matches} matches found`;
-            }
-        } catch (_) {}
-
-        if (!stubSummary) {
-            const toolName = m.name || m.tool_call_id || "tool";
-            const preview = rawContent.slice(0, 150).replace(/\s+/g, " ");
-            stubSummary = `${toolName}: ${preview}...`;
-        }
-
-        return {
-            ...m,
-            content: `[Historical tool output: ${stubSummary} — content already reviewed; proceed with implementation.]`
-        };
-    });
+export function microPruneToolOutputs(messages) {
+    return messages;
 }
 
 /**
@@ -168,10 +118,10 @@ export function assessContext(session, options = {}) {
         return { shouldCompact: false, tokenCount: 0, threshold: COMPACTION_TOKEN_THRESHOLD };
     }
 
-    // Evaluate token count of current working messages (with micro-pruning applied)
+    // Evaluate token count of current working messages directly
     const workingMsgs = session.compactionState?.summary
         ? compileWorkingContext(session)
-        : microPruneToolOutputs(msgs);
+        : msgs;
 
     const tokenCount = estimateMessagesTokens(workingMsgs);
     const modelId = options.model || session.model;
@@ -209,7 +159,7 @@ export function compileWorkingContext(session) {
 
     // FAST PATH: Fresh conversations without compaction
     if (!compaction || !compaction.summary || typeof compaction.compactedThroughIndex !== "number") {
-        return microPruneToolOutputs(msgs);
+        return msgs;
     }
 
     const systemMsg = msgs[0] || { role: "system", content: "" };
@@ -281,13 +231,12 @@ export function compileWorkingContext(session) {
     }
 
     const rawActiveTurns = msgs.slice(startIndex);
-    const prunedActiveTurns = microPruneToolOutputs(rawActiveTurns);
 
     // Sanitize active turns:
     // - Bound oversized tool outputs (>15,000 chars)
     // - Scrub empty assistant messages
     const safeTurns = [];
-    for (const m of prunedActiveTurns) {
+    for (const m of rawActiveTurns) {
         if (m.role === "assistant") {
             const hasTools = m.tool_calls && Array.isArray(m.tool_calls) && m.tool_calls.length > 0;
             const contentStr = typeof m.content === "string" ? m.content.trim() : "";
