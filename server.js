@@ -1403,21 +1403,30 @@ if (req.method === "POST" && req.url === "/api/code/grep") {
             const logflareKey = getEnvKey("LOGFLARE_API_KEY") || getEnvKey("LOGFARE_API_KEY");
             const openaiKey = getEnvKey("OPENAI_API_KEY") || getEnvKey("OPENAI_KEY");
 
-            const defaultImageProvider = getConfig().General?.DefaultImageProvider || (logflareKey ? "logflare_image" : "pollinations");
+            const defaultImageProvider = getConfig().General?.DefaultImageProvider || "pollinations";
             let targetProviderKey = provider || model || defaultImageProvider;
             const { resolveImageProvider: getImgProvider } = require("./providers");
 
             let apiKey = null;
             if (targetProviderKey.toLowerCase().includes("openai") || targetProviderKey.toLowerCase().includes("dall")) {
                 apiKey = openaiKey;
+                if (!apiKey) {
+                    console.warn("[IMAGE API] OpenAI API key not found. Falling back to Pollinations AI...");
+                    targetProviderKey = "pollinations";
+                }
             } else if (targetProviderKey.toLowerCase().includes("logf") || targetProviderKey.toLowerCase().includes("sdxl")) {
                 apiKey = logflareKey;
-            } else if (logflareKey && (targetProviderKey === "pollinations" || !provider)) {
-                targetProviderKey = "logflare_image";
-                apiKey = logflareKey;
+                if (!apiKey) {
+                    console.warn("[IMAGE API] Logflare API key not found. Falling back to Pollinations AI...");
+                    targetProviderKey = "pollinations";
+                }
             }
 
             let imageHandler = getImgProvider(targetProviderKey);
+            if (!imageHandler) {
+                targetProviderKey = "pollinations";
+                imageHandler = getImgProvider("pollinations");
+            }
 
             const activeChatId = data.chatId || data.chat_id;
             const genTaskId = "gen_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 7);
@@ -1438,15 +1447,33 @@ if (req.method === "POST" && req.url === "/api/code/grep") {
 
             const genPromise = (async () => {
                 try {
-                    const result = await imageHandler.generateImage({
-                        prompt: prompt.trim(),
-                        model: chosenModel,
-                        aspectRatio: aspect_ratio || "1:1",
-                        width,
-                        height,
-                        apiKey,
-                        options: { seed, negative_prompt }
-                    });
+                    let result;
+                    try {
+                        result = await imageHandler.generateImage({
+                            prompt: prompt.trim(),
+                            model: chosenModel,
+                            aspectRatio: aspect_ratio || "1:1",
+                            width,
+                            height,
+                            apiKey,
+                            options: { seed, negative_prompt }
+                        });
+                    } catch (primaryErr) {
+                        if (targetProviderKey !== "pollinations") {
+                            console.warn(`[IMAGE API] ${targetProviderKey} generation failed (${primaryErr.message}). Falling back to Pollinations AI...`);
+                            const fallbackHandler = getImgProvider("pollinations");
+                            result = await fallbackHandler.generateImage({
+                                prompt: prompt.trim(),
+                                model: "turbo",
+                                aspectRatio: aspect_ratio || "1:1",
+                                width,
+                                height,
+                                options: { seed, negative_prompt }
+                            });
+                        } else {
+                            throw primaryErr;
+                        }
+                    }
 
                     if (activeChatId && result.url && result.url.startsWith("/generated_images/")) {
                         try {

@@ -88,22 +88,37 @@ async function validateSyntax(filePath) {
 // ---------------------------------------------------------
 async function handleWriteFile(args, chatId, { resolveSafePath }) {
     const targetPath = resolveSafePath(args.path, chatId);
-    const action = args.action || "write";
-
     const dir = path.dirname(targetPath);
     if (!fs.existsSync(dir)) {
         await fs.promises.mkdir(dir, { recursive: true });
     }
+    const isScratch = targetPath.includes(path.sep + "scratch" + path.sep) || targetPath.endsWith(path.sep + "scratch");
+
+    let action = args.action;
+    if (!action) {
+        if (Array.isArray(args.operations)) action = "batch";
+        else if (args.target !== undefined || args.old_string !== undefined || args.old_text !== undefined) action = "replace";
+        else if (args.line !== undefined) action = "inject";
+        else action = "write";
+    }
 
     if (action === "write") {
-        await writeAtomic(targetPath, args.content ?? "");
+        if (fs.existsSync(targetPath) && args.overwrite === false) {
+            throw new Error(`File already exists: ${args.path} and overwrite is false`);
+        }
+        const textToWrite = args.content ?? "";
+        await writeAtomic(targetPath, textToWrite);
         return {
             success: true,
             path: args.path,
             resolved_path: targetPath,
+            is_scratch: isScratch,
             action: "write",
+            bytes_written: Buffer.byteLength(textToWrite),
             status: "success",
-            message: `Successfully wrote file ${args.path}`
+            message: isScratch
+                ? `Successfully wrote file to conversation scratch directory: ${args.path}`
+                : `Successfully wrote file: ${args.path}`
         };
     }
 
@@ -112,11 +127,11 @@ async function handleWriteFile(args, chatId, { resolveSafePath }) {
             throw new Error(`File not found for replace: ${args.path}`);
         }
         const current = await fs.promises.readFile(targetPath, "utf-8");
-        const target = args.target;
+        const target = args.target !== undefined ? args.target : (args.old_string !== undefined ? args.old_string : args.old_text);
         if (target === undefined || target === null || target === "") {
             throw new Error("Missing 'target' string to replace");
         }
-        const replacement = args.replacement ?? "";
+        const replacement = args.replacement !== undefined ? args.replacement : (args.new_string !== undefined ? args.new_string : (args.new_text ?? ""));
 
         if (args.start_line !== undefined || args.end_line !== undefined) {
             const lines = current.split("\n");
@@ -206,12 +221,12 @@ async function handleWriteFile(args, chatId, { resolveSafePath }) {
 
         for (let i = 0; i < ops.length; i++) {
             const op = ops[i];
-            const opAction = op.action || (op.target !== undefined ? "replace" : (op.line !== undefined ? "inject" : "write"));
+            const opAction = op.action || (op.target !== undefined || op.old_string !== undefined || op.old_text !== undefined ? "replace" : (op.line !== undefined ? "inject" : "write"));
 
             if (opAction === "replace") {
-                const target = op.target;
+                const target = op.target !== undefined ? op.target : (op.old_string !== undefined ? op.old_string : op.old_text);
                 if (target === undefined || target === null) throw new Error(`Batch operation #${i + 1}: Missing 'target' string`);
-                const replacement = op.replacement ?? "";
+                const replacement = op.replacement !== undefined ? op.replacement : (op.new_string !== undefined ? op.new_string : (op.new_text ?? ""));
                 const count = current.split(target).length - 1;
                 if (count === 0) throw new Error(`Batch operation #${i + 1}: Target string not found in ${args.path}`);
                 if (count > 1 && !op.all) throw new Error(`Batch operation #${i + 1}: Found ${count} occurrences of target string in ${args.path}. Specify 'all: true' or provide more surrounding context.`);

@@ -37,7 +37,7 @@ if HAS_FLASK:
     def run_task_endpoint():
         data = request.json or {}
         command = data.get("command")
-        timeout_secs = data.get("timeout", 1)
+        timeout_secs = float(data.get("timeout") if data.get("timeout") is not None else (float(data.get("wait_ms", 1000)) / 1000.0 if "wait_ms" in data else 1.0))
         if not command:
             return jsonify({"error": "No command provided"}), 400
 
@@ -45,11 +45,17 @@ if HAS_FLASK:
         shell_override = data.get("shell")
         task_id = manager.run_task(command, shell_override=shell_override, scratch_dir=scratch_dir)
 
-        # Allow brief execution window to capture immediate output
-        time.sleep(float(timeout_secs))
-
-        output = manager.get_output(task_id)
+        output = manager.wait_for_task(task_id, timeout_secs)
         return jsonify(output)
+
+    @app.route("/api/task/idle", methods=["POST"])
+    def idle_endpoint():
+        data = request.json or {}
+        seconds = data.get("seconds", 5)
+        task_id = data.get("task_id")
+        wake_on = data.get("wake_on", "exit")
+        reason = data.get("reason", "")
+        return jsonify(manager.idle(seconds=seconds, task_id=task_id, wake_on=wake_on, reason=reason))
 
     @app.route("/api/task/stdout/<task_id>", methods=["GET"])
     def get_output_endpoint(task_id):
@@ -61,8 +67,8 @@ if HAS_FLASK:
     @app.route("/api/task/input/<task_id>", methods=["POST"])
     def send_input_endpoint(task_id):
         data = request.json or {}
-        input_string = data.get("input", "")
-        input_type = data.get("type", "text")
+        input_string = data.get("field") if data.get("field") is not None else (data.get("input_string") if data.get("input_string") is not None else data.get("input", ""))
+        input_type = data.get("type") or ("keycode" if ("combination" in data and data.get("combination")) else "text")
         combination = data.get("combination", "")
         press_enter = data.get("press_enter", True)
 
@@ -189,19 +195,29 @@ class FallbackHandler(BaseHTTPRequestHandler):
             cmd = data.get("command")
             if not cmd:
                 return self._send_json(400, {"error": "No command provided"})
-            timeout_sec = float(data.get("timeout", 1))
+            timeout_sec = float(data.get("timeout") if data.get("timeout") is not None else (float(data.get("wait_ms", 1000)) / 1000.0 if "wait_ms" in data else 1.0))
             tid = manager.run_task(cmd, shell_override=data.get("shell"), scratch_dir=data.get("scratch_dir"))
-            time.sleep(timeout_sec)
-            return self._send_json(200, manager.get_output(tid))
+            return self._send_json(200, manager.wait_for_task(tid, timeout_sec))
+
+        if path == "/api/task/idle":
+            seconds = data.get("seconds", 5)
+            task_id = data.get("task_id")
+            wake_on = data.get("wake_on", "exit")
+            reason = data.get("reason", "")
+            return self._send_json(200, manager.idle(seconds=seconds, task_id=task_id, wake_on=wake_on, reason=reason))
 
         if path.startswith("/api/task/input/"):
             task_id = path[len("/api/task/input/"):]
+            input_string = data.get("field") if data.get("field") is not None else (data.get("input_string") if data.get("input_string") is not None else data.get("input", ""))
+            input_type = data.get("type") or ("keycode" if ("combination" in data and data.get("combination")) else "text")
+            combination = data.get("combination", "")
+            press_enter = data.get("press_enter", True)
             res = manager.send_input(
                 task_id,
-                input_string=data.get("input", ""),
-                input_type=data.get("type", "text"),
-                combination=data.get("combination", ""),
-                press_enter=data.get("press_enter", True)
+                input_string=input_string,
+                input_type=input_type,
+                combination=combination,
+                press_enter=press_enter
             )
             status = 404 if ("error" in res and not res.get("status")) else 200
             return self._send_json(status, res)

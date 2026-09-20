@@ -145,3 +145,70 @@ class BaseTaskManager:
 
     def kill_task(self, task_id: str) -> dict:
         raise NotImplementedError
+
+    def wait_for_task(self, task_id: str, timeout_secs: float = 1.0) -> dict:
+        """Wait for task process to exit up to timeout_secs with early return."""
+        if task_id not in self.tasks:
+            return {"error": f"Task {task_id} not found."}
+
+        cooldown = max(0.05, float(timeout_secs))
+        end_time = time.time() + cooldown
+        process = self.tasks[task_id]["process"]
+
+        while time.time() < end_time:
+            if process.poll() is not None:
+                time.sleep(0.02)
+                break
+            time.sleep(0.03)
+
+        return self.get_output(task_id)
+
+    def idle(
+        self,
+        seconds: float = 5.0,
+        task_id: Optional[str] = None,
+        wake_on: str = "exit",
+        reason: str = "",
+    ) -> dict:
+        """Pause or monitor a background task for early exit/output."""
+        seconds = max(0.1, min(300.0, float(seconds)))
+        start_time = time.time()
+        end_time = start_time + seconds
+
+        if task_id and task_id in self.tasks:
+            task = self.tasks[task_id]
+            process = task["process"]
+            q = task["queue"]
+
+            while time.time() < end_time:
+                if wake_on in ("exit", "any") and process.poll() is not None:
+                    time.sleep(0.02)
+                    output = self.get_output(task_id)
+                    output["status"] = "task_completed"
+                    output["elapsed_seconds"] = round(time.time() - start_time, 2)
+                    output["reason"] = reason
+                    return output
+
+                if wake_on in ("output", "any") and not q.empty():
+                    time.sleep(0.02)
+                    output = self.get_output(task_id)
+                    output["status"] = "task_output"
+                    output["elapsed_seconds"] = round(time.time() - start_time, 2)
+                    output["reason"] = reason
+                    return output
+
+                time.sleep(0.04)
+
+            output = self.get_output(task_id)
+            output["status"] = "timer_expired"
+            output["elapsed_seconds"] = round(time.time() - start_time, 2)
+            output["reason"] = reason
+            return output
+        else:
+            time.sleep(seconds)
+            return {
+                "status": "timer_expired",
+                "elapsed_seconds": round(time.time() - start_time, 2),
+                "reason": reason,
+            }
+

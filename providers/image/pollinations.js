@@ -41,6 +41,8 @@ class PollinationsImageProvider extends BaseImageProvider {
 
         let localUrl = null;
         let lastError = null;
+        const encodedPrompt = encodeURIComponent(urlPrompt);
+        let finalPollinationsUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${safeWidth}&height=${safeHeight}&model=${effectiveModel}&seed=${usedSeed}&nologo=true`;
 
         // Fast 8s timeout with 2 attempts max (turbo then no-model fallback)
         for (let attempt = 0; attempt < 2; attempt++) {
@@ -50,9 +52,8 @@ class PollinationsImageProvider extends BaseImageProvider {
                     await new Promise(r => setTimeout(r, 600));
                 }
 
-                const encodedPrompt = encodeURIComponent(urlPrompt);
                 const modelParam = attempt === 0 ? `&model=${effectiveModel}` : "";
-                const finalPollinationsUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${safeWidth}&height=${safeHeight}${modelParam}&seed=${usedSeed}&nologo=true`;
+                finalPollinationsUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${safeWidth}&height=${safeHeight}${modelParam}&seed=${usedSeed}&nologo=true`;
 
                 const controller = new AbortController();
                 const timeout = setTimeout(() => controller.abort(), 15000);
@@ -94,11 +95,10 @@ class PollinationsImageProvider extends BaseImageProvider {
             }
         }
 
-        if (!localUrl) {
+        const deliveryUrl = localUrl || finalPollinationsUrl;
+        if (!deliveryUrl) {
             throw new Error(`Pollinations failed: ${lastError?.message || "Service unavailable"}`);
         }
-
-        const deliveryUrl = localUrl;
 
         return {
             success: true,
@@ -113,7 +113,8 @@ class PollinationsImageProvider extends BaseImageProvider {
                 aspectRatio: dims.aspectRatio
             },
             seed: usedSeed,
-            cachedLocally: Boolean(localUrl)
+            cachedLocally: Boolean(localUrl),
+            directUrl: finalPollinationsUrl
         };
     }
 }
