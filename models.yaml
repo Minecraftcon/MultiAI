@@ -381,3 +381,27 @@ providers:
     api_key_env: null
     base_url: null
     models: []
+
+  tokenharbor:
+    name: "Token Harbor"
+    type: "tokenharbor"
+    api_key_env: "TOKENHARBOUR_API_KEY"
+    base_url: "https://tokenharbor.ai/v1"
+    models:
+      - id: "deepseek-v4.1-flash:free"
+        name: "DeepSeek V4.1 Flash (Free)"
+        supports_tools: true
+        supports_vision: false
+      - id: "deepseek-v4-flash:free"
+        name: "DeepSeek V4 Flash (Free)"
+        supports_tools: true
+        supports_vision: false
+      - id: "mimo-v2.5:free"
+        name: "MiMo V2.5 (Free)"
+        supports_tools: true
+        supports_vision: false
+      - id: "th-rudder:free"
+        name: "TH-Rudder (Free)"
+        supports_tools: true
+        supports_vision: false
+

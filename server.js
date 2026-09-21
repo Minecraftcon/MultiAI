@@ -33,15 +33,25 @@ let koboldBaseUrl = null;
 
 function getEnvKey(keyName) {
     if (!keyName) return null;
-    if (process.env[keyName]) return process.env[keyName];
+    const aliases = [keyName];
+    if (keyName === "TOKENHARBOR_API_KEY") aliases.push("TOKENHARBOUR_API_KEY");
+    if (keyName === "TOKENHARBOUR_API_KEY") aliases.push("TOKENHARBOR_API_KEY");
+    if (keyName === "LOGFLARE_API_KEY") aliases.push("LOGFARE_API_KEY");
+    if (keyName === "LOGFARE_API_KEY") aliases.push("LOGFLARE_API_KEY");
+
+    for (const k of aliases) {
+        if (process.env[k]) return process.env[k];
+    }
     try {
         const bashrcPath = path.join(os.homedir(), ".bashrc");
         if (fs.existsSync(bashrcPath)) {
             const content = fs.readFileSync(bashrcPath, "utf8");
-            const match = content.match(new RegExp(`export\\s+${keyName}=["']?([^"'\\r\\n]+)["']?`));
-            if (match && match[1]) {
-                process.env[keyName] = match[1].trim();
-                return process.env[keyName];
+            for (const k of aliases) {
+                const match = content.match(new RegExp(`export\\s+${k}=["']?([^"'\\r\\n]+)["']?`));
+                if (match && match[1]) {
+                    process.env[k] = match[1].trim();
+                    return process.env[k];
+                }
             }
         }
     } catch (e) {
