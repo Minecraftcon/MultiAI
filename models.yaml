@@ -404,4 +404,40 @@ providers:
         name: "TH-Rudder (Free)"
         supports_tools: true
         supports_vision: false
+      - id: "qwen3.8-flash:free"
+        name: "Qwen 3.8 Flash (Free Campaign)"
+        supports_tools: true
+        supports_vision: false
+
+  omniroute:
+    name: "OmniRoute (Local Gateway)"
+    type: "omniroute"
+    api_key_env: "OMNIROUTE_API_KEY"
+    base_url: "http://localhost:20128/v1"
+    models:
+      - id: "auto"
+        name: "OmniRoute Auto (Smart Fallback)"
+        supports_tools: true
+        supports_vision: true
+      - id: "deepseek-chat"
+        name: "DeepSeek Chat (OmniRoute)"
+        supports_tools: true
+        supports_vision: false
+      - id: "claude-3-5-sonnet"
+        name: "Claude 3.5 Sonnet (OmniRoute)"
+        supports_tools: true
+        supports_vision: true
+      - id: "gpt-4o-mini"
+        name: "GPT-4o Mini (OmniRoute)"
+        supports_tools: true
+        supports_vision: true
+      - id: "gemini-2.0-flash"
+        name: "Gemini 2.0 Flash (OmniRoute)"
+        supports_tools: true
+        supports_vision: true
+      - id: "qwen-2.5-coder-32b"
+        name: "Qwen 2.5 Coder 32B (OmniRoute)"
+        supports_tools: true
+        supports_vision: false
+
 
