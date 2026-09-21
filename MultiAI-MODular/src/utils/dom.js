@@ -117,7 +117,7 @@ export function extractChatTitleAndContent(rawText) {
             const parsed = JSON.parse(jsonMatch[1]);
             const title = parsed.chatname || parsed.chat_name || parsed.chatName;
             if (title && typeof title === "string") {
-                let cleanContent = trimmed.replace(jsonMatch[0], "").trim();
+                let cleanContent = trimmed.replaceAll(jsonMatch[0], "").trim();
                 if (!cleanContent && (parsed.reply || parsed.response || parsed.content)) {
                     cleanContent = parsed.reply || parsed.response || parsed.content;
                 }
@@ -129,7 +129,7 @@ export function extractChatTitleAndContent(rawText) {
         } catch (e) {
             const titleMatch = jsonMatch[1].match(/["\x27]chatname["\x27]\s*:\s*["\x27]([^"\x27]+)["\x27]/i);
             if (titleMatch) {
-                let cleanContent = trimmed.replace(jsonMatch[0], "").trim();
+                let cleanContent = trimmed.replaceAll(jsonMatch[0], "").trim();
                 return {
                     title: titleMatch[1].trim(),
                     content: cleanContent.trim()

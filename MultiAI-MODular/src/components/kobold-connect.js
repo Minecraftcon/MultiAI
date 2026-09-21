@@ -297,7 +297,7 @@ export function _injectKoboldModel(data) {
         id: modelId,
         name: modelName,
         provider: "koboldcpp",
-        supports_tools: false,
+        supports_tools: data.supports_tools !== false,
         supports_vision: false,
         max_context_tokens: data.context_size || 4096
     };

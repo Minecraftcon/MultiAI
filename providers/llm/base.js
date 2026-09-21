@@ -445,7 +445,7 @@ class BaseProvider {
             } catch (_) {}
         }
         const argsObj = {};
-        const argRegex = /([a-zA-Z0-9_\-]+)\s*:\s*(?:<\|"\|>([\s\S]*?)<\|"\|>|"([^"]*)"|'([^']*)'|([^,}\s]+))/g;
+        const argRegex = /["\x27]?([a-zA-Z0-9_\-]+)["\x27]?\s*:\s*(?:<\|"\|>([\s\S]*?)<\|"\|>|"([^"]*)"|'([^']*)'|([^,}\s]+))/g;
         let match;
         let found = false;
         while ((match = argRegex.exec(trimmed)) !== null) {
@@ -534,6 +534,25 @@ class BaseProvider {
             } catch (_) {}
         }
 
+        // 4. Raw known tool invocation: (run_task|read_file|...)\n{...} or (run_task|read_file|...){...}
+        const knownToolsRegex = /(?:^|[\n.\s])(run_task|read_file|write_file|grep_search|search_and_replace|fetch_web_content|web_search|idle|run_python|generate_image|task_send_input|task_stdout|task_kill)\s*(\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\})(?:\s*\1)?/gi;
+        while ((m = knownToolsRegex.exec(cleaned)) !== null) {
+            const name = m[1];
+            const rawArgs = m[2];
+            const parsedArgs = this.parseToolCallArgs(rawArgs);
+            if (parsedArgs && typeof parsedArgs === "object" && Object.keys(parsedArgs).length > 0) {
+                toolCalls.push({
+                    id: "call_" + Math.random().toString(36).substring(2, 9),
+                    type: "function",
+                    function: {
+                        name,
+                        arguments: typeof parsedArgs === "string" ? parsedArgs : JSON.stringify(parsedArgs)
+                    }
+                });
+                cleaned = cleaned.replace(m[0], "").trim();
+            }
+        }
+
         return { cleanedText: cleaned, toolCalls };
     }
 
@@ -570,6 +589,12 @@ class BaseProvider {
         if (reasoning) {
             reasoning = reasoning.replace(/<details class="thought-box"[^>]*>[\s\S]*?<div class="thought-content[^"]*">([\s\S]*?)<\/div>\s*<\/div>\s*<\/details>/gi, "$1").trim();
             reasoning = reasoning.replace(/<\/?(?:details|summary|svg|path|span)[^>]*>/gi, "").trim();
+        }
+
+        // If reasoning content mirrors or equals the main content, discard reasoning
+        // to prevent falsely wrapping the answer in a thought box and duplicating it.
+        if (reasoning && content && reasoning.trim() === content.trim()) {
+            reasoning = "";
         }
 
         if (reasoning && content) {

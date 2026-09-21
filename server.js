@@ -1723,7 +1723,7 @@ if (req.method === "POST" && req.url === "/api/code/grep") {
                 model_name: modelName,
                 model_id: `koboldcpp:${modelName}`,
                 context_size: contextSize,
-                supports_tools: false,
+                supports_tools: true,
                 supports_vision: false
             });
         } catch (err) {

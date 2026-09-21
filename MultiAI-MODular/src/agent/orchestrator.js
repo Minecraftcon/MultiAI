@@ -196,7 +196,8 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
             if (roundText) {
                 const extractedTitle = extractChatTitleAndContent(roundText);
                 if (extractedTitle.title) {
-                    if (!session.title || session.title === "New Chat") {
+                    const isDefaultTitle = !session.title || session.title === "New Chat" || session.title === "Conversation" || session.title === (userText || "").trim().slice(0, 34);
+                    if (isDefaultTitle) {
                         session.title = extractedTitle.title.slice(0, 36);
                         saveStoredChats();
                         renderChatList();
