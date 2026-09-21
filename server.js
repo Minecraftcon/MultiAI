@@ -28,6 +28,9 @@ setInterval(() => {
     }
 }, 60 * 60 * 1000); // Run hourly
 
+// In-memory KoboldCPP session cache — cleared on server restart (by design)
+let koboldBaseUrl = null;
+
 function getEnvKey(keyName) {
     if (!keyName) return null;
     if (process.env[keyName]) return process.env[keyName];
@@ -1641,7 +1644,7 @@ if (req.method === "POST" && req.url === "/api/code/grep") {
         for (const [providerId, provider] of Object.entries(config.providers || {})) {
             const key = provider.api_key_env ? getEnvKey(provider.api_key_env) : null;
             const isAvailable = !provider.api_key_env || Boolean(key);
-            resultProviders.push({
+            const entry = {
                 id: providerId,
                 name: provider.name || providerId,
                 type: provider.type,
@@ -1656,9 +1659,79 @@ if (req.method === "POST" && req.url === "/api/code/grep") {
                     max_context_tokens: m.max_context_tokens || provider.max_context_tokens || getModelDefaultContext(m.id, provider.type || providerId),
                     provider: providerId
                 }))
-            });
+            };
+            // Pass rolling flag so the frontend knows to show URL-prompt instead of model list
+            if (provider.rolling) {
+                entry.rolling = true;
+                // Inject live-discovered model if probe was called this session
+                if (providerId === "koboldcpp" && koboldBaseUrl) {
+                    entry.connected_base_url = koboldBaseUrl;
+                }
+            }
+            resultProviders.push(entry);
         }
         return sendJSON(res, 200, { providers: resultProviders });
+    }
+
+    // ----------------------------------------------------------------
+    // KoboldCPP rolling connection — probe & base_url cache
+    // ----------------------------------------------------------------
+    if (req.method === "GET" && req.url === "/api/kobold/base_url") {
+        return sendJSON(res, 200, { base_url: koboldBaseUrl || null });
+    }
+
+    if (req.method === "POST" && req.url === "/api/kobold/probe") {
+        try {
+            let body = "";
+            for await (const chunk of req) body += chunk;
+            const { base_url } = JSON.parse(body || "{}");
+            if (!base_url || typeof base_url !== "string") {
+                return sendJSON(res, 400, { error: "base_url is required" });
+            }
+
+            const cleanUrl = base_url.replace(/\/+$/, "");
+
+            // Probe 1: get loaded model name
+            const modelRes = await fetch(`${cleanUrl}/api/v1/model`, {
+                signal: AbortSignal.timeout(5000)
+            });
+            if (!modelRes.ok) {
+                return sendJSON(res, 502, { error: `KoboldCPP at ${cleanUrl} returned HTTP ${modelRes.status} on /api/v1/model` });
+            }
+            const modelData = await modelRes.json();
+            const modelName = modelData.result || modelData.model || "koboldcpp-model";
+
+            // Probe 2: get context length (graceful fallback)
+            let contextSize = 4096;
+            try {
+                const ctxRes = await fetch(`${cleanUrl}/api/extra/true_max_context_length`, {
+                    signal: AbortSignal.timeout(3000)
+                });
+                if (ctxRes.ok) {
+                    const ctxData = await ctxRes.json();
+                    contextSize = ctxData.value || ctxData.max_context_length || 4096;
+                }
+            } catch (_) { /* non-critical — use fallback */ }
+
+            // Store in session memory (resets on server restart)
+            koboldBaseUrl = cleanUrl;
+
+            console.log(`[KOBOLD] Connected to ${cleanUrl} — model: ${modelName}, ctx: ${contextSize}`);
+            return sendJSON(res, 200, {
+                success: true,
+                base_url: cleanUrl,
+                model_name: modelName,
+                model_id: `koboldcpp:${modelName}`,
+                context_size: contextSize,
+                supports_tools: false,
+                supports_vision: false
+            });
+        } catch (err) {
+            if (err.name === "TimeoutError") {
+                return sendJSON(res, 504, { error: "Connection timed out — is KoboldCPP running at that URL?" });
+            }
+            return sendJSON(res, 500, { error: err.message });
+        }
     }
 
     if ((req.method === "GET" || req.method === "HEAD") && req.url === "/api/config") {
@@ -1712,10 +1785,16 @@ if (req.method === "POST" && req.url === "/api/code/grep") {
             const providerKey = providerId || provider.name || provider.type;
             const providerHandler = resolveProvider(providerKey);
 
+            // For rolling providers (e.g. KoboldCPP), inject the session base_url
+            const effectiveProviderConfig = { ...provider };
+            if (providerKey === "koboldcpp" && koboldBaseUrl) {
+                effectiveProviderConfig.base_url = koboldBaseUrl;
+            }
+
             const chatResult = await providerHandler.handleChat({
                 model,
                 apiKey,
-                providerConfig: provider,
+                providerConfig: effectiveProviderConfig,
                 messages,
                 tools,
                 tool_choice

@@ -146,6 +146,21 @@ export function renderModelPickerList(filter = "") {
 
 function selectModel(modelValue) {
     const modelSelect = document.getElementById("modelSelect");
+
+    // Rolling connect placeholder — show the connect modal instead of selecting
+    if (modelValue && modelValue.startsWith("__rolling_connect__")) {
+        const providerId = modelValue.replace("__rolling_connect__", "");
+        if (providerId === "koboldcpp") {
+            closeModelPicker();
+            import("./kobold-connect.js").then(kc => {
+                kc.showKoboldConnectModal((data) => {
+                    // Model was injected by kobold-connect, picker will auto-update
+                });
+            });
+        }
+        return; // Don't select the placeholder
+    }
+
     if (modelSelect && modelSelect.value !== modelValue) {
         modelSelect.value = modelValue;
         modelSelect.dispatchEvent(new Event("change", { bubbles: true }));

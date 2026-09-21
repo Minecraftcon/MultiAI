@@ -955,6 +955,15 @@ export let availableModels = [];
 export let modelProviderMap = {};
 export let modelVisionMap = {};
 
+// Lazy import to avoid circular deps (kobold-connect imports from side-panel)
+let _koboldConnect = null;
+async function getKoboldConnect() {
+    if (!_koboldConnect) {
+        _koboldConnect = await import("./kobold-connect.js");
+    }
+    return _koboldConnect;
+}
+
 export function isModelVisionCapable(modelId) {
     if (!modelId) {
         const sel = document.getElementById("modelSelect");
@@ -992,6 +1001,30 @@ export async function loadAvailableModels() {
         let defaultModelId = null;
 
         data.providers.forEach(provider => {
+            // Rolling providers: show a "Connect…" entry instead of model list
+            if (provider.rolling) {
+                const group = document.createElement("optgroup");
+                group.label = provider.name;
+                group.dataset.provider = provider.id;
+
+                const placeholder = document.createElement("option");
+                placeholder.value = `__rolling_connect__${provider.id}`;
+                placeholder.textContent = `⚡ Connect ${provider.name}…`;
+                placeholder.dataset.provider = provider.id;
+                placeholder.dataset.rolling = "true";
+                group.appendChild(placeholder);
+
+                modelSelect.appendChild(group);
+
+                // If server already probed this session, auto-reconnect silently
+                if (provider.id === "koboldcpp" && provider.connected_base_url) {
+                    getKoboldConnect().then(kc => {
+                        kc.tryKoboldAutoReconnect(null).catch(() => {});
+                    });
+                }
+                return;
+            }
+
             if (!provider.models || provider.models.length === 0) return;
             const group = document.createElement("optgroup");
             group.label = provider.name + (provider.available ? "" : " (No Key)");
