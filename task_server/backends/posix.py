@@ -36,6 +36,7 @@ class PosixTaskManager(BaseTaskManager):
         shell_override: Optional[str] = None,
         scratch_dir: Optional[str] = None,
         artifacts_dir: Optional[str] = None,
+        cwd: Optional[str] = None,
     ) -> str:
         task_id = str(uuid.uuid4())[:8]
 
@@ -49,6 +50,10 @@ class PosixTaskManager(BaseTaskManager):
             env["ARTIFACTS"] = artifacts_dir
             env["ARTIFACTS_DIR"] = artifacts_dir
 
+        target_cwd = cwd or os.environ.get("MULTIAI_WORKSPACE_DIR") or os.getcwd()
+        if not os.path.isdir(target_cwd):
+            target_cwd = os.getcwd()
+
         process = subprocess.Popen(
             command,
             shell=True,
@@ -57,6 +62,7 @@ class PosixTaskManager(BaseTaskManager):
             stderr=subprocess.PIPE,
             bufsize=0,
             env=env,
+            cwd=target_cwd,
             preexec_fn=os.setsid if hasattr(os, "setsid") else None,
         )
 

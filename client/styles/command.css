@@ -1,0 +1,116 @@
+/* =========================================================
+   COMMAND OUTPUT BLOCK (SCALED & ALIGNED AFTER PROGRESS LINE)
+   ========================================================= */
+.badge-collapse {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+    width: auto;
+    margin: 2px 0 4px 48px;
+    max-width: calc(100% - 48px);
+}
+
+.search-badge-item.open + .badge-collapse {
+    grid-template-rows: 1fr;
+}
+
+.badge-collapse-inner {
+    min-height: 0;
+    overflow: hidden;
+}
+
+.command-output-box {
+    background: var(--bubble-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin: 2px 0 4px 0;
+    display: block;
+    max-width: 100%;
+}
+
+.command-output-box pre {
+    margin: 0;
+    padding: 6px 10px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 11px;
+    line-height: 1.45;
+    color: var(--text-primary);
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 220px;
+    overflow-y: auto;
+    border-radius: 7px;
+    transform: translateZ(0);
+    will-change: transform;
+}
+
+.command-output-box pre::-webkit-scrollbar { width: 4px; height: 4px; }
+.command-output-box pre::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 8px; }
+
+.command-output-cmd {
+    color: var(--text-primary);
+    font-weight: 500;
+    position: relative;
+}
+
+.command-cmd-text {
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+.cmd-toggle-row {
+    margin-top: 5px;
+    margin-bottom: 2px;
+}
+
+.cmd-compact-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 7px;
+    font-size: 10px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color: var(--text-secondary);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+    user-select: none;
+    line-height: 1.4;
+}
+
+.cmd-compact-toggle:hover {
+    color: var(--text-primary);
+    background: var(--hover-3);
+    border-color: var(--border-strong);
+}
+
+.cmd-compact-toggle:active {
+    transform: scale(0.97);
+}
+
+.cmd-toggle-lines {
+    color: var(--text-tertiary);
+    font-size: 9.5px;
+}
+
+.cmd-compact-toggle:hover .cmd-toggle-lines {
+    color: var(--text-secondary);
+}
+
+.command-output-sep {
+    border: 0;
+    border-top: 1px solid var(--border);
+    margin: 5px 0;
+}
+
+.command-output-res {
+    color: var(--text-secondary);
+}
+
+.command-output-res:empty::after {
+    content: "Running...";
+    color: var(--text-tertiary);
+    font-style: italic;
+}

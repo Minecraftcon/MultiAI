@@ -2,6 +2,7 @@ node_modules/
 __pycache__/
 *.pyc
 .backup_*
+.backups/
 logs.txt
 *.log
 .env
@@ -11,4 +12,13 @@ generated_images/
 demo.txt
 example.txt
 test.txt
-.backups/
+
+# Binary & Decompilation Artifacts
+*.dex
+*.apk
+*.jar
+*.so
+
+# Test Output Artifacts
+tests/*.png
+

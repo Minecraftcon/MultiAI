@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# MultiAI CLI Launcher
+# ==============================================================================
+# Launches MultiAI backend with the current working directory as the workspace.
+# Designed to be symlinked into ~/.local/bin/multiai or /usr/local/bin/multiai.
+# ==============================================================================
+
+set -e
+
+# Capture caller working directory as target workspace
+TARGET_WORKSPACE="$(pwd -P)"
+
+# Resolve physical path to this script, resolving symlink chains
+SOURCE="${BASH_SOURCE[0]}"
+while [ -L "$SOURCE" ]; do
+  SCRIPT_DIR="$(cd -P "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ $SOURCE != /* ]] && SOURCE="$SCRIPT_DIR/$SOURCE"
+done
+MULTIAI_DIR="$(cd -P "$(dirname "$SOURCE")/.." >/dev/null 2>&1 && pwd)"
+
+if [ ! -f "$MULTIAI_DIR/start.py" ]; then
+  echo "Error: MultiAI installation not found at $MULTIAI_DIR" >&2
+  exit 1
+fi
+
+# Detect Python 3 executable
+PYTHON_BIN="python3"
+if ! command -v python3 >/dev/null 2>&1; then
+  if command -v python >/dev/null 2>&1; then
+    PYTHON_BIN="python"
+  else
+    echo "Error: Python 3 is required but was not found in PATH." >&2
+    exit 1
+  fi
+fi
+
+# Export workspace environment variables
+export MULTIAI_REPO_DIR="$MULTIAI_DIR"
+export MULTIAI_WORKSPACE_DIR="$TARGET_WORKSPACE"
+
+# Execute Universal Starter in workspace
+exec "$PYTHON_BIN" "$MULTIAI_DIR/start.py" --workspace "$TARGET_WORKSPACE" "$@"

@@ -172,7 +172,7 @@ class ProcessSupervisor:
         self.is_shutting_down = False
         self.lock = threading.Lock()
 
-    def spawn(self, name, cmd, color=RESET, cwd=None):
+    def spawn(self, name, cmd, color=RESET, cwd=None, env=None):
         """Spawn a child process in a new process group for clean termination."""
         prefix = f"{color}[{name}]{RESET} "
         
@@ -183,6 +183,8 @@ class ProcessSupervisor:
             "text": True,
             "bufsize": 1
         }
+        if env is not None:
+            kwargs["env"] = env
         
         if sys.platform == "win32":
             kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
@@ -277,9 +279,12 @@ def main():
     parser.add_argument("--check-only", action="store_true", help="Run setup check and exit without starting servers")
     parser.add_argument("--no-browser", action="store_true", help="Do not open browser automatically")
     parser.add_argument("--port", type=int, default=configured_port, help=f"Web server port (default: {configured_port})")
+    parser.add_argument("--workspace", type=str, default=None, help="Target workspace directory (default: current directory)")
     args = parser.parse_args()
 
     root_dir = os.path.dirname(os.path.abspath(__file__))
+    workspace_dir = os.path.abspath(args.workspace or os.environ.get("MULTIAI_WORKSPACE_DIR") or os.getcwd())
+    os.makedirs(workspace_dir, exist_ok=True)
     os.chdir(root_dir)
 
     # 1. Run Pre-Flight Setup Check
@@ -309,8 +314,18 @@ def main():
     atexit.register(supervisor.stop_all)
 
     # 3. Start Node.js Web Server (which also supervises the Python task server on port 5000)
-    log_info(f"Starting MultiAI on port {args.port} (node --watch server.js)...")
-    supervisor.spawn("Server", ["node", "--watch", "server.js"], color=GREEN, cwd=root_dir)
+    server_script = os.path.join(root_dir, "src", "index.js")
+    node_env = os.environ.copy()
+    node_env["MULTIAI_REPO_DIR"] = root_dir
+    node_env["MULTIAI_WORKSPACE_DIR"] = workspace_dir
+    node_modules_path = os.path.join(root_dir, "node_modules")
+    existing_node_path = node_env.get("NODE_PATH", "")
+    node_env["NODE_PATH"] = f"{node_modules_path}:{existing_node_path}" if existing_node_path else node_modules_path
+    existing_py_path = node_env.get("PYTHONPATH", "")
+    node_env["PYTHONPATH"] = f"{root_dir}:{existing_py_path}" if existing_py_path else root_dir
+
+    log_info(f"Starting MultiAI on port {args.port} (workspace: {workspace_dir})...")
+    supervisor.spawn("Server", ["node", "--watch", server_script], color=GREEN, cwd=workspace_dir, env=node_env)
 
     # 4. Wait for server to become ready
     ready = False
