@@ -167,6 +167,16 @@ async function handleFilesRoute(req, res) {
             return sendJSON(res, 200, result);
         }
 
+        if (reqUrl === "/api/file/resolve") {
+            const rawPath = args.path || "$ARTIFACTS/checkpoint.md";
+            const targetPath = resolveSafePath(rawPath, chatId);
+            return sendJSON(res, 200, {
+                path: rawPath,
+                resolved_path: targetPath,
+                exists: fs.existsSync(targetPath)
+            });
+        }
+
         if (reqUrl === "/api/file/write") {
             const result = await handleWriteFile(args, chatId, { resolveSafePath });
             return sendJSON(res, 200, result);

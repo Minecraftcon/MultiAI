@@ -276,7 +276,7 @@ export async function showCheckpointModal({
                     <div class="checkpoint-modal-title-group">
                         <div class="checkpoint-modal-badge"><i data-lucide="layers"></i> Checkpoint #${checkpointNum}</div>
                         <h3 id="checkpointModalTitle" class="checkpoint-modal-title">Context Checkpoint</h3>
-                        <div class="checkpoint-modal-subtitle">Turns ${sliceStartIdx}–${sliceEndIdx} • Saved ~${Math.round(tokensSaved / 1000)}k tokens • Live Trajectory Retained</div>
+                        <div class="checkpoint-modal-subtitle">Turns ${sliceStartIdx}–${sliceEndIdx} • Saved ~${Math.round(tokensSaved / 1000)}k tokens</div>
                     </div>
                     <div class="checkpoint-modal-actions">
                         <button type="button" class="checkpoint-copy-path-btn" title="Copy Artifact Path" aria-label="Copy artifact path">
@@ -288,8 +288,7 @@ export async function showCheckpointModal({
                     </div>
                 </div>
                 <div class="checkpoint-modal-meta">
-                    <span class="checkpoint-path-label"><i data-lucide="file-text"></i> ${escapeHTML(artifactPath || "$ARTIFACTS/checkpoint.md")}</span>
-                    <span class="checkpoint-badge-status">Snapshot Stored</span>
+                    <span class="checkpoint-path-label"><i data-lucide="file-text"></i> Loading path…</span>
                 </div>
                 <div class="checkpoint-modal-body markdown-body">
                     <div class="checkpoint-modal-loading">Loading checkpoint artifact…</div>
@@ -346,14 +345,55 @@ export async function showCheckpointModal({
     if (subtitleEl) {
         subtitleEl.textContent = isGenericArtifact 
             ? `Persistent Project Document • Saved to $ARTIFACTS/` 
-            : `Turns ${sliceStartIdx}–${sliceEndIdx} • Saved ~${Math.round(tokensSaved / 1000)}k tokens • Live Trajectory Retained`;
+            : `Turns ${sliceStartIdx}–${sliceEndIdx} • Saved ~${Math.round(tokensSaved / 1000)}k tokens`;
     }
-    if (pathEl) pathEl.innerHTML = `<i data-lucide="file-text"></i> ${escapeHTML(artifactPath || "$ARTIFACTS/checkpoint.md")}`;
+
+    // Resolve full absolute path on disk
+    let absolutePath = artifactPath || "";
+    const activeChatId = state.currentChatId;
+    const ws = activeChatId && state.chatSessions[activeChatId]?.workspace;
+    const defaultFilename = checkpointNum ? `checkpoint_${checkpointNum}.md` : "checkpoint.md";
+
+    if (absolutePath && absolutePath.startsWith("/") && !absolutePath.includes("$ARTIFACTS") && !absolutePath.includes("$SCRATCH")) {
+        // Already a clean absolute path
+    } else if (ws?.artifactsDir) {
+        const rel = absolutePath ? absolutePath.replace(/^\$\{?ARTIFACTS\}?[/\\]?/, "") : defaultFilename;
+        absolutePath = `${ws.artifactsDir.replace(/[/\\]+$/, "")}/${rel || defaultFilename}`;
+    } else {
+        const candidate = absolutePath || `$ARTIFACTS/${defaultFilename}`;
+        try {
+            const resolveRes = await fetch("/api/file/resolve", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ path: candidate, chatId: activeChatId })
+            });
+            if (resolveRes.ok) {
+                const resolveData = await resolveRes.json();
+                if (resolveData?.resolved_path) {
+                    absolutePath = resolveData.resolved_path;
+                }
+            }
+        } catch (_) {}
+    }
+
+    if (!absolutePath) {
+        const root = state.hostSystemInfo?.storageRoot || (state.hostSystemInfo?.homedir ? `${state.hostSystemInfo.homedir}/.MultiAI` : "");
+        if (root && activeChatId) {
+            const d = new Date();
+            const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+            const rel = artifactPath ? artifactPath.replace(/^\$\{?ARTIFACTS\}?[/\\]?/, "") : defaultFilename;
+            absolutePath = `${root}/chat_conversations/${dateStr}/chats/${activeChatId}/artifacts/${rel || defaultFilename}`;
+        } else {
+            absolutePath = artifactPath || `$ARTIFACTS/${defaultFilename}`;
+        }
+    }
+
+    if (pathEl) pathEl.innerHTML = `<i data-lucide="file-text"></i> ${escapeHTML(absolutePath)}`;
 
     if (copyBtn) {
         copyBtn.onclick = async () => {
             try {
-                await navigator.clipboard.writeText(artifactPath);
+                await navigator.clipboard.writeText(absolutePath);
                 copyBtn.innerHTML = '<i data-lucide="check"></i>';
                 renderIcons(copyBtn);
                 setTimeout(() => {
@@ -376,13 +416,14 @@ export async function showCheckpointModal({
 
     // Fetch full markdown content from backend
     let rawContent = "";
-    if (artifactPath) {
+    const pathToFetch = absolutePath || artifactPath;
+    if (pathToFetch) {
         try {
             const res = await fetch("/api/file/read", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    path: artifactPath,
+                    path: pathToFetch,
                     chatId: state.currentChatId,
                     numbered: false,
                     end_line: 5000
@@ -392,6 +433,13 @@ export async function showCheckpointModal({
                 const data = await res.json();
                 if (data && data.content) {
                     rawContent = data.content;
+                }
+                if (data && data.resolved_path) {
+                    absolutePath = data.resolved_path;
+                    if (pathEl) {
+                        pathEl.innerHTML = `<i data-lucide="file-text"></i> ${escapeHTML(absolutePath)}`;
+                        renderIcons(pathEl);
+                    }
                 }
             }
         } catch (e) {
@@ -403,7 +451,7 @@ export async function showCheckpointModal({
         rawContent = `# Context Checkpoint #${checkpointNum}\n\n` +
             `**Archived Turns:** ${sliceStartIdx}–${sliceEndIdx}\n` +
             `**Tokens Saved:** ~${Math.round(tokensSaved / 1000)}k\n` +
-            `**Artifact File:** \`${artifactPath}\`\n\n` +
+            `**Artifact File:** \`${absolutePath}\`\n\n` +
             `## Context & Discoveries Briefing\n\n${summaryText}`;
     }
 
@@ -494,7 +542,7 @@ export function addCompactionBadge(element, { messagesCount = 0, tokensBefore = 
                 const queryEl = item.querySelector(".search-query");
                 const savedStr = tokensSaved > 0 ? `Saved ~${Math.round(tokensSaved / 1000)}k tokens` : `Distilled`;
                 const finalDesc = sliceEndIdx > 0
-                    ? `${isEmergencyTrim ? "Emergency Trimmed" : "Archived"} Turns ${sliceStartIdx}–${sliceEndIdx} (${savedStr}) • Trajectory Retained`
+                    ? `${isEmergencyTrim ? "Emergency Trimmed" : "Archived"} Turns ${sliceStartIdx}–${sliceEndIdx} (${savedStr})`
                     : `Reduced ${messagesCount} turns (${savedStr})`;
                 if (queryEl) {
                     queryEl.textContent = finalDesc;
@@ -979,4 +1027,147 @@ export function initChatDelegation() {
             }
         }
     });
+
+    initScrollToBottom();
+}
+
+export function initScrollToBottom() {
+    const chat = document.getElementById("chat");
+    const btn = document.getElementById("scrollToBottomBtn");
+    if (!chat || !btn) return;
+
+    renderIcons(btn);
+
+    // Dynamic height tracking of composer so button floats cleanly above it
+    const inputArea = document.getElementById("inputArea");
+    const updateComposerHeight = () => {
+        if (!inputArea) return;
+        const rect = inputArea.getBoundingClientRect();
+        const height = Math.round(rect.height || inputArea.offsetHeight || 94);
+        document.documentElement.style.setProperty("--composer-height", `${height}px`);
+    };
+
+    if (inputArea && typeof ResizeObserver !== "undefined") {
+        const ro = new ResizeObserver(() => {
+            updateComposerHeight();
+        });
+        ro.observe(inputArea);
+    }
+    updateComposerHeight();
+
+    const SCROLL_THRESHOLD = 90; // pixels from bottom before affordance appears
+    let isTicking = false;
+
+    function updateVisibility() {
+        const appShell = document.getElementById("appShell");
+        const isStartPage = appShell?.classList.contains("is-start-page");
+        if (isStartPage) {
+            btn.classList.remove("visible");
+            return;
+        }
+
+        const distanceFromBottom = chat.scrollHeight - chat.scrollTop - chat.clientHeight;
+        const hasScrollableContent = chat.scrollHeight > chat.clientHeight + 60;
+
+        if (hasScrollableContent && distanceFromBottom > SCROLL_THRESHOLD) {
+            btn.classList.add("visible");
+        } else {
+            btn.classList.remove("visible");
+        }
+    }
+
+    // Passive scroll listener with requestAnimationFrame throttling
+    chat.addEventListener("scroll", () => {
+        if (!isTicking) {
+            window.requestAnimationFrame(() => {
+                updateVisibility();
+                isTicking = false;
+            });
+            isTicking = true;
+        }
+    }, { passive: true });
+
+    // Ensure bottom sentinel exists and is observed
+    let sentinel = document.getElementById("chatBottomSentinel");
+    let observer = null;
+    const ensureSentinel = () => {
+        if (!sentinel || !chat.contains(sentinel)) {
+            sentinel = document.getElementById("chatBottomSentinel");
+            if (!sentinel) {
+                sentinel = document.createElement("div");
+                sentinel.id = "chatBottomSentinel";
+                sentinel.className = "chat-bottom-sentinel";
+                sentinel.setAttribute("aria-hidden", "true");
+                chat.appendChild(sentinel);
+            }
+            if (observer && sentinel) {
+                observer.observe(sentinel);
+            }
+        }
+    };
+
+    if (typeof IntersectionObserver !== "undefined") {
+        observer = new IntersectionObserver((entries) => {
+            for (const entry of entries) {
+                if (entry.isIntersecting) {
+                    btn.classList.remove("visible");
+                } else {
+                    updateVisibility();
+                }
+            }
+        }, { root: chat, threshold: 0.1 });
+    }
+    ensureSentinel();
+
+    // Smooth scroll to bottom on click
+    btn.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        chat.scrollTo({
+            top: chat.scrollHeight,
+            behavior: "smooth"
+        });
+        btn.classList.remove("visible");
+
+        // Follow-up checks in case any dynamic content or code blocks render during smooth scroll
+        const ensureAtEnd = () => {
+            const distance = chat.scrollHeight - chat.scrollTop - chat.clientHeight;
+            if (distance > 30) {
+                chat.scrollTo({
+                    top: chat.scrollHeight,
+                    behavior: "smooth"
+                });
+            }
+        };
+        if ("onscrollend" in window) {
+            chat.addEventListener("scrollend", ensureAtEnd, { once: true });
+        }
+        setTimeout(ensureAtEnd, 350);
+        setTimeout(ensureAtEnd, 750);
+    });
+
+    // Update whenever chat session changes or messages update
+    document.addEventListener("chatsUpdated", () => {
+        ensureSentinel();
+        updateComposerHeight();
+        setTimeout(updateVisibility, 80);
+    });
+
+    // MutationObserver on chat to ensure sentinel stays at bottom
+    if (typeof MutationObserver !== "undefined") {
+        const mutationObserver = new MutationObserver(() => {
+            ensureSentinel();
+            if (sentinel && sentinel.nextElementSibling) {
+                chat.appendChild(sentinel);
+            }
+            updateVisibility();
+        });
+        mutationObserver.observe(chat, { childList: true, subtree: false });
+    }
+
+    // Initial check
+    setTimeout(() => {
+        updateComposerHeight();
+        updateVisibility();
+    }, 150);
 }

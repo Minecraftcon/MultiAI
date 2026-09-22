@@ -214,7 +214,14 @@
         </div>
     </header>
 
-    <main id="chat"></main>
+    <main id="chat">
+        <div id="chatBottomSentinel" class="chat-bottom-sentinel" aria-hidden="true"></div>
+    </main>
+
+    <!-- Floating Scroll-To-Bottom Button (Grok-style affordance) -->
+    <button id="scrollToBottomBtn" class="chat-scroll-btn" type="button" aria-label="Scroll to bottom" title="Scroll to bottom">
+        <i data-lucide="chevron-down"></i>
+    </button>
 
     <!-- Start Page Celestial / Aurora Backdrop (Active on welcome screen) -->
     <div id="startPageBackdrop" class="start-page-backdrop" aria-hidden="true"></div>

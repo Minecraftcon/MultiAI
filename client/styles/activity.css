@@ -760,35 +760,13 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    width: 100%;
 }
 
 .checkpoint-path-label svg {
     width: 14px;
     height: 14px;
     flex-shrink: 0;
-}
-
-.checkpoint-badge-status {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    background: var(--hover-2);
-    color: var(--text-secondary);
-    border: 1px solid var(--active);
-    font-size: 10.5px;
-    font-weight: 500;
-    padding: 2px 8px;
-    border-radius: 9999px;
-    flex-shrink: 0;
-    letter-spacing: 0.02em;
-}
-
-.checkpoint-badge-status::before {
-    content: "";
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
-    background: #a1a1aa;
 }
 
 .checkpoint-modal-body {

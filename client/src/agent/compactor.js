@@ -403,6 +403,38 @@ Be concise, clear, and omit conversational filler. Return ONLY the markdown brie
         const tokensAfter = estimateMessagesTokens(workingAfter);
         const tokensSaved = Math.max(0, tokensBefore - tokensAfter);
 
+        const checkpointNum = (session.compactionCount || 0) + 1;
+        session.compactionCount = checkpointNum;
+        const artifactFileName = `checkpoint_${checkpointNum}.md`;
+        const artifactPath = `$ARTIFACTS/${artifactFileName}`;
+        const checkpointMarkdown = `# Context Checkpoint #${checkpointNum}\n\n` +
+            `**Archived Turns:** ${sliceStartIdx}–${sliceEndIdx}\n` +
+            `**Tokens Saved:** ~${Math.round(tokensSaved / 1000)}k\n\n` +
+            `## Context & Discoveries Briefing\n\n${summaryText}\n`;
+
+        let absoluteArtifactPath = artifactPath;
+        try {
+            const writeRes = await fetch("/api/file/write", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    path: artifactPath,
+                    content: checkpointMarkdown,
+                    action: "write",
+                    overwrite: true,
+                    chatId: session.id
+                })
+            });
+            if (writeRes.ok) {
+                const writeData = await writeRes.json();
+                if (writeData?.resolved_path) {
+                    absoluteArtifactPath = writeData.resolved_path;
+                }
+            }
+        } catch (e) {
+            console.warn("[COMPACTOR] Could not persist checkpoint artifact:", e);
+        }
+
         session.compactionState = {
             summary: summaryText,
             compactedThroughIndex: sliceEndIdx,
@@ -410,7 +442,11 @@ Be concise, clear, and omit conversational filler. Return ONLY the markdown brie
             tokensAfter,
             tokensSaved,
             compactedAt: Date.now(),
-            model: selectedModel
+            model: selectedModel,
+            checkpointNum,
+            sliceStartIdx,
+            sliceEndIdx,
+            artifactPath: absoluteArtifactPath
         };
 
         state.messages = session.messages;
@@ -429,7 +465,11 @@ Be concise, clear, and omit conversational filler. Return ONLY the markdown brie
             status: "completed",
             summaryText,
             tokensSaved,
-            messagesCount: newMessagesToCompact.length
+            messagesCount: newMessagesToCompact.length,
+            artifactPath: absoluteArtifactPath,
+            checkpointNum,
+            sliceStartIdx,
+            sliceEndIdx
         });
 
         return true;

@@ -6,6 +6,7 @@ const { handleTaskRoute } = require("./routes/tasks");
 const { handleSearchRoute } = require("./routes/search");
 const { handleDeepSearchRoute } = require("./routes/deepsearch");
 const { handleChat, handleAgentStream } = require("./routes/chat");
+const { handleConversationsRoute } = require("./routes/conversations");
 const { sendJSON } = require("./utils");
 
 async function routeRequest(req, res) {
@@ -74,6 +75,11 @@ async function routeRequest(req, res) {
     }
     if (req.method === "POST" && reqUrl === "/api/agent/stream") {
         return handleAgentStream(req, res);
+    }
+
+    // Persistent Chat & Workspace Endpoints
+    if (reqUrl.startsWith("/api/chats")) {
+        return handleConversationsRoute(req, res);
     }
 
     // Static assets
