@@ -171,8 +171,8 @@
     width: 36px;
     height: 36px;
     border-radius: 50%;
-    background: var(--surface-2);
-    border: 1px solid var(--border);
+    background: #242424;
+    border: 1px solid #383838;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -184,12 +184,28 @@
 
 .search-icon-circle.has-timer-ring {
     border-color: transparent;
-    color: var(--text-primary);
+    color: #ffffff;
+}
+
+[data-theme="light"] .search-icon-circle {
+    background: #f4f4f5;
+    border-color: #e4e4e7;
+    color: #71717a;
+}
+
+[data-theme="light"] .search-icon-circle.has-timer-ring {
+    border-color: transparent;
+    color: #09090b;
 }
 
 .timer-badge.timer-finished .search-icon-circle {
-    color: var(--text-tertiary) !important;
-    border-color: var(--border) !important;
+    color: #888 !important;
+    border-color: #383838 !important;
+}
+
+[data-theme="light"] .timer-badge.timer-finished .search-icon-circle {
+    color: #71717a !important;
+    border-color: #e4e4e7 !important;
 }
 
 .search-icon-circle i svg,
@@ -208,17 +224,22 @@
     height: 36px !important;
     pointer-events: none;
     z-index: 1;
+    transition: opacity 0.35s ease;
 }
 
 .timer-ring-bg {
     fill: none;
-    stroke: var(--border);
+    stroke: #383838;
     stroke-width: 1.5;
+}
+
+[data-theme="light"] .timer-ring-bg {
+    stroke: #e4e4e7;
 }
 
 .timer-ring-bar {
     fill: none;
-    stroke: var(--text-primary);
+    stroke: #ffffff;
     stroke-width: 1.5;
     stroke-linecap: round;
     stroke-dasharray: 108.39;
@@ -226,9 +247,21 @@
     transition: stroke 0.3s ease;
 }
 
+[data-theme="light"] .timer-ring-bar {
+    stroke: #09090b;
+}
+
 .timer-badge.timer-finished .timer-ring-bar {
     stroke-dashoffset: 0;
-    stroke: var(--border-strong) !important;
+    stroke: #383838 !important;
+}
+
+[data-theme="light"] .timer-badge.timer-finished .timer-ring-bar {
+    stroke: #e4e4e7 !important;
+}
+
+.timer-badge.timer-finished .timer-ring-svg {
+    opacity: 0;
 }
 
 .search-label {

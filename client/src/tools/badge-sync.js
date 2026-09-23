@@ -20,8 +20,8 @@ export function onToolStart(name, args, badgeEl) {
         }
     }
 
-    if (name === "idle") {
-        const cooldown = Math.max(1, parseInt(args.seconds, 10) || 5);
+    if (name === "idle" || name === "schedule" || name === "sleep") {
+        const cooldown = Math.max(0.1, parseFloat(args.time ?? args.sleep_time ?? args.seconds ?? 5) || 5);
         const ringBar = badgeEl.querySelector(".timer-ring-bar");
         if (ringBar) {
             ringBar.style.transition = "none";
@@ -39,7 +39,7 @@ export function onToolStart(name, args, badgeEl) {
 export function onToolComplete(name, args, badgeEl, data) {
     if (!badgeEl) return;
 
-    if (name === "run_task" || name === "run_command" || name === "idle") {
+    if (name === "run_task" || name === "run_command" || name === "idle" || name === "schedule" || name === "sleep") {
         const ringBar = badgeEl.querySelector(".timer-ring-bar");
         if (ringBar) {
             ringBar.style.transition = "stroke-dashoffset 0.15s ease, stroke 0.3s ease";
@@ -47,18 +47,20 @@ export function onToolComplete(name, args, badgeEl, data) {
         }
         badgeEl.classList.add("timer-finished");
 
-        if (name === "idle" && data) {
+        if ((name === "idle" || name === "schedule" || name === "sleep") && data) {
             const labelEl = badgeEl.querySelector(".search-label");
             const queryEl = badgeEl.querySelector(".search-query");
             if (data.status === "task_completed") {
                 if (labelEl) labelEl.textContent = "Task completed";
-                if (queryEl) queryEl.textContent = `${data.task_id || "task"} exited in ${data.elapsed_seconds}s (code: ${data.exit_code ?? 0})`;
+                if (queryEl) queryEl.textContent = `${data.task_id || args.task || "task"} exited in ${data.elapsed_seconds}s (code: ${data.exit_code ?? 0})`;
             } else if (data.status === "task_output") {
                 if (labelEl) labelEl.textContent = "Task output";
-                if (queryEl) queryEl.textContent = `${data.task_id || "task"} emitted output in ${data.elapsed_seconds}s`;
+                if (queryEl) queryEl.textContent = `${data.task_id || args.task || "task"} emitted output in ${data.elapsed_seconds}s`;
             } else {
-                if (labelEl) labelEl.textContent = "Timer hit";
-                if (queryEl) queryEl.textContent = `${data.elapsed_seconds || args.seconds || 5}s cooldown completed`;
+                if (labelEl) labelEl.textContent = name === "schedule" ? "Scheduled timer" : "Timer hit";
+                const taskDesc = args.task ? ` for ${args.task}` : "";
+                const elapsed = data.elapsed_seconds ?? args.time ?? args.seconds ?? 5;
+                if (queryEl) queryEl.textContent = `${elapsed}s cooldown completed${taskDesc}`;
             }
         }
     }
@@ -142,10 +144,13 @@ export function onToolComplete(name, args, badgeEl, data) {
                 } else {
                     outText = JSON.stringify(data, null, 2);
                 }
-            } else if (name === "idle") {
-                outText = `[Idle Result: ${data.status}] Elapsed: ${data.elapsed_seconds}s${data.exit_code !== undefined ? ` (Exit code: ${data.exit_code})` : ""}`;
-                if (data.stdout || data.stderr) {
-                    outText += "\n\n" + (data.stdout || "") + (data.stderr ? ("\n" + data.stderr) : "");
+            } else if (name === "schedule" || name === "idle" || name === "sleep") {
+                outText = `[Schedule Result: ${data.status || "completed"}] Elapsed: ${data.elapsed_seconds ?? args.time ?? args.seconds ?? 0}s${data.exit_code !== undefined ? ` (Exit code: ${data.exit_code})` : ""}`;
+                if (data.reason) outText += `\nReason: ${data.reason}`;
+                if (data.task_id || args.task) outText += `\nTask: ${data.task_id || args.task}`;
+                if (data.end_response) outText += `\nEnd Response: ${data.end_response}`;
+                if (data.stdout || data.stderr || data.output) {
+                    outText += "\n\n" + (data.stdout || data.output || "") + (data.stderr ? ("\n" + data.stderr) : "");
                 }
             } else if (data.stdout || data.stderr) {
                 outText = (data.stdout || "") + (data.stderr ? ("\n" + data.stderr) : "");

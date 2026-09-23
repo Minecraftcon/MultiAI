@@ -151,6 +151,105 @@ export const manageTasksTool = {
     }
 };
 
+/**
+ * Schedules a sleep timer or hooks onto a background task.
+ * Supports:
+ * - just-wait (sleep timer): Provide time / sleep_time. Waits for the duration and continues.
+ * - hook-on-task-and-wait: Provide time and task (task_id or shell command to run and monitor).
+ * - optional end_response: Text / response to return when the timer completes, allowing the model to auto-start or continue.
+ */
+export const scheduleTool = {
+    name: "schedule",
+    schema: {
+        type: "function",
+        function: {
+            name: "schedule",
+            description: "Schedule a timer, pause execution, or hook onto a background task with an optional wake condition and completion response. Supports 'hook-on-task-and-wait' or pure 'just-wait' sleep modes.",
+            parameters: {
+                type: "object",
+                properties: {
+                    time: {
+                        type: "number",
+                        description: "Duration in seconds to sleep or wait (e.g. 5, 10, 30)."
+                    },
+                    task: {
+                        type: "string",
+                        description: "Optional background task_id to monitor (or shell command to start and monitor). If omitted, performs a pure sleep timer."
+                    },
+                    end_response: {
+                        type: "string",
+                        description: "Optional response or action prompt to return when the timer completes, allowing the agent to automatically start or continue reasoning."
+                    },
+                    wake_on: {
+                        type: "string",
+                        enum: ["exit", "output", "any", "never"],
+                        description: "When hooked on a task, early wake condition: 'exit' (default: wakes when task exits), 'output' (wakes on new output), 'any' (exit or output), 'never' (always waits full duration)."
+                    },
+                    reason: {
+                        type: "string",
+                        description: "Optional human-readable explanation of what is being scheduled or waited for."
+                    }
+                },
+                required: ["time"]
+            }
+        }
+    },
+    handler: async (args, { genState }) => {
+        const rawTime = args.time ?? args.sleep_time ?? args.seconds ?? 5;
+        const time = Math.max(0.1, parseFloat(rawTime) || 5);
+        const task = (args.task || args.task_id || "").trim();
+        const endResponse = args.end_response ?? args["end-response"] ?? null;
+        const wakeOn = args.wake_on || "exit";
+        const reason = args.reason || (task ? `Monitoring ${task}` : `Sleeping for ${time}s`);
+
+        let taskId = null;
+        if (task) {
+            if (/^[a-zA-Z0-9_-]+$/.test(task)) {
+                taskId = task;
+            } else {
+                try {
+                    const runRes = await toolFetch("/api/task/run", {
+                        method: "POST",
+                        body: { command: task, timer: 0.1, timeout: 0.1, task_name: reason },
+                        genState
+                    });
+                    taskId = runRes.task_id || null;
+                    if (!taskId && runRes.stdout !== undefined) {
+                        return {
+                            status: "task_completed",
+                            task,
+                            elapsed_seconds: runRes.execution_time || 0.1,
+                            output: (runRes.stdout || "") + (runRes.stderr ? "\n" + runRes.stderr : ""),
+                            end_response: endResponse || "Task completed immediately."
+                        };
+                    }
+                } catch (err) {
+                    console.warn("[SCHEDULE] Could not launch task command:", err.message);
+                }
+            }
+        }
+
+        const res = await toolFetch("/api/task/idle", {
+            method: "POST",
+            body: {
+                seconds: time,
+                task_id: taskId,
+                wake_on: wakeOn,
+                reason
+            },
+            genState
+        });
+
+        if (endResponse) {
+            res.end_response = endResponse;
+        }
+        if (taskId) {
+            res.task_id = taskId;
+        }
+        return res;
+    }
+};
+
 /* =========================================================
    BACKWARD-COMPATIBILITY ALIASES
    ========================================================= */
@@ -179,11 +278,33 @@ export const taskKillAlias = {
     handler: (args, ctx) => manageTasksTool.handler({ ...args, action: "kill_task" }, ctx)
 };
 
+export const idleAlias = {
+    name: "idle",
+    schema: null,
+    handler: (args, ctx) => scheduleTool.handler({
+        ...args,
+        time: args.seconds ?? args.time,
+        task: args.task_id ?? args.task
+    }, ctx)
+};
+
+export const sleepAlias = {
+    name: "sleep",
+    schema: null,
+    handler: (args, ctx) => scheduleTool.handler({
+        ...args,
+        time: args.seconds ?? args.time
+    }, ctx)
+};
+
 export const terminalTools = [
     runTaskTool,
     manageTasksTool,
+    scheduleTool,
     runCommandAlias,
     manageTaskAlias,
     taskSendInputAlias,
-    taskKillAlias
+    taskKillAlias,
+    idleAlias,
+    sleepAlias
 ];

@@ -131,6 +131,14 @@ export function addToolBadge(element, toolName, args) {
         icon = "clock";
         label = "Sleeping…";
         detail = `${args.seconds || 1}s timer`;
+    } else if (toolName === "schedule") {
+        icon = "clock";
+        const hasTask = Boolean(args.task || args.task_id);
+        label = hasTask ? "Scheduled task…" : "Scheduled timer…";
+        const targetTask = hasTask ? ` (${args.task || args.task_id})` : "";
+        const duration = args.time ?? args.sleep_time ?? args.seconds ?? 5;
+        detail = args.reason ? `${args.reason}${targetTask}` : `${duration}s timer${targetTask}`;
+        isCommandTask = true;
     } else if (toolName === "idle") {
         icon = "hourglass";
         label = args.task_id ? "Waiting for task…" : "Idling…";
@@ -179,7 +187,7 @@ export function addToolBadge(element, toolName, args) {
         isCommandTask = false;
     }
 
-    const isTimer = toolName === "sleep" || toolName === "idle";
+    const isTimer = toolName === "sleep" || toolName === "idle" || toolName === "schedule";
     const isCommand = toolName === "run_task" || toolName === "run_command";
     const hasRing = isTimer || isCommand;
 
@@ -256,8 +264,10 @@ export function addToolBadge(element, toolName, args) {
         } else if (toolName === "read_file") {
             const span = (args.start_line || args.end_line) ? ` (lines ${args.start_line || 1}-${args.end_line || "end"})` : "";
             displayCmd = `${(args.action || "read").toUpperCase()}: ${args.path || "file"}${span}`;
-        } else if (toolName === "idle") {
-            displayCmd = `Idle timer: ${args.seconds || 5}s${args.task_id ? ` (wake on ${args.wake_on || "exit"}: ${args.task_id})` : ""}`;
+        } else if (toolName === "schedule" || toolName === "idle") {
+            const duration = args.time ?? args.sleep_time ?? args.seconds ?? 5;
+            const taskInfo = (args.task || args.task_id) ? ` (hooked on ${args.task || args.task_id}, wake: ${args.wake_on || "exit"})` : "";
+            displayCmd = `Schedule timer: ${duration}s${taskInfo}${args.reason ? ` - ${args.reason}` : ""}${args.end_response ? `\nEnd response: ${args.end_response}` : ""}`;
         } else {
             displayCmd = args.command || args.input_string || (Array.isArray(args.urls) ? args.urls.join("\n") : args.url) || (args.task_id ? `Task: ${args.task_id}` : "Task execution");
         }

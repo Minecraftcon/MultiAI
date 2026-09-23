@@ -6,10 +6,12 @@ import { registerTool, getTool, getAllToolSchemas, hasTool } from "./registry.js
 import { onToolStart, onToolComplete, onToolError } from "./badge-sync.js";
 import { terminalTools } from "./terminal/index.js";
 import { webTools } from "./web/index.js";
+import { mediaTools } from "./media/index.js";
 
-// Register terminal and web tools
+// Register terminal, web, and media tools
 terminalTools.forEach(registerTool);
 webTools.forEach(registerTool);
+mediaTools.forEach(registerTool);
 
 /**
  * Array of all tool schemas provided to LLM chat requests.
@@ -45,6 +47,12 @@ export async function executeTool(name, args, badgeEl, genState) {
     const isWebTool = name === "web_search" || name === "fetch_web_content" || name === "web_fetch";
     if (toolsConfig.EnableWebSearch === false && isWebTool) {
         throw new Error("Web search is disabled in config.ini");
+    }
+
+    // Check if image generation is disabled in config.ini
+    const isImageTool = name === "generate_image" || name === "get_image_status";
+    if (toolsConfig.EnableImageGeneration === false && isImageTool) {
+        throw new Error("Image generation is disabled in config.ini");
     }
 
     const tool = getTool(name);
