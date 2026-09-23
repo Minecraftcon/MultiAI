@@ -339,7 +339,7 @@ export function formatThoughtHtml(content, durationStr = "") {
     const durLabel = rawDur ? (typeof rawDur === "number" || (!isNaN(Number(rawDur)) && rawDur !== "") ? `${rawDur} seconds` : rawDur) : "a few seconds";
     const brainSvg = `<svg class="thought-brain-icon" viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/><path d="M12 5v13"/><path d="M12 8h4"/><path d="M12 12h3"/><path d="M12 16h4"/><path d="M8 8h4"/><path d="M9 12h3"/><path d="M8 16h4"/></svg>`;
 
-    let innerFormatted = content.trim();
+    let innerFormatted = content.trim().replace(/\n{3,}/g, "\n\n");
     if (typeof marked !== "undefined" && typeof marked.parse === "function") {
         try {
             innerFormatted = marked.parse(innerFormatted);
@@ -352,7 +352,7 @@ export function formatThoughtHtml(content, durationStr = "") {
 
     const isHuge = content.length > 400 || content.split("\n").length > 6;
     const bodyHtml = isHuge
-        ? `<div class="thought-content thought-collapsible"><div class="thought-collapsed-body">${innerFormatted}</div><button type="button" class="thought-expand-btn"><span class="thought-expand-icon">...</span> expand</button></div>`
+        ? `<div class="thought-content thought-collapsible"><div class="thought-collapsed-body">${innerFormatted}</div><button type="button" class="thought-expand-btn" aria-expanded="false"><span class="thought-expand-icon" aria-hidden="true">…</span> expand</button></div>`
         : `<div class="thought-content">${innerFormatted}</div>`;
 
     return `<details class="thought-box" open${rawDur ? ` data-duration="${escapeHTML(rawDur)}"` : ''}><summary class="thought-summary"><span class="thought-header">${brainSvg}<span class="thought-label">Thought for ${escapeHTML(durLabel)}</span><span class="thought-chevron">›</span></span></summary><div class="thought-body">${bodyHtml}</div></details>`;

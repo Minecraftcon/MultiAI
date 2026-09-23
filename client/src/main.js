@@ -8,6 +8,7 @@ import { initSystemEnvironment } from "./services/system.js";
 import { loadStoredChats, saveStoredChats, syncFromBackendDisk, syncBuildProjectsFromDisk } from "./services/storage.js";
 import { initGestures } from "./components/gestures.js";
 import { initSidePanel, renderChatList, switchToChat, syncActiveModeConversation } from "./components/side-panel.js";
+window.switchToChat = switchToChat;
 import { initChatDelegation } from "./components/chat-ui.js";
 import { initComposer } from "./components/composer.js";
 import { initContextMenu } from "./components/context-menu.js";
@@ -34,8 +35,10 @@ async function initChatSessions() {
     let hasCleaned = false;
     for (const id of Object.keys(state.chatSessions)) {
         const sess = state.chatSessions[id];
-        const hasUserMsg = sess.messages && sess.messages.some(m => m.role === "user");
-        // Session has no user messages — prune it (chatHtml no longer stored)
+        // Session has no user messages and is not backed by disk — prune it
+        const hasUserMsg = sess.messages
+            ? sess.messages.some(m => m.role === "user")
+            : (Boolean(sess.messageCount && sess.messageCount > 0) || Boolean(sess.workspace));
         if (!hasUserMsg) {
             delete state.chatSessions[id];
             hasCleaned = true;

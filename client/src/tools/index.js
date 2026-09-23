@@ -3,60 +3,48 @@
    ========================================================= */
 import { state } from "../state/index.js";
 import { registerTool, getTool, getAllToolSchemas, hasTool } from "./registry.js";
-import { terminalTools } from "./terminal/index.js";
-import { filesystemTools } from "./filesystem/index.js";
-import { webTools } from "./web/index.js";
-import { mediaTools } from "./media/index.js";
-import { artifactWriterTool } from "./filesystem/artifact-writer.js";
 import { onToolStart, onToolComplete, onToolError } from "./badge-sync.js";
+import { terminalTools } from "./terminal/index.js";
+import { webTools } from "./web/index.js";
 
-// Register all domain tool definitions
-[...terminalTools, ...filesystemTools, ...webTools, ...mediaTools, artifactWriterTool].forEach(registerTool);
+// Register terminal and web tools
+terminalTools.forEach(registerTool);
+webTools.forEach(registerTool);
 
 /**
- * Array of all tool schemas provided to LLM chat requests in standard engineering mode.
+ * Array of all tool schemas provided to LLM chat requests.
  */
 export const tools = getAllToolSchemas();
 
 /**
- * Returns strictly isolated on-chat tool schemas for DeepSearch chats:
- * 1. web_search (for entity/lookup verification during interview)
- * 2. read_file (for inspecting files/artifacts)
- * 3. artifact_writer (for saving persistent milestone documents into chat artifacts)
+ * Returns strictly isolated on-chat tool schemas for DeepSearch chats.
  */
 export function getDeepSearchOnChatTools() {
-    const allowed = ["web_search", "read_file", "artifact_writer"];
+    const allowed = ["run_task", "manage_tasks", "web_search", "run_command"];
     return allowed.map(name => getTool(name)?.schema).filter(Boolean);
 }
 
 /**
  * Dispatches and executes a tool call with validation, config permission checks,
  * visual badge syncing, and lifecycle management.
- *
- * @param {string} name
- * @param {Object} args
- * @param {HTMLElement|null} badgeEl
- * @param {Object} genState
- * @returns {Promise<any>}
  */
 export async function executeTool(name, args, badgeEl, genState) {
     if (genState && genState.abortRequested) {
         throw new Error("Generation stopped by user");
     }
 
-    // Check if tool category is disabled in config.ini
     const toolsConfig = state.config?.Tools || {};
-    if (toolsConfig.EnableTerminal === false && (name === "run_task" || name.startsWith("task_") || name === "idle")) {
+
+    // Check if terminal execution is disabled in config.ini
+    const isTerminalTool = name === "run_task" || name === "run_command" || name === "manage_tasks" || name === "manage_task";
+    if (toolsConfig.EnableTerminal === false && isTerminalTool) {
         throw new Error("Terminal execution is disabled in config.ini");
     }
-    if (toolsConfig.EnableWebSearch === false && (name === "web_search" || name === "fetch_web_content" || name === "web_fetch")) {
+
+    // Check if web search is disabled in config.ini
+    const isWebTool = name === "web_search" || name === "fetch_web_content" || name === "web_fetch";
+    if (toolsConfig.EnableWebSearch === false && isWebTool) {
         throw new Error("Web search is disabled in config.ini");
-    }
-    if (toolsConfig.EnableImageGeneration === false && (name === "generate_image" || name === "get_image_status")) {
-        throw new Error("Image generation is disabled in config.ini");
-    }
-    if (toolsConfig.EnableFileOperations === false && (name === "read_file" || name === "write_file" || name === "search_and_replace" || name === "grep_search")) {
-        throw new Error("File operations are disabled in config.ini");
     }
 
     const tool = getTool(name);
@@ -64,7 +52,6 @@ export async function executeTool(name, args, badgeEl, genState) {
         throw new Error("Unknown tool: " + name);
     }
 
-    // Initialize visual state on badge (e.g. timers)
     onToolStart(name, args, badgeEl);
 
     let data;
@@ -75,9 +62,7 @@ export async function executeTool(name, args, badgeEl, genState) {
         throw err;
     }
 
-    // Synchronize UI badge and collapse output
     onToolComplete(name, args, badgeEl, data);
-
     return data;
 }
 

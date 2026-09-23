@@ -714,10 +714,24 @@ class BaseProvider {
                 if (argsObj.file && !argsObj.path) argsObj.path = argsObj.file;
             } else if (nameLower === "find_in_files" || nameLower === "grep" || nameLower === "search_files") {
                 name = "grep_search";
-            } else if (nameLower === "web_fetch" || nameLower === "fetch_url" || nameLower === "curl" || nameLower === "scrape") {
-                name = "fetch_web_content";
+            } else if (nameLower === "fetch_web_content" || nameLower === "web_fetch" || nameLower === "fetch_url" || nameLower === "curl" || nameLower === "scrape") {
+                name = "web_search";
+                if (!argsObj.type) argsObj.type = "fetch";
+                if (!argsObj.query && argsObj.url) argsObj.query = argsObj.url;
             } else if (nameLower === "google_search" || nameLower === "duckduckgo_search" || nameLower === "search") {
                 name = "web_search";
+                if (!argsObj.type) argsObj.type = "search";
+            } else if (nameLower === "manage_task" || nameLower === "task_manager") {
+                name = "manage_tasks";
+            } else if (nameLower === "task_send_input" || nameLower === "send_input") {
+                name = "manage_tasks";
+                if (!argsObj.action) argsObj.action = "send_input";
+            } else if (nameLower === "task_kill" || nameLower === "kill_task") {
+                name = "manage_tasks";
+                if (!argsObj.action) argsObj.action = "kill_task";
+            } else if (nameLower === "task_stdout" || nameLower === "get_task_output") {
+                name = "manage_tasks";
+                if (!argsObj.action) argsObj.action = "status";
             } else if (nameLower === "sleep" || nameLower === "wait") {
                 name = "idle";
             }

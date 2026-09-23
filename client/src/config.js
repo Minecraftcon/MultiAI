@@ -25,18 +25,15 @@ export const SYSTEM_PROMPT_PRESETS = {
 };
 
 export const CORE_TOOLS_PROMPT = `
-Use web_search whenever current, recent, or externally verifiable information is needed.
-Use fetch_web_content whenever you need to read the full content, documentation, or articles from specific web URLs.
-To execute terminal commands, call run_task. Always provide a concise task_name (e.g. 'Analyze project', 'Run unit tests', 'Install dependencies'). You can inspect output, read files, or manage shell scripts.
-If a command is interactive or long-running, run_task returns an initial state with any live prompt. Use task_send_input to pipe text (type: "text", field: "...", automatically submits with Enter) or keyboard combinations (type: "keycode", combination: "ctrl+c" / "ctrl+d" / "enter" / "esc"). task_send_input returns the immediate process status and output. Use task_stdout to monitor cumulative output, and task_kill to terminate it.
-Use idle if you need to pause or wait for a background command to complete or produce output. When task_id is provided, idle will wake up immediately as soon as the command exits or produces output without waiting for the full timeout.
-Use run_python to execute Python code snippets directly in the runtime environment. Automatically captures stdout, stderr, execution time, and evaluates the value of the final expression if present (like Jupyter). Ideal for fast calculations, data processing, regex testing, or script validation without shell escaping issues.
-Use read_file to inspect files, check file metadata/stats (action: "info"), examine line-numbered code slices with start_line/end_line (action: "read"), or preview images/media (action: "view").
-Use grep_search to perform high-speed regex or literal text searches across files and directories (supports query, path, include glob, case_sensitive, is_regex, and files_only). Always use grep_search instead of running shell grep/find commands when searching for code patterns, symbols, or usages.
-Use search_and_replace for surgical find-and-replace in files. Employs a multi-stage cascade (exact match, CRLF/LF normalization, relative indentation tolerance with automatic replacement re-indentation, and fuzzy similarity matching >= 85%). Validates uniqueness to prevent ambiguous overwrites, supports optional line constraints (start_line, end_line), and supports allow_multiple: true when replacing all occurrences. Prefer search_and_replace or surgical write_file operations over rewriting entire files.
-Use write_file to modify or create files. You can write full contents (action: "write"), perform surgical string/code replacements with line-window targeting (action: "replace"), inject lines at specific 1-indexed line numbers (action: "inject"), or execute transactional multi-step file mutations (action: "batch").
+To search the web or fetch webpage content, call web_search:
+- Search keywords: web_search(type: "search", query: "<search keywords>")
+- Fetch webpage: web_search(type: "fetch", query: "<webpage url>")
+To execute terminal commands, call run_task. Supports command, timer (seconds to wait before returning output, default: 5), task_name, and optional cwd.
+To manage running background tasks, call manage_tasks. Supports subcommands:
+- 'send_input': send keycodes like 'ctrl+c', 'ctrl+d', 'alt+x', 'enter', or text inputs in quotes like "'my input'".
+- 'kill_task': terminate a background task by task_id.
 COMPOSITE STORAGE & FILE ARCHIVAL ($SCRATCH & $ARTIFACTS):
-- Ephemeral Scratchpad ($SCRATCH): For one-off test scripts, scratch notes, temporary data, mock outputs, or benchmarks, write them using '$SCRATCH/<filename>'.
+- Ephemeral Scratchpad ($SCRATCH): For one-off test scripts, scratch notes, temporary data, working outputs, or benchmarks, write them using '$SCRATCH/<filename>'.
 - Persistent Artifacts ($ARTIFACTS): For milestone archives, architectural design docs, compaction snapshots, or permanent state briefs, write them using '$ARTIFACTS/<filename>'.
 - Paths starting with '$SCRATCH/' or '$ARTIFACTS/' automatically route to their dedicated conversation directory on disk.
 - In terminal commands with run_task, you can directly reference '$SCRATCH/<file>' or '$ARTIFACTS/<file>' (as well as '$SCRATCH_DIR', '$ARTIFACTS_DIR').

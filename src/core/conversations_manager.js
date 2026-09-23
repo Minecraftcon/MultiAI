@@ -188,13 +188,13 @@ function ensureChatWorkspace(chatId, dateStr) {
         `[SCRATCHPAD, ARTIFACTS & WORKSPACE]:`,
         `- Active Chat ID: ${chatId}`,
         `- Conversation Root: ${chatDir}`,
-        `- Scratchsheet Directory ($SCRATCH): ${scratchDir}`,
+        `- Scratch Directory ($SCRATCH): ${scratchDir}`,
         `- Artifacts Directory ($ARTIFACTS): ${artifactsDir}`,
         `- Images Directory: ${imagesDir}`,
         `- STORAGE & WORKSPACE GUIDELINES:`,
-        `  1. You have a dedicated scratch directory (${scratchDir}) accessible via '$SCRATCH/<filename>' for temporary test scripts, scratch notes, or one-off benchmarks.`,
+        `  1. You have a dedicated scratch directory (${scratchDir}) accessible via '$SCRATCH/<filename>' for temporary test scripts, scratch notes, working logs, or one-off benchmarks.`,
         `  2. You have a dedicated artifacts directory (${artifactsDir}) accessible via '$ARTIFACTS/<filename>' for persistent milestone archives, architecture briefs, and state snapshots.`,
-        `  3. In run_task, you can directly use '$SCRATCH' or '$ARTIFACTS' (or '$SCRATCH_DIR', '$ARTIFACTS_DIR') in terminal commands.`,
+        `  3. In run_task, you can directly reference '$SCRATCH' or '$ARTIFACTS' (or '$SCRATCH_DIR', '$ARTIFACTS_DIR') in terminal commands.`,
         `  4. Regular relative paths resolve normally against the project workspace.`
     ].join("\n");
 

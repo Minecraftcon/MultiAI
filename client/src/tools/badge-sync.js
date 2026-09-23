@@ -8,8 +8,8 @@
 export function onToolStart(name, args, badgeEl) {
     if (!badgeEl) return;
 
-    if (name === "run_task") {
-        const cooldown = Math.max(1, parseInt(args.timeout, 10) || 1);
+    if (name === "run_task" || name === "run_command") {
+        const cooldown = Math.max(1, parseInt(args.timer || args.timeout, 10) || 5);
         const ringBar = badgeEl.querySelector(".timer-ring-bar");
         if (ringBar) {
             ringBar.style.transition = "none";
@@ -39,7 +39,7 @@ export function onToolStart(name, args, badgeEl) {
 export function onToolComplete(name, args, badgeEl, data) {
     if (!badgeEl) return;
 
-    if (name === "run_task" || name === "idle") {
+    if (name === "run_task" || name === "run_command" || name === "idle") {
         const ringBar = badgeEl.querySelector(".timer-ring-bar");
         if (ringBar) {
             ringBar.style.transition = "stroke-dashoffset 0.15s ease, stroke 0.3s ease";
@@ -130,11 +130,18 @@ export function onToolComplete(name, args, badgeEl, data) {
                             badgeEl._collapseDiv.appendChild(imgPreview);
                         }
                         imgPreview.src = imgData.url;
-                        imgPreview.alt = imgData.prompt || "Generated image";
                     }
                 }
-            } else if (name === "task_send_input") {
-                outText = data.output || `input: (${data.input || (args.type === "keycode" || args.combination ? (args.combination || "key") : (args.field !== undefined ? args.field : (args.input_string || "")))}), sent successfully\nStatus: ${data.status || (data.running ? "running" : "finished")}\nstderr: ${data.stderr || ""}${data.stdout ? `\nstdout: ${data.stdout}` : ""}`;
+            } else if (name === "manage_tasks" || name === "manage_task" || name === "task_send_input" || name === "task_kill") {
+                if (data.status === "task_completed" || (typeof data.status === "string" && data.status.includes("terminated"))) {
+                    outText = data.output || data.status || `Task ${args.task_id || args.id} terminated.`;
+                } else if (data.output) {
+                    outText = data.output;
+                } else if (data.status) {
+                    outText = `Status: ${data.status}\n${data.stdout ? `stdout:\n${data.stdout}` : ""}${data.stderr ? `stderr:\n${data.stderr}` : ""}`.trim();
+                } else {
+                    outText = JSON.stringify(data, null, 2);
+                }
             } else if (name === "idle") {
                 outText = `[Idle Result: ${data.status}] Elapsed: ${data.elapsed_seconds}s${data.exit_code !== undefined ? ` (Exit code: ${data.exit_code})` : ""}`;
                 if (data.stdout || data.stderr) {
@@ -142,8 +149,14 @@ export function onToolComplete(name, args, badgeEl, data) {
                 }
             } else if (data.stdout || data.stderr) {
                 outText = (data.stdout || "") + (data.stderr ? ("\n" + data.stderr) : "");
-            } else if (data.status) {
-                outText = data.status;
+            } else if (name === "web_search" || name === "fetch_web_content" || name === "web_fetch") {
+                if (data.results && Array.isArray(data.results)) {
+                    outText = data.results.map(r => `[${r.title || r.url}]\n${(r.snippet || r.text || r.content || "").slice(0, 800)}${(r.snippet || r.text || r.content || "").length > 800 ? "..." : ""}`).join("\n\n---\n\n");
+                } else if (data.markdown || data.content) {
+                    outText = data.markdown || data.content;
+                } else {
+                    outText = JSON.stringify(data, null, 2);
+                }
             } else if (data.results && Array.isArray(data.results)) {
                 outText = data.results.map(r => `[${r.title || r.url}]\n${(r.text || "").slice(0, 800)}${r.text?.length > 800 ? "..." : ""}`).join("\n\n---\n\n");
             } else {

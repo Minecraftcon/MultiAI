@@ -37,7 +37,8 @@ if HAS_FLASK:
     def run_task_endpoint():
         data = request.json or {}
         command = data.get("command")
-        timeout_secs = float(data.get("timeout") if data.get("timeout") is not None else (float(data.get("wait_ms", 1000)) / 1000.0 if "wait_ms" in data else 1.0))
+        timer_val = data.get("timer") if data.get("timer") is not None else data.get("timeout")
+        timeout_secs = float(timer_val if timer_val is not None else (float(data.get("wait_ms", 1000)) / 1000.0 if "wait_ms" in data else 5.0))
         if not command:
             return jsonify({"error": "No command provided"}), 400
 
@@ -198,7 +199,8 @@ class FallbackHandler(BaseHTTPRequestHandler):
             cmd = data.get("command")
             if not cmd:
                 return self._send_json(400, {"error": "No command provided"})
-            timeout_sec = float(data.get("timeout") if data.get("timeout") is not None else (float(data.get("wait_ms", 1000)) / 1000.0 if "wait_ms" in data else 1.0))
+            timer_val = data.get("timer") if data.get("timer") is not None else data.get("timeout")
+            timeout_sec = float(timer_val if timer_val is not None else (float(data.get("wait_ms", 1000)) / 1000.0 if "wait_ms" in data else 5.0))
             tid = manager.run_task(cmd, shell_override=data.get("shell"), scratch_dir=data.get("scratch_dir"), artifacts_dir=data.get("artifacts_dir"), cwd=data.get("cwd"))
             return self._send_json(200, manager.wait_for_task(tid, timeout_sec))
 

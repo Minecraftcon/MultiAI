@@ -140,6 +140,7 @@
     font-size: 13.5px;
     line-height: 1.5;
     color: var(--text-primary);
+    white-space: normal;
 }
 
 .activity-thought-item p {
@@ -148,6 +149,21 @@
 
 .activity-thought-item p:last-child {
     margin-bottom: 0;
+}
+
+.activity-thought-item ul,
+.activity-thought-item ol {
+    margin: 4px 0 6px 0;
+    padding-left: 20px;
+}
+
+.activity-thought-item li {
+    margin: 2px 0;
+}
+
+.activity-thought-item li p {
+    margin: 0;
+    display: inline;
 }
 
 /* Icons & Progress Ring */
@@ -319,9 +335,9 @@
 
 .thought-content {
     font-size: 13.5px;
-    line-height: 1.6;
+    line-height: 1.5;
     color: var(--text-secondary);
-    white-space: pre-wrap;
+    white-space: normal;
     word-break: break-word;
     padding: 2px 0 6px 0;
 }
@@ -332,6 +348,33 @@
 
 .thought-content p:last-child {
     margin-bottom: 0;
+}
+
+.thought-content ul,
+.thought-content ol {
+    margin: 4px 0 8px 0;
+    padding-left: 20px;
+}
+
+.thought-content li {
+    margin: 2px 0;
+    padding-left: 2px;
+}
+
+.thought-content li p {
+    margin: 0;
+    display: inline;
+}
+
+.thought-content pre {
+    margin: 6px 0;
+    padding: 8px 12px;
+    border-radius: 6px;
+    background: var(--surface-2);
+    font-size: 12.5px;
+    line-height: 1.4;
+    white-space: pre;
+    overflow-x: auto;
 }
 
 /* =========================================================

@@ -24,7 +24,7 @@ import { updateSendButtonState, stopChatGeneration } from "./composer.js";
 import { updateModelPickerDisplay } from "./model-picker.js";
 import { openSettings } from "./settings-view.js";
 import { setStartPageMode } from "./chatbox.js";
-import { wrapHugeThoughts } from "./chat-ui.js";
+import { wrapHugeThoughts, renderSessionMessages } from "./chat-ui.js";
 
 let currentSearchFilter = "";
 let activeMenuChatId = null;
@@ -494,26 +494,8 @@ export async function switchToBuildChat(projectId, chatId) {
     if (chat) {
         chat.innerHTML = "";
 
-        // Render from messages (chatHtml no longer stored)
-        if (Array.isArray(session.messages) && session.messages.length > 0) {
-            const fragment = document.createDocumentFragment();
-            session.messages.forEach(m => {
-                if (m.role === "user") {
-                    const div = document.createElement("div");
-                    div.className = "message user";
-                    div.dataset.rawText = m.content || "";
-                    div.innerHTML = `<div class="user-bubble-content"><div class="msg-bubble-text">${escapeHTML(m.content || "")}</div></div>`;
-                    fragment.appendChild(div);
-                } else if (m.role === "assistant") {
-                    const div = document.createElement("div");
-                    div.className = "message ai";
-                    div.dataset.rawText = m.content || "";
-                    div.innerHTML = `<div class="pre-search-content">${parseMarkdown(m.content || "")}</div><div class="activity-wrapper" style="display:none;"><button type="button" class="activity-toggle"><span class="chevron">▶</span><span class="activity-label">Activity</span></button><div class="activity-collapse"><div class="activity-overflow"><div class="activity-content"><div class="search-items-container"></div></div></div></div></div><div class="final-content"></div><div class="followup-suggestions" style="display:none;"></div>`;
-                    fragment.appendChild(div);
-                }
-            });
-            chat.appendChild(fragment);
-        }
+        // Accurately render from messages with full tool call and thought trace recovery
+        renderSessionMessages(session, chat);
 
         bindInteractiveCodeBlocks(chat);
         renderMermaidInElement(chat);
@@ -588,7 +570,7 @@ export async function startFreshBuildChat(projectId) {
     closePanel(true);
 }
 
-export function switchToChat(id) {
+export async function switchToChat(id) {
     if (!state.chatSessions[id]) return;
     hideMobileActions();
     hideChatItemMenu();
@@ -601,7 +583,25 @@ export function switchToChat(id) {
     try {
         localStorage.setItem(ACTIVE_CHAT_KEY, id);
     } catch (_) {}
-    const session = state.chatSessions[id];
+    let session = state.chatSessions[id];
+
+    // If session messages are not yet loaded in memory, fetch full session from backend
+    if (!session.messages || session.messages.length === 0) {
+        try {
+            const res = await fetch("/api/chats/" + encodeURIComponent(id));
+            if (res.ok) {
+                const data = await res.json();
+                if (data && data.session) {
+                    session = { ...session, ...data.session };
+                    state.chatSessions[id] = session;
+                    if (data.workspace) session.workspace = data.workspace;
+                }
+            }
+        } catch (e) {
+            console.warn("[STORAGE] Error fetching full chat session:", e);
+        }
+    }
+
     const chat = document.getElementById("chat");
     const modelSelect = document.getElementById("modelSelect");
 
@@ -627,26 +627,8 @@ export function switchToChat(id) {
     if (chat) {
         chat.innerHTML = "";
 
-        // Always render from messages (chatHtml no longer stored)
-        if (Array.isArray(session.messages) && session.messages.length > 0) {
-            const fragment = document.createDocumentFragment();
-            session.messages.forEach(m => {
-                if (m.role === "user") {
-                    const div = document.createElement("div");
-                    div.className = "message user";
-                    div.dataset.rawText = m.content || "";
-                    div.innerHTML = `<div class="user-bubble-content"><div class="msg-bubble-text">${escapeHTML(m.content || "")}</div></div>`;
-                    fragment.appendChild(div);
-                } else if (m.role === "assistant") {
-                    const div = document.createElement("div");
-                    div.className = "message ai";
-                    div.dataset.rawText = m.content || "";
-                    div.innerHTML = `<div class="pre-search-content">${parseMarkdown(m.content || "")}</div><div class="activity-wrapper" style="display:none;"><button type="button" class="activity-toggle"><span class="chevron">▶</span><span class="activity-label">Activity</span></button><div class="activity-collapse"><div class="activity-overflow"><div class="activity-content"><div class="search-items-container"></div></div></div></div></div><div class="final-content"></div><div class="followup-suggestions" style="display:none;"></div>`;
-                    fragment.appendChild(div);
-                }
-            });
-            chat.appendChild(fragment);
-        }
+        // Accurately render from messages with full tool call and thought trace recovery
+        renderSessionMessages(session, chat);
 
         chat.querySelectorAll(".user-msg-actions").forEach(el => el.remove());
 
@@ -654,22 +636,6 @@ export function switchToChat(id) {
             if (!msg.dataset.rawText) {
                 const textEl = msg.querySelector(".msg-bubble-text");
                 msg.dataset.rawText = textEl ? textEl.textContent.trim() : msg.textContent.trim();
-            }
-        });
-
-        // Re-hydrate AI messages that contain math but are missing KaTeX elements
-        chat.querySelectorAll(".message.ai").forEach(msg => {
-            const raw = msg.dataset.rawText;
-            if (raw && !msg.querySelector(".katex")) {
-                const hasMath = raw.includes("\\[") || raw.includes("$$") || raw.includes("\\(") ||
-                                /(?:^|\n)\s*\[\s*[\s\S]*?\\[a-zA-Z]+[\s\S]*?\s*\]/.test(raw) ||
-                                /(?<![\$\\\w])\$[^\s\$][^\$]*?[^\s\$]?\$(?![\$\d\w])/.test(raw);
-                if (hasMath) {
-                    const preContent = msg.querySelector(".pre-search-content");
-                    const finalContent = msg.querySelector(".final-content");
-                    const target = (finalContent && finalContent.innerHTML.trim()) ? finalContent : preContent;
-                    if (target) target.innerHTML = parseMarkdown(raw);
-                }
             }
         });
 
@@ -764,24 +730,6 @@ export function switchToChat(id) {
         }
     } else if (session && session.isDeepSearch !== undefined) {
         setDeepSearchActive(Boolean(session.isDeepSearch));
-    }
-
-    // Asynchronously fetch full messages from backend if missing
-    if (!session.messages || !session.messages.some(m => m.role === "user")) {
-        fetch("/api/chats/" + encodeURIComponent(id))
-            .then(res => res.ok ? res.json() : null)
-            .then(data => {
-                if (data && data.session && Array.isArray(data.session.messages) && data.session.messages.length > 0) {
-                    if (state.currentChatId === id) {
-                        session.messages = data.session.messages;
-                        state.messages = structuredClone(session.messages);
-                        if (session.messages.some(m => m.role === "user")) {
-                            setStartPageMode(false);
-                        }
-                    }
-                }
-            })
-            .catch(() => {});
     }
 
     saveStoredChats();
@@ -1589,18 +1537,18 @@ export async function syncActiveModeConversation(mode = state.appMode) {
         const activeId = localStorage.getItem(ACTIVE_CHAT_KEY);
         if (activeId && state.chatSessions[activeId] && !state.chatSessions[activeId].projectId && state.chatSessions[activeId].mode !== "build") {
             state.currentChatId = null;
-            switchToChat(activeId);
+            await switchToChat(activeId);
             return;
         }
 
         const validSessions = Object.values(state.chatSessions).filter(s => 
-            s && !s.projectId && (s.mode !== "build") && s.messages?.some(m => m.role === "user")
+            s && !s.projectId && (s.mode !== "build") && (s.messages?.some(m => m.role === "user") || (s.messageCount && s.messageCount > 0) || s.workspace)
         );
 
         if (validSessions.length > 0) {
             validSessions.sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
             state.currentChatId = null;
-            switchToChat(validSessions[0].id);
+            await switchToChat(validSessions[0].id);
             return;
         }
 
