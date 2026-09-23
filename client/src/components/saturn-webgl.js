@@ -175,6 +175,27 @@ function animate() {
     }
 }
 
+let _threePromise = null;
+function ensureThreeJS() {
+    if (typeof THREE !== "undefined") return Promise.resolve(THREE);
+    if (_threePromise) return _threePromise;
+    _threePromise = new Promise((resolve, reject) => {
+        const s = document.createElement("script");
+        s.src = "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js";
+        s.async = true;
+        s.onload = () => {
+            if (typeof THREE !== "undefined") resolve(THREE);
+            else reject(new Error("Three.js loaded but undefined"));
+        };
+        s.onerror = () => {
+            _threePromise = null;
+            reject(new Error("Failed to load Three.js from CDN"));
+        };
+        document.head.appendChild(s);
+    });
+    return _threePromise;
+}
+
 /**
  * Starts or mounts the 3D Saturn WebGL experience
  */
@@ -184,8 +205,9 @@ export function startSaturnWebGL(container) {
     }
 
     if (typeof THREE === "undefined") {
-        console.warn("[SATURN-3D] Three.js not loaded yet. Waiting...");
-        setTimeout(() => startSaturnWebGL(container), 200);
+        ensureThreeJS()
+            .then(() => startSaturnWebGL(container))
+            .catch(err => console.warn("[SATURN-3D] Could not load Three.js on demand:", err));
         return;
     }
 

@@ -1,7 +1,7 @@
 const { loadModelsConfig, getEnvKey, sendJSON } = require("../utils");
 const { resolveProvider } = require("../../providers");
 const { createAgentGraph } = require("../../core/agent_graph");
-const { getKoboldBaseUrl } = require("./config");
+const { getKoboldBaseUrl, getLocalSession } = require("./config");
 
 async function handleChat(req, res) {
     try {
@@ -34,11 +34,19 @@ async function handleChat(req, res) {
         const providerKey = providerId || provider.name || provider.type;
         const providerHandler = resolveProvider(providerKey);
 
-        // For rolling providers (e.g. KoboldCPP), inject the session base_url
+        // For rolling providers (local / koboldcpp), inject the full session state
         const effectiveProviderConfig = { ...provider };
-        const koboldUrl = getKoboldBaseUrl();
-        if (providerKey === "koboldcpp" && koboldUrl) {
-            effectiveProviderConfig.base_url = koboldUrl;
+        const isLocalProvider = providerKey === "local" || providerKey === "koboldcpp";
+        if (isLocalProvider) {
+            const localSession = getLocalSession();
+            if (localSession.base_url) {
+                effectiveProviderConfig.base_url = localSession.base_url;
+                if (localSession.api_format) effectiveProviderConfig.api_format = localSession.api_format;
+                if (localSession.temperature !== null) effectiveProviderConfig.temperature = localSession.temperature;
+                if (localSession.top_p !== null) effectiveProviderConfig.top_p = localSession.top_p;
+                if (localSession.top_k !== null) effectiveProviderConfig.top_k = localSession.top_k;
+                if (localSession.repetition_penalty !== null) effectiveProviderConfig.repetition_penalty = localSession.repetition_penalty;
+            }
         }
 
         const chatResult = await providerHandler.handleChat({

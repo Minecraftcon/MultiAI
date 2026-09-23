@@ -1,5 +1,5 @@
 const { handleStatic } = require("./routes/static");
-const { handleSystemInfo, handleConfig, handleModels, handleKoboldBaseUrl, handleKoboldProbe } = require("./routes/config");
+const { handleSystemInfo, handleConfig, handleModels, handleKoboldBaseUrl, handleKoboldProbe, handleLocalSession, handleLocalProbe } = require("./routes/config");
 const { handleMedia, handleImageGenerate, handleImageStatus } = require("./routes/media");
 const { handleFilesRoute } = require("./routes/files");
 const { handleTaskRoute } = require("./routes/tasks");
@@ -36,6 +36,13 @@ async function routeRequest(req, res) {
     }
     if (req.method === "POST" && reqUrl === "/api/kobold/probe") {
         return handleKoboldProbe(req, res);
+    }
+    // /api/local/* — new canonical routes (same handlers)
+    if (req.method === "GET" && reqUrl === "/api/local/session") {
+        return handleLocalSession(req, res);
+    }
+    if (req.method === "POST" && reqUrl === "/api/local/probe") {
+        return handleLocalProbe(req, res);
     }
 
     // Media & Image Generation

@@ -14,6 +14,12 @@
     <!-- Puter -->
     <script src="https://js.puter.com/v2/"></script>
 
+    <!-- CDN preconnects -->
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+    <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+    <link rel="dns-prefetch" href="https://cdnjs.cloudflare.com">
+
     <!-- UI Font -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -56,17 +62,6 @@
     <script>
         if (typeof lucide === "undefined") {
             document.write('<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"><\/script>');
-        }
-    </script>
-
-    <!-- Mermaid Diagrams -->
-    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
-
-    <!-- Three.js (Photorealistic WebGL 3D Celestial Engine) -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script>
-        if (typeof THREE === "undefined") {
-            document.write('<script src="https://unpkg.com/three@0.128.0/build/three.min.js"><\/script>');
         }
     </script>
 
@@ -761,18 +756,6 @@
             <div class="sheet-action-text">
                 <span class="sheet-action-title">Documents</span>
                 <span class="sheet-action-desc">PDF, TXT, code & data</span>
-            </div>
-        </button>
-        <button id="pickDeepSearchBtn" type="button" class="sheet-action-card">
-            <div class="sheet-action-icon search-icon-bg">
-                <i data-lucide="compass"></i>
-            </div>
-            <div class="sheet-action-text">
-                <div class="sheet-action-title-row">
-                    <span class="sheet-action-title">Deep Search</span>
-                    <span class="sheet-action-badge" id="deepSearchSheetBadge">OFF</span>
-                </div>
-                <span class="sheet-action-desc" id="deepSearchSheetDesc">Multi-agent research (New chats only)</span>
             </div>
         </button>
     </div>

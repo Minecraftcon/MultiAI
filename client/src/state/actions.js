@@ -57,7 +57,7 @@ export function updateSessionMessages(chatId, messages) {
     if (!chatId || !state.chatSessions[chatId]) return;
     state.chatSessions[chatId].messages = messages;
     if (state.currentChatId === chatId) {
-        state.messages = JSON.parse(JSON.stringify(messages));
+        state.messages = structuredClone(messages);
     }
 }
 

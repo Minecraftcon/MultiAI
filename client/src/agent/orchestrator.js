@@ -331,8 +331,6 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
                     elapsedSeconds: ((Date.now() - overallStartTime) / 1000).toFixed(1)
                 });
                 updateAIStream(currentAIMessage, finalDisplay, true, overallStartTime, hasRunTools);
-                const chat = document.getElementById("chat");
-                if (chat) session.chatHtml = chat.innerHTML;
                 session.updatedAt = Date.now();
                 state.messages = session.messages;
                 saveStoredChats();

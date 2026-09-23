@@ -357,9 +357,6 @@ export async function continueFromFailedPoint() {
             });
         }
     } finally {
-        if (session) {
-            session.chatHtml = (state.currentChatId === targetChatId) ? chat.innerHTML : session.chatHtml;
-        }
         delete state.activeGenerations[targetChatId];
 
         if (state.currentChatId === targetChatId) {

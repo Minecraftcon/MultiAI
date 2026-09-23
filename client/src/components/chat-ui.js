@@ -9,6 +9,28 @@ import { chatbox } from "./chatbox.js";
 import { parseMarkdown, extractThoughtAndContent, bindInteractiveCodeBlocks, renderMermaidInElement, renderMath, bindAIImageCards } from "./renderer.js";
 import { saveCurrentChatState } from "../services/storage.js";
 
+let streamScrollRafId = null;
+
+export function requestScrollToBottom(chat, force = false) {
+    if (!chat) return;
+    if (force) {
+        if (streamScrollRafId) {
+            cancelAnimationFrame(streamScrollRafId);
+            streamScrollRafId = null;
+        }
+        chat.scrollTop = chat.scrollHeight;
+        return;
+    }
+    if (streamScrollRafId) return;
+    streamScrollRafId = requestAnimationFrame(() => {
+        streamScrollRafId = null;
+        const isNearBottom = (chat.scrollHeight - chat.scrollTop - chat.clientHeight) < 140;
+        if (isNearBottom) {
+            chat.scrollTop = chat.scrollHeight;
+        }
+    });
+}
+
 export function createAIMessageShell() {
     const chat = document.getElementById("chat");
     const div = document.createElement("div");
@@ -674,7 +696,7 @@ export function addThoughtTrace(element, text) {
     }
 
     searchContainer.appendChild(item);
-    chat.scrollTop = chat.scrollHeight;
+    requestScrollToBottom(chat);
     return item;
 }
 
@@ -800,9 +822,10 @@ export function updateAIStream(element, fullText, isDone, startTime, hasTools) {
         renderMermaidInElement(element);
         renderMath(element);
         bindAIImageCards(element);
+        requestScrollToBottom(chat, true);
+    } else {
+        requestScrollToBottom(chat, false);
     }
-
-    chat.scrollTop = chat.scrollHeight;
 }
 
 export function renderFollowupSuggestions(element, followups, isDone) {

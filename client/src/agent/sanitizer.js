@@ -85,6 +85,19 @@ export function cleanErrorMessage(raw) {
         } catch (_) {}
     }
 
+    // Extract readable text from HTML error pages (e.g. Cloudflare 524/502/503)
+    if (str.includes("<html") || str.includes("<!DOCTYPE") || str.includes("<title>")) {
+        const titleMatch = str.match(/<title>([^<]+)<\/title>/i);
+        const h1Match = str.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
+        const pMatch = str.match(/<p[^>]*>([\s\S]*?)<\/p>/i);
+        const parts = [];
+        if (titleMatch) parts.push(titleMatch[1].trim());
+        if (h1Match) parts.push(h1Match[1].replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim());
+        if (pMatch) parts.push(pMatch[1].replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim());
+        const cleaned = parts.filter(Boolean).join(" — ");
+        if (cleaned) str = cleaned;
+    }
+
     str = str.replace(/^Error:\s*/i, "").trim();
     return str;
 }

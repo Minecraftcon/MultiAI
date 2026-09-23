@@ -150,11 +150,11 @@ function selectModel(modelValue) {
     // Rolling connect placeholder — show the connect modal instead of selecting
     if (modelValue && modelValue.startsWith("__rolling_connect__")) {
         const providerId = modelValue.replace("__rolling_connect__", "");
-        if (providerId === "koboldcpp") {
+        if (providerId === "local" || providerId === "koboldcpp") {
             closeModelPicker();
-            import("./kobold-connect.js").then(kc => {
-                kc.showKoboldConnectModal((data) => {
-                    // Model was injected by kobold-connect, picker will auto-update
+            import("./local-connect.js").then(lc => {
+                lc.showLocalConnectModal((data) => {
+                    // Model was injected by local-connect, picker will auto-update
                 });
             });
         }

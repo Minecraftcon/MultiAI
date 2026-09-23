@@ -205,8 +205,8 @@ export function branchChatSession(chatId) {
         createdAt: Date.now(),
         updatedAt: Date.now(),
         model: original.model,
-        messages: JSON.parse(JSON.stringify(original.messages || [])),
-        chatHtml: original.chatHtml || ""
+        messages: structuredClone(original.messages || [])
+        // chatHtml omitted — re-rendered from messages
     };
 
     saveStoredChats();
@@ -272,8 +272,8 @@ export function branchFromMessage(targetMsgEl) {
         createdAt: Date.now(),
         updatedAt: Date.now(),
         model: session.model,
-        messages: JSON.parse(JSON.stringify(slicedMessages)),
-        chatHtml: branchHtml
+        messages: structuredClone(slicedMessages)
+        // chatHtml omitted — re-rendered from messages
     };
 
     saveStoredChats();
@@ -344,7 +344,6 @@ export function deleteMessage(targetMsgEl) {
     }
 
     targetMsgEl.remove();
-    session.chatHtml = chat.innerHTML;
     saveStoredChats();
     renderChatList();
 }
@@ -483,10 +482,6 @@ export async function regenerateFromMessage(target) {
             });
         }
     } finally {
-        const targetSession = state.chatSessions[targetChatId];
-        if (targetSession) {
-            targetSession.chatHtml = (state.currentChatId === targetChatId) ? chat.innerHTML : targetSession.chatHtml;
-        }
         delete state.activeGenerations[targetChatId];
 
         if (state.currentChatId === targetChatId) {
@@ -759,10 +754,6 @@ export async function submitEditUserMessage(userEl) {
             });
         }
     } finally {
-        const targetSession = state.chatSessions[targetChatId];
-        if (targetSession) {
-            targetSession.chatHtml = (state.currentChatId === targetChatId) ? chat.innerHTML : targetSession.chatHtml;
-        }
         delete state.activeGenerations[targetChatId];
 
         if (state.currentChatId === targetChatId) {

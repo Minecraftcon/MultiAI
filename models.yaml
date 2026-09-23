@@ -371,15 +371,22 @@ providers:
         supports_tools: true
         supports_vision: false
 
-  koboldcpp:
-    name: "KoboldCPP (Local)"
-    type: "koboldcpp"
-    # rolling: true means no hardcoded models — the UI prompts for a base URL
-    # and auto-detects the loaded model from the running KoboldCPP server.
-    # The base_url is stored in server memory only and resets on restart.
+  local:
+    name: "Local"
+    type: "local"
+    # rolling: true — no hardcoded models. The UI prompts for a base URL and
+    # auto-detects the loaded model from the running local server.
+    # The base_url and settings are stored in server memory only; reset on restart.
     rolling: true
     api_key_env: null
     base_url: null
+    # api_format: one of kobold | openai | llama | vllm | ollama
+    api_format: "kobold"
+    # Generation defaults (can be overridden in the connect modal per-session)
+    temperature: null
+    top_p: null
+    top_k: null
+    repetition_penalty: null
     models: []
 
   tokenharbor:

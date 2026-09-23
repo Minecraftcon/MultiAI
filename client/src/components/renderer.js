@@ -4,7 +4,48 @@
 import { escapeHTML } from "../utils/dom.js";
 import { renderIcons } from "../utils/icons.js";
 
-// Initialize Mermaid
+let _mermaidPromise = null;
+export function ensureMermaid() {
+    if (typeof mermaid !== "undefined") return Promise.resolve(mermaid);
+    if (_mermaidPromise) return _mermaidPromise;
+
+    _mermaidPromise = new Promise((resolve, reject) => {
+        const s = document.createElement("script");
+        s.src = "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js";
+        s.async = true;
+        s.onload = () => {
+            if (typeof mermaid !== "undefined") {
+                mermaid.initialize({
+                    startOnLoad: false,
+                    theme: "dark",
+                    securityLevel: "loose",
+                    fontFamily: "'JetBrains Mono', monospace",
+                    themeVariables: {
+                        darkMode: true,
+                        background: "#181818",
+                        primaryColor: "#2563eb",
+                        primaryTextColor: "#f3f4f6",
+                        primaryBorderColor: "#3b82f6",
+                        lineColor: "#9ca3af",
+                        secondaryColor: "#1e293b",
+                        tertiaryColor: "#0f172a"
+                    }
+                });
+                resolve(mermaid);
+            } else {
+                reject(new Error("Mermaid loaded but window.mermaid undefined"));
+            }
+        };
+        s.onerror = (e) => {
+            _mermaidPromise = null;
+            reject(new Error("Failed to load Mermaid library from CDN"));
+        };
+        document.head.appendChild(s);
+    });
+    return _mermaidPromise;
+}
+
+// Initialize Mermaid if already available
 if (typeof mermaid !== "undefined") {
     mermaid.initialize({
         startOnLoad: false,
@@ -809,9 +850,17 @@ export function bindInteractiveCodeBlocks(container) {
 let mermaidChartCounter = 0;
 
 export async function renderMermaidInElement(container) {
-    if (typeof mermaid === "undefined") return;
-
+    if (!container) return;
     const targets = container.querySelectorAll(".mermaid-target");
+    if (!targets.length) return;
+
+    try {
+        await ensureMermaid();
+    } catch (e) {
+        console.warn("[Mermaid] Could not load library:", e);
+        return;
+    }
+
     for (const target of targets) {
         if (target.dataset.rendered === "true") continue;
         target.dataset.rendered = "true";

@@ -404,7 +404,6 @@ export async function send() {
     }
 
     const targetSession = state.chatSessions[targetChatId];
-    targetSession.chatHtml = chat.innerHTML;
 
     state.activeGenerations[targetChatId] = {
         isGenerating: true,
@@ -462,9 +461,6 @@ export async function send() {
             });
         }
     } finally {
-        if (targetSession) {
-            targetSession.chatHtml = (state.currentChatId === targetChatId) ? chat.innerHTML : targetSession.chatHtml;
-        }
         delete state.activeGenerations[targetChatId];
 
         if (state.currentChatId === targetChatId) {

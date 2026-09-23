@@ -375,10 +375,30 @@ class BaseProvider {
 
             const resText = await res.text();
             if (!res.ok) {
+                let cleanErr = (resText || "").trim();
+                if (cleanErr.includes("<html") || cleanErr.includes("<!DOCTYPE") || cleanErr.includes("<body")) {
+                    const titleMatch = cleanErr.match(/<title>([^<]+)<\/title>/i);
+                    const h1Match = cleanErr.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
+                    const descMatch = cleanErr.match(/<p[^>]*>([\s\S]*?)<\/p>/i);
+                    const parts = [];
+                    if (titleMatch) parts.push(titleMatch[1].trim());
+                    if (h1Match) {
+                        const h1 = h1Match[1].replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+                        if (h1 && !parts.includes(h1)) parts.push(h1);
+                    }
+                    if (descMatch) {
+                        const desc = descMatch[1].replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+                        if (desc && desc.length < 200) parts.push(desc);
+                    }
+                    cleanErr = parts.filter(Boolean).join(" — ") || `HTML response (HTTP ${res.status})`;
+                }
+                if (res.status === 524) {
+                    cleanErr = `Cloudflare 524 (Timeout): Origin web server timed out responding (>100s). The model took too long or tunnel is unreachable. (${cleanErr})`;
+                }
                 return {
                     ok: false,
                     status: res.status,
-                    error: `${this.constructor.displayName || this.constructor.id} API error (${res.status}): ${resText}`
+                    error: `${this.constructor.displayName || this.constructor.id} API error (${res.status}): ${cleanErr}`
                 };
             }
 

@@ -50,12 +50,7 @@ export function loadStoredChats() {
     try {
         const raw = localStorage.getItem(CHATS_STORAGE_KEY);
         state.chatSessions = raw ? JSON.parse(raw) : {};
-        for (const id in state.chatSessions) {
-            const s = state.chatSessions[id];
-            if (s && typeof s.chatHtml === "string" && s.chatHtml.includes("user-msg-actions")) {
-                s.chatHtml = s.chatHtml.replace(/<div class="user-msg-actions">[\s\S]*?<\/div>/g, "");
-            }
-        }
+        // (No chatHtml migration needed — chatHtml is no longer stored in sessions)
     } catch (e) {
         state.chatSessions = {};
     }
@@ -80,7 +75,7 @@ export function loadStoredChats() {
                 .then(d => {
                     if (d?.session?.messages && d.session.messages.length > 0) {
                         sess.messages = d.session.messages;
-                        state.messages = JSON.parse(JSON.stringify(d.session.messages));
+                        state.messages = structuredClone(d.session.messages);
                         if (d.session.compactionState) sess.compactionState = d.session.compactionState;
                         document.dispatchEvent(new CustomEvent("chatsUpdated"));
                     }
@@ -119,9 +114,6 @@ export async function syncFromBackendDisk() {
                         if ((!diskChat.messages || diskChat.messages.length === 0) && (existing.messages && existing.messages.length > 0)) {
                             diskChat.messages = existing.messages;
                         }
-                        if (existing.chatHtml && (!diskChat.chatHtml || !diskChat.chatHtml.trim())) {
-                            diskChat.chatHtml = existing.chatHtml;
-                        }
                         if (existing.title && (!diskChat.title || diskChat.title === "Conversation")) {
                             diskChat.title = existing.title;
                         }
@@ -152,9 +144,31 @@ export async function syncFromBackendDisk() {
     }
 }
 
-export function saveStoredChats() {
+// Debounce timer for saveStoredChats — avoids serializing all sessions on every agent step.
+let _saveDebounceTimer = null;
+
+/**
+ * Schedules a debounced save. Flushes immediately if `immediate` is true.
+ * Use immediate=true only for critical moments (chat delete, app unload, etc.).
+ */
+export function saveStoredChats(immediate = false) {
     if (state.config?.General?.RecordChatHistory === false) return;
 
+    if (immediate) {
+        clearTimeout(_saveDebounceTimer);
+        _saveDebounceTimer = null;
+        _flushSave();
+        return;
+    }
+
+    if (_saveDebounceTimer) return; // already scheduled
+    _saveDebounceTimer = setTimeout(() => {
+        _saveDebounceTimer = null;
+        _flushSave();
+    }, 400);
+}
+
+function _flushSave() {
     // 1. Reliably save the active keys first in their own try/catch block
     try {
         if (state.appMode === "build") {
@@ -177,11 +191,19 @@ export function saveStoredChats() {
         }
     } catch (_) {}
 
-    // 2. Persist full chatSessions with quota-safe lightweight fallback
+    // 2. Persist sessions — strip chatHtml (DOM cache) before serializing to reduce size.
+    //    chatHtml is never needed: chat is re-rendered from session.messages on load.
     try {
-        localStorage.setItem(CHATS_STORAGE_KEY, JSON.stringify(state.chatSessions));
+        const toStore = {};
+        for (const [id, sess] of Object.entries(state.chatSessions)) {
+            if (!sess) continue;
+            // Shallow-copy without chatHtml
+            const { chatHtml: _dropped, ...rest } = sess; // eslint-disable-line no-unused-vars
+            toStore[id] = rest;
+        }
+        localStorage.setItem(CHATS_STORAGE_KEY, JSON.stringify(toStore));
     } catch (e) {
-        console.warn("[STORAGE] Full chat storage quota exceeded, falling back to lightweight cache:", e.message);
+        console.warn("[STORAGE] Chat storage quota exceeded, saving lightweight cache:", e.message);
         try {
             const lightweight = {};
             for (const [id, sess] of Object.entries(state.chatSessions)) {
@@ -195,8 +217,7 @@ export function saveStoredChats() {
                     updatedAt: sess.updatedAt,
                     workspace: sess.workspace,
                     compactionState: sess.compactionState,
-                    messages: [], // Do NOT store a truncated slice in localStorage; full history lives on disk
-                    chatHtml: "" // strip heavy DOM to ensure it fits in quota
+                    messages: [] // full history lives on disk
                 };
             }
             localStorage.setItem(CHATS_STORAGE_KEY, JSON.stringify(lightweight));
@@ -208,7 +229,7 @@ export function saveStoredChats() {
         const session = state.chatSessions[state.currentChatId];
         // Ensure in-memory session has current messages if state.messages has real turns
         if ((!session.messages || session.messages.length === 0) && state.messages && state.messages.length > 0) {
-            session.messages = JSON.parse(JSON.stringify(state.messages));
+            session.messages = structuredClone(state.messages);
         }
         const projectId = session.projectId || (state.appMode === "build" ? state.currentProjectId : null);
         if (projectId) {
@@ -227,7 +248,7 @@ export async function persistChatToDisk(session) {
     try {
         // Guard against sending empty messages if state has real turns for this session
         if ((!session.messages || session.messages.length === 0) && state.messages && state.messages.length > 0 && state.currentChatId === session.id) {
-            session.messages = JSON.parse(JSON.stringify(state.messages));
+            session.messages = structuredClone(state.messages);
         }
         const res = await fetch("/api/chats/save", {
             method: "POST",
@@ -288,8 +309,8 @@ export function createNewChatSession(initialUserText = "") {
         createdAt: Date.now(),
         updatedAt: Date.now(),
         model: modelSelect ? modelSelect.value : defaultModel,
-        messages: [...state.messages],
-        chatHtml: chat ? chat.innerHTML : ""
+        messages: [...state.messages]
+        // chatHtml intentionally omitted — DOM is re-rendered from messages on load
     };
     state.currentChatId = id;
 
@@ -309,36 +330,18 @@ export function createNewChatSession(initialUserText = "") {
 export function saveCurrentChatState() {
     if (!state.currentChatId || !state.chatSessions[state.currentChatId]) return;
 
-    const chat = document.getElementById("chat");
     const modelSelect = document.getElementById("modelSelect");
 
-    // If any user message is currently being edited, restore its text before saving HTML
-    if (chat) {
-        chat.querySelectorAll(".message.user.is-editing").forEach(el => {
-            const editContainer = el.querySelector(".user-edit-container");
-            if (editContainer) editContainer.remove();
-            const textEl = el.querySelector(".msg-bubble-text");
-            if (textEl) textEl.style.display = "";
-            el.classList.remove("is-editing");
-        });
-    }
-
     const session = state.chatSessions[state.currentChatId];
-    if (chat) {
-        const currentHtml = chat.innerHTML;
-        if (currentHtml && currentHtml.trim()) {
-            session.chatHtml = currentHtml;
-        }
-    }
-    
+
     // Protect against overwriting real message history with empty/system-only arrays
     const sessionHasReal = session.messages && session.messages.some(m => m.role !== "system");
     const stateHasReal = state.messages && state.messages.some(m => m.role !== "system");
 
     if (sessionHasReal) {
-        state.messages = JSON.parse(JSON.stringify(session.messages));
+        state.messages = structuredClone(session.messages);
     } else if (stateHasReal) {
-        session.messages = JSON.parse(JSON.stringify(state.messages));
+        session.messages = structuredClone(state.messages);
     }
 
     session.updatedAt = Date.now();
@@ -438,7 +441,7 @@ export async function saveBuildChatToDisk(projectId, chatSession) {
     if (!projectId || !chatSession || !chatSession.id) return;
     try {
         if ((!chatSession.messages || chatSession.messages.length === 0) && state.messages && state.messages.length > 0 && state.currentChatId === chatSession.id) {
-            chatSession.messages = JSON.parse(JSON.stringify(state.messages));
+            chatSession.messages = structuredClone(state.messages);
         }
         const res = await fetch(`/api/build/projects/${encodeURIComponent(projectId)}/chats/save`, {
             method: "POST",

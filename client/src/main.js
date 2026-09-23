@@ -35,13 +35,14 @@ async function initChatSessions() {
     for (const id of Object.keys(state.chatSessions)) {
         const sess = state.chatSessions[id];
         const hasUserMsg = sess.messages && sess.messages.some(m => m.role === "user");
-        if (!hasUserMsg && (!sess.chatHtml || !sess.chatHtml.trim())) {
+        // Session has no user messages — prune it (chatHtml no longer stored)
+        if (!hasUserMsg) {
             delete state.chatSessions[id];
             hasCleaned = true;
         }
     }
     if (hasCleaned) {
-        saveStoredChats();
+        saveStoredChats(true); // immediate: startup cleanup should flush right away
     }
 
     // Activate the appropriate conversation according to the active mode (Chat vs Build)

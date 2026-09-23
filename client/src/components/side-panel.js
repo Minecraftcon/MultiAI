@@ -257,6 +257,9 @@ export function renderProjectList(filterQuery = currentSearchFilter) {
     renderIcons(projectList);
 }
 
+/** Cached snapshot per chat-item so we know what's already rendered. */
+const _chatItemCache = new Map(); // chatId -> { title, dateStr, isActive, isRunning }
+
 export function renderChatList(filterQuery = currentSearchFilter) {
     if (state.appMode === "build") {
         renderProjectList(filterQuery);
@@ -267,8 +270,15 @@ export function renderChatList(filterQuery = currentSearchFilter) {
 
     let ids = Object.keys(state.chatSessions);
 
+    // Clear the keyed-diff map if we had an empty state placeholder
+    if (chatList.querySelector(".history-empty")) {
+        chatList.innerHTML = "";
+        _chatItemCache.clear();
+    }
+
     if (ids.length === 0) {
         chatList.innerHTML = '<div class="history-empty">No conversations yet</div>';
+        _chatItemCache.clear();
         return;
     }
 
@@ -281,127 +291,152 @@ export function renderChatList(filterQuery = currentSearchFilter) {
         });
         if (ids.length === 0) {
             chatList.innerHTML = '<div class="history-empty">No matching chats</div>';
+            _chatItemCache.clear();
             return;
         }
     }
 
-    chatList.innerHTML = "";
-    ids.forEach(id => {
+    // --- Keyed diff: reuse existing nodes, only patch what changed ---
+    const existingById = new Map();
+    for (const el of chatList.querySelectorAll(".chat-item[data-chat-id]")) {
+        existingById.set(el.dataset.chatId, el);
+    }
+
+    // Remove nodes that are no longer in the visible list
+    const idSet = new Set(ids);
+    for (const [id, el] of existingById) {
+        if (!idSet.has(id)) {
+            el.remove();
+            _chatItemCache.delete(id);
+            existingById.delete(id);
+        }
+    }
+
+    let prevEl = null; // used to maintain DOM order
+    let needsIconRefresh = false;
+
+    for (const id of ids) {
         const session = state.chatSessions[id];
         const isActive = id === state.currentChatId;
         const isRunning = Boolean(state.activeGenerations[id]?.isGenerating);
         const dateStr = formatChatDate(session.updatedAt || session.createdAt);
+        const title = session.title || "Untitled Chat";
 
-        const item = document.createElement("div");
-        item.className = `chat-item ${isActive ? "active" : ""}`;
-        item.dataset.chatId = id;
-        item.setAttribute("role", "button");
-        item.setAttribute("tabindex", "0");
+        let item = existingById.get(id);
 
-        item.innerHTML = `
-            <div class="chat-item-main">
-                <span class="chat-item-title">${escapeHTML(session.title || "Untitled Chat")}</span>
-            </div>
-            ${dateStr ? `<span class="chat-item-date">${escapeHTML(dateStr)}</span>` : ''}
-            ${isRunning ? '<div class="chat-item-spinner" title="Task running in background"></div>' : ''}
-            <button type="button" class="chat-item-more-btn" title="Options" aria-label="Conversation options">
-                <i data-lucide="more-horizontal"></i>
-            </button>
-        `;
+        if (!item) {
+            // --- Create new node ---
+            item = document.createElement("div");
+            item.dataset.chatId = id;
+            item.setAttribute("role", "button");
+            item.setAttribute("tabindex", "0");
 
-        let holdTimer = null;
-        let startX = 0;
-        let startY = 0;
-        let didLongPress = false;
+            // Inner markup (static structure, content patched below)
+            item.innerHTML = `
+                <div class="chat-item-main">
+                    <span class="chat-item-title"></span>
+                </div>
+                <span class="chat-item-date"></span>
+                <div class="chat-item-spinner" title="Task running in background" style="display:none"></div>
+                <button type="button" class="chat-item-more-btn" title="Options" aria-label="Conversation options">
+                    <i data-lucide="more-horizontal"></i>
+                </button>
+            `;
 
-        item.addEventListener("touchstart", (e) => {
-            if (e.touches.length !== 1) return;
-            if (e.target.closest(".chat-item-more-btn")) return;
+            // Bind events once per node (not re-bound on every render)
+            let holdTimer = null;
+            let startX = 0;
+            let startY = 0;
+            let didLongPress = false;
 
-            const touch = e.touches[0];
-            startX = touch.clientX;
-            startY = touch.clientY;
-            didLongPress = false;
-
-            clearTimeout(holdTimer);
-            holdTimer = setTimeout(() => {
-                didLongPress = true;
-                if (navigator.vibrate) {
-                    try { navigator.vibrate(40); } catch (err) {}
-                }
-                showChatItemContextMenu(id, startX, startY);
-            }, 450);
-        }, { passive: true });
-
-        item.addEventListener("touchmove", (e) => {
-            if (!holdTimer) return;
-            if (e.touches.length !== 1) {
-                clearTimeout(holdTimer);
-                holdTimer = null;
-                return;
-            }
-            const touch = e.touches[0];
-            const dx = Math.abs(touch.clientX - startX);
-            const dy = Math.abs(touch.clientY - startY);
-            if (dx > 10 || dy > 10) {
-                clearTimeout(holdTimer);
-                holdTimer = null;
-            }
-        }, { passive: true });
-
-        item.addEventListener("touchend", () => {
-            clearTimeout(holdTimer);
-            holdTimer = null;
-            if (didLongPress) {
-                setTimeout(() => {
-                    didLongPress = false;
-                }, 350);
-            }
-        });
-
-        item.addEventListener("touchcancel", () => {
-            clearTimeout(holdTimer);
-            holdTimer = null;
-            didLongPress = false;
-        });
-
-        item.addEventListener("click", (e) => {
-            if (didLongPress) {
-                e.preventDefault();
-                e.stopPropagation();
+            item.addEventListener("touchstart", (e) => {
+                if (e.touches.length !== 1) return;
+                if (e.target.closest(".chat-item-more-btn")) return;
+                const touch = e.touches[0];
+                startX = touch.clientX;
+                startY = touch.clientY;
                 didLongPress = false;
-                return;
-            }
-            if (e.target.closest(".chat-item-more-btn")) return;
-            if (id !== state.currentChatId) {
-                switchToChat(id);
-            }
-            closePanel(true);
-        });
+                clearTimeout(holdTimer);
+                holdTimer = setTimeout(() => {
+                    didLongPress = true;
+                    if (navigator.vibrate) { try { navigator.vibrate(40); } catch (_) {} }
+                    showChatItemContextMenu(id, startX, startY);
+                }, 450);
+            }, { passive: true });
 
-        item.addEventListener("keydown", (e) => {
-            if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                if (id !== state.currentChatId) {
-                    switchToChat(id);
+            item.addEventListener("touchmove", (e) => {
+                if (!holdTimer) return;
+                if (e.touches.length !== 1) { clearTimeout(holdTimer); holdTimer = null; return; }
+                const touch = e.touches[0];
+                if (Math.abs(touch.clientX - startX) > 10 || Math.abs(touch.clientY - startY) > 10) {
+                    clearTimeout(holdTimer); holdTimer = null;
                 }
-                closePanel(true);
-            }
-        });
+            }, { passive: true });
 
-        const moreBtn = item.querySelector(".chat-item-more-btn");
-        if (moreBtn) {
-            moreBtn.addEventListener("click", (e) => {
-                e.stopPropagation();
-                e.preventDefault();
-                showChatItemMenu(id, moreBtn);
+            item.addEventListener("touchend", () => {
+                clearTimeout(holdTimer); holdTimer = null;
+                if (didLongPress) setTimeout(() => { didLongPress = false; }, 350);
             });
+
+            item.addEventListener("touchcancel", () => {
+                clearTimeout(holdTimer); holdTimer = null; didLongPress = false;
+            });
+
+            item.addEventListener("click", (e) => {
+                if (didLongPress) { e.preventDefault(); e.stopPropagation(); didLongPress = false; return; }
+                if (e.target.closest(".chat-item-more-btn")) return;
+                if (id !== state.currentChatId) switchToChat(id);
+                closePanel(true);
+            });
+
+            item.addEventListener("keydown", (e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    if (id !== state.currentChatId) switchToChat(id);
+                    closePanel(true);
+                }
+            });
+
+            item.querySelector(".chat-item-more-btn")?.addEventListener("click", (e) => {
+                e.stopPropagation(); e.preventDefault();
+                showChatItemMenu(id, item.querySelector(".chat-item-more-btn"));
+            });
+
+            needsIconRefresh = true;
+            existingById.set(id, item);
         }
 
-        chatList.appendChild(item);
-    });
+        // --- Patch only changed fields ---
+        const cached = _chatItemCache.get(id) || {};
+        if (cached.isActive !== isActive) {
+            item.className = `chat-item${isActive ? " active" : ""}`;
+        }
+        if (cached.title !== title) {
+            item.querySelector(".chat-item-title").textContent = title;
+        }
+        if (cached.dateStr !== dateStr) {
+            const dateEl = item.querySelector(".chat-item-date");
+            if (dateEl) { dateEl.textContent = dateStr || ""; dateEl.style.display = dateStr ? "" : "none"; }
+        }
+        if (cached.isRunning !== isRunning) {
+            const spinner = item.querySelector(".chat-item-spinner");
+            if (spinner) spinner.style.display = isRunning ? "" : "none";
+        }
+        _chatItemCache.set(id, { title, dateStr, isActive, isRunning });
 
-    renderIcons(chatList);
+        // --- Maintain sorted DOM order without full rebuild ---
+        const correctNext = prevEl ? prevEl.nextSibling : chatList.firstChild;
+        if (item !== correctNext) {
+            if (prevEl) {
+                chatList.insertBefore(item, prevEl.nextSibling);
+            } else {
+                chatList.prepend(item);
+            }
+        }
+        prevEl = item;
+    }
+
+    if (needsIconRefresh) renderIcons(chatList);
 
     const panelBody = document.querySelector(".panel-body");
     if (panelBody) {
@@ -444,7 +479,7 @@ export async function switchToBuildChat(projectId, chatId) {
     await initBuildChatWorkspace(projectId, chatId);
 
     state.messages = (session.messages && session.messages.length > 0)
-        ? JSON.parse(JSON.stringify(session.messages))
+        ? structuredClone(session.messages)
         : [{ role: "system", content: state.activeSystemPrompt }];
 
     if (state.messages[0]?.role === "system") {
@@ -457,24 +492,27 @@ export async function switchToBuildChat(projectId, chatId) {
     }
 
     if (chat) {
-        chat.innerHTML = session.chatHtml || "";
+        chat.innerHTML = "";
 
-        if ((!chat.innerHTML || !chat.innerHTML.trim()) && Array.isArray(session.messages) && session.messages.length > 0) {
+        // Render from messages (chatHtml no longer stored)
+        if (Array.isArray(session.messages) && session.messages.length > 0) {
+            const fragment = document.createDocumentFragment();
             session.messages.forEach(m => {
                 if (m.role === "user") {
                     const div = document.createElement("div");
                     div.className = "message user";
                     div.dataset.rawText = m.content || "";
                     div.innerHTML = `<div class="user-bubble-content"><div class="msg-bubble-text">${escapeHTML(m.content || "")}</div></div>`;
-                    chat.appendChild(div);
+                    fragment.appendChild(div);
                 } else if (m.role === "assistant") {
                     const div = document.createElement("div");
                     div.className = "message ai";
                     div.dataset.rawText = m.content || "";
                     div.innerHTML = `<div class="pre-search-content">${parseMarkdown(m.content || "")}</div><div class="activity-wrapper" style="display:none;"><button type="button" class="activity-toggle"><span class="chevron">▶</span><span class="activity-label">Activity</span></button><div class="activity-collapse"><div class="activity-overflow"><div class="activity-content"><div class="search-items-container"></div></div></div></div></div><div class="final-content"></div><div class="followup-suggestions" style="display:none;"></div>`;
-                    chat.appendChild(div);
+                    fragment.appendChild(div);
                 }
             });
+            chat.appendChild(fragment);
         }
 
         bindInteractiveCodeBlocks(chat);
@@ -527,7 +565,7 @@ export async function startFreshBuildChat(projectId) {
         updatedAt: Date.now(),
         model: modelSelect ? modelSelect.value : defaultModel,
         messages: [{ role: "system", content: state.activeSystemPrompt }],
-        chatHtml: "",
+        chatHtml: "", // kept for disk-compat with old sessions that may still have it
         workspace
     };
 
@@ -574,7 +612,7 @@ export function switchToChat(id) {
     }
 
     state.messages = (session.messages && session.messages.length > 0)
-        ? JSON.parse(JSON.stringify(session.messages))
+        ? structuredClone(session.messages)
         : [{ role: "system", content: state.activeSystemPrompt }];
 
     if (state.messages[0]?.role === "system") {
@@ -587,25 +625,27 @@ export function switchToChat(id) {
     }
 
     if (chat) {
-        chat.innerHTML = session.chatHtml || "";
+        chat.innerHTML = "";
 
-        // Reconstruct from messages if chatHtml was empty or missing
-        if ((!chat.innerHTML || !chat.innerHTML.trim()) && Array.isArray(session.messages) && session.messages.length > 0) {
+        // Always render from messages (chatHtml no longer stored)
+        if (Array.isArray(session.messages) && session.messages.length > 0) {
+            const fragment = document.createDocumentFragment();
             session.messages.forEach(m => {
                 if (m.role === "user") {
                     const div = document.createElement("div");
                     div.className = "message user";
                     div.dataset.rawText = m.content || "";
                     div.innerHTML = `<div class="user-bubble-content"><div class="msg-bubble-text">${escapeHTML(m.content || "")}</div></div>`;
-                    chat.appendChild(div);
+                    fragment.appendChild(div);
                 } else if (m.role === "assistant") {
                     const div = document.createElement("div");
                     div.className = "message ai";
                     div.dataset.rawText = m.content || "";
                     div.innerHTML = `<div class="pre-search-content">${parseMarkdown(m.content || "")}</div><div class="activity-wrapper" style="display:none;"><button type="button" class="activity-toggle"><span class="chevron">▶</span><span class="activity-label">Activity</span></button><div class="activity-collapse"><div class="activity-overflow"><div class="activity-content"><div class="search-items-container"></div></div></div></div></div><div class="final-content"></div><div class="followup-suggestions" style="display:none;"></div>`;
-                    chat.appendChild(div);
+                    fragment.appendChild(div);
                 }
             });
+            chat.appendChild(fragment);
         }
 
         chat.querySelectorAll(".user-msg-actions").forEach(el => el.remove());
@@ -617,7 +657,7 @@ export function switchToChat(id) {
             }
         });
 
-        // Upgrade/re-hydrate any AI messages whose rawText contains math but KaTeX elements are absent
+        // Re-hydrate AI messages that contain math but are missing KaTeX elements
         chat.querySelectorAll(".message.ai").forEach(msg => {
             const raw = msg.dataset.rawText;
             if (raw && !msg.querySelector(".katex")) {
@@ -628,9 +668,7 @@ export function switchToChat(id) {
                     const preContent = msg.querySelector(".pre-search-content");
                     const finalContent = msg.querySelector(".final-content");
                     const target = (finalContent && finalContent.innerHTML.trim()) ? finalContent : preContent;
-                    if (target) {
-                        target.innerHTML = parseMarkdown(raw);
-                    }
+                    if (target) target.innerHTML = parseMarkdown(raw);
                 }
             }
         });
@@ -644,11 +682,6 @@ export function switchToChat(id) {
         wrapHugeThoughts(chat);
 
         chat.scrollTop = chat.scrollHeight;
-
-        // Ensure newly rendered KaTeX markup is stored in chatHtml for seamless reload
-        if (session.chatHtml !== chat.innerHTML) {
-            session.chatHtml = chat.innerHTML;
-        }
 
         // If session messages are missing or empty, reconstruct from DOM so context is never lost
         if ((!session.messages || !session.messages.some(m => m.role === "user")) && chat) {
@@ -666,7 +699,7 @@ export function switchToChat(id) {
                 });
                 if (reconstructed.length > 1) {
                     session.messages = reconstructed;
-                    state.messages = JSON.parse(JSON.stringify(reconstructed));
+                    state.messages = structuredClone(reconstructed);
                 }
             }
         }
@@ -720,7 +753,7 @@ export function switchToChat(id) {
         (state.messages && state.messages.some(m => m.role === "user")) ||
         (session.messageCount && session.messageCount > 0) ||
         (chat && chat.querySelector(".message.user")) ||
-        (session.chatHtml && (session.chatHtml.includes('class="message user"') || session.chatHtml.includes("message user")))
+        session.messages?.some(m => m.role === "user")
     );
     setStartPageMode(!hasUserMsg);
     if (session && session.isDeepSearch) {
@@ -741,7 +774,7 @@ export function switchToChat(id) {
                 if (data && data.session && Array.isArray(data.session.messages) && data.session.messages.length > 0) {
                     if (state.currentChatId === id) {
                         session.messages = data.session.messages;
-                        state.messages = JSON.parse(JSON.stringify(session.messages));
+                        state.messages = structuredClone(session.messages);
                         if (session.messages.some(m => m.role === "user")) {
                             setStartPageMode(false);
                         }
@@ -1003,13 +1036,13 @@ export let availableModels = [];
 export let modelProviderMap = {};
 export let modelVisionMap = {};
 
-// Lazy import to avoid circular deps (kobold-connect imports from side-panel)
-let _koboldConnect = null;
-async function getKoboldConnect() {
-    if (!_koboldConnect) {
-        _koboldConnect = await import("./kobold-connect.js");
+// Lazy import to avoid circular deps (local-connect imports from side-panel)
+let _localConnect = null;
+async function getLocalConnect() {
+    if (!_localConnect) {
+        _localConnect = await import("./local-connect.js");
     }
-    return _koboldConnect;
+    return _localConnect;
 }
 
 export function isModelVisionCapable(modelId) {
@@ -1065,9 +1098,10 @@ export async function loadAvailableModels() {
                 modelSelect.appendChild(group);
 
                 // If server already probed this session, auto-reconnect silently
-                if (provider.id === "koboldcpp" && provider.connected_base_url) {
-                    getKoboldConnect().then(kc => {
-                        kc.tryKoboldAutoReconnect(null).catch(() => {});
+                const isLocalProvider = provider.id === "local" || provider.id === "koboldcpp";
+                if (isLocalProvider && provider.connected_base_url) {
+                    getLocalConnect().then(lc => {
+                        lc.tryLocalAutoReconnect(null).catch(() => {});
                     });
                 }
                 return;
@@ -1560,7 +1594,7 @@ export async function syncActiveModeConversation(mode = state.appMode) {
         }
 
         const validSessions = Object.values(state.chatSessions).filter(s => 
-            s && !s.projectId && (s.mode !== "build") && (s.messages?.some(m => m.role === "user") || (s.chatHtml && s.chatHtml.trim()))
+            s && !s.projectId && (s.mode !== "build") && s.messages?.some(m => m.role === "user")
         );
 
         if (validSessions.length > 0) {
