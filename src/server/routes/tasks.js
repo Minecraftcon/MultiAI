@@ -136,42 +136,101 @@ async function handleTaskRoute(req, res) {
                     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
                     json.ran_for = json.elapsed_seconds ? String(json.elapsed_seconds) : elapsed;
 
-                    const combinedOutput = (json.stdout || "") + (json.stderr ? "\n" + json.stderr : "");
-                    const lines = combinedOutput.split("\n");
-                    const isLarge = lines.length > 100 || Buffer.byteLength(combinedOutput) > 2048;
+                    const urlParts = req.url.split("?")[0];
+                    let extractedTaskId = "";
+                    if (urlParts.startsWith("/api/task/stdout/")) {
+                        extractedTaskId = decodeURIComponent(urlParts.replace("/api/task/stdout/", "")).trim();
+                    } else if (urlParts.startsWith("/api/task/input/")) {
+                        extractedTaskId = decodeURIComponent(urlParts.replace("/api/task/input/", "")).trim();
+                    } else if (urlParts.startsWith("/api/task/kill/")) {
+                        extractedTaskId = decodeURIComponent(urlParts.replace("/api/task/kill/", "")).trim();
+                    } else if (urlParts.startsWith("/api/task/status/")) {
+                        extractedTaskId = decodeURIComponent(urlParts.replace("/api/task/status/", "")).trim();
+                    }
 
-                    if (isLarge) {
+                    const taskId = json.task_id || extractedTaskId || parsedBody.task_id || parsedBody.id || "";
+
+                    const chatId = req.headers["x-chat-id"] || parsedBody.chatId || "";
+                    let scratchDir = "";
+                    if (chatId) {
                         try {
-                            const chatId = req.headers["x-chat-id"] || parsedBody.chatId || "";
-                            let scratchDir = "";
-                            if (chatId) {
-                                try {
-                                    scratchDir = conversationsManager.ensureChatWorkspace(chatId).scratchDir;
-                                } catch (_) {}
-                            }
-                            if (!scratchDir) {
-                                scratchDir = path.join(conversationsManager.getStorageRoot(), "scratch");
-                            }
-                            if (!fs.existsSync(scratchDir)) {
-                                fs.mkdirSync(scratchDir, { recursive: true });
-                            }
+                            scratchDir = conversationsManager.ensureChatWorkspace(chatId).scratchDir;
+                        } catch (_) {}
+                    }
+                    if (!scratchDir) {
+                        scratchDir = path.join(conversationsManager.getStorageRoot(), "scratch");
+                    }
+                    if (!fs.existsSync(scratchDir)) {
+                        fs.mkdirSync(scratchDir, { recursive: true });
+                    }
 
-                            const taskName = parsedBody.task_name || parsedBody.name || "";
-                            const cleanName = taskName 
-                                ? taskName.toLowerCase().replace(/[^a-z0-9_-]+/g, "-").slice(0, 30) 
-                                : "task";
-                            const logFileName = `${cleanName}-${json.task_id || Date.now().toString(36)}.log`;
-                            const logFilePath = path.join(scratchDir, logFileName);
+                    // Locate or name log file
+                    let logFileName = "";
+                    if (taskId && fs.existsSync(scratchDir)) {
+                        try {
+                            const existing = fs.readdirSync(scratchDir).find(f => f.endsWith(`-${taskId}.log`));
+                            if (existing) logFileName = existing;
+                        } catch (_) {}
+                    }
+                    if (!logFileName) {
+                        const taskName = parsedBody.task_name || parsedBody.name || "";
+                        const cleanName = taskName 
+                            ? taskName.toLowerCase().replace(/[^a-z0-9_-]+/g, "-").slice(0, 30) 
+                            : "task";
+                        logFileName = `${cleanName}-${taskId || Date.now().toString(36)}.log`;
+                    }
+                    const logFilePath = path.join(scratchDir, logFileName);
+                    const logRelPath = `scratch/${logFileName}`;
 
-                            fs.writeFileSync(logFilePath, combinedOutput, "utf8");
+                    // If reading via manage_tasks /api/task/stdout/:taskId and python queue was empty, read historical log
+                    if (urlParts.startsWith("/api/task/stdout/") && (!json.stdout || !json.stdout.trim()) && fs.existsSync(logFilePath)) {
+                        try {
+                            const diskLog = fs.readFileSync(logFilePath, "utf8");
+                            if (diskLog.trim()) {
+                                json.stdout = diskLog;
+                            }
+                        } catch (_) {}
+                    }
 
-                            json.is_large_output = true;
-                            json.scratch_log_path = `scratch/${logFileName}`;
-                            json.truncated_lines = lines.slice(-100).join("\n");
+                    const combinedOutput = (json.stdout || "") + (json.stderr ? "\n" + json.stderr : "");
+                    if (combinedOutput && combinedOutput.trim()) {
+                        try {
+                            if (urlParts.startsWith("/api/task/stdout/") && fs.existsSync(logFilePath)) {
+                                // Already in log or read from log
+                            } else if (fs.existsSync(logFilePath)) {
+                                fs.appendFileSync(logFilePath, combinedOutput, "utf8");
+                            } else {
+                                fs.writeFileSync(logFilePath, combinedOutput, "utf8");
+                            }
                         } catch (err) {
                             console.warn("[TASK LOG SAVE ERROR]", err.message);
                         }
                     }
+
+                    json.scratch_log_path = logRelPath;
+
+                    // Enforce maximum 150 lines per turn on stdout
+                    const MAX_LINES = 150;
+                    if (json.stdout && typeof json.stdout === "string") {
+                        const stdoutLines = json.stdout.split("\n");
+                        if (stdoutLines.length > MAX_LINES) {
+                            const kept = stdoutLines.slice(-MAX_LINES).join("\n");
+                            json.stdout = `[Output truncated ... showing last ${MAX_LINES} lines]\n${kept}`;
+                            json.is_large_output = true;
+                            json.truncated_lines = kept;
+                        }
+                    }
+
+                    // Enforce maximum 150 lines per turn on stderr
+                    if (json.stderr && typeof json.stderr === "string") {
+                        const stderrLines = json.stderr.split("\n");
+                        if (stderrLines.length > MAX_LINES) {
+                            const kept = stderrLines.slice(-MAX_LINES).join("\n");
+                            json.stderr = `[Output truncated ... showing last ${MAX_LINES} lines]\n${kept}`;
+                            json.is_large_output = true;
+                        }
+                    }
+
                     return sendJSON(res, proxyRes.statusCode, json);
                 }
 

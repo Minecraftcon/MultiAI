@@ -148,6 +148,47 @@ export function getCompactionThreshold(modelId, bufferTokens = COMPACTION_BUFFER
  * All historical messages in session.messages remain completely preserved on disk.
  * @param {Object} session
  * @returns {Array<Object>}
+/**
+ * Sanitizes an individual message for working context:
+ * - Windowing/truncating giant tool results (> 20,000 chars)
+ * - Stripping reasoning <think>...</think> blocks from prior assistant turns so thinking tokens don't leak
+ */
+export function sanitizeWorkingTurn(m) {
+    if (!m || typeof m !== "object") return m;
+
+    if (m.role === "tool") {
+        const raw = typeof m.content === "string" ? m.content : JSON.stringify(m.content);
+        if (raw.length > 20000) {
+            const head = raw.slice(0, 8000);
+            const tail = raw.slice(-8000);
+            const omitted = raw.length - 16000;
+            return {
+                ...m,
+                content: `${head}\n\n[... OMITTED ${omitted} CHARS OF TOOL OUTPUT FOR WORKING CONTEXT; FULL RECORD IS PRESERVED ON DISK ...] \n\n${tail}`
+            };
+        }
+        return m;
+    }
+
+    if (m.role === "assistant" && typeof m.content === "string" && m.content.includes("</think>")) {
+        const stripped = m.content.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+        return {
+            ...m,
+            content: stripped
+        };
+    }
+
+    return m;
+}
+
+/**
+ * Compiles the working messages array for model inference.
+ * If a compactionState exists, combines the system prompt, the compacted memory briefing,
+ * and uncompacted active turns starting from compactedThroughIndex.
+ * Guarantees that the active dialogue never starts on an orphan 'tool' or 'assistant' role.
+ * All historical messages in session.messages remain completely preserved on disk.
+ * @param {Object} session
+ * @returns {Array<Object>}
  */
 export function compileWorkingMessages(session) {
     if (!session || !Array.isArray(session.messages)) return [];
@@ -155,7 +196,7 @@ export function compileWorkingMessages(session) {
     const compaction = session.compactionState;
 
     if (!compaction || !compaction.summary || typeof compaction.compactedThroughIndex !== "number") {
-        return msgs;
+        return msgs.map(sanitizeWorkingTurn);
     }
 
     const systemMsg = msgs[0] || { role: "system", content: "" };
@@ -198,20 +239,7 @@ export function compileWorkingMessages(session) {
     }
 
     const rawRecentTurns = msgs.slice(startIndex);
-
-    // Guard: ensure giant tool outputs in recentTurns don't overflow the context window
-    const safeRecentTurns = rawRecentTurns.map(m => {
-        if (m.role === "tool" && typeof m.content === "string" && m.content.length > 25000) {
-            const head = m.content.slice(0, 10000);
-            const tail = m.content.slice(-10000);
-            const omitted = m.content.length - 20000;
-            return {
-                ...m,
-                content: `${head}\n\n[... OMITTED ${omitted} CHARS OF TOOL OUTPUT FOR WORKING CONTEXT; FULL RECORD IS PRESERVED ON DISK ...] \n\n${tail}`
-            };
-        }
-        return m;
-    });
+    const safeRecentTurns = rawRecentTurns.map(sanitizeWorkingTurn);
 
     return bridgeUserMsg
         ? [systemMsg, briefingMsg, bridgeUserMsg, ...safeRecentTurns]

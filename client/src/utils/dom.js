@@ -85,7 +85,32 @@ export function extractText(response) {
 
 export function formatToolResult(data) {
     if (data && typeof data === "object") {
-        if (typeof data.output === "string") return data.output;
+        if (typeof data.output === "string" && !data.stdout && !data.stderr) {
+            return data.output;
+        }
+
+        // Clean, structured format for task / terminal / command results
+        if (data.stdout !== undefined || data.stderr !== undefined || data.exit_code !== undefined || data.task_id) {
+            const parts = [];
+            if (data.task_id) parts.push(`task_id: ${data.task_id}`);
+            if (data.status) parts.push(`status: ${data.status}`);
+            if (data.exit_code !== undefined && data.exit_code !== null) parts.push(`exit_code: ${data.exit_code}`);
+            if (data.ran_for || data.elapsed_seconds) parts.push(`elapsed_time: ${data.ran_for || data.elapsed_seconds}s`);
+            if (data.scratch_log_path) parts.push(`log_file: ${data.scratch_log_path}`);
+            if (data.stdout && data.stdout.trim()) {
+                parts.push(`stdout:\n${data.stdout.trimEnd()}`);
+            }
+            if (data.stderr && data.stderr.trim()) {
+                parts.push(`stderr:\n${data.stderr.trimEnd()}`);
+            }
+            if (data.error && !data.stderr) {
+                parts.push(`error: ${data.error}`);
+            }
+            if (parts.length > 0) {
+                return parts.join("\n");
+            }
+        }
+
         return JSON.stringify(data);
     }
     return String(data);

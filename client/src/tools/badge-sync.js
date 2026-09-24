@@ -89,20 +89,33 @@ export function onToolComplete(name, args, badgeEl, data) {
         const resEl = badgeEl._collapseDiv.querySelector(".command-output-res");
         if (resEl) {
             let outText = "";
-            const isLarge = data.is_large_output || (data.stdout && data.stdout.split("\n").length > 100);
-            if (isLarge && name === "run_task") {
+            const isLarge = data.is_large_output || (data.stdout && data.stdout.split("\n").length > 150);
+            if (isLarge && (name === "run_task" || name === "manage_tasks")) {
                 const rawOutput = data.truncated_lines || data.stdout || "";
-                const lines = rawOutput.split("\n").slice(-100);
+                const lines = rawOutput.split("\n").slice(-150);
                 const indentedLines = lines.map(l => "      " + l).join("\n");
                 outText = `id: ${data.task_id || args.task_id || "task"}\n`;
                 if (data.stderr && data.stderr.trim()) {
-                    outText += `stderr: [output truncated] ... showing last 100 lines\n${indentedLines}\n`;
+                    outText += `stderr: [output truncated ... showing last 150 lines]\n${indentedLines}\n`;
                 } else {
-                    outText += `stdout: [output truncated] ... showing last 100 lines\n${indentedLines}\n`;
+                    outText += `stdout: [output truncated ... showing last 150 lines]\n${indentedLines}\n`;
                 }
                 outText += `status_code: ${data.exit_code ?? 0}\n`;
                 outText += `ran_for: ${data.ran_for || data.elapsed_seconds || "1.0"}s\n`;
                 outText += `sys: output has been saved to ${data.scratch_log_path || `scratch/${args.task_name ? (args.task_name.toLowerCase().replace(/[^a-z0-9_-]+/g, '-') + '-') : ''}${data.task_id || 'task'}.log`}`;
+            } else if (name === "run_task" || name === "manage_tasks") {
+                outText = `id: ${data.task_id || args.task_id || "task"}\n`;
+                if (data.stdout && data.stdout.trim()) {
+                    outText += `stdout:\n${data.stdout.split("\n").map(l => "      " + l).join("\n")}\n`;
+                }
+                if (data.stderr && data.stderr.trim()) {
+                    outText += `stderr:\n${data.stderr.split("\n").map(l => "      " + l).join("\n")}\n`;
+                }
+                outText += `status_code: ${data.exit_code ?? 0}\n`;
+                outText += `ran_for: ${data.ran_for || data.elapsed_seconds || "1.0"}s\n`;
+                if (data.scratch_log_path) {
+                    outText += `sys: log saved to ${data.scratch_log_path}`;
+                }
             } else if (name === "read_file") {
                 if (data.type === "image") {
                     outText = `[Image: ${data.path} (${data.mime || "image"}, ${data.human_size || ""})]\n${data.markdown || ""}`;
