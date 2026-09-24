@@ -172,8 +172,17 @@ export function initGestures() {
         }
 
         const t = e.touches[0];
-        // Stop browser native back-swipe if near edge
-        if (!isPanelOpen && t.clientX <= 32) {
+
+        // Edge tracking constraint:
+        // When panel is closed, ONLY touches initiating within the left edge zone (<= 36px) activate drawer dragging.
+        // Touches across the rest of the screen pass straight through to normal chat scrolling and text interactions.
+        if (!isPanelOpen && t.clientX > 36) {
+            isTracking = false;
+            return;
+        }
+
+        // Prevent native browser back-navigation gesture when starting at the edge
+        if (!isPanelOpen && t.clientX <= 36 && e.cancelable) {
             e.preventDefault();
         }
 
@@ -182,6 +191,7 @@ export function initGestures() {
         lastX = t.clientX;
         lastTime = performance.now();
         velocityX = 0;
+        pendingX = isPanelOpen ? getPanelWidth() : 0;
 
         isTracking = true;
         isLocked = false;
@@ -202,7 +212,10 @@ export function initGestures() {
                 return;
             }
             isLocked = true;
-            if (absX > absY * 1.5) {
+            // From closed state at edge: dragging rightwards (dx > 0) with dominant horizontal angle
+            // From open state: dragging leftwards (dx < 0) with dominant horizontal angle
+            const isDirectionValid = !isPanelOpen ? (dx > 0 && absX >= absY) : (dx < 0 && absX >= absY);
+            if (isDirectionValid) {
                 isHorizontal = true;
             } else {
                 isTracking = false;
@@ -254,7 +267,7 @@ export function initGestures() {
         } else if (velocityX < -0.3) {
             closePanel(true);
         } else {
-            if (pendingX > width * 0.45) {
+            if (pendingX > width * 0.4) {
                 openPanel(true);
             } else {
                 closePanel(true);

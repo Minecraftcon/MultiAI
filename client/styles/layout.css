@@ -13,6 +13,10 @@
     transform: translateX(0px);
     will-change: transform;
     background: var(--bg);
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    perspective: 1000px;
+    -webkit-perspective: 1000px;
 }
 
 #appShell.animate-transition {

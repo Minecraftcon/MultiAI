@@ -17,6 +17,10 @@
     box-shadow: 8px 0 36px var(--scrim);
     transform: translateX(-100%);
     will-change: transform;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    perspective: 1000px;
+    -webkit-perspective: 1000px;
     font-family: inherit;
 }
 

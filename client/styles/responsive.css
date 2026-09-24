@@ -6,20 +6,11 @@
         animation: none !important;
     }
 
-    /* 2. Isolated compositor-thread scrolling with explicit pan-y touch action */
+    /* 2. Isolated compositor-thread scrolling without conflicting touch locks */
     #chat {
         scroll-behavior: auto !important;
         contain: layout style;
         -webkit-overflow-scrolling: touch;
-        overscroll-behavior-y: contain;
-        touch-action: pan-y;
-    }
-
-
-    #sidePanel {
-        perspective: none !important;
-        -webkit-perspective: none !important;
-        box-shadow: 4px 0 18px rgba(0, 0, 0, 0.5) !important;
     }
 
     /* 4. Strip ALL expensive GPU backdrop-filter blur passes on mobile to save VRAM and fillrate */
@@ -77,14 +68,6 @@
     scroll-behavior: auto !important;
     contain: layout style;
     -webkit-overflow-scrolling: touch;
-    overscroll-behavior-y: contain;
-    touch-action: pan-y;
-}
-
-.is-android #sidePanel {
-    perspective: none !important;
-    -webkit-perspective: none !important;
-    box-shadow: 4px 0 18px rgba(0, 0, 0, 0.5) !important;
 }
 
 .is-android .composer,
