@@ -163,10 +163,17 @@ export function addToolBadge(element, toolName, args) {
         const scope = args.path && args.path !== "." ? ` in ${args.path}` : "";
         detail = `"${args.query || args.pattern || ""}"${scope}`;
         isCommandTask = true;
-    } else if (toolName === "search_and_replace") {
+    } else if (toolName === "replace_file_content" || toolName === "search_and_replace") {
         icon = "edit-3";
-        label = "Replaced text";
-        detail = args.path || "file";
+        label = "Edited file";
+        const lineSpan = (args.start_line || args.end_line) ? ` (lines ${args.start_line || 1}-${args.end_line || "end"})` : "";
+        detail = `${args.path || "file"}${lineSpan}${args.description ? ` - ${args.description}` : ""}`;
+        isCommandTask = true;
+    } else if (toolName === "multi_replace_file_content") {
+        icon = "edit-3";
+        label = "Multi-edited file";
+        const count = Array.isArray(args.replacement_chunks) ? ` (${args.replacement_chunks.length} chunks)` : "";
+        detail = `${args.path || "file"}${count}${args.description ? ` - ${args.description}` : ""}`;
         isCommandTask = true;
     } else if (toolName === "run_python") {
         icon = "terminal";
@@ -251,6 +258,10 @@ export function addToolBadge(element, toolName, args) {
         let displayCmd = "";
         if (toolName === "write_file") {
             displayCmd = `Write to ${args.path || "file"}`;
+        } else if (toolName === "replace_file_content" || toolName === "search_and_replace") {
+            displayCmd = `EDIT: ${args.path || "file"}${args.description ? ` (${args.description})` : ""}`;
+        } else if (toolName === "multi_replace_file_content") {
+            displayCmd = `MULTI-EDIT: ${args.path || "file"}${args.description ? ` (${args.description})` : ""}`;
         } else if (toolName === "read_file") {
             const span = (args.start_line || args.end_line) ? ` (lines ${args.start_line || 1}-${args.end_line || "end"})` : "";
             displayCmd = `READ: ${args.path || "file"}${span}`;

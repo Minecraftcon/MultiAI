@@ -65,6 +65,14 @@ export function onToolComplete(name, args, badgeEl, data) {
         }
     }
 
+    if ((name === "replace_file_content" || name === "multi_replace_file_content") && data) {
+        const queryEl = badgeEl.querySelector(".search-query");
+        if (queryEl) {
+            const diffSign = (data.lines_diff !== undefined && data.lines_diff >= 0) ? `+${data.lines_diff}` : `${data.lines_diff || 0}`;
+            queryEl.textContent = `${data.path || "file"} (${diffSign} lines)`;
+        }
+    }
+
     // Format output in collapse div if present
     if (badgeEl._collapseDiv && data) {
         const resEl = badgeEl._collapseDiv.querySelector(".command-output-res");
@@ -112,6 +120,9 @@ export function onToolComplete(name, args, badgeEl, data) {
                 }
             } else if (name === "write_file") {
                 outText = data.message || JSON.stringify(data, null, 2);
+            } else if (name === "replace_file_content" || name === "multi_replace_file_content" || name === "search_and_replace") {
+                const diffSection = data.diff ? `\n\n${data.diff}` : "";
+                outText = (data.message || `Edited ${data.path || "file"}`) + diffSection;
             } else if (name === "grep_search") {
                 if (data.matches && Array.isArray(data.matches)) {
                     outText = `Found ${data.total_matches ?? data.matches.length} match(es) (${data.engine_used || "scan"}, ${data.elapsed_ms || 0}ms):\n` +

@@ -76,7 +76,141 @@ export const writeFileTool = {
     }
 };
 
+export const replaceFileContentTool = {
+    name: "replace_file_content",
+    schema: {
+        type: "function",
+        function: {
+            name: "replace_file_content",
+            description: "Surgically edit a file by replacing a single block of text with new content. Can be constrained to a line range for precise disambiguation.",
+            parameters: {
+                type: "object",
+                properties: {
+                    path: {
+                        type: "string",
+                        description: "Path to the target file."
+                    },
+                    target_content: {
+                        type: "string",
+                        description: "The exact lines/block of code to replace (must match whitespace and indentation exactly)."
+                    },
+                    replacement_content: {
+                        type: "string",
+                        description: "The new content to insert in place of target_content."
+                    },
+                    start_line: {
+                        type: "integer",
+                        description: "Optional 1-based start line of the search window."
+                    },
+                    end_line: {
+                        type: "integer",
+                        description: "Optional 1-based end line of the search window."
+                    },
+                    allow_multiple: {
+                        type: "boolean",
+                        description: "If true, replaces all occurrences in the window. If false, errors if multiple matches exist (default: false)."
+                    },
+                    instruction: {
+                        type: "string",
+                        description: "Optional explanation of the changes being made."
+                    },
+                    description: {
+                        type: "string",
+                        description: "Optional user-facing summary of why this change is made."
+                    }
+                },
+                required: ["path", "target_content", "replacement_content"]
+            }
+        }
+    },
+    handler: async (args, { genState }) => {
+        const payload = {
+            path: args.path || args.TargetFile || args.target_file,
+            target_content: args.target_content !== undefined ? args.target_content : args.TargetContent,
+            replacement_content: args.replacement_content !== undefined ? args.replacement_content : args.ReplacementContent,
+            start_line: args.start_line !== undefined ? args.start_line : args.StartLine,
+            end_line: args.end_line !== undefined ? args.end_line : args.EndLine,
+            allow_multiple: args.allow_multiple !== undefined ? args.allow_multiple : args.AllowMultiple,
+            instruction: args.instruction || args.Instruction,
+            description: args.description || args.Description,
+            chatId: state.currentChatId
+        };
+        return await toolFetch("/api/file/replace", { method: "POST", body: payload, genState });
+    }
+};
+
+export const multiReplaceFileContentTool = {
+    name: "multi_replace_file_content",
+    schema: {
+        type: "function",
+        function: {
+            name: "multi_replace_file_content",
+            description: "Apply multiple non-contiguous edits to a single file in a single atomic pass. Validates all chunks before applying any changes.",
+            parameters: {
+                type: "object",
+                properties: {
+                    path: {
+                        type: "string",
+                        description: "Path to the target file."
+                    },
+                    replacement_chunks: {
+                        type: "array",
+                        description: "Array of non-contiguous replacement chunks.",
+                        items: {
+                            type: "object",
+                            properties: {
+                                target_content: {
+                                    type: "string",
+                                    description: "Exact content to be replaced."
+                                },
+                                replacement_content: {
+                                    type: "string",
+                                    description: "Content to replace target_content with."
+                                },
+                                start_line: {
+                                    type: "integer",
+                                    description: "Optional 1-based start line."
+                                },
+                                end_line: {
+                                    type: "integer",
+                                    description: "Optional 1-based end line."
+                                },
+                                allow_multiple: {
+                                    type: "boolean",
+                                    description: "Allow multiple replacements if matched."
+                                }
+                            },
+                            required: ["target_content", "replacement_content"]
+                        }
+                    },
+                    instruction: {
+                        type: "string",
+                        description: "Optional explanation of the changes being made."
+                    },
+                    description: {
+                        type: "string",
+                        description: "Optional user-facing summary of why this change is made."
+                    }
+                },
+                required: ["path", "replacement_chunks"]
+            }
+        }
+    },
+    handler: async (args, { genState }) => {
+        const payload = {
+            path: args.path || args.TargetFile || args.target_file,
+            replacement_chunks: args.replacement_chunks || args.ReplacementChunks,
+            instruction: args.instruction || args.Instruction,
+            description: args.description || args.Description,
+            chatId: state.currentChatId
+        };
+        return await toolFetch("/api/file/multi-replace", { method: "POST", body: payload, genState });
+    }
+};
+
 export const filesystemTools = [
     readFileTool,
-    writeFileTool
+    writeFileTool,
+    replaceFileContentTool,
+    multiReplaceFileContentTool
 ];

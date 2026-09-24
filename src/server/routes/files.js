@@ -1,7 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const { resolveSafePath, formatBytes, getMimeType, sendJSON, postJSON } = require("../utils");
-const { handleCodeGrep, handleSearchAndReplace, handleWriteFile } = require("../../tools/filesystem/code_tools");
+const { handleCodeGrep, handleSearchAndReplace, handleReplaceFileContent, handleMultiReplaceFileContent, handleWriteFile } = require("../../tools/filesystem/code_tools");
 
 async function handleFileRead(args, chatId) {
     const targetPath = resolveSafePath(args.path, chatId);
@@ -154,8 +154,13 @@ async function handleFilesRoute(req, res) {
             return sendJSON(res, 200, result);
         }
 
-        if (reqUrl === "/api/file/search-replace") {
-            const result = await handleSearchAndReplace(args, chatId, { resolveSafePath });
+        if (reqUrl === "/api/file/replace" || reqUrl === "/api/file/search-replace") {
+            const result = await handleReplaceFileContent(args, chatId, { resolveSafePath });
+            return sendJSON(res, 200, result);
+        }
+
+        if (reqUrl === "/api/file/multi-replace") {
+            const result = await handleMultiReplaceFileContent(args, chatId, { resolveSafePath });
             return sendJSON(res, 200, result);
         }
 
