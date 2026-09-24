@@ -2,38 +2,70 @@
    RESPONSIVE BREAKPOINTS & MOBILE PERFORMANCE
    ========================================================= */
 @media (max-width: 768px), (pointer: coarse) {
-    /* 1. Prevent 0px collapse and GPU tile eviction loop on older mobile Chromium */
+    /* 1. Prevent 0px collapse, popIn transform, and GPU tile eviction loop on mobile Chromium */
     .message {
         content-visibility: visible !important;
         contain: layout style !important;
         contain-intrinsic-size: none !important;
+        animation: none !important;
     }
 
-    /* 2. Isolated compositor-thread scrolling without conflicting smooth animations */
+    /* 2. Isolated compositor-thread scrolling with explicit pan-y touch action */
     #chat {
         scroll-behavior: auto !important;
         contain: layout style;
         -webkit-overflow-scrolling: touch;
         overscroll-behavior-y: contain;
+        touch-action: pan-y;
     }
 
-    /* 3. Strip expensive GPU backdrop-filter blur passes on mobile to save VRAM and fillrate */
+    /* 3. Keep appShell stationary as containing block for rock-solid fixed viewport elements */
+    #appShell {
+        transform: none !important;
+        perspective: none !important;
+        -webkit-perspective: none !important;
+        will-change: auto !important;
+    }
+
+    #sidePanel {
+        perspective: none !important;
+        -webkit-perspective: none !important;
+        box-shadow: 4px 0 18px rgba(0, 0, 0, 0.5) !important;
+    }
+
+    /* 4. Strip ALL expensive GPU backdrop-filter blur passes on mobile to save VRAM and fillrate */
+    .composer,
+    .composer-dock,
     .chat-scroll-btn,
     .followup-suggestions,
     .deepsearch-stats-box,
     .mobile-msg-actions,
     .modal-overlay,
     .modal-backdrop,
+    .model-picker-backdrop,
     .command-output-box,
+    .settings-screen,
+    .settings-modal-backdrop,
+    .panel-search-bar,
+    .search-pill-input,
+    .mention-dropdown,
+    .bottom-sheet,
     header {
         backdrop-filter: none !important;
         -webkit-backdrop-filter: none !important;
     }
 
+    .composer,
+    .composer-dock {
+        background: #1c1c1e !important;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45) !important;
+    }
+
     .chat-scroll-btn {
         background: #242426 !important;
         border: 1px solid rgba(255, 255, 255, 0.14) !important;
-        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45) !important;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45) !important;
+        transition: opacity 0.15s ease, visibility 0.15s ease !important;
     }
 
     .followup-suggestions {
@@ -42,11 +74,17 @@
     }
 }
 
-/* Explicit Android OS fallback safeguard (even in desktop mode emulation) */
+/* Explicit Android OS fallback safeguard (active even in desktop mode emulation) */
+.is-android,
+.is-android * {
+    -webkit-tap-highlight-color: transparent !important;
+}
+
 .is-android .message {
     content-visibility: visible !important;
     contain: layout style !important;
     contain-intrinsic-size: none !important;
+    animation: none !important;
 }
 
 .is-android #chat {
@@ -54,6 +92,36 @@
     contain: layout style;
     -webkit-overflow-scrolling: touch;
     overscroll-behavior-y: contain;
+    touch-action: pan-y;
+}
+
+.is-android #appShell {
+    transform: none !important;
+    perspective: none !important;
+    -webkit-perspective: none !important;
+    will-change: auto !important;
+}
+
+.is-android #sidePanel {
+    perspective: none !important;
+    -webkit-perspective: none !important;
+    box-shadow: 4px 0 18px rgba(0, 0, 0, 0.5) !important;
+}
+
+.is-android .composer,
+.is-android .composer-dock,
+.is-android .chat-scroll-btn,
+.is-android .modal-backdrop,
+.is-android .model-picker-backdrop,
+.is-android header {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
+
+.is-android .composer,
+.is-android .composer-dock {
+    background: #1c1c1e !important;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45) !important;
 }
 
 @media (max-width: 600px) {

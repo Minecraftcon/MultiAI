@@ -10,7 +10,7 @@
    ========================================================= */
 import { renderIcons } from "../utils/icons.js";
 import { isMobileBrowser } from "../utils/dom.js";
-import { onStartPageModeChange } from "./aurora-theme.js";
+import { onStartPageModeChange, isAndroidOrMobile } from "./aurora-theme.js";
 import { state, setDeepSearchActive } from "../state/index.js";
 
 class ChatBoxComponent {
@@ -38,13 +38,8 @@ class ChatBoxComponent {
         const heroTitleHtml = isBuild 
             ? `<span>Lets Build</span> <i data-lucide="hammer" class="start-page-title-icon"></i>` 
             : `How can I assist you today?`;
-        return `
-        <!-- Start Page Hero Header (Visible only when in start page mode) -->
-        <div class="start-page-hero" id="startPageHero">
-            <h1 class="start-page-title" id="startPageTitle">${heroTitleHtml}</h1>
-        </div>
-
-        <div class="composer-dock composer composer-compact" id="chatboxDock">
+        const isMobile = isAndroidOrMobile();
+        const auraHtml = isMobile ? "" : `
             <!-- Start Page Dynamic Cloud Glow Effect (Visible only in start page mode) -->
             <div class="start-page-glow-aura" aria-hidden="true">
                 <div class="glow-cloud glow-cloud-1"></div>
@@ -52,7 +47,15 @@ class ChatBoxComponent {
                 <div class="glow-cloud glow-cloud-3"></div>
                 <div class="glow-cloud glow-cloud-4"></div>
                 <div class="glow-cloud-shimmer"></div>
-            </div>
+            </div>`;
+        return `
+        <!-- Start Page Hero Header (Visible only when in start page mode) -->
+        <div class="start-page-hero" id="startPageHero">
+            <h1 class="start-page-title" id="startPageTitle">${heroTitleHtml}</h1>
+        </div>
+
+        <div class="composer-dock composer composer-compact" id="chatboxDock">
+            ${auraHtml}
 
             <!-- Top: Staged Attachments Strip -->
             <div id="stagedAttachments" class="staged-attachments-strip" style="display: none;"></div>

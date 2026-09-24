@@ -108,6 +108,8 @@ export function initIconObserver() {
                 for (let j = 0; j < added.length; j++) {
                     const node = added[j];
                     if (node && node.nodeType === 1) { // ELEMENT_NODE
+                        // Skip streaming chat messages to avoid thrashing CPU during token generation
+                        if (node.closest && (node.closest("#chat") || node.closest(".message"))) continue;
                         if ((node.matches && node.matches("i[data-lucide], [data-lucide]")) || (node.querySelector && node.querySelector("i[data-lucide], [data-lucide]"))) {
                             hasNewIcons = true;
                             break;

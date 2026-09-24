@@ -1397,31 +1397,34 @@ export function initScrollToBottom() {
     }
     ensureSentinel();
 
-    // Smooth scroll to bottom on click
+    // Scroll to bottom on click (instant on mobile to prevent animation thrashing)
     btn.addEventListener("click", (e) => {
         e.preventDefault();
         e.stopPropagation();
+        const isMobile = window.matchMedia("(max-width: 768px), (pointer: coarse)").matches ||
+                         document.documentElement.classList.contains("is-android");
+        const scrollBehavior = isMobile ? "auto" : "smooth";
         chat.scrollTo({
             top: chat.scrollHeight,
-            behavior: "smooth"
+            behavior: scrollBehavior
         });
         btn.classList.remove("visible");
 
-        // Follow-up checks in case any dynamic content or code blocks render during smooth scroll
+        // Follow-up checks in case any dynamic content or code blocks render during scroll
         const ensureAtEnd = () => {
             const distance = chat.scrollHeight - chat.scrollTop - chat.clientHeight;
             if (distance > 30) {
                 chat.scrollTo({
                     top: chat.scrollHeight,
-                    behavior: "smooth"
+                    behavior: scrollBehavior
                 });
             }
         };
         if ("onscrollend" in window) {
             chat.addEventListener("scrollend", ensureAtEnd, { once: true });
         }
-        setTimeout(ensureAtEnd, 350);
-        setTimeout(ensureAtEnd, 750);
+        setTimeout(ensureAtEnd, isMobile ? 50 : 350);
+        setTimeout(ensureAtEnd, isMobile ? 120 : 750);
     });
 
     // Update whenever chat session changes or messages update
