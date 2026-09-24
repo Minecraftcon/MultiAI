@@ -21,9 +21,10 @@
     line-height: 1.6;
     word-wrap: break-word;
     overflow-wrap: anywhere;
-    /* Defer rendering and isolate layout reflows for off-screen messages in long chats */
+    /* Safe fallback for browsers prior to Chrome 108 */
+    contain-intrinsic-size: 150px;
+    contain-intrinsic-size: auto none auto 150px;
     content-visibility: auto;
-    contain-intrinsic-size: auto none auto 120px;
     contain: layout style;
 }
 

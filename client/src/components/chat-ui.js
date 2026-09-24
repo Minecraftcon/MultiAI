@@ -1024,7 +1024,7 @@ export function updateAIStream(element, fullText, isDone, startTime, hasTools) {
         if (sanitizedThought) {
             preSearchContent.innerHTML = sanitizedThought;
             wrapTablesForScroll(preSearchContent);
-            renderIcons(preSearchContent);
+            if (isDone) renderIcons(preSearchContent);
         } else {
             preSearchContent.innerHTML = "";
         }
@@ -1032,8 +1032,10 @@ export function updateAIStream(element, fullText, isDone, startTime, hasTools) {
         if (sanitizedRest) {
             finalContent.innerHTML = sanitizedRest;
             wrapTablesForScroll(finalContent);
-            renderIcons(finalContent);
-            bindAIImageCards(finalContent);
+            if (isDone) {
+                renderIcons(finalContent);
+                bindAIImageCards(finalContent);
+            }
         } else {
             finalContent.innerHTML = "";
         }

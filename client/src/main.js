@@ -82,6 +82,9 @@ async function initConfig() {
 
 // Global bootstrap with readyState guard
 async function bootstrap() {
+    if (typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent)) {
+        document.documentElement.classList.add("is-android");
+    }
     renderIcons();
     initUiScale();
     initAuroraTheme();

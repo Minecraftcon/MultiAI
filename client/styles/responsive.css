@@ -1,6 +1,61 @@
 /* =========================================================
    RESPONSIVE BREAKPOINTS & MOBILE PERFORMANCE
    ========================================================= */
+@media (max-width: 768px), (pointer: coarse) {
+    /* 1. Prevent 0px collapse and GPU tile eviction loop on older mobile Chromium */
+    .message {
+        content-visibility: visible !important;
+        contain: layout style !important;
+        contain-intrinsic-size: none !important;
+    }
+
+    /* 2. Isolated compositor-thread scrolling without conflicting smooth animations */
+    #chat {
+        scroll-behavior: auto !important;
+        contain: layout style;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior-y: contain;
+    }
+
+    /* 3. Strip expensive GPU backdrop-filter blur passes on mobile to save VRAM and fillrate */
+    .chat-scroll-btn,
+    .followup-suggestions,
+    .deepsearch-stats-box,
+    .mobile-msg-actions,
+    .modal-overlay,
+    .modal-backdrop,
+    .command-output-box,
+    header {
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
+    }
+
+    .chat-scroll-btn {
+        background: #242426 !important;
+        border: 1px solid rgba(255, 255, 255, 0.14) !important;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45) !important;
+    }
+
+    .followup-suggestions {
+        background: #1c1c1e !important;
+        border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    }
+}
+
+/* Explicit Android OS fallback safeguard (even in desktop mode emulation) */
+.is-android .message {
+    content-visibility: visible !important;
+    contain: layout style !important;
+    contain-intrinsic-size: none !important;
+}
+
+.is-android #chat {
+    scroll-behavior: auto !important;
+    contain: layout style;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+}
+
 @media (max-width: 600px) {
     header { 
         padding: 0 max(14px, env(safe-area-inset-right, 0px)) 0 max(14px, env(safe-area-inset-left, 0px)); 
@@ -22,18 +77,14 @@
         backdrop-filter: none !important;
         -webkit-backdrop-filter: none !important;
         background: #1c1c1e !important;
-        transform: translateZ(0);
-        will-change: transform;
     }
     #inputArea {
         padding: 10px max(12px, env(safe-area-inset-right, 0px)) calc(14px + env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px));
-        transform: translateZ(0);
         box-sizing: border-box;
         max-width: 100vw;
     }
     .bottom-sheet {
         transform: translate3d(0, 100%, 0);
-        will-change: transform;
     }
     .bottom-sheet.open {
         transform: translate3d(0, 0, 0);
