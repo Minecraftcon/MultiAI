@@ -78,14 +78,35 @@ class AnthropicProvider extends BaseProvider {
                 }
                 anthropicMessages.push({ role: "assistant", content: parts.length === 1 && parts[0].type === "text" ? parts[0].text : parts });
             } else if (msg.role === "tool") {
-                anthropicMessages.push({
-                    role: "user",
-                    content: [{
-                        type: "tool_result",
-                        tool_use_id: msg.tool_call_id,
-                        content: typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content)
-                    }]
-                });
+                const img = BaseProvider.extractImageFromToolResult(msg.content);
+                const toolResultBlock = {
+                    type: "tool_result",
+                    tool_use_id: msg.tool_call_id,
+                    content: (img && supportsVision) ? [
+                        {
+                            type: "text",
+                            text: `[Image file read: ${img.path} (${img.mime}${img.humanSize ? `, ${img.humanSize}` : ""})]`
+                        },
+                        {
+                            type: "image",
+                            source: {
+                                type: "base64",
+                                media_type: img.mime,
+                                data: img.base64
+                            }
+                        }
+                    ] : (typeof msg.content === "string" ? (img ? img.cleanContent : msg.content) : JSON.stringify(msg.content))
+                };
+
+                const prev = anthropicMessages[anthropicMessages.length - 1];
+                if (prev && prev.role === "user" && Array.isArray(prev.content)) {
+                    prev.content.push(toolResultBlock);
+                } else {
+                    anthropicMessages.push({
+                        role: "user",
+                        content: [toolResultBlock]
+                    });
+                }
             }
         }
 

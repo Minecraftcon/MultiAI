@@ -29,11 +29,111 @@ class BaseProvider {
     }
 
     /**
+     * Extracts image data from tool result content if present.
+     */
+    static extractImageFromToolResult(content) {
+        if (!content) return null;
+        let obj = content;
+        if (typeof content === "string") {
+            if (!content.includes("data_url") && !content.includes("data:image/")) return null;
+            try {
+                obj = JSON.parse(content);
+            } catch (_) {
+                const match = content.match(/data:(image\/[^;]+);base64,([A-Za-z0-9+/=]+)/);
+                if (match) {
+                    return {
+                        mime: match[1],
+                        base64: match[2],
+                        dataUrl: match[0],
+                        path: "image",
+                        humanSize: "",
+                        cleanContent: content.replace(/data:image\/[^;]+;base64,[A-Za-z0-9+/=]+/g, "[embedded image data]")
+                    };
+                }
+                return null;
+            }
+        }
+        if (obj && (obj.type === "image" || (typeof obj.mime === "string" && obj.mime.startsWith("image/")))) {
+            const rawUrl = obj.data_url || obj.url;
+            if (rawUrl && typeof rawUrl === "string") {
+                const match = rawUrl.match(/^data:([^;]+);base64,(.+)$/);
+                if (match) {
+                    const cleanObj = {
+                        path: obj.path || "image",
+                        type: "image",
+                        mime: match[1],
+                        size_bytes: obj.size_bytes,
+                        human_size: obj.human_size,
+                        status: "success",
+                        message: `Image read successfully: ${obj.path || "image"} (${obj.human_size || match[1]})`
+                    };
+                    return {
+                        mime: match[1],
+                        base64: match[2],
+                        dataUrl: rawUrl,
+                        path: obj.path || "image",
+                        humanSize: obj.human_size || "",
+                        cleanContent: JSON.stringify(cleanObj)
+                    };
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
      * Universal normalization of chat messages for standard OpenAI format.
      */
     normalizeMessages(messages, supportsTools = true, supportsVision = true) {
         if (!Array.isArray(messages)) return [];
-        return messages.map(msg => this.normalizeMessage(msg, supportsTools, supportsVision)).filter(Boolean);
+        const result = [];
+        const pendingToolImages = [];
+
+        for (let i = 0; i < messages.length; i++) {
+            const rawMsg = messages[i];
+            if (!rawMsg || typeof rawMsg !== "object") continue;
+
+            if (rawMsg.role === "tool") {
+                const img = BaseProvider.extractImageFromToolResult(rawMsg.content);
+                if (img && supportsVision) {
+                    pendingToolImages.push(img);
+                }
+                const norm = this.normalizeMessage(rawMsg, supportsTools, supportsVision);
+                if (norm) {
+                    if (img) {
+                        norm.content = img.cleanContent;
+                    }
+                    result.push(norm);
+                }
+
+                // If next message is not a tool message, flush pending tool images into a user message
+                const nextMsg = messages[i + 1];
+                if (!nextMsg || nextMsg.role !== "tool") {
+                    if (pendingToolImages.length > 0) {
+                        const userParts = [];
+                        for (const item of pendingToolImages) {
+                            userParts.push({
+                                type: "text",
+                                text: `[Visual preview of ${item.path}]:`
+                            });
+                            userParts.push({
+                                type: "image_url",
+                                image_url: { url: item.dataUrl }
+                            });
+                        }
+                        result.push({
+                            role: "user",
+                            content: userParts
+                        });
+                        pendingToolImages.length = 0;
+                    }
+                }
+            } else {
+                const norm = this.normalizeMessage(rawMsg, supportsTools, supportsVision);
+                if (norm) result.push(norm);
+            }
+        }
+        return result;
     }
 
     normalizeMessage(msg, supportsTools = true, supportsVision = true) {

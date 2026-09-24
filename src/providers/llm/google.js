@@ -50,7 +50,12 @@ class GoogleProvider extends BaseProvider {
                     userParts.push({ text: msg.content });
                 }
                 if (userParts.length === 0) userParts.push({ text: " " });
-                contents.push({ role: "user", parts: userParts });
+                const prev = contents[contents.length - 1];
+                if (prev && prev.role === "user") {
+                    prev.parts.push(...userParts);
+                } else {
+                    contents.push({ role: "user", parts: userParts });
+                }
             } else if (msg.role === "assistant") {
                 const parts = [];
                 if (msg.tool_calls && Array.isArray(msg.tool_calls)) {
@@ -90,18 +95,21 @@ class GoogleProvider extends BaseProvider {
                 }
             } else if (msg.role === "tool") {
                 const toolName = msg.name || "tool";
-                contents.push({
-                    role: "user",
-                    parts: [{
-                        functionResponse: {
+                const toolParts = [{
+                    functionResponse: {
+                        name: toolName,
+                        response: {
                             name: toolName,
-                            response: {
-                                name: toolName,
-                                content: msg.content
-                            }
+                            content: msg.content
                         }
-                    }]
-                });
+                    }
+                }];
+                const prev = contents[contents.length - 1];
+                if (prev && prev.role === "user") {
+                    prev.parts.push(...toolParts);
+                } else {
+                    contents.push({ role: "user", parts: toolParts });
+                }
             }
         }
 
