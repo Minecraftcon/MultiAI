@@ -2,11 +2,7 @@
    RESPONSIVE BREAKPOINTS & MOBILE PERFORMANCE
    ========================================================= */
 @media (max-width: 768px), (pointer: coarse) {
-    /* 1. Prevent 0px collapse, popIn transform, and GPU tile eviction loop on mobile Chromium */
     .message {
-        content-visibility: visible !important;
-        contain: layout style !important;
-        contain-intrinsic-size: none !important;
         animation: none !important;
     }
 
@@ -81,9 +77,6 @@
 }
 
 .is-android .message {
-    content-visibility: visible !important;
-    contain: layout style !important;
-    contain-intrinsic-size: none !important;
     animation: none !important;
 }
 

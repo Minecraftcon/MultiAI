@@ -82,8 +82,8 @@ export function setUiScale(scale, showHud = true) {
     const clamped = Math.max(MIN_SCALE, Math.min(MAX_SCALE, Math.round(scale * 100) / 100));
     currentScale = clamped;
 
-    if (isMobileDevice()) {
-        // Never apply CSS zoom on mobile/Android - prevents coordinate drift & viewport divergence
+    if (isMobileDevice() || Math.abs(currentScale - 1.0) < 0.001) {
+        // Native 100% scale or mobile: never apply CSS zoom to avoid coordinate drift & browser layout overhead
         document.documentElement.style.setProperty("--ui-scale", "1");
         document.documentElement.style.zoom = "";
     } else {

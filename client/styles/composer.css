@@ -1489,11 +1489,13 @@ body.drag-over .composer {
     overflow: hidden;
     z-index: 5;
     opacity: 0;
-    transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+    visibility: hidden;
+    transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.6s;
 }
 
 #appShell.is-start-page .start-page-backdrop {
     opacity: 1;
+    visibility: visible;
 }
 
 [data-aurora-theme="none"] #appShell.is-start-page .start-page-backdrop,

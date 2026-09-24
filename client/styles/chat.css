@@ -11,7 +11,6 @@
     display: flex;
     flex-direction: column;
     gap: 20px;
-    scroll-behavior: smooth;
 }
 
 #chat::-webkit-scrollbar { width: 7px; }
@@ -21,28 +20,12 @@
     line-height: 1.6;
     word-wrap: break-word;
     overflow-wrap: anywhere;
-    /* Safe fallback for browsers prior to Chrome 108 */
-    contain-intrinsic-size: 150px;
-    contain-intrinsic-size: auto none auto 150px;
-    content-visibility: auto;
-    contain: layout style;
-}
-
-/* Ensure the latest message is always ready for interaction & streaming */
-.message:last-child {
-    content-visibility: visible;
 }
 
 /* Restrict entrance animation to latest/streaming message, avoiding concurrent animations on 50+ items */
 .message:last-child,
 .message.new-message {
     animation: popIn 0.25s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
-}
-
-@supports not (content-visibility: auto) {
-    .message {
-        contain: layout style;
-    }
 }
 
 
