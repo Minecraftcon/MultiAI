@@ -15,13 +15,6 @@
         touch-action: pan-y;
     }
 
-    /* 3. Keep appShell stationary as containing block for rock-solid fixed viewport elements */
-    #appShell {
-        transform: none !important;
-        perspective: none !important;
-        -webkit-perspective: none !important;
-        will-change: auto !important;
-    }
 
     #sidePanel {
         perspective: none !important;
@@ -86,13 +79,6 @@
     -webkit-overflow-scrolling: touch;
     overscroll-behavior-y: contain;
     touch-action: pan-y;
-}
-
-.is-android #appShell {
-    transform: none !important;
-    perspective: none !important;
-    -webkit-perspective: none !important;
-    will-change: auto !important;
 }
 
 .is-android #sidePanel {

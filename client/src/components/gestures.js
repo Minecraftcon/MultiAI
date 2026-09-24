@@ -43,12 +43,10 @@ export function renderTransform(x, withAnimation = false) {
     const width = getPanelWidth();
     const clampedX = Math.max(0, Math.min(width, x));
     const progress = clampedX / width;
-    const isMobile = window.matchMedia("(max-width: 768px), (pointer: coarse)").matches ||
-                     document.documentElement.classList.contains("is-android");
 
     if (withAnimation) {
         sidePanel.classList.add("animate-transition");
-        if (!isMobile) appShell.classList.add("animate-transition");
+        appShell.classList.add("animate-transition");
         backdrop.classList.add("animate-transition");
     } else {
         sidePanel.classList.remove("animate-transition");
@@ -66,22 +64,14 @@ export function renderTransform(x, withAnimation = false) {
 
     if (clampedX === width) {
         sidePanel.style.transform = "translate3d(0, 0, 0)";
-        if (!isMobile) {
-            appShell.style.transform = `translate3d(${width}px, 0, 0)`;
-        } else {
-            appShell.style.transform = "";
-        }
+        appShell.style.transform = `translate3d(${width}px, 0, 0)`;
         backdrop.style.opacity = "1";
         backdrop.style.pointerEvents = "auto";
         return;
     }
 
     sidePanel.style.transform = `translate3d(${clampedX - width}px, 0, 0)`;
-    if (!isMobile) {
-        appShell.style.transform = `translate3d(${clampedX}px, 0, 0)`;
-    } else {
-        appShell.style.transform = "";
-    }
+    appShell.style.transform = `translate3d(${clampedX}px, 0, 0)`;
     backdrop.style.opacity = progress;
     backdrop.style.pointerEvents = progress > 0.05 ? "auto" : "none";
 }
@@ -182,14 +172,8 @@ export function initGestures() {
         }
 
         const t = e.touches[0];
-        // Only track if panel is open (to close it) OR if touch starts near the left edge (to open it)
-        if (!isPanelOpen && t.clientX > 36) {
-            isTracking = false;
-            return;
-        }
-
         // Stop browser native back-swipe if near edge
-        if (!isPanelOpen && t.clientX <= 36 && e.cancelable) {
+        if (!isPanelOpen && t.clientX <= 32) {
             e.preventDefault();
         }
 
