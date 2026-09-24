@@ -308,15 +308,37 @@ class BaseProvider {
     estimateMessageTokens(msg) {
         if (!msg) return 0;
         let chars = 0;
+        let imageTokens = 0;
+
+        const measure = (text) => {
+            if (typeof text !== "string") return;
+            const stripped = text.replace(/data:image\/[^;]+;base64,[A-Za-z0-9+/=]+/g, () => {
+                imageTokens += 1200;
+                return "";
+            });
+            chars += stripped.length;
+        };
+
         if (typeof msg.content === "string") {
-            chars += msg.content.length;
+            measure(msg.content);
+        } else if (Array.isArray(msg.content)) {
+            for (const part of msg.content) {
+                if (part.type === "image_url" || part.type === "image") {
+                    imageTokens += 1200;
+                } else if (part.type === "text") {
+                    measure(part.text);
+                } else {
+                    measure(JSON.stringify(part));
+                }
+            }
         } else if (msg.content) {
-            chars += JSON.stringify(msg.content).length;
+            measure(JSON.stringify(msg.content));
         }
+
         if (msg.tool_calls) {
             chars += JSON.stringify(msg.tool_calls).length;
         }
-        return Math.ceil(chars / 3.0);
+        return Math.ceil(chars / 3.0) + imageTokens;
     }
 
     /**

@@ -62,17 +62,38 @@ export function formatMessagesToTranscript(messages) {
 export function estimateMessagesTokens(messages) {
     if (!Array.isArray(messages)) return 0;
     let chars = 0;
+    let imageTokens = 0;
+
+    const measure = (text) => {
+        if (typeof text !== "string") return;
+        const stripped = text.replace(/data:image\/[^;]+;base64,[A-Za-z0-9+/=]+/g, () => {
+            imageTokens += 1200;
+            return "";
+        });
+        chars += stripped.length;
+    };
+
     for (const m of messages) {
         if (typeof m.content === "string") {
-            chars += m.content.length;
+            measure(m.content);
+        } else if (Array.isArray(m.content)) {
+            for (const part of m.content) {
+                if (part.type === "image_url" || part.type === "image") {
+                    imageTokens += 1200;
+                } else if (part.type === "text") {
+                    measure(part.text);
+                } else {
+                    measure(JSON.stringify(part));
+                }
+            }
         } else if (m.content) {
-            chars += JSON.stringify(m.content).length;
+            measure(JSON.stringify(m.content));
         }
         if (m.tool_calls) {
             chars += JSON.stringify(m.tool_calls).length;
         }
     }
-    return Math.ceil(chars / 3.2);
+    return Math.ceil(chars / 3.2) + imageTokens;
 }
 
 /**
