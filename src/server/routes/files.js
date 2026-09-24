@@ -4,28 +4,40 @@ const { resolveSafePath, formatBytes, getMimeType, sendJSON, postJSON } = requir
 const { handleCodeGrep, handleSearchAndReplace, handleReplaceFileContent, handleMultiReplaceFileContent, handleWriteFile } = require("../../tools/filesystem/code_tools");
 
 async function handleFileRead(args, chatId) {
-    const targetPath = resolveSafePath(args.path, chatId);
+    const rawPath = args.path || args.AbsolutePath || args.target_file || args.file_path;
+    if (!rawPath) {
+        throw new Error("Missing required parameter 'path'.");
+    }
+
+    const targetPath = resolveSafePath(rawPath, chatId);
     if (!fs.existsSync(targetPath)) {
-        throw new Error(`File or directory not found: ${args.path}`);
+        throw new Error(`File or directory not found: ${rawPath}`);
     }
 
     const stat = await fs.promises.stat(targetPath);
 
-    // 1. Directory inspection
+    // 1. Directory inspection (with 100-entry truncation cap)
     if (stat.isDirectory()) {
         const entries = await fs.promises.readdir(targetPath, { withFileTypes: true });
         const formattedEntries = entries.map(e => ({
             name: e.name,
             type: e.isDirectory() ? "directory" : "file"
         }));
+        const slicedEntries = entries.slice(0, 100);
+        const isDirTruncated = entries.length > 100;
+        let content = slicedEntries.map(e => `${e.isDirectory() ? "[DIR] " : "      "}${e.name}`).join("\n");
+        if (isDirTruncated) {
+            content += `\n\n[Directory truncated: showing first 100 of ${entries.length} items.]`;
+        }
         return {
-            path: args.path,
+            path: rawPath,
             resolved_path: targetPath,
             type: "directory",
             is_dir: true,
             entry_count: entries.length,
             entries: formattedEntries.slice(0, 100),
-            content: entries.map(e => `${e.isDirectory() ? "[DIR] " : "      "}${e.name}`).join("\n")
+            content,
+            is_truncated: isDirTruncated
         };
     }
 
@@ -38,7 +50,7 @@ async function handleFileRead(args, chatId) {
         if (stat.size <= 5 * 1024 * 1024) {
             const dataUrl = `data:${mime};base64,${buf.toString("base64")}`;
             return {
-                path: args.path,
+                path: rawPath,
                 resolved_path: targetPath,
                 type: "image",
                 mime,
@@ -49,7 +61,7 @@ async function handleFileRead(args, chatId) {
             };
         } else {
             return {
-                path: args.path,
+                path: rawPath,
                 resolved_path: targetPath,
                 type: "image",
                 mime,
@@ -62,7 +74,7 @@ async function handleFileRead(args, chatId) {
 
     if (ext === ".pdf") {
         return {
-            path: args.path,
+            path: rawPath,
             resolved_path: targetPath,
             type: "pdf",
             size_bytes: stat.size,
@@ -85,7 +97,7 @@ async function handleFileRead(args, chatId) {
     if (BINARY_EXTS.has(ext)) {
         const mime = getMimeType(ext);
         return {
-            path: args.path,
+            path: rawPath,
             resolved_path: targetPath,
             type: "binary",
             is_binary: true,
@@ -96,33 +108,85 @@ async function handleFileRead(args, chatId) {
         };
     }
 
-    // 4. Text File Inspection with Line Numbers & Windowing
+    // 4. Text File Inspection with Strict 400-Line Window & 45KB Byte Limit
+    const MAX_WINDOW = 400;
+    const MAX_BYTES = 46080; // 45 KB hard limit per view
+
     const raw = await fs.promises.readFile(targetPath, "utf-8");
     const lines = raw.split("\n");
     const totalLines = lines.length;
-    const startLine = Math.max(1, parseInt(args.start_line, 10) || 1);
-    const endLine = args.end_line 
-        ? Math.min(totalLines, Math.max(startLine, parseInt(args.end_line, 10))) 
-        : Math.min(totalLines, startLine + 400 - 1);
+
+    const rawStartLine = args.start_line !== undefined ? args.start_line : args.StartLine;
+    const rawEndLine = args.end_line !== undefined ? args.end_line : args.EndLine;
+    const contentOffset = Math.max(0, parseInt(args.content_offset || args.ContentOffset || args.offset, 10) || 0);
+
+    let startLine = 1;
+    let endLine = Math.min(totalLines, MAX_WINDOW);
+
+    const hasStart = rawStartLine !== undefined && rawStartLine !== null && !isNaN(parseInt(rawStartLine, 10));
+    const hasEnd = rawEndLine !== undefined && rawEndLine !== null && !isNaN(parseInt(rawEndLine, 10));
+
+    if (hasStart && hasEnd) {
+        const reqStart = Math.max(1, Math.min(totalLines, parseInt(rawStartLine, 10)));
+        const reqEnd = Math.min(totalLines, Math.max(reqStart, parseInt(rawEndLine, 10)));
+        startLine = reqStart;
+        endLine = Math.min(reqEnd, startLine + MAX_WINDOW - 1);
+    } else if (hasStart) {
+        startLine = Math.max(1, Math.min(totalLines, parseInt(rawStartLine, 10)));
+        endLine = Math.min(totalLines, startLine + MAX_WINDOW - 1);
+    } else if (hasEnd) {
+        endLine = Math.min(totalLines, Math.max(1, parseInt(rawEndLine, 10)));
+        startLine = Math.max(1, endLine - MAX_WINDOW + 1);
+    }
+
     const isNumbered = args.numbered !== false;
-
     const sliced = lines.slice(startLine - 1, endLine);
-    let content = sliced.map((line, idx) => isNumbered ? `${String(startLine + idx).padStart(5, " ")} | ${line}` : line).join("\n");
+    let formattedContent = sliced.map((line, idx) => {
+        const lineNum = startLine + idx;
+        return isNumbered ? `${String(lineNum).padStart(5, " ")} | ${line}` : line;
+    }).join("\n");
 
-    const isTruncated = (startLine > 1 || endLine < totalLines);
-    if (isTruncated) {
-        content += `\n\n[File truncated: showing lines ${startLine}-${endLine} of ${totalLines}. Use start_line/end_line to read further sections.]`;
+    const contentBuffer = Buffer.from(formattedContent, "utf8");
+    const fullByteLength = contentBuffer.length;
+
+    let finalContent = formattedContent;
+    let isByteTruncated = false;
+
+    if (contentOffset > 0 || fullByteLength > MAX_BYTES) {
+        if (contentOffset < fullByteLength) {
+            const endOffset = Math.min(fullByteLength, contentOffset + MAX_BYTES);
+            const slicedBuf = contentBuffer.subarray(contentOffset, endOffset);
+            finalContent = slicedBuf.toString("utf8");
+            isByteTruncated = endOffset < fullByteLength;
+
+            let byteNotice = `\n\n[Content truncated: showing bytes ${contentOffset} to ${endOffset} of ${fullByteLength} (${MAX_BYTES} bytes limit per view).`;
+            if (isByteTruncated) {
+                byteNotice += ` Use content_offset=${endOffset} to view the next chunk.]`;
+            } else {
+                byteNotice += ` Reached end of line slice.]`;
+            }
+            finalContent += byteNotice;
+        } else {
+            finalContent = `[Content offset ${contentOffset} exceeds available slice bytes (${fullByteLength}).]`;
+        }
+    }
+
+    const isLineTruncated = (startLine > 1 || endLine < totalLines);
+    if (isLineTruncated && !isByteTruncated && contentOffset === 0) {
+        finalContent += `\n\n[File truncated: showing lines ${startLine}-${endLine} of ${totalLines} (max 400 lines per read). Use start_line/end_line to read further sections.]`;
     }
 
     return {
-        path: args.path,
+        path: rawPath,
         resolved_path: targetPath,
         type: "text",
-        content,
+        content: finalContent,
         start_line: startLine,
         end_line: endLine,
         total_lines: totalLines,
-        is_truncated: isTruncated
+        content_offset: contentOffset,
+        byte_length: fullByteLength,
+        is_truncated: isLineTruncated || isByteTruncated
     };
 }
 

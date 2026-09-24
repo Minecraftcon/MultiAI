@@ -425,17 +425,20 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
                 const badgeEl = addToolBadge(currentAIMessage, toolName, args);
 
                 let result;
-                const filePath = args.path || args.file_path;
+                const filePath = args.path || args.AbsolutePath || args.file_path || args.target_file;
                 if (toolName === "read_file" && filePath) {
-                    // Track per slice so pagination (e.g. lines 1-400 vs 401-800) is never falsely blocked
-                    const sliceKey = `${filePath}:${args.action || "read"}:${args.start_line || 1}:${args.end_line || "all"}`;
+                    const start = args.start_line !== undefined ? args.start_line : args.StartLine;
+                    const end = args.end_line !== undefined ? args.end_line : args.EndLine;
+                    const offset = args.content_offset !== undefined ? args.content_offset : (args.ContentOffset !== undefined ? args.ContentOffset : args.offset);
+                    // Track per slice so pagination (e.g. lines 1-400 vs 401-800 or offset) is never falsely blocked
+                    const sliceKey = `${filePath}:${args.action || "read"}:${start || 1}:${end || "all"}:${offset || 0}`;
                     const count = (fileReadCounts.get(sliceKey) || 0) + 1;
                     fileReadCounts.set(sliceKey, count);
                     if (count > 5) {
                         result = {
                             path: filePath,
                             status: "already_inspected",
-                            note: `[Anti-Loop Notice]: The exact same slice of "${filePath}" (lines ${args.start_line || 1}–${args.end_line || "end"}) has already been read ${count - 1} times previously in this session without modifications. Its contents are available in your conversation context. Do NOT re-read the identical slice; proceed with your edits or actions.`
+                            note: `[Anti-Loop Notice]: The exact same slice of "${filePath}" (lines ${start || 1}–${end || "end"}) has already been read ${count - 1} times previously in this session without modifications. Its contents are available in your conversation context. Do NOT re-read the identical slice; proceed with your edits or actions.`
                         };
                     }
                 } else if (toolName === "write_file" || toolName === "search_and_replace") {

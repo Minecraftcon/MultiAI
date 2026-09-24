@@ -11,7 +11,7 @@ export const readFileTool = {
         type: "function",
         function: {
             name: "read_file",
-            description: "Read contents from a file or directory. Automatically formats text with line numbers (capped at 400 lines), returns visual previews for images, and provides clean metadata for binary files.",
+            description: "Read contents from a file or directory. Lines are 1-indexed and capped at max 400 lines per read (with a 45KB byte limit). Supports bidirectional slicing: specify start_line only (next 400 lines), end_line only (preceding 400 lines), or both. If content exceeds 45KB, use content_offset to paginate.",
             parameters: {
                 type: "object",
                 properties: {
@@ -21,11 +21,15 @@ export const readFileTool = {
                     },
                     start_line: {
                         type: "integer",
-                        description: "Optional 1-based starting line number for text files."
+                        description: "Optional 1-based start line. If specified without end_line, reads up to 400 lines forward."
                     },
                     end_line: {
                         type: "integer",
-                        description: "Optional ending line number (inclusive). Max 400 lines per read window."
+                        description: "Optional 1-based end line. If specified without start_line, reads up to 400 lines preceding it."
+                    },
+                    content_offset: {
+                        type: "integer",
+                        description: "Optional byte offset into the content. Use this to view content beyond the 45KB limit when truncated."
                     }
                 },
                 required: ["path"]
@@ -34,9 +38,10 @@ export const readFileTool = {
     },
     handler: async (args, { genState }) => {
         const payload = {
-            path: args.path,
-            start_line: args.start_line,
-            end_line: args.end_line,
+            path: args.path || args.AbsolutePath || args.target_file || args.file_path,
+            start_line: args.start_line !== undefined ? args.start_line : args.StartLine,
+            end_line: args.end_line !== undefined ? args.end_line : args.EndLine,
+            content_offset: args.content_offset !== undefined ? args.content_offset : (args.ContentOffset !== undefined ? args.ContentOffset : args.offset),
             chatId: state.currentChatId
         };
         return await toolFetch("/api/file/read", { method: "POST", body: payload, genState });

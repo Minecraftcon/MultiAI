@@ -148,8 +148,12 @@ export function addToolBadge(element, toolName, args) {
     } else if (toolName === "read_file") {
         icon = "file-text";
         label = "Read file";
-        const lineSpan = (args.start_line || args.end_line) ? ` (lines ${args.start_line || 1}-${args.end_line || "end"})` : "";
-        detail = `${args.path || "file"}${lineSpan}`;
+        const start = args.start_line !== undefined ? args.start_line : args.StartLine;
+        const end = args.end_line !== undefined ? args.end_line : args.EndLine;
+        const offset = args.content_offset !== undefined ? args.content_offset : (args.ContentOffset !== undefined ? args.ContentOffset : args.offset);
+        const lineSpan = (start || end) ? ` (lines ${start || 1}-${end || "end"})` : "";
+        const offsetSpan = offset ? ` [offset: ${offset}]` : "";
+        detail = `${args.path || args.AbsolutePath || "file"}${lineSpan}${offsetSpan}`;
         isCommandTask = true;
     } else if (toolName === "write_file") {
         const isArtifact = (args.path || "").startsWith("$ARTIFACTS/") || (args.path || "").startsWith("${ARTIFACTS}/");
