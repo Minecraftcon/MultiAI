@@ -8,7 +8,7 @@
 export function onToolStart(name, args, badgeEl) {
     if (!badgeEl) return;
 
-    if (name === "run_task" || name === "run_command") {
+    if (name === "run_task") {
         const cooldown = Math.max(1, parseInt(args.timer || args.timeout, 10) || 5);
         const ringBar = badgeEl.querySelector(".timer-ring-bar");
         if (ringBar) {
@@ -20,7 +20,7 @@ export function onToolStart(name, args, badgeEl) {
         }
     }
 
-    if (name === "idle" || name === "schedule" || name === "sleep") {
+    if (name === "schedule") {
         const cooldown = Math.max(0.1, parseFloat(args.time ?? args.sleep_time ?? args.seconds ?? 5) || 5);
         const ringBar = badgeEl.querySelector(".timer-ring-bar");
         if (ringBar) {
@@ -39,7 +39,7 @@ export function onToolStart(name, args, badgeEl) {
 export function onToolComplete(name, args, badgeEl, data) {
     if (!badgeEl) return;
 
-    if (name === "run_task" || name === "run_command" || name === "idle" || name === "schedule" || name === "sleep") {
+    if (name === "run_task" || name === "schedule") {
         const ringBar = badgeEl.querySelector(".timer-ring-bar");
         if (ringBar) {
             ringBar.style.transition = "stroke-dashoffset 0.15s ease, stroke 0.3s ease";
@@ -47,7 +47,7 @@ export function onToolComplete(name, args, badgeEl, data) {
         }
         badgeEl.classList.add("timer-finished");
 
-        if ((name === "idle" || name === "schedule" || name === "sleep") && data) {
+        if (name === "schedule" && data) {
             const labelEl = badgeEl.querySelector(".search-label");
             const queryEl = badgeEl.querySelector(".search-query");
             if (data.status === "task_completed") {
@@ -71,7 +71,7 @@ export function onToolComplete(name, args, badgeEl, data) {
         if (resEl) {
             let outText = "";
             const isLarge = data.is_large_output || (data.stdout && data.stdout.split("\n").length > 100);
-            if (isLarge && (name === "run_task" || name === "idle" || name.startsWith("task_"))) {
+            if (isLarge && name === "run_task") {
                 const rawOutput = data.truncated_lines || data.stdout || "";
                 const lines = rawOutput.split("\n").slice(-100);
                 const indentedLines = lines.map(l => "      " + l).join("\n");
@@ -134,7 +134,7 @@ export function onToolComplete(name, args, badgeEl, data) {
                         imgPreview.src = imgData.url;
                     }
                 }
-            } else if (name === "manage_tasks" || name === "manage_task" || name === "task_send_input" || name === "task_kill") {
+            } else if (name === "manage_tasks") {
                 if (data.status === "task_completed" || (typeof data.status === "string" && data.status.includes("terminated"))) {
                     outText = data.output || data.status || `Task ${args.task_id || args.id} terminated.`;
                 } else if (data.output) {
@@ -144,7 +144,7 @@ export function onToolComplete(name, args, badgeEl, data) {
                 } else {
                     outText = JSON.stringify(data, null, 2);
                 }
-            } else if (name === "schedule" || name === "idle" || name === "sleep") {
+            } else if (name === "schedule") {
                 outText = `[Schedule Result: ${data.status || "completed"}] Elapsed: ${data.elapsed_seconds ?? args.time ?? args.seconds ?? 0}s${data.exit_code !== undefined ? ` (Exit code: ${data.exit_code})` : ""}`;
                 if (data.reason) outText += `\nReason: ${data.reason}`;
                 if (data.task_id || args.task) outText += `\nTask: ${data.task_id || args.task}`;
@@ -154,7 +154,7 @@ export function onToolComplete(name, args, badgeEl, data) {
                 }
             } else if (data.stdout || data.stderr) {
                 outText = (data.stdout || "") + (data.stderr ? ("\n" + data.stderr) : "");
-            } else if (name === "web_search" || name === "fetch_web_content" || name === "web_fetch") {
+            } else if (name === "web_search") {
                 if (data.results && Array.isArray(data.results)) {
                     outText = data.results.map(r => `[${r.title || r.url}]\n${(r.snippet || r.text || r.content || "").slice(0, 800)}${(r.snippet || r.text || r.content || "").length > 800 ? "..." : ""}`).join("\n\n---\n\n");
                 } else if (data.markdown || data.content) {

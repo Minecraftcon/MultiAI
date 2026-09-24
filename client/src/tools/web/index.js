@@ -52,32 +52,8 @@ export const webSearchTool = {
     }
 };
 
-/* =========================================================
-   BACKWARD-COMPATIBILITY ALIASES
-   ========================================================= */
-
-export const fetchWebContentAlias = {
-    name: "fetch_web_content",
-    schema: null,
-    handler: (args, ctx) => {
-        const query = args.query || args.url || (Array.isArray(args.urls) ? args.urls[0] : "");
-        return webSearchTool.handler({ ...args, type: "fetch", query }, ctx);
-    }
-};
-
-export const webFetchAlias = {
-    name: "web_fetch",
-    schema: null,
-    handler: (args, ctx) => {
-        const query = args.query || args.url || (Array.isArray(args.urls) ? args.urls[0] : "");
-        return webSearchTool.handler({ ...args, type: "fetch", query }, ctx);
-    }
-};
-
 export const webTools = [
-    webSearchTool,
-    fetchWebContentAlias,
-    webFetchAlias
+    webSearchTool
 ];
 
 export { activeWebProvider, TinyFishProvider, setWebProvider };

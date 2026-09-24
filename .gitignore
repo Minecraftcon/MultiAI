@@ -12,7 +12,7 @@ generated_images/
 demo.txt
 example.txt
 test.txt
-
+NEXT.md
 # Binary & Decompilation Artifacts
 *.dex
 *.apk

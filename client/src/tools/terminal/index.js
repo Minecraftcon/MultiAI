@@ -250,61 +250,8 @@ export const scheduleTool = {
     }
 };
 
-/* =========================================================
-   BACKWARD-COMPATIBILITY ALIASES
-   ========================================================= */
-
-export const runCommandAlias = {
-    name: "run_command",
-    schema: null, // Keep prompt schema clean with run_task
-    handler: runTaskTool.handler
-};
-
-export const manageTaskAlias = {
-    name: "manage_task",
-    schema: null,
-    handler: manageTasksTool.handler
-};
-
-export const taskSendInputAlias = {
-    name: "task_send_input",
-    schema: null,
-    handler: (args, ctx) => manageTasksTool.handler({ ...args, action: "send_input" }, ctx)
-};
-
-export const taskKillAlias = {
-    name: "task_kill",
-    schema: null,
-    handler: (args, ctx) => manageTasksTool.handler({ ...args, action: "kill_task" }, ctx)
-};
-
-export const idleAlias = {
-    name: "idle",
-    schema: null,
-    handler: (args, ctx) => scheduleTool.handler({
-        ...args,
-        time: args.seconds ?? args.time,
-        task: args.task_id ?? args.task
-    }, ctx)
-};
-
-export const sleepAlias = {
-    name: "sleep",
-    schema: null,
-    handler: (args, ctx) => scheduleTool.handler({
-        ...args,
-        time: args.seconds ?? args.time
-    }, ctx)
-};
-
 export const terminalTools = [
     runTaskTool,
     manageTasksTool,
-    scheduleTool,
-    runCommandAlias,
-    manageTaskAlias,
-    taskSendInputAlias,
-    taskKillAlias,
-    idleAlias,
-    sleepAlias
+    scheduleTool
 ];

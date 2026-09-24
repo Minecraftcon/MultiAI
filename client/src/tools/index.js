@@ -22,7 +22,7 @@ export const tools = getAllToolSchemas();
  * Returns strictly isolated on-chat tool schemas for DeepSearch chats.
  */
 export function getDeepSearchOnChatTools() {
-    const allowed = ["run_task", "manage_tasks", "web_search", "run_command"];
+    const allowed = ["run_task", "manage_tasks", "web_search", "schedule"];
     return allowed.map(name => getTool(name)?.schema).filter(Boolean);
 }
 
@@ -38,13 +38,13 @@ export async function executeTool(name, args, badgeEl, genState) {
     const toolsConfig = state.config?.Tools || {};
 
     // Check if terminal execution is disabled in config.ini
-    const isTerminalTool = name === "run_task" || name === "run_command" || name === "manage_tasks" || name === "manage_task";
+    const isTerminalTool = name === "run_task" || name === "manage_tasks" || name === "schedule";
     if (toolsConfig.EnableTerminal === false && isTerminalTool) {
         throw new Error("Terminal execution is disabled in config.ini");
     }
 
     // Check if web search is disabled in config.ini
-    const isWebTool = name === "web_search" || name === "fetch_web_content" || name === "web_fetch";
+    const isWebTool = name === "web_search";
     if (toolsConfig.EnableWebSearch === false && isWebTool) {
         throw new Error("Web search is disabled in config.ini");
     }
