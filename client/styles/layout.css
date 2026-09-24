@@ -39,6 +39,24 @@ header {
     z-index: 25;
 }
 
+/* Top compositing gradient: Smoothly fades chat content beneath the model/new chat header */
+header::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    height: 28px;
+    background: linear-gradient(180deg, var(--bg) 0%, transparent 100%);
+    pointer-events: none;
+    z-index: 25;
+    transition: opacity 0.2s ease;
+}
+
+#appShell.is-start-page header::after {
+    opacity: 0;
+}
+
 .header-left,
 .header-right {
     display: flex;

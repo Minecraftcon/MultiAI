@@ -29,8 +29,7 @@
     .panel-search-bar,
     .search-pill-input,
     .mention-dropdown,
-    .bottom-sheet,
-    header {
+    .bottom-sheet {
         backdrop-filter: none !important;
         -webkit-backdrop-filter: none !important;
     }
@@ -74,8 +73,7 @@
 .is-android .composer-dock,
 .is-android .chat-scroll-btn,
 .is-android .modal-backdrop,
-.is-android .model-picker-backdrop,
-.is-android header {
+.is-android .model-picker-backdrop {
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
 }
