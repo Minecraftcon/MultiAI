@@ -1,5 +1,16 @@
 const fs = require("fs");
 const path = require("path");
+const { execFile, execSync } = require("child_process");
+
+let rgBinaryPath = null;
+try {
+    const whichOut = execSync("which rg || which ripgrep", { encoding: "utf-8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+    if (whichOut && fs.existsSync(whichOut)) {
+        rgBinaryPath = whichOut;
+    }
+} catch {
+    rgBinaryPath = null;
+}
 
 function isBinaryBuffer(buffer) {
     const checkLen = Math.min(buffer.length, 8000);
@@ -69,8 +80,268 @@ function countOccurrences(source, search) {
     return count;
 }
 
+function executeRipgrep(opts) {
+    return new Promise((resolve, reject) => {
+        const args = ["--json"];
+
+        if (!opts.isRegex) {
+            args.push("-F"); // exact literal match
+        }
+        if (opts.caseInsensitive) {
+            args.push("-i");
+        }
+        for (const g of opts.globList) {
+            if (g && typeof g === "string") {
+                args.push("-g", g);
+            }
+        }
+
+        args.push("--max-count", String(opts.maxMatches));
+        args.push("--", opts.query, opts.targetPath);
+
+        execFile(opts.rgPath, args, { maxBuffer: 10 * 1024 * 1024 }, (err, stdout, stderr) => {
+            // rg exits with 1 if no matches found, which is a normal result
+            if (err && err.code !== 1 && err.code !== 0) {
+                return reject(new Error(`Ripgrep error: ${stderr || err.message}`));
+            }
+
+            const lines = (stdout || "").split("\n");
+            const matches = [];
+            const files = new Set();
+            let isTruncated = false;
+
+            for (const line of lines) {
+                if (!line.trim()) continue;
+                try {
+                    const parsed = JSON.parse(line);
+                    if (parsed.type === "match" && parsed.data) {
+                        const fileText = parsed.data.path?.text || "";
+                        const relativeFile = path.relative(process.cwd(), fileText) || fileText;
+                        files.add(relativeFile);
+
+                        if (matches.length < opts.maxMatches) {
+                            matches.push({
+                                filename: relativeFile,
+                                line_number: parsed.data.line_number,
+                                line_content: (parsed.data.lines?.text || "").replace(/\r?\n$/, "")
+                            });
+                        } else {
+                            isTruncated = true;
+                        }
+                    }
+                } catch {
+                    // Ignore malformed lines
+                }
+            }
+
+            if (opts.matchPerLine) {
+                resolve({
+                    status: "success",
+                    engine: "ripgrep",
+                    query: opts.query,
+                    search_path: opts.displayPath,
+                    total_matches: matches.length,
+                    is_truncated: isTruncated || matches.length >= opts.maxMatches,
+                    matches
+                });
+            } else {
+                const uniqueFiles = Array.from(files).slice(0, opts.maxMatches);
+                resolve({
+                    status: "success",
+                    engine: "ripgrep",
+                    query: opts.query,
+                    search_path: opts.displayPath,
+                    total_files: uniqueFiles.length,
+                    is_truncated: files.size > opts.maxMatches,
+                    files: uniqueFiles
+                });
+            }
+        });
+    });
+}
+
+async function executeNodeGrep(opts) {
+    const matches = [];
+    const files = new Set();
+    let isTruncated = false;
+
+    let regex;
+    try {
+        const flags = opts.caseInsensitive ? "i" : "";
+        regex = opts.isRegex
+            ? new RegExp(opts.query, flags)
+            : new RegExp(opts.query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), flags);
+    } catch (e) {
+        throw new Error(`Invalid regular expression: ${opts.query} (${e.message})`);
+    }
+
+    async function walk(currentDir) {
+        if (matches.length >= opts.maxMatches) {
+            isTruncated = true;
+            return;
+        }
+
+        const entries = await fs.promises.readdir(currentDir, { withFileTypes: true });
+        for (const entry of entries) {
+            if (matches.length >= opts.maxMatches) {
+                isTruncated = true;
+                break;
+            }
+
+            const fullPath = path.join(currentDir, entry.name);
+            const relativePath = path.relative(process.cwd(), fullPath);
+
+            if (entry.isDirectory()) {
+                if (["node_modules", ".git", ".next", "dist", "build", ".venv", "__pycache__"].includes(entry.name)) {
+                    continue;
+                }
+                await walk(fullPath);
+            } else if (entry.isFile()) {
+                if (opts.globList.length > 0) {
+                    const matchesGlob = opts.globList.some(g => {
+                        if (g.startsWith("*.")) {
+                            return entry.name.endsWith(g.slice(1));
+                        }
+                        return entry.name.includes(g);
+                    });
+                    if (!matchesGlob) continue;
+                }
+
+                try {
+                    const stat = await fs.promises.stat(fullPath);
+                    if (stat.size > 2 * 1024 * 1024) continue; // Skip files > 2MB
+
+                    const buffer = await fs.promises.readFile(fullPath);
+                    if (isBinaryBuffer(buffer)) continue;
+
+                    const content = buffer.toString("utf-8");
+                    if (!regex.test(content)) continue;
+
+                    files.add(relativePath);
+
+                    if (opts.matchPerLine) {
+                        const fileLines = content.split(/\r?\n/);
+                        for (let lineIdx = 0; lineIdx < fileLines.length; lineIdx++) {
+                            const lineText = fileLines[lineIdx];
+                            if (regex.test(lineText)) {
+                                matches.push({
+                                    filename: relativePath,
+                                    line_number: lineIdx + 1,
+                                    line_content: lineText
+                                });
+                                if (matches.length >= opts.maxMatches) {
+                                    isTruncated = true;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                } catch {
+                    // Ignore unreadable files
+                }
+            }
+        }
+    }
+
+    const stat = await fs.promises.stat(opts.targetPath);
+    if (stat.isDirectory()) {
+        await walk(opts.targetPath);
+    } else {
+        const buffer = await fs.promises.readFile(opts.targetPath);
+        if (!isBinaryBuffer(buffer)) {
+            const content = buffer.toString("utf-8");
+            const relativePath = path.relative(process.cwd(), opts.targetPath);
+            if (regex.test(content)) {
+                files.add(relativePath);
+                if (opts.matchPerLine) {
+                    const fileLines = content.split(/\r?\n/);
+                    for (let lineIdx = 0; lineIdx < fileLines.length; lineIdx++) {
+                        if (regex.test(fileLines[lineIdx])) {
+                            matches.push({
+                                filename: relativePath,
+                                line_number: lineIdx + 1,
+                                line_content: fileLines[lineIdx]
+                            });
+                            if (matches.length >= opts.maxMatches) {
+                                isTruncated = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (opts.matchPerLine) {
+        return {
+            status: "success",
+            engine: "node-scanner",
+            query: opts.query,
+            search_path: opts.displayPath,
+            total_matches: matches.length,
+            is_truncated: isTruncated || matches.length >= opts.maxMatches,
+            matches
+        };
+    } else {
+        const uniqueFiles = Array.from(files).slice(0, opts.maxMatches);
+        return {
+            status: "success",
+            engine: "node-scanner",
+            query: opts.query,
+            search_path: opts.displayPath,
+            total_files: uniqueFiles.length,
+            is_truncated: files.size > opts.maxMatches,
+            files: uniqueFiles
+        };
+    }
+}
+
 async function handleCodeGrep(args, chatId, { resolveSafePath }) {
-    throw new Error("grep_search tool is being rebuilt with clean modular architecture.");
+    const rawPath = args.SearchPath || args.search_path || args.path || ".";
+    const query = args.Query !== undefined ? args.Query : (args.query !== undefined ? args.query : (args.pattern !== undefined ? args.pattern : ""));
+
+    if (!query) {
+        throw new Error("Missing required parameter 'Query'.");
+    }
+
+    const targetPath = resolveSafePath(rawPath, chatId);
+    if (!fs.existsSync(targetPath)) {
+        throw new Error(`Search path not found: ${rawPath}`);
+    }
+
+    const isRegex = Boolean(args.IsRegex || args.is_regex);
+    const caseInsensitive = Boolean(args.CaseInsensitive || args.case_insensitive);
+    const matchPerLine = args.MatchPerLine !== undefined ? Boolean(args.MatchPerLine) : (args.match_per_line !== undefined ? Boolean(args.match_per_line) : true);
+    const includes = args.Includes || args.includes || args.glob || [];
+    const globList = Array.isArray(includes) ? includes : (typeof includes === "string" ? [includes] : []);
+
+    const MAX_MATCHES = 50;
+
+    if (rgBinaryPath) {
+        return await executeRipgrep({
+            rgPath: rgBinaryPath,
+            targetPath,
+            displayPath: rawPath,
+            query,
+            isRegex,
+            caseInsensitive,
+            matchPerLine,
+            globList,
+            maxMatches: MAX_MATCHES
+        });
+    }
+
+    return await executeNodeGrep({
+        targetPath,
+        displayPath: rawPath,
+        query,
+        isRegex,
+        caseInsensitive,
+        matchPerLine,
+        globList,
+        maxMatches: MAX_MATCHES
+    });
 }
 
 async function handleReplaceFileContent(args, chatId, { resolveSafePath }) {

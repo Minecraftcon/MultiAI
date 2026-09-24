@@ -24,7 +24,7 @@ export const tools = getAllToolSchemas();
  * Returns strictly isolated on-chat tool schemas for DeepSearch chats.
  */
 export function getDeepSearchOnChatTools() {
-    const allowed = ["run_task", "manage_tasks", "web_search", "schedule", "read_file", "write_file", "replace_file_content", "multi_replace_file_content"];
+    const allowed = ["run_task", "manage_tasks", "web_search", "schedule", "read_file", "write_file", "replace_file_content", "multi_replace_file_content", "grep_search"];
     return allowed.map(name => getTool(name)?.schema).filter(Boolean);
 }
 
@@ -58,7 +58,7 @@ export async function executeTool(name, args, badgeEl, genState) {
     }
 
     // Check if filesystem tools are disabled in config.ini
-    const isFilesystemTool = name === "read_file" || name === "write_file" || name === "replace_file_content" || name === "multi_replace_file_content";
+    const isFilesystemTool = name === "read_file" || name === "write_file" || name === "replace_file_content" || name === "multi_replace_file_content" || name === "grep_search";
     if (toolsConfig.EnableFilesystem === false && isFilesystemTool) {
         throw new Error("Filesystem tools are disabled in config.ini");
     }

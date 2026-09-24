@@ -160,8 +160,10 @@ export function addToolBadge(element, toolName, args) {
     } else if (toolName === "grep_search") {
         icon = "search";
         label = "Searched code";
-        const scope = args.path && args.path !== "." ? ` in ${args.path}` : "";
-        detail = `"${args.query || args.pattern || ""}"${scope}`;
+        const targetPath = args.SearchPath || args.path || args.search_path || "";
+        const scope = targetPath && targetPath !== "." ? ` in ${targetPath}` : "";
+        const queryTerm = args.Query !== undefined ? args.Query : (args.query || args.pattern || "");
+        detail = `"${queryTerm}"${scope}`;
         isCommandTask = true;
     } else if (toolName === "replace_file_content" || toolName === "search_and_replace") {
         icon = "edit-3";

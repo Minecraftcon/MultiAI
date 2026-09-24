@@ -73,6 +73,17 @@ export function onToolComplete(name, args, badgeEl, data) {
         }
     }
 
+    if (name === "grep_search" && data) {
+        const queryEl = badgeEl.querySelector(".search-query");
+        if (queryEl) {
+            const count = data.total_matches !== undefined ? `${data.total_matches} match${data.total_matches === 1 ? '' : 'es'}` : (data.total_files !== undefined ? `${data.total_files} file${data.total_files === 1 ? '' : 's'}` : "");
+            const queryTerm = args.Query !== undefined ? args.Query : (args.query || args.pattern || "");
+            if (count) {
+                queryEl.textContent = `"${queryTerm}" (${count})`;
+            }
+        }
+    }
+
     // Format output in collapse div if present
     if (badgeEl._collapseDiv && data) {
         const resEl = badgeEl._collapseDiv.querySelector(".command-output-res");
@@ -124,11 +135,13 @@ export function onToolComplete(name, args, badgeEl, data) {
                 const diffSection = data.diff ? `\n\n${data.diff}` : "";
                 outText = (data.message || `Edited ${data.path || "file"}`) + diffSection;
             } else if (name === "grep_search") {
+                const engine = data.engine || data.engine_used || "ripgrep";
+                const trunc = data.is_truncated ? " (capped at 50 results)" : "";
                 if (data.matches && Array.isArray(data.matches)) {
-                    outText = `Found ${data.total_matches ?? data.matches.length} match(es) (${data.engine_used || "scan"}, ${data.elapsed_ms || 0}ms):\n` +
-                        data.matches.map(m => `${m.file}:${m.line_number}: ${m.line_content}`).join("\n");
+                    outText = `Found ${data.total_matches ?? data.matches.length} match(es) [${engine}]${trunc}:\n` +
+                        data.matches.map(m => `${m.filename || m.file}:${m.line_number}: ${m.line_content}`).join("\n");
                 } else if (data.files && Array.isArray(data.files)) {
-                    outText = `Found ${data.total_files ?? data.files.length} file(s) (${data.engine_used || "scan"}, ${data.elapsed_ms || 0}ms):\n` +
+                    outText = `Found ${data.total_files ?? data.files.length} file(s) [${engine}]${trunc}:\n` +
                         data.files.join("\n");
                 } else {
                     outText = JSON.stringify(data, null, 2);

@@ -208,9 +208,64 @@ export const multiReplaceFileContentTool = {
     }
 };
 
+export const grepSearchTool = {
+    name: "grep_search",
+    schema: {
+        type: "function",
+        function: {
+            name: "grep_search",
+            description: "Use ripgrep to find exact pattern matches within files or directories. Results are returned in JSON format and for each match you will receive: Filename, LineNumber (only when MatchPerLine is true), LineContent (only when MatchPerLine is true). Total results are capped at 50 matches. Use the Includes option to filter by file type or specific paths.",
+            parameters: {
+                type: "object",
+                properties: {
+                    SearchPath: {
+                        type: "string",
+                        description: "The path to search. Must be an absolute path or relative path to a directory or file."
+                    },
+                    Query: {
+                        type: "string",
+                        description: "The search term or pattern to look for within files."
+                    },
+                    IsRegex: {
+                        type: "boolean",
+                        description: "If true, treats Query as a regular expression pattern. If false, treats Query as a literal string where all characters are matched exactly."
+                    },
+                    CaseInsensitive: {
+                        type: "boolean",
+                        description: "If true, performs a case-insensitive search."
+                    },
+                    MatchPerLine: {
+                        type: "boolean",
+                        description: "If true, returns each line that matches the query, including line numbers and snippets of matching lines. If false, only returns the names of files containing the query."
+                    },
+                    Includes: {
+                        type: "array",
+                        items: { type: "string" },
+                        description: "Glob patterns to filter files found within the SearchPath (e.g. ['*.js', '!**/vendor/*'])."
+                    }
+                },
+                required: ["SearchPath", "Query"]
+            }
+        }
+    },
+    handler: async (args, { genState }) => {
+        const payload = {
+            SearchPath: args.SearchPath || args.search_path || args.path || ".",
+            Query: args.Query !== undefined ? args.Query : (args.query !== undefined ? args.query : args.pattern),
+            IsRegex: args.IsRegex !== undefined ? args.IsRegex : args.is_regex,
+            CaseInsensitive: args.CaseInsensitive !== undefined ? args.CaseInsensitive : args.case_insensitive,
+            MatchPerLine: args.MatchPerLine !== undefined ? args.MatchPerLine : args.match_per_line,
+            Includes: args.Includes || args.includes || args.glob,
+            chatId: state.currentChatId
+        };
+        return await toolFetch("/api/code/grep", { method: "POST", body: payload, genState });
+    }
+};
+
 export const filesystemTools = [
     readFileTool,
     writeFileTool,
     replaceFileContentTool,
-    multiReplaceFileContentTool
+    multiReplaceFileContentTool,
+    grepSearchTool
 ];
