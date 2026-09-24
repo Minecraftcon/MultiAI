@@ -13,11 +13,14 @@ let velocityX = 0;
 let isTracking = false;
 let isLocked = false;
 let isHorizontal = false;
+let initialVisualX = 0;
 
 let pendingX = 0;
 let rafId = null;
+let closeTimeout = null;
 
-const SLOP = 12;
+const SLOP_H = 6;
+const SLOP_V = 10;
 
 function getElements() {
     return {
@@ -34,6 +37,34 @@ export function getPanelWidth() {
     if (!sidePanel) return 336;
     // Prefer offsetWidth (unscaled layout CSS pixels) over getBoundingClientRect to avoid CSS zoom distortion
     return sidePanel.offsetWidth || (sidePanel.getBoundingClientRect ? sidePanel.getBoundingClientRect().width : 0) || 336;
+}
+
+export function getCurrentVisualX() {
+    const { appShell } = getElements();
+    const width = getPanelWidth();
+    if (!appShell) return isPanelOpen ? width : 0;
+    try {
+        const style = window.getComputedStyle(appShell);
+        const transform = style.transform || style.webkitTransform;
+        if (!transform || transform === "none") {
+            return isPanelOpen ? width : 0;
+        }
+        if (typeof DOMMatrixReadOnly !== "undefined") {
+            const matrix = new DOMMatrixReadOnly(transform);
+            const x = matrix.m41;
+            if (!isNaN(x)) return Math.max(0, Math.min(width, x));
+        }
+        // Fallback parser for older Android WebViews
+        const match = transform.match(/matrix(?:3d)?\((.+)\)/);
+        if (match) {
+            const values = match[1].split(/,\s*/);
+            const x = values.length === 6 ? parseFloat(values[4]) : parseFloat(values[12]);
+            if (!isNaN(x)) return Math.max(0, Math.min(width, x));
+        }
+        return isPanelOpen ? width : 0;
+    } catch {
+        return isPanelOpen ? width : 0;
+    }
 }
 
 export function renderTransform(x, withAnimation = false) {
@@ -72,7 +103,7 @@ export function renderTransform(x, withAnimation = false) {
 
     sidePanel.style.transform = `translate3d(${clampedX - width}px, 0, 0)`;
     appShell.style.transform = `translate3d(${clampedX}px, 0, 0)`;
-    backdrop.style.opacity = progress;
+    backdrop.style.opacity = progress.toString();
     backdrop.style.pointerEvents = progress > 0.05 ? "auto" : "none";
 }
 
@@ -88,8 +119,8 @@ export function requestRender(x) {
 
 export function openPanel(animated = true) {
     if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+    if (closeTimeout) { clearTimeout(closeTimeout); closeTimeout = null; }
     isPanelOpen = true;
-    renderTransform(getPanelWidth(), animated);
 
     const { sidePanel, panelToggle, backdrop } = getElements();
     if (sidePanel) sidePanel.setAttribute("aria-hidden", "false");
@@ -98,28 +129,49 @@ export function openPanel(animated = true) {
         backdrop.style.opacity = "1";
         backdrop.style.pointerEvents = "auto";
     }
+
+    const width = getPanelWidth();
+    pendingX = width;
+    renderTransform(width, animated);
 }
 
 export function closePanel(animated = true) {
     if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+    if (closeTimeout) { clearTimeout(closeTimeout); closeTimeout = null; }
     isPanelOpen = false;
-    renderTransform(0, animated);
 
     const { sidePanel, panelToggle, backdrop } = getElements();
-    if (sidePanel) sidePanel.setAttribute("aria-hidden", "true");
     if (panelToggle) panelToggle.setAttribute("aria-expanded", "false");
     if (backdrop) {
         backdrop.style.opacity = "0";
         backdrop.style.pointerEvents = "none";
     }
+
+    pendingX = 0;
+    renderTransform(0, animated);
+
+    // Keep sidePanel active during close animation so touches/interruption can catch it
+    if (animated) {
+        closeTimeout = setTimeout(() => {
+            if (!isPanelOpen && !isTracking) {
+                const { sidePanel: sp } = getElements();
+                if (sp) sp.setAttribute("aria-hidden", "true");
+            }
+            closeTimeout = null;
+        }, 340);
+    } else {
+        if (sidePanel) sidePanel.setAttribute("aria-hidden", "true");
+    }
 }
 
 export function togglePanel() {
-    const { sidePanel, panelToggle } = getElements();
-    const isVisuallyOpen = isPanelOpen ||
-        (sidePanel && sidePanel.getAttribute("aria-hidden") === "false") ||
-        (panelToggle && panelToggle.getAttribute("aria-expanded") === "true");
-    isVisuallyOpen ? closePanel(true) : openPanel(true);
+    const visualX = getCurrentVisualX();
+    const width = getPanelWidth();
+    if (isPanelOpen || visualX > width * 0.4) {
+        closePanel(true);
+    } else {
+        openPanel(true);
+    }
 }
 
 export function getIsPanelOpen() {
@@ -133,7 +185,7 @@ export function initGestures() {
     let lastToggleTime = 0;
     const handleToggle = (e) => {
         const now = Date.now();
-        if (now - lastToggleTime < 300) return;
+        if (now - lastToggleTime < 150) return;
         lastToggleTime = now;
         if (e && e.type !== "click" && e.cancelable) {
             e.preventDefault();
@@ -146,7 +198,11 @@ export function initGestures() {
         panelToggle.addEventListener("touchend", handleToggle);
     }
 
+    let lastCloseTime = 0;
     const handleClose = (e) => {
+        const now = Date.now();
+        if (now - lastCloseTime < 150) return;
+        lastCloseTime = now;
         if (e && e.type !== "click" && e.cancelable) {
             e.preventDefault();
         }
@@ -167,23 +223,46 @@ export function initGestures() {
         if (e.touches.length !== 1) return;
 
         const target = e.target;
-        if (target.closest('button, a, input, textarea, select, pre, .table-wrapper, table, .mobile-msg-actions, .composer, .command-output-box')) {
+        // Don't intercept touches on interactive inputs, controls, or code blocks
+        if (target.closest('button, a, input, textarea, select, pre, .table-wrapper, table, .mobile-msg-actions, .composer, .command-output-box, .model-picker-dropdown')) {
             return;
         }
 
         const t = e.touches[0];
+        const width = getPanelWidth();
+        const visualX = getCurrentVisualX();
 
-        // Edge tracking constraint:
-        // When panel is closed, ONLY touches initiating within the left edge zone (<= 36px) activate drawer dragging.
-        // Touches across the rest of the screen pass straight through to normal chat scrolling and text interactions.
-        if (!isPanelOpen && t.clientX > 36) {
+        // Edge / Left-zone constraint:
+        // When drawer is fully closed, initiate drawer swipe from a generous left zone
+        // (up to 45% of screen width, minimum 160px).
+        // This eliminates the restrictive 36px sliver and avoids Android OS gesture back conflicts.
+        const maxOpenStartX = Math.max(160, window.innerWidth * 0.45);
+        if (visualX <= 2 && !isPanelOpen && t.clientX > maxOpenStartX) {
             isTracking = false;
             return;
         }
 
-        // Prevent native browser back-navigation gesture when starting at the edge
-        if (!isPanelOpen && t.clientX <= 36 && e.cancelable) {
-            e.preventDefault();
+        // Interrupt any ongoing transition immediately!
+        if (closeTimeout) {
+            clearTimeout(closeTimeout);
+            closeTimeout = null;
+        }
+        if (rafId) {
+            cancelAnimationFrame(rafId);
+            rafId = null;
+        }
+
+        const { sidePanel, appShell, backdrop } = getElements();
+        if (sidePanel) {
+            sidePanel.classList.remove("animate-transition");
+            sidePanel.setAttribute("aria-hidden", "false");
+        }
+        if (appShell) appShell.classList.remove("animate-transition");
+        if (backdrop) backdrop.classList.remove("animate-transition");
+
+        // Freeze in-flight transforms instantly without jump
+        if (visualX > 0 && visualX < width) {
+            renderTransform(visualX, false);
         }
 
         touchStartX = t.clientX;
@@ -191,7 +270,8 @@ export function initGestures() {
         lastX = t.clientX;
         lastTime = performance.now();
         velocityX = 0;
-        pendingX = isPanelOpen ? getPanelWidth() : 0;
+        initialVisualX = visualX;
+        pendingX = visualX;
 
         isTracking = true;
         isLocked = false;
@@ -206,28 +286,40 @@ export function initGestures() {
         const dy = t.clientY - touchStartY;
         const absX = Math.abs(dx);
         const absY = Math.abs(dy);
+        const width = getPanelWidth();
 
         if (!isLocked) {
-            if (absX < SLOP && absY < SLOP) {
+            // Priority 1: Detect vertical scroll intent
+            if (absY >= SLOP_V && absY > absX * 1.4) {
+                isLocked = true;
+                isHorizontal = false;
+                isTracking = false;
                 return;
             }
-            isLocked = true;
-            // From closed state at edge: dragging rightwards (dx > 0) with dominant horizontal angle
-            // From open state: dragging leftwards (dx < 0) with dominant horizontal angle
-            const isDirectionValid = !isPanelOpen ? (dx > 0 && absX >= absY) : (dx < 0 && absX >= absY);
-            if (isDirectionValid) {
+
+            // Priority 2: Detect horizontal drawer intent
+            if (absX >= SLOP_H && absX > absY * 0.75) {
+                // If closed, must be pulling rightwards
+                if (initialVisualX <= 2 && dx <= 0) {
+                    isTracking = false;
+                    return;
+                }
+                // If open, must be pulling leftwards
+                if (initialVisualX >= width - 2 && dx >= 0) {
+                    isTracking = false;
+                    return;
+                }
+
+                isLocked = true;
                 isHorizontal = true;
             } else {
-                isTracking = false;
                 return;
             }
         }
 
         if (!isHorizontal) return;
 
-        const { sidePanel } = getElements();
-        if (sidePanel) sidePanel.setAttribute("aria-hidden", "false");
-
+        // Prevent native browser back-navigation & vertical scroll hijacking
         if (e.cancelable) {
             e.preventDefault();
         }
@@ -241,10 +333,7 @@ export function initGestures() {
             lastTime = now;
         }
 
-        const width = getPanelWidth();
-        const startOffset = isPanelOpen ? width : 0;
-        const currentX = Math.max(0, Math.min(width, startOffset + dx));
-
+        const currentX = Math.max(0, Math.min(width, initialVisualX + dx));
         requestRender(currentX);
     }, { passive: false });
 
@@ -262,12 +351,17 @@ export function initGestures() {
 
         const width = getPanelWidth();
 
+        // High velocity flick
         if (velocityX > 0.3) {
             openPanel(true);
         } else if (velocityX < -0.3) {
             closePanel(true);
         } else {
-            if (pendingX > width * 0.4) {
+            // Position threshold:
+            // If dragging from closed, 30% drag is enough to open
+            // If dragging from open, closing past 30% commits to close
+            const threshold = initialVisualX <= 2 ? width * 0.3 : width * 0.7;
+            if (pendingX > threshold) {
                 openPanel(true);
             } else {
                 closePanel(true);
@@ -279,7 +373,12 @@ export function initGestures() {
         if (!isTracking) return;
         isTracking = false;
         if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
-        isPanelOpen ? openPanel(true) : closePanel(true);
+        const width = getPanelWidth();
+        if (pendingX > width * 0.5) {
+            openPanel(true);
+        } else {
+            closePanel(true);
+        }
     });
 
     document.addEventListener("keydown", (event) => {
@@ -288,3 +387,4 @@ export function initGestures() {
         }
     });
 }
+
