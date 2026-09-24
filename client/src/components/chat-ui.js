@@ -959,7 +959,7 @@ export function renderSessionMessages(session, chat) {
                 const rawText = finalAssistantMsg.content || "";
                 aiDiv.dataset.rawText = rawText;
 
-                const { thoughtHtml, content } = extractThoughtAndContent(rawText);
+                const { thoughtHtml, content, followups } = extractThoughtAndContent(rawText);
                 
                 if (thoughtHtml) {
                     preSearchContent.innerHTML = thoughtHtml;
@@ -974,6 +974,10 @@ export function renderSessionMessages(session, chat) {
                     bindAIImageCards(finalContent);
                 } else if (totalToolCalls === 0) {
                     finalContent.innerHTML = "<em>(Empty response)</em>";
+                }
+
+                if (Array.isArray(followups) && followups.length > 0) {
+                    renderFollowupSuggestions(aiDiv, followups, true);
                 }
             }
 
