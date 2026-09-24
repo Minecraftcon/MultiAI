@@ -10,147 +10,119 @@ async function handleFileRead(args, chatId) {
     }
 
     const stat = await fs.promises.stat(targetPath);
-    const action = args.action || "read";
 
-    if (action === "info") {
-        if (stat.isDirectory()) {
-            const entries = await fs.promises.readdir(targetPath, { withFileTypes: true });
-            return {
-                path: args.path,
-                resolved_path: targetPath,
-                exists: true,
-                is_dir: true,
-                is_file: false,
-                size_bytes: stat.size,
-                human_size: formatBytes(stat.size),
-                entry_count: entries.length,
-                entries: entries.slice(0, 100).map(e => ({ name: e.name, type: e.isDirectory() ? "directory" : "file" })),
-                modified_time: stat.mtime
-            };
-        }
-        let lineCount = 0;
-        try {
-            const raw = await fs.promises.readFile(targetPath, "utf-8");
-            lineCount = raw.split("\n").length;
-        } catch {
-            lineCount = null;
-        }
-        return {
-            path: args.path,
-            resolved_path: targetPath,
-            exists: true,
-            is_dir: false,
-            is_file: true,
-            size_bytes: stat.size,
-            human_size: formatBytes(stat.size),
-            line_count: lineCount,
-            mime_type: getMimeType(path.extname(targetPath)),
-            modified_time: stat.mtime
-        };
-    }
-
-    if (action === "view") {
-        const ext = path.extname(targetPath).toLowerCase();
-        const isImg = [".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg", ".bmp", ".ico", ".avif"].includes(ext);
-        if (isImg) {
-            const buf = await fs.promises.readFile(targetPath);
-            const mime = getMimeType(ext);
-            if (stat.size <= 4 * 1024 * 1024) {
-                const dataUrl = `data:${mime};base64,${buf.toString("base64")}`;
-                return {
-                    path: args.path,
-                    resolved_path: targetPath,
-                    action: "view",
-                    type: "image",
-                    mime,
-                    size_bytes: stat.size,
-                    human_size: formatBytes(stat.size),
-                    data_url: dataUrl,
-                    markdown: `![${path.basename(targetPath)}](${dataUrl})`
-                };
-            } else {
-                return {
-                    path: args.path,
-                    resolved_path: targetPath,
-                    action: "view",
-                    type: "image",
-                    mime,
-                    size_bytes: stat.size,
-                    human_size: formatBytes(stat.size),
-                    message: "Image exceeds 4MB inline viewing limit"
-                };
-            }
-        }
-        if (ext === ".pdf") {
-            return {
-                path: args.path,
-                resolved_path: targetPath,
-                action: "view",
-                type: "pdf",
-                size_bytes: stat.size,
-                human_size: formatBytes(stat.size),
-                message: `PDF Document (${formatBytes(stat.size)})`
-            };
-        }
-    }
-
-    // Default: action === "read"
+    // 1. Directory inspection
     if (stat.isDirectory()) {
         const entries = await fs.promises.readdir(targetPath, { withFileTypes: true });
+        const formattedEntries = entries.map(e => ({
+            name: e.name,
+            type: e.isDirectory() ? "directory" : "file"
+        }));
         return {
             path: args.path,
             resolved_path: targetPath,
+            type: "directory",
             is_dir: true,
             entry_count: entries.length,
+            entries: formattedEntries.slice(0, 100),
             content: entries.map(e => `${e.isDirectory() ? "[DIR] " : "      "}${e.name}`).join("\n")
         };
     }
 
-    // Guard: detect binary files before reading as UTF-8
+    // 2. Automatic Image Detection & Multimodal Preview
+    const ext = path.extname(targetPath).toLowerCase();
+    const IMAGE_EXTS = new Set([".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg", ".bmp", ".ico", ".avif"]);
+    if (IMAGE_EXTS.has(ext)) {
+        const mime = getMimeType(ext);
+        const buf = await fs.promises.readFile(targetPath);
+        if (stat.size <= 5 * 1024 * 1024) {
+            const dataUrl = `data:${mime};base64,${buf.toString("base64")}`;
+            return {
+                path: args.path,
+                resolved_path: targetPath,
+                type: "image",
+                mime,
+                size_bytes: stat.size,
+                human_size: formatBytes(stat.size),
+                data_url: dataUrl,
+                markdown: `![${path.basename(targetPath)}](${dataUrl})`
+            };
+        } else {
+            return {
+                path: args.path,
+                resolved_path: targetPath,
+                type: "image",
+                mime,
+                size_bytes: stat.size,
+                human_size: formatBytes(stat.size),
+                message: `Image exceeds 5MB inline preview limit (${formatBytes(stat.size)})`
+            };
+        }
+    }
+
+    if (ext === ".pdf") {
+        return {
+            path: args.path,
+            resolved_path: targetPath,
+            type: "pdf",
+            size_bytes: stat.size,
+            human_size: formatBytes(stat.size),
+            message: `PDF Document (${formatBytes(stat.size)})`
+        };
+    }
+
+    // 3. Binary File Guard
     const BINARY_EXTS = new Set([
-        ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".ico", ".avif", ".tiff", ".tif",
         ".mp4", ".webm", ".mov", ".avi", ".mkv", ".m4v", ".mpg", ".mpeg", ".flv", ".3gp",
         ".mp3", ".wav", ".flac", ".ogg", ".opus", ".m4a", ".aac", ".wma",
         ".zip", ".tar", ".gz", ".bz2", ".xz", ".7z", ".rar",
         ".exe", ".dll", ".so", ".dylib", ".bin", ".dat",
         ".wasm", ".pyc", ".class", ".o", ".obj", ".pdb",
         ".ttf", ".otf", ".woff", ".woff2", ".eot",
-        ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx",
+        ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx",
         ".sqlite", ".db"
     ]);
-    const fileExt = path.extname(targetPath).toLowerCase();
-    if (BINARY_EXTS.has(fileExt)) {
-        const mime = getMimeType(fileExt);
-        const viewable = [".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".ico", ".avif", ".pdf"].includes(fileExt);
+    if (BINARY_EXTS.has(ext)) {
+        const mime = getMimeType(ext);
         return {
             path: args.path,
             resolved_path: targetPath,
+            type: "binary",
             is_binary: true,
             mime_type: mime,
             size_bytes: stat.size,
             human_size: formatBytes(stat.size),
-            message: `Binary file (${mime}, ${formatBytes(stat.size)}). Cannot read as text.${viewable ? ' Use action: "view" to render as embedded preview.' : ' Use action: "info" for metadata only.'}`
+            message: `Binary file (${mime}, ${formatBytes(stat.size)}). Cannot read as text.`
         };
     }
 
+    // 4. Text File Inspection with Line Numbers & Windowing
     const raw = await fs.promises.readFile(targetPath, "utf-8");
     const lines = raw.split("\n");
     const totalLines = lines.length;
     const startLine = Math.max(1, parseInt(args.start_line, 10) || 1);
-    const endLine = args.end_line ? Math.min(totalLines, Math.max(startLine, parseInt(args.end_line, 10))) : Math.min(totalLines, startLine + 400 - 1);
+    const endLine = args.end_line 
+        ? Math.min(totalLines, Math.max(startLine, parseInt(args.end_line, 10))) 
+        : Math.min(totalLines, startLine + 400 - 1);
     const isNumbered = args.numbered !== false;
 
     const sliced = lines.slice(startLine - 1, endLine);
-    const content = sliced.map((line, idx) => isNumbered ? `${String(startLine + idx).padStart(5, " ")} | ${line}` : line).join("\n");
+    let content = sliced.map((line, idx) => isNumbered ? `${String(startLine + idx).padStart(5, " ")} | ${line}` : line).join("\n");
+
+    const isTruncated = (startLine > 1 || endLine < totalLines);
+    if (isTruncated) {
+        content += `\n\n[File truncated: showing lines ${startLine}-${endLine} of ${totalLines}. Use start_line/end_line to read further sections.]`;
+    }
 
     return {
         path: args.path,
         resolved_path: targetPath,
+        type: "text",
         content,
         start_line: startLine,
         end_line: endLine,
         total_lines: totalLines,
-        is_truncated: (startLine > 1 || endLine < totalLines)
+        is_truncated: isTruncated
     };
 }
 

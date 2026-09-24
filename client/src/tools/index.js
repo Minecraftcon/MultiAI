@@ -7,11 +7,13 @@ import { onToolStart, onToolComplete, onToolError } from "./badge-sync.js";
 import { terminalTools } from "./terminal/index.js";
 import { webTools } from "./web/index.js";
 import { mediaTools } from "./media/index.js";
+import { filesystemTools } from "./filesystem/index.js";
 
-// Register terminal, web, and media tools
+// Register terminal, web, media, and filesystem tools
 terminalTools.forEach(registerTool);
 webTools.forEach(registerTool);
 mediaTools.forEach(registerTool);
+filesystemTools.forEach(registerTool);
 
 /**
  * Array of all tool schemas provided to LLM chat requests.
@@ -22,7 +24,7 @@ export const tools = getAllToolSchemas();
  * Returns strictly isolated on-chat tool schemas for DeepSearch chats.
  */
 export function getDeepSearchOnChatTools() {
-    const allowed = ["run_task", "manage_tasks", "web_search", "schedule"];
+    const allowed = ["run_task", "manage_tasks", "web_search", "schedule", "read_file", "write_file"];
     return allowed.map(name => getTool(name)?.schema).filter(Boolean);
 }
 
@@ -53,6 +55,12 @@ export async function executeTool(name, args, badgeEl, genState) {
     const isImageTool = name === "generate_image" || name === "get_image_status";
     if (toolsConfig.EnableImageGeneration === false && isImageTool) {
         throw new Error("Image generation is disabled in config.ini");
+    }
+
+    // Check if filesystem tools are disabled in config.ini
+    const isFilesystemTool = name === "read_file" || name === "write_file";
+    if (toolsConfig.EnableFilesystem === false && isFilesystemTool) {
+        throw new Error("Filesystem tools are disabled in config.ini");
     }
 
     const tool = getTool(name);

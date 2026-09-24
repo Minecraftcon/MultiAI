@@ -146,16 +146,15 @@ export function addToolBadge(element, toolName, args) {
         detail = args.reason ? `${args.reason}${targetTask}` : `${args.seconds || 5}s timer${targetTask}`;
         isCommandTask = true;
     } else if (toolName === "read_file") {
-        icon = args.action === "view" ? "eye" : (args.action === "info" ? "info" : "file-text");
-        label = args.action === "view" ? "Viewed file" : (args.action === "info" ? "File info" : "Read file");
+        icon = "file-text";
+        label = "Read file";
         const lineSpan = (args.start_line || args.end_line) ? ` (lines ${args.start_line || 1}-${args.end_line || "end"})` : "";
         detail = `${args.path || "file"}${lineSpan}`;
         isCommandTask = true;
     } else if (toolName === "write_file") {
         const isArtifact = (args.path || "").startsWith("$ARTIFACTS/") || (args.path || "").startsWith("${ARTIFACTS}/");
-        const act = args.action || (args.operations ? "batch" : (args.target !== undefined ? "replace" : (args.line !== undefined ? "inject" : "write")));
-        icon = isArtifact ? "file-code" : (act === "replace" ? "edit-3" : (act === "inject" ? "plus-circle" : (act === "batch" ? "layers" : "file-edit")));
-        label = isArtifact ? (act === "replace" ? "Updated artifact" : "Created artifact") : (act === "replace" ? "Replaced text" : (act === "inject" ? "Injected into file" : (act === "batch" ? "Batch modified" : "Wrote file")));
+        icon = isArtifact ? "file-code" : "file-edit";
+        label = isArtifact ? "Wrote artifact" : "Wrote file";
         detail = args.path || "file";
         isCommandTask = true;
     } else if (toolName === "grep_search") {
@@ -251,19 +250,10 @@ export function addToolBadge(element, toolName, args) {
         
         let displayCmd = "";
         if (toolName === "write_file") {
-            const act = args.action || (args.operations ? "batch" : (args.target !== undefined ? "replace" : (args.line !== undefined ? "inject" : "write")));
-            if (act === "replace") {
-                displayCmd = `Replace in ${args.path || "file"}:\nTarget: ${args.target ?? ""}\nReplacement: ${args.replacement ?? ""}`;
-            } else if (act === "inject") {
-                displayCmd = `Inject at line ${args.line || 1} in ${args.path || "file"}:\n${args.content ?? ""}`;
-            } else if (act === "batch") {
-                displayCmd = `Batch operations (${(args.operations || []).length}) on ${args.path || "file"}`;
-            } else {
-                displayCmd = `Write to ${args.path || "file"}`;
-            }
+            displayCmd = `Write to ${args.path || "file"}`;
         } else if (toolName === "read_file") {
             const span = (args.start_line || args.end_line) ? ` (lines ${args.start_line || 1}-${args.end_line || "end"})` : "";
-            displayCmd = `${(args.action || "read").toUpperCase()}: ${args.path || "file"}${span}`;
+            displayCmd = `READ: ${args.path || "file"}${span}`;
         } else if (toolName === "schedule" || toolName === "idle") {
             const duration = args.time ?? args.sleep_time ?? args.seconds ?? 5;
             const taskInfo = (args.task || args.task_id) ? ` (hooked on ${args.task || args.task_id}, wake: ${args.wake_on || "exit"})` : "";

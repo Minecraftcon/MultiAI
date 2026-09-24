@@ -85,22 +85,33 @@ export function onToolComplete(name, args, badgeEl, data) {
                 outText += `ran_for: ${data.ran_for || data.elapsed_seconds || "1.0"}s\n`;
                 outText += `sys: output has been saved to ${data.scratch_log_path || `scratch/${args.task_name ? (args.task_name.toLowerCase().replace(/[^a-z0-9_-]+/g, '-') + '-') : ''}${data.task_id || 'task'}.log`}`;
             } else if (name === "read_file") {
-                if (data.action === "view" && data.type === "image") {
-                    outText = `[Image View: ${data.path} (${data.mime}, ${data.human_size})]\n${data.markdown || ""}`;
-                } else if (data.action === "info") {
-                    outText = JSON.stringify(data, null, 2);
+                if (data.type === "image") {
+                    outText = `[Image: ${data.path} (${data.mime || "image"}, ${data.human_size || ""})]\n${data.markdown || ""}`;
+                    if (data.data_url && badgeEl._collapseDiv) {
+                        let imgPreview = badgeEl._collapseDiv.querySelector(".tool-image-preview");
+                        if (!imgPreview) {
+                            imgPreview = document.createElement("img");
+                            imgPreview.className = "tool-image-preview";
+                            imgPreview.style.maxWidth = "100%";
+                            imgPreview.style.maxHeight = "320px";
+                            imgPreview.style.borderRadius = "8px";
+                            imgPreview.style.marginTop = "10px";
+                            imgPreview.style.display = "block";
+                            imgPreview.style.objectFit = "contain";
+                            imgPreview.style.boxShadow = "0 4px 12px rgba(0,0,0,0.15)";
+                            badgeEl._collapseDiv.appendChild(imgPreview);
+                        }
+                        imgPreview.src = data.data_url;
+                    }
                 } else if (data.content !== undefined) {
                     outText = data.content || (data.entries ? JSON.stringify(data.entries, null, 2) : "(Empty file or directory)");
-                } else if (data.note || data.status || data.error) {
-                    outText = data.note || data.error || data.status;
+                } else if (data.message || data.note || data.status || data.error) {
+                    outText = data.message || data.note || data.error || data.status;
                 } else {
                     outText = JSON.stringify(data, null, 2);
                 }
-            } else if (name === "write_file" || name === "search_and_replace") {
+            } else if (name === "write_file") {
                 outText = data.message || JSON.stringify(data, null, 2);
-                if (data.syntax_warning) {
-                    outText += `\n\n[Warning]: ${data.syntax_warning}`;
-                }
             } else if (name === "grep_search") {
                 if (data.matches && Array.isArray(data.matches)) {
                     outText = `Found ${data.total_matches ?? data.matches.length} match(es) (${data.engine_used || "scan"}, ${data.elapsed_ms || 0}ms):\n` +
