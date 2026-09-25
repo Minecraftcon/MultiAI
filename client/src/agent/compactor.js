@@ -42,6 +42,17 @@ export function formatMessagesToTranscript(messages) {
         }
         if (role === "tool") {
             const raw = typeof m.content === "string" ? m.content : JSON.stringify(m.content);
+            if (raw.includes("data:image/") || raw.includes('"data_url"') || m.type === "image") {
+                try {
+                    const parsed = typeof m.content === "object" ? m.content : JSON.parse(raw);
+                    const imgPath = parsed.path || "image";
+                    const mime = parsed.mime || "image";
+                    const size = parsed.human_size || (parsed.size_bytes ? `${Math.round(parsed.size_bytes / 1024)} KB` : "");
+                    return `[Tool Result (${m.name || m.tool_call_id || "tool"})]: [Image file read: ${imgPath} (${mime}${size ? `, ${size}` : ""})]`;
+                } catch (_) {
+                    return `[Tool Result (${m.name || m.tool_call_id || "tool"})]: [Image binary data]`;
+                }
+            }
             const preview = raw.length > 4000 
                 ? raw.slice(0, 2000) + "\n... [output truncated for summary] ...\n" + raw.slice(-2000) 
                 : raw;

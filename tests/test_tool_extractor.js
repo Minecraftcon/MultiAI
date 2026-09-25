@@ -193,5 +193,34 @@ console.log("Test: extractImageFromToolResult");
     assert(normToolMsg.content.includes('"type":"image"'), "Normalized tool message should retain metadata");
 }
 
-console.log("✓ ALL SAFETY NET TESTS PASSED CLEANLY!");
+(async () => {
+    // 5e. Base64 payload with line breaks (MIME style) must be handled cleanly
+    const b64WithNewlines = "iVBORw0KGgoAAAANSUhEUgAA\r\n" + "A".repeat(100) + "\nASUVORK5CYII=";
+    const newlineImgPayload = JSON.stringify({
+        type: "image",
+        mime: "image/png",
+        data_url: `data:image/png;base64,${b64WithNewlines}`,
+        path: "wrapped.png"
+    });
+    const parsedNewlineImg = BaseProvider.extractImageFromToolResult(newlineImgPayload);
+    assert(parsedNewlineImg, "Must parse image with wrapped newlines");
+    assert(!parsedNewlineImg.base64.includes("\n"), "Must strip newlines from base64 string");
+    assert(!parsedNewlineImg.base64.includes("\r"), "Must strip carriage returns from base64 string");
+
+    // 5f. formatMessagesToTranscript must format image tool result cleanly without slicing base64
+    const { formatMessagesToTranscript } = await import("../client/src/agent/compactor.js");
+    const transcript = formatMessagesToTranscript([{
+        role: "tool",
+        name: "read_file",
+        content: newlineImgPayload
+    }]);
+    assert(transcript.includes("[Image file read: wrapped.png (image/png"), "Transcript should summarize image cleanly");
+    assert(!transcript.includes("[output truncated for summary]"), "Transcript must not slice base64 with truncation notice");
+    assert(!transcript.includes("iVBORw0"), "Transcript must not leak raw base64 characters");
+
+    console.log("✓ ALL SAFETY NET TESTS PASSED CLEANLY!");
+})().catch(err => {
+    console.error(err);
+    process.exit(1);
+});
 

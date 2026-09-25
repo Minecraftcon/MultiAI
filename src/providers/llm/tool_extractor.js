@@ -24,42 +24,48 @@ function extractImageFromToolResult(content) {
             if (/truncated|omitted/i.test(content)) {
                 return null;
             }
-            const match = content.match(/data:(image\/[^;]+);base64,([A-Za-z0-9+/=]+)/);
-            if (match && match[2].length >= 16) {
-                return {
-                    mime: match[1],
-                    base64: match[2],
-                    dataUrl: match[0],
-                    path: "image",
-                    humanSize: "",
-                    cleanContent: content.replace(/data:image\/[^;]+;base64,[A-Za-z0-9+/=]+/g, "[embedded image data]")
-                };
+            const match = content.match(/data:(image\/[^;]+);base64,([A-Za-z0-9+/=\s]+)/);
+            if (match) {
+                const b64 = match[2].replace(/\s+/g, "");
+                if (b64.length >= 16) {
+                    return {
+                        mime: match[1],
+                        base64: b64,
+                        dataUrl: `data:${match[1]};base64,${b64}`,
+                        path: "image",
+                        humanSize: "",
+                        cleanContent: content.replace(/data:image\/[^;]+;base64,[A-Za-z0-9+/=\s]+/g, "[embedded image data]")
+                    };
+                }
             }
             return null;
         }
     }
     if (obj && (obj.type === "image" || (typeof obj.mime === "string" && obj.mime.startsWith("image/")))) {
-        const rawUrl = obj.data_url || obj.url;
+        const rawUrl = (obj.data_url || obj.url || "").trim();
         if (rawUrl && typeof rawUrl === "string") {
-            const match = rawUrl.match(/^data:([^;]+);base64,([A-Za-z0-9+/=]+)$/);
-            if (match && match[2].length >= 16) {
-                const cleanObj = {
-                    path: obj.path || "image",
-                    type: "image",
-                    mime: match[1],
-                    size_bytes: obj.size_bytes,
-                    human_size: obj.human_size,
-                    status: "success",
-                    message: `Image read successfully: ${obj.path || "image"} (${obj.human_size || match[1]})`
-                };
-                return {
-                    mime: match[1],
-                    base64: match[2],
-                    dataUrl: rawUrl,
-                    path: obj.path || "image",
-                    humanSize: obj.human_size || "",
-                    cleanContent: JSON.stringify(cleanObj)
-                };
+            const match = rawUrl.match(/^data:([^;]+);base64,([A-Za-z0-9+/=\s]+)$/);
+            if (match) {
+                const b64 = match[2].replace(/\s+/g, "");
+                if (b64.length >= 16) {
+                    const cleanObj = {
+                        path: obj.path || "image",
+                        type: "image",
+                        mime: match[1],
+                        size_bytes: obj.size_bytes,
+                        human_size: obj.human_size,
+                        status: "success",
+                        message: `Image read successfully: ${obj.path || "image"} (${obj.human_size || match[1]})`
+                    };
+                    return {
+                        mime: match[1],
+                        base64: b64,
+                        dataUrl: `data:${match[1]};base64,${b64}`,
+                        path: obj.path || "image",
+                        humanSize: obj.human_size || "",
+                        cleanContent: JSON.stringify(cleanObj)
+                    };
+                }
             }
         }
     }

@@ -57,7 +57,7 @@ async function handleFileRead(args, chatId) {
                 size_bytes: stat.size,
                 human_size: formatBytes(stat.size),
                 data_url: dataUrl,
-                markdown: `![${path.basename(targetPath)}](${dataUrl})`
+                markdown: `![${path.basename(targetPath)}](${rawPath})`
             };
         } else {
             return {
