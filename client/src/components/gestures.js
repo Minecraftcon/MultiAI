@@ -40,26 +40,25 @@ export function getPanelWidth() {
 }
 
 export function getCurrentVisualX() {
-    const { sidePanel } = getElements();
+    const { appShell } = getElements();
     const width = getPanelWidth();
-    if (!sidePanel) return isPanelOpen ? width : 0;
+    if (!appShell) return isPanelOpen ? width : 0;
     try {
-        const style = window.getComputedStyle(sidePanel);
+        const style = window.getComputedStyle(appShell);
         const transform = style.transform || style.webkitTransform;
         if (!transform || transform === "none") {
             return isPanelOpen ? width : 0;
         }
         if (typeof DOMMatrixReadOnly !== "undefined") {
             const matrix = new DOMMatrixReadOnly(transform);
-            const x = matrix.m41 + width;
+            const x = matrix.m41;
             if (!isNaN(x)) return Math.max(0, Math.min(width, x));
         }
         // Fallback parser for older Android WebViews
         const match = transform.match(/matrix(?:3d)?\((.+)\)/);
         if (match) {
             const values = match[1].split(/,\s*/);
-            const rawX = values.length === 6 ? parseFloat(values[4]) : parseFloat(values[12]);
-            const x = rawX + width;
+            const x = values.length === 6 ? parseFloat(values[4]) : parseFloat(values[12]);
             if (!isNaN(x)) return Math.max(0, Math.min(width, x));
         }
         return isPanelOpen ? width : 0;
@@ -69,8 +68,8 @@ export function getCurrentVisualX() {
 }
 
 export function renderTransform(x, withAnimation = false) {
-    const { sidePanel, backdrop } = getElements();
-    if (!sidePanel || !backdrop) return;
+    const { sidePanel, appShell, backdrop } = getElements();
+    if (!sidePanel || !appShell || !backdrop) return;
 
     const width = getPanelWidth();
     const clampedX = Math.max(0, Math.min(width, x));
@@ -78,14 +77,17 @@ export function renderTransform(x, withAnimation = false) {
 
     if (withAnimation) {
         sidePanel.classList.add("animate-transition");
+        appShell.classList.add("animate-transition");
         backdrop.classList.add("animate-transition");
     } else {
         sidePanel.classList.remove("animate-transition");
+        appShell.classList.remove("animate-transition");
         backdrop.classList.remove("animate-transition");
     }
 
     if (clampedX === 0) {
-        sidePanel.style.transform = "translate3d(-100%, 0, 0)";
+        sidePanel.style.transform = "";
+        appShell.style.transform = "";
         backdrop.style.opacity = "0";
         backdrop.style.pointerEvents = "none";
         return;
@@ -93,18 +95,16 @@ export function renderTransform(x, withAnimation = false) {
 
     if (clampedX === width) {
         sidePanel.style.transform = "translate3d(0, 0, 0)";
+        appShell.style.transform = `translate3d(${width}px, 0, 0)`;
         backdrop.style.opacity = "1";
         backdrop.style.pointerEvents = "auto";
         return;
     }
 
     sidePanel.style.transform = `translate3d(${clampedX - width}px, 0, 0)`;
+    appShell.style.transform = `translate3d(${clampedX}px, 0, 0)`;
     backdrop.style.opacity = progress.toString();
-    if (progress > 0.05 && backdrop.style.pointerEvents !== "auto") {
-        backdrop.style.pointerEvents = "auto";
-    } else if (progress <= 0.05 && backdrop.style.pointerEvents !== "none") {
-        backdrop.style.pointerEvents = "none";
-    }
+    backdrop.style.pointerEvents = progress > 0.05 ? "auto" : "none";
 }
 
 export function requestRender(x) {
@@ -252,11 +252,12 @@ export function initGestures() {
             rafId = null;
         }
 
-        const { sidePanel, backdrop } = getElements();
+        const { sidePanel, appShell, backdrop } = getElements();
         if (sidePanel) {
             sidePanel.classList.remove("animate-transition");
             sidePanel.setAttribute("aria-hidden", "false");
         }
+        if (appShell) appShell.classList.remove("animate-transition");
         if (backdrop) backdrop.classList.remove("animate-transition");
 
         // Freeze in-flight transforms instantly without jump

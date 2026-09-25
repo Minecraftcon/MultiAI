@@ -10,7 +10,12 @@
     flex-direction: column;
     position: relative;
     overflow-x: hidden;
+    transform: translateX(0px);
     background: var(--bg);
+}
+
+#appShell.animate-transition {
+    transition: transform var(--panel-speed) var(--panel-ease);
 }
 
 header {
@@ -181,8 +186,17 @@ header::after {
 }
 
 @keyframes modelPulse {
-    0%, 100% { border-color: var(--hover-2); box-shadow: none; }
-    50% { border-color: var(--accent); box-shadow: 0 0 12px var(--accent-mid); }
+
+    0%,
+    100% {
+        border-color: var(--hover-2);
+        box-shadow: none;
+    }
+
+    50% {
+        border-color: var(--accent);
+        box-shadow: 0 0 12px var(--accent-mid);
+    }
 }
 
 /* Hidden native select (Preserved for compatibility) */
@@ -236,7 +250,7 @@ header::after {
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.18s cubic-bezier(0.16, 1, 0.3, 1),
-                transform 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+        transform 0.18s cubic-bezier(0.16, 1, 0.3, 1);
     overflow: hidden;
 }
 
@@ -324,6 +338,7 @@ header::after {
 .model-picker-list::-webkit-scrollbar {
     width: 5px;
 }
+
 .model-picker-list::-webkit-scrollbar-thumb {
     background: var(--surface-3);
     border-radius: 6px;
@@ -486,4 +501,3 @@ header::after {
     width: 15px;
     height: 15px;
 }
-

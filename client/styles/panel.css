@@ -14,10 +14,9 @@
     flex-direction: column;
     background: var(--surface);
     border-right: 1px solid var(--border);
-    box-shadow: 4px 0 20px rgba(0, 0, 0, 0.35);
-    transform: translate3d(-100%, 0, 0);
+    box-shadow: 8px 0 36px var(--scrim);
+    transform: translateX(-100%);
     will-change: transform;
-    contain: layout style paint;
     font-family: inherit;
 }
 
@@ -25,7 +24,7 @@
 .side-panel[aria-hidden="true"] {
     visibility: hidden;
     pointer-events: none;
-    transform: translate3d(-100%, 0, 0);
+    transform: translateX(-100%);
 }
 
 #sidePanel[aria-hidden="false"],
@@ -189,6 +188,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+
     .mode-pill-thumb,
     .mode-pill-item {
         transition: none !important;
@@ -256,9 +256,18 @@
     position: relative;
 }
 
-.panel-body::-webkit-scrollbar { width: 5px; }
-.panel-body::-webkit-scrollbar-thumb { background: var(--surface-3); border-radius: 10px; }
-.panel-body::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-hover); }
+.panel-body::-webkit-scrollbar {
+    width: 5px;
+}
+
+.panel-body::-webkit-scrollbar-thumb {
+    background: var(--surface-3);
+    border-radius: 10px;
+}
+
+.panel-body::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-hover);
+}
 
 /* Normal View Wrapper (Smoothly collapses when in search mode) */
 .panel-normal-view {
@@ -269,8 +278,9 @@
     overflow: hidden;
     transform: translateY(0);
     transition: max-height 0.28s cubic-bezier(0.2, 0.9, 0.3, 1),
-                opacity 0.22s ease,
-                transform 0.24s cubic-bezier(0.2, 0.9, 0.3, 1);
+        opacity 0.22s ease,
+        transform 0.24s cubic-bezier(0.2, 0.9, 0.3, 1);
+    view-transition-name: panel-normal-view;
     flex-shrink: 0;
 }
 
@@ -294,9 +304,10 @@
     pointer-events: none;
     transform: translateY(-8px);
     transition: max-height 0.28s cubic-bezier(0.2, 0.9, 0.3, 1),
-                opacity 0.22s ease,
-                transform 0.24s cubic-bezier(0.2, 0.9, 0.3, 1),
-                padding 0.28s cubic-bezier(0.2, 0.9, 0.3, 1);
+        opacity 0.22s ease,
+        transform 0.24s cubic-bezier(0.2, 0.9, 0.3, 1),
+        padding 0.28s cubic-bezier(0.2, 0.9, 0.3, 1);
+    view-transition-name: panel-search-bar;
     flex-shrink: 0;
 }
 
@@ -398,9 +409,9 @@
     opacity: 1;
     overflow: visible;
     transition: max-height 0.24s cubic-bezier(0.2, 0.9, 0.3, 1),
-                opacity 0.18s ease,
-                padding 0.24s cubic-bezier(0.2, 0.9, 0.3, 1),
-                margin 0.24s cubic-bezier(0.2, 0.9, 0.3, 1);
+        opacity 0.18s ease,
+        padding 0.24s cubic-bezier(0.2, 0.9, 0.3, 1),
+        margin 0.24s cubic-bezier(0.2, 0.9, 0.3, 1);
 }
 
 .panel-section-header::after {
@@ -600,11 +611,13 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+
     ::view-transition-group(*),
     ::view-transition-old(*),
     ::view-transition-new(*) {
         animation: none !important;
     }
+
     .panel-normal-view,
     .panel-search-bar,
     .panel-section-header {
@@ -1270,5 +1283,3 @@
     opacity: 0.35;
     cursor: not-allowed;
 }
-
-
