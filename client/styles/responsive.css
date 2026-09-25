@@ -2,14 +2,14 @@
    RESPONSIVE BREAKPOINTS & MOBILE PERFORMANCE
    ========================================================= */
 @media (max-width: 768px), (pointer: coarse) {
-    .message {
+    .message,
+    .search-badge-item {
         animation: none !important;
     }
 
     /* 2. Isolated compositor-thread scrolling without conflicting touch locks */
     #chat {
         scroll-behavior: auto !important;
-        contain: layout style;
         -webkit-overflow-scrolling: touch;
     }
 
@@ -53,13 +53,13 @@
     -webkit-tap-highlight-color: transparent !important;
 }
 
-.is-android .message {
+.is-android .message,
+.is-android .search-badge-item {
     animation: none !important;
 }
 
 .is-android #chat {
     scroll-behavior: auto !important;
-    contain: layout style;
     -webkit-overflow-scrolling: touch;
 }
 

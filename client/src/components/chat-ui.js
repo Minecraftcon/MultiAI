@@ -1336,10 +1336,10 @@ export function initScrollToBottom() {
     // Dynamic height tracking of composer so button floats cleanly above it
     const inputArea = document.getElementById("inputArea");
     const updateComposerHeight = () => {
-        if (!inputArea) return;
+        if (!inputArea || !btn) return;
         const rect = inputArea.getBoundingClientRect();
         const height = Math.round(rect.height || inputArea.offsetHeight || 94);
-        document.documentElement.style.setProperty("--composer-height", `${height}px`);
+        btn.style.bottom = `${height + 22}px`;
     };
 
     if (inputArea && typeof ResizeObserver !== "undefined") {

@@ -40,8 +40,6 @@
     max-height: 220px;
     overflow-y: auto;
     border-radius: 7px;
-    transform: translateZ(0);
-    will-change: transform;
 }
 
 .command-output-box pre::-webkit-scrollbar { width: 4px; height: 4px; }
