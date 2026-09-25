@@ -11,13 +11,14 @@
 |---|---|---|---|
 | `src/providers/llm/base.js` & `tool_extractor.js` | Argument parsing (JSON, delimited, quotes), Token extraction (GLM-4, Hermes, template tokens, XML, code blocks, function calls), Leaked XML repairs, Prompt sanitization, Image extraction from tool output | `tests/test_tool_extractor.js` | Provider network streaming timeouts |
 | `client/src/components/chat-tool-badges.js` | Tool badge configuration resolution (`getToolBadgeConfig`), icon/label mapping, task command formatting, multiline truncation, artifact detection | `tests/test_chat_tool_badges.js` | Browser DOM event listeners |
-| `src/core/conversations_manager.js` | Session loading, append message, JSONL compaction, session deletion | (Pending Phase 1 Core safety net) | Multi-process file lock concurrency |
+| `src/core/conversations_manager.js` | Session loading, append message, JSONL compaction, session deletion, truncation protection, project registration & workspace scaffolding | `tests/test_conversations_manager.js` | Multi-process file lock concurrency |
 
 ## Characterization Backlog
 - [x] `src/providers/llm/base.js` tool parsing & normalization (Criticality: High, Priority: P0)
 - [x] `client/src/components/chat-tool-badges.js` badge generation & icon mapping (Criticality: High, Priority: P0)
-- [ ] `src/core/conversations_manager.js` message streaming & file persistence (Criticality: Medium, Priority: P1)
+- [x] `src/core/conversations_manager.js` message streaming & file persistence (Criticality: Medium, Priority: P1)
 
 ## CI Gates
 - `node tests/test_tool_extractor.js`
 - `node tests/test_chat_tool_badges.js`
+- `node tests/test_conversations_manager.js`
