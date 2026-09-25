@@ -28,8 +28,10 @@
 | 2026-09-25 | Phase 1 | Safety net test suite created (`tests/test_tool_extractor.js`) before refactoring `base.js` | Zero regressions allowed across all 18 inheriting LLM providers. |
 | 2026-09-25 | Phase 3 & 4 | Extracted tool call parsing heuristics from `BaseProvider` into `tool_extractor.js` | Deep module design: hides regex/XML/token dialects behind a simple clean interface; shrunk `base.js` by ~420 lines. |
 | 2026-09-25 | Operating | Prioritize high-churn frontend monolith `client/src/components/chat-ui.js` next | 38 commits churn, 1,553 lines with mixed concerns (badges, streaming, auto-scroll, message lifecycle). |
+| 2026-09-25 | Phase 1, 3 & 4 | Created characterization tests (`tests/test_chat_tool_badges.js`) and extracted `client/src/components/chat-tool-badges.js` | Extracted ~700 lines of badge/modal logic out of `chat-ui.js`. Shrunk `chat-ui.js` from 1,553 lines to 870 lines. Maintained 100% re-export compatibility. |
 
 ## Next Actions
 - [x] Pin `src/providers/llm/base.js` with characterization tests and extract `tool_extractor.js`.
-- [ ] Establish characterization test/safety net for `client/src/components/chat-ui.js` badge rendering logic.
-- [ ] Extract `chat-tool-badges.js` / renderer out of `chat-ui.js` to shrink it by ~500 lines.
+- [x] Establish characterization test/safety net for `client/src/components/chat-ui.js` badge rendering logic.
+- [x] Extract `chat-tool-badges.js` out of `chat-ui.js` to shrink it by ~680 lines.
+- [ ] Tackle next critical monolith: `src/core/conversations_manager.js` (982 lines; separate JSONL stream storage from workspace resolution).
