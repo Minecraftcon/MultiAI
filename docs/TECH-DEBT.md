@@ -8,6 +8,8 @@
 | Chat History & Modal Coupling | `client/src/components/side-panel.js` | SRP Violation | Medium | Medium | P1 | Resolved (Extracted `models.js`, `build-projects-panel.js`, `chat-history-list.js`) |
 | Dual-role Workspace & JSONL streaming | `src/core/conversations_manager.js` | SRP Violation | Medium | Medium | P1 | Resolved (Extracted `jsonl_session_store.js` & `build_projects_manager.js`) |
 | Missing Outbound Request Timeouts on raw providers | `src/providers/llm/` | Reliability | Medium | Low | P2 | Resolved (`base.js`, `local.js`, `opencode.js` stream & body timeout protection) |
+| Mixed Attachment Staging in Input Controller | `client/src/components/composer.js` | SRP Violation | Medium | Low | P2 | Resolved (Extracted `composer-attachments.js`) |
+| Scroll Affordance & Lightbox Coupling in Chat UI | `client/src/components/chat-ui.js` | Feature Envy / Duplication | Low | Low | P3 | Resolved (Extracted `chat-scroll.js`, unified `openImageLightbox`) |
 
 ## Smell Inventory
 | Smell | Location | Refactoring | Status |
@@ -16,7 +18,8 @@
 | Long Method / Divergent Change (700+ lines of DOM badge & modal creation in `chat-ui.js`) | `client/src/components/chat-ui.js` | Extract Class / Component (`chat-tool-badges.js`) | done |
 | Large File / Dual-role Workspace & JSONL Streaming | `src/core/conversations_manager.js` | Extract Modules (`jsonl_session_store.js`, `build_projects_manager.js`) | done |
 | Long File / Mixed Responsibilities (1,558 lines in `side-panel.js`) | `client/src/components/side-panel.js` | Extract Modules (`models.js`, `build-projects-panel.js`, `chat-history-list.js`) | done |
-| Mixed Abstraction Levels (HTML string concatenation mixed with websocket handling) | `client/src/components/chat-ui.js` | Extract Method / Component separation | pending |
+| Mixed Abstraction Levels (Input dispatching mixed with Canvas downscaling & file staging) | `client/src/components/composer.js` | Extract Module (`composer-attachments.js`) | done |
+| Divergent Change (Scroll sentinel & IntersectionObserver inside message renderer) | `client/src/components/chat-ui.js` | Extract Component (`chat-scroll.js`) | done |
 
 ## Sprout / Wrap Register
 - `src/providers/llm/tool_extractor.js`: Sprouted module housing all tool parsing and normalization functions; wrapped cleanly with delegates in `BaseProvider`.
@@ -26,6 +29,8 @@
 - `client/src/services/models.js`: Sprouted model loader, provider map, and vision capability determination service.
 - `client/src/components/build-projects-panel.js`: Sprouted Build Mode project tree rendering, directory validation, and project modal management.
 - `client/src/components/chat-history-list.js`: Sprouted conversation history list rendering, keyed-diff DOM updates, and session switching.
+- `client/src/components/composer-attachments.js`: Sprouted attachment management, image downscaling, and preview staging component.
+- `client/src/components/chat-scroll.js`: Sprouted scroll frame-throttling, bottom sentinel observer, and jump-to-bottom affordance widget.
 
 
 ## Debt Budget & Broken-Windows Policy

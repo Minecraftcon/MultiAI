@@ -32,6 +32,7 @@
 | 2026-09-26 | Phase 1, 3 & 4 | Created characterization tests (`tests/test_conversations_manager.js`) and extracted `jsonl_session_store.js` and `build_projects_manager.js` | Separated JSONL append/safe write storage primitives and Build Mode project lifecycle out of `conversations_manager.js`. Shrunk from 982 to 539 lines (~45% reduction). |
 | 2026-09-26 | Phase 1, 3 & 4 | Created safety net tests (`tests/test_model_service.js`) and decomposed `side-panel.js` into `models.js`, `build-projects-panel.js`, and `chat-history-list.js` | Separated Model Service, Build Mode project management, and chat history list rendering from the panel shell coordinator. Shrunk `side-panel.js` from 1,558 to 436 lines (~72% reduction). Maintained 100% re-export compatibility. |
 | 2026-09-26 | Phase 7 | Outbound Request Timeouts & Stream Lifecycle Protection in LLM Providers | Extended timeout coverage in `base.js` across full body read (`res.text()`) and across entire chunk consumption loops in `local.js` & `opencode.js` to eliminate socket hanging vulnerabilities. |
+| 2026-09-26 | Phase 1, 3 & 4 | Created safety net tests (`tests/test_composer_attachments.js`) and extracted `composer-attachments.js` and `chat-scroll.js` | Extracted attachment staging and downscaling from `composer.js` (shrunk from 585 to 305 lines). Decoupled `chat-scroll.js` and unified image lightbox modal from `chat-ui.js` (shrunk to 688 lines). 100% test pass. |
 
 ## Next Actions
 - [x] Pin `src/providers/llm/base.js` with characterization tests and extract `tool_extractor.js`.
@@ -40,6 +41,8 @@
 - [x] Tackle `src/core/conversations_manager.js` (created `jsonl_session_store.js` and `build_projects_manager.js`).
 - [x] Tackle next monolith: `client/src/components/side-panel.js` (1,558 lines; decomposed into `models.js`, `build-projects-panel.js`, and `chat-history-list.js`).
 - [x] Fix Outbound Request Timeouts across all 18+ LLM providers (`base.js`, `local.js`, `opencode.js`).
-- [ ] Phase 2 Clean Code Audit: Review remaining UI modules (`client/src/components/composer.js` and `settings-view.js`).
+- [x] Phase 2 Clean Code Audit: Review and refactor `client/src/components/composer.js` (extracted `composer-attachments.js`).
+- [x] Decouple `client/src/components/chat-scroll.js` and unify image lightbox modal in `chat-ui.js`.
+- [ ] Review `client/src/components/settings-view.js` and error handling boundaries.
 
 
