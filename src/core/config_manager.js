@@ -194,13 +194,26 @@ function loadConfig(filePath) {
     }
 }
 
+function deepMerge(target, source) {
+    const result = { ...(target || {}) };
+    for (const [key, value] of Object.entries(source || {})) {
+        if (value && typeof value === "object" && !Array.isArray(value)) {
+            result[key] = deepMerge(result[key], value);
+        } else {
+            result[key] = value;
+        }
+    }
+    return result;
+}
+
 /**
  * Saves an updated config to config.ini.
  */
 function saveConfig(updates, filePath) {
     const targetPath = filePath || path.join(__dirname, "config.ini");
     const current = loadConfig(targetPath);
-    const updated = mergeWithDefaults({ ...current, ...updates });
+    const merged = deepMerge(current, updates);
+    const updated = mergeWithDefaults(merged);
     const serialized = serializeINI(updated);
     fs.writeFileSync(targetPath, serialized, "utf8");
     cachedConfig = updated;

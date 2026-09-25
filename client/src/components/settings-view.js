@@ -16,6 +16,7 @@ import { setStartPageMode } from "./chatbox.js";
 
 let activeSubScreen = "general";
 let saveTimeout = null;
+let pendingConfigUpdates = {};
 
 export function openSettings(targetCategory = "general") {
     const appShell = document.getElementById("appShell");
@@ -325,6 +326,11 @@ export async function saveSetting(section, key, value) {
     if (!state.config[section]) state.config[section] = {};
     state.config[section][key] = value;
 
+    if (!pendingConfigUpdates[section]) {
+        pendingConfigUpdates[section] = {};
+    }
+    pendingConfigUpdates[section][key] = value;
+
     const statusEl = document.getElementById("settingsSaveStatus");
     if (statusEl) {
         statusEl.className = "settings-save-status saving";
@@ -334,11 +340,13 @@ export async function saveSetting(section, key, value) {
 
     clearTimeout(saveTimeout);
     saveTimeout = setTimeout(async () => {
+        const payload = pendingConfigUpdates;
+        pendingConfigUpdates = {};
         try {
             const res = await fetch("/api/config", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ [section]: { [key]: value } })
+                body: JSON.stringify(payload)
             });
 
             if (res.ok) {
