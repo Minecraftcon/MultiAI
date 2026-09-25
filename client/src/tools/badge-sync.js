@@ -1,6 +1,7 @@
 /**
  * Badge Synchronization & UI Presentation for Tool Executions
  */
+import { renderIcons } from "../utils/icons.js";
 
 /**
  * Initializes visual timers and indicators on tool badge start.
@@ -117,7 +118,14 @@ export function onToolComplete(name, args, badgeEl, data) {
                     outText += `sys: log saved to ${data.scratch_log_path}`;
                 }
             } else if (name === "read_file") {
-                if (data.type === "image") {
+                if (data.type === "image" || (typeof data.mime === "string" && data.mime.startsWith("image/"))) {
+                    const labelEl = badgeEl.querySelector(".search-label");
+                    if (labelEl) labelEl.textContent = "Viewed Image";
+                    const iconCircle = badgeEl.querySelector(".search-icon-circle");
+                    if (iconCircle) {
+                        iconCircle.innerHTML = '<i data-lucide="image" aria-hidden="true"></i>';
+                        renderIcons(iconCircle);
+                    }
                     outText = `[Image: ${data.path} (${data.mime || "image"}, ${data.human_size || ""})]\n${data.markdown || ""}`;
                     if (data.data_url && badgeEl._collapseDiv) {
                         let imgPreview = badgeEl._collapseDiv.querySelector(".tool-image-preview");

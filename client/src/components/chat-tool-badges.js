@@ -86,14 +86,24 @@ export function getToolBadgeConfig(toolName, args = {}) {
         detail = args.reason ? `${args.reason}${targetTask}` : `${args.seconds || 5}s timer${targetTask}`;
         isCommandTask = true;
     } else if (toolName === "read_file") {
-        icon = "file-text";
-        label = "Read file";
-        const start = args.start_line !== undefined ? args.start_line : args.StartLine;
-        const end = args.end_line !== undefined ? args.end_line : args.EndLine;
-        const offset = args.content_offset !== undefined ? args.content_offset : (args.ContentOffset !== undefined ? args.ContentOffset : args.offset);
-        const lineSpan = (start || end) ? ` (lines ${start || 1}-${end || "end"})` : "";
-        const offsetSpan = offset ? ` [offset: ${offset}]` : "";
-        detail = `${args.path || args.AbsolutePath || "file"}${lineSpan}${offsetSpan}`;
+        const filePath = args.path || args.AbsolutePath || args.file_path || args.target_file || "";
+        const isImg = /\.(png|jpe?g|webp|gif|svg|bmp|ico|tiff?)$/i.test(filePath) 
+            || args.type === "image" 
+            || (typeof args.mime === "string" && args.mime.startsWith("image/"));
+        if (isImg) {
+            icon = "image";
+            label = "Viewed Image";
+            detail = filePath || "image";
+        } else {
+            icon = "file-text";
+            label = "Read file";
+            const start = args.start_line !== undefined ? args.start_line : args.StartLine;
+            const end = args.end_line !== undefined ? args.end_line : args.EndLine;
+            const offset = args.content_offset !== undefined ? args.content_offset : (args.ContentOffset !== undefined ? args.ContentOffset : args.offset);
+            const lineSpan = (start || end) ? ` (lines ${start || 1}-${end || "end"})` : "";
+            const offsetSpan = offset ? ` [offset: ${offset}]` : "";
+            detail = `${filePath || "file"}${lineSpan}${offsetSpan}`;
+        }
         isCommandTask = true;
     } else if (toolName === "write_file") {
         const isArtifact = (args.path || "").startsWith("$ARTIFACTS/") || (args.path || "").startsWith("${ARTIFACTS}/");
@@ -160,8 +170,16 @@ export function getToolBadgeConfig(toolName, args = {}) {
     } else if (toolName === "multi_replace_file_content") {
         displayCmd = `MULTI-EDIT: ${args.path || "file"}${args.description ? ` (${args.description})` : ""}`;
     } else if (toolName === "read_file") {
-        const span = (args.start_line || args.end_line) ? ` (lines ${args.start_line || 1}-${args.end_line || "end"})` : "";
-        displayCmd = `READ: ${args.path || "file"}${span}`;
+        const filePath = args.path || args.AbsolutePath || args.file_path || args.target_file || "";
+        const isImg = /\.(png|jpe?g|webp|gif|svg|bmp|ico|tiff?)$/i.test(filePath) 
+            || args.type === "image" 
+            || (typeof args.mime === "string" && args.mime.startsWith("image/"));
+        if (isImg) {
+            displayCmd = `VIEW IMAGE: ${filePath || "image"}`;
+        } else {
+            const span = (args.start_line || args.end_line) ? ` (lines ${args.start_line || 1}-${args.end_line || "end"})` : "";
+            displayCmd = `READ: ${filePath || "file"}${span}`;
+        }
     } else if (toolName === "schedule" || toolName === "idle") {
         const duration = args.time ?? args.sleep_time ?? args.seconds ?? 5;
         const taskInfo = (args.task || args.task_id) ? ` (hooked on ${args.task || args.task_id}, wake: ${args.wake_on || "exit"})` : "";

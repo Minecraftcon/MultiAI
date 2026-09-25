@@ -65,6 +65,17 @@ async function runTests() {
         assert.strictEqual(readCfg.detail, "src/index.js (lines 10-50)");
         assert.strictEqual(readCfg.displayCmd, "READ: src/index.js (lines 10-50)");
 
+        const readImageCfg = getToolBadgeConfig("read_file", { path: "screenshot.png" });
+        assert.strictEqual(readImageCfg.icon, "image");
+        assert.strictEqual(readImageCfg.label, "Viewed Image");
+        assert.strictEqual(readImageCfg.detail, "screenshot.png");
+        assert.strictEqual(readImageCfg.displayCmd, "VIEW IMAGE: screenshot.png");
+
+        const readImageWithMimeCfg = getToolBadgeConfig("read_file", { path: "/tmp/plot", mime: "image/jpeg" });
+        assert.strictEqual(readImageWithMimeCfg.icon, "image");
+        assert.strictEqual(readImageWithMimeCfg.label, "Viewed Image");
+        assert.strictEqual(readImageWithMimeCfg.displayCmd, "VIEW IMAGE: /tmp/plot");
+
         const writeArtifactCfg = getToolBadgeConfig("write_file", { path: "$ARTIFACTS/plan.md" });
         assert.strictEqual(writeArtifactCfg.icon, "file-code");
         assert.strictEqual(writeArtifactCfg.label, "Wrote artifact");
