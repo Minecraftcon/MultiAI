@@ -63,6 +63,17 @@ export function onToolComplete(name, args, badgeEl, data) {
                 const elapsed = data.elapsed_seconds ?? args.time ?? args.seconds ?? 5;
                 if (queryEl) queryEl.textContent = `${elapsed}s cooldown completed${taskDesc}`;
             }
+        } else if ((name === "run_task" || name === "run_command") && data) {
+            const isRunning = data.running === true || data.status === "running" || data.status === "in_progress";
+            if (isRunning) {
+                const labelEl = badgeEl.querySelector(".search-label");
+                const queryEl = badgeEl.querySelector(".search-query");
+                if (labelEl) labelEl.textContent = "Running in background";
+                if (queryEl) {
+                    const desc = args.task_name || data.task_id || args.command || "task";
+                    queryEl.textContent = `${desc}${data.task_id ? ` (id: ${data.task_id})` : ""}`;
+                }
+            }
         }
     }
 
@@ -90,32 +101,40 @@ export function onToolComplete(name, args, badgeEl, data) {
         const resEl = badgeEl._collapseDiv.querySelector(".command-output-res");
         if (resEl) {
             let outText = "";
+            const isRunning = data.running === true || data.status === "running" || data.status === "in_progress";
             const isLarge = data.is_large_output || (data.stdout && data.stdout.split("\n").length > 150);
-            if (isLarge && (name === "run_task" || name === "manage_tasks")) {
+            if (name === "run_task" || name === "run_command") {
                 const rawOutput = data.truncated_lines || data.stdout || "";
-                const lines = rawOutput.split("\n").slice(-150);
-                const indentedLines = lines.map(l => "      " + l).join("\n");
-                outText = `id: ${data.task_id || args.task_id || "task"}\n`;
-                if (data.stderr && data.stderr.trim()) {
-                    outText += `stderr: [output truncated ... showing last 150 lines]\n${indentedLines}\n`;
-                } else {
-                    outText += `stdout: [output truncated ... showing last 150 lines]\n${indentedLines}\n`;
+                outText = `id: ${data.task_id || args.task_id || args.task_name || "task"}\n`;
+                if (isRunning) {
+                    outText += `status: running\n`;
+                } else if (data.status) {
+                    outText += `status: ${data.status}\n`;
                 }
-                outText += `status_code: ${data.exit_code ?? 0}\n`;
-                outText += `ran_for: ${data.ran_for || data.elapsed_seconds || "1.0"}s\n`;
-                outText += `sys: output has been saved to ${data.scratch_log_path || `scratch/${args.task_name ? (args.task_name.toLowerCase().replace(/[^a-z0-9_-]+/g, '-') + '-') : ''}${data.task_id || 'task'}.log`}`;
-            } else if (name === "run_task" || name === "manage_tasks") {
-                outText = `id: ${data.task_id || args.task_id || "task"}\n`;
-                if (data.stdout && data.stdout.trim()) {
-                    outText += `stdout:\n${data.stdout.split("\n").map(l => "      " + l).join("\n")}\n`;
+                if (!isRunning && data.exit_code !== undefined && data.exit_code !== null) {
+                    outText += `exit_code: ${data.exit_code}\n`;
                 }
-                if (data.stderr && data.stderr.trim()) {
-                    outText += `stderr:\n${data.stderr.split("\n").map(l => "      " + l).join("\n")}\n`;
-                }
-                outText += `status_code: ${data.exit_code ?? 0}\n`;
                 outText += `ran_for: ${data.ran_for || data.elapsed_seconds || "1.0"}s\n`;
                 if (data.scratch_log_path) {
-                    outText += `sys: log saved to ${data.scratch_log_path}`;
+                    outText += `sys: ${isLarge ? "output has been saved to" : "log saved to"} ${data.scratch_log_path}\n`;
+                } else if (isLarge) {
+                    outText += `sys: output has been saved to scratch/${args.task_name ? (args.task_name.toLowerCase().replace(/[^a-z0-9_-]+/g, '-') + '-') : ''}${data.task_id || 'task'}.log\n`;
+                }
+                if (isLarge) {
+                    const lines = rawOutput.split("\n").slice(-150);
+                    const indentedLines = lines.map(l => "      " + l).join("\n");
+                    if (data.stderr && data.stderr.trim()) {
+                        outText += `stderr: [output truncated ... showing last 150 lines]\n${indentedLines}\n`;
+                    } else {
+                        outText += `stdout: [output truncated ... showing last 150 lines]\n${indentedLines}\n`;
+                    }
+                } else {
+                    if (data.stdout && data.stdout.trim()) {
+                        outText += `stdout:\n${data.stdout.split("\n").map(l => "      " + l).join("\n")}\n`;
+                    }
+                    if (data.stderr && data.stderr.trim()) {
+                        outText += `stderr:\n${data.stderr.split("\n").map(l => "      " + l).join("\n")}\n`;
+                    }
                 }
             } else if (name === "read_file") {
                 if (data.type === "image" || (typeof data.mime === "string" && data.mime.startsWith("image/"))) {
@@ -191,12 +210,23 @@ export function onToolComplete(name, args, badgeEl, data) {
                     }
                 }
             } else if (name === "manage_tasks") {
-                if (data.status === "task_completed" || (typeof data.status === "string" && data.status.includes("terminated"))) {
+                if (isRunning) {
+                    outText = `id: ${data.task_id || args.task_id || "task"}\nstatus: running\n`;
+                    if (data.stdout && data.stdout.trim()) {
+                        outText += `stdout:\n${data.stdout.trim()}\n`;
+                    }
+                    if (data.stderr && data.stderr.trim()) {
+                        outText += `stderr:\n${data.stderr.trim()}\n`;
+                    }
+                    if (data.output && !data.stdout && !data.stderr) {
+                        outText += `${data.output}\n`;
+                    }
+                } else if (data.status === "task_completed" || (typeof data.status === "string" && data.status.includes("terminated"))) {
                     outText = data.output || data.status || `Task ${args.task_id || args.id} terminated.`;
                 } else if (data.output) {
                     outText = data.output;
                 } else if (data.status) {
-                    outText = `Status: ${data.status}\n${data.stdout ? `stdout:\n${data.stdout}` : ""}${data.stderr ? `stderr:\n${data.stderr}` : ""}`.trim();
+                    outText = `status: ${data.status}\n${data.stdout ? `stdout:\n${data.stdout}` : ""}${data.stderr ? `stderr:\n${data.stderr}` : ""}`.trim();
                 } else {
                     outText = JSON.stringify(data, null, 2);
                 }

@@ -90,11 +90,18 @@ export function formatToolResult(data) {
         }
 
         // Clean, structured format for task / terminal / command results
-        if (data.stdout !== undefined || data.stderr !== undefined || data.exit_code !== undefined || data.task_id) {
+        if (data.stdout !== undefined || data.stderr !== undefined || data.exit_code !== undefined || data.task_id || data.running !== undefined) {
             const parts = [];
+            const isRunning = data.running === true || data.status === "running" || data.status === "in_progress";
             if (data.task_id) parts.push(`task_id: ${data.task_id}`);
-            if (data.status) parts.push(`status: ${data.status}`);
-            if (data.exit_code !== undefined && data.exit_code !== null) parts.push(`exit_code: ${data.exit_code}`);
+            if (isRunning) {
+                parts.push(`status: running`);
+            } else if (data.status) {
+                parts.push(`status: ${data.status}`);
+            }
+            if (!isRunning && data.exit_code !== undefined && data.exit_code !== null) {
+                parts.push(`exit_code: ${data.exit_code}`);
+            }
             if (data.ran_for || data.elapsed_seconds) parts.push(`elapsed_time: ${data.ran_for || data.elapsed_seconds}s`);
             if (data.scratch_log_path) parts.push(`log_file: ${data.scratch_log_path}`);
             if (data.stdout && data.stdout.trim()) {

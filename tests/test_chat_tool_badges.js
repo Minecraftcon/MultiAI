@@ -106,6 +106,36 @@ async function runTests() {
         assert.strictEqual(idleCfg.label, "Waiting for task…");
     }
 
+    // 6. formatToolResult formatting
+    console.log("Test: formatToolResult running status and exit code");
+    {
+        const domModule = await import("../client/src/utils/dom.js");
+        const { formatToolResult } = domModule;
+
+        // When task is running: status: running must appear, exit_code must be omitted completely
+        const runningResult = formatToolResult({
+            task_id: "task_12345",
+            running: true,
+            exit_code: null,
+            stdout: "server listening on port 3000\n",
+            elapsed_seconds: 5.0
+        });
+        assert(runningResult.includes("status: running"), "Running task must include 'status: running'");
+        assert(!runningResult.includes("exit_code"), "Running task must omit exit_code completely");
+        assert(runningResult.includes("task_id: task_12345"), "Must include task_id");
+
+        // When task is completed: status: running must not appear, exit_code must appear
+        const completedResult = formatToolResult({
+            task_id: "task_12345",
+            running: false,
+            exit_code: 0,
+            stdout: "build completed successfully\n",
+            elapsed_seconds: 2.1
+        });
+        assert(!completedResult.includes("status: running"), "Completed task must not include 'status: running'");
+        assert(completedResult.includes("exit_code: 0"), "Completed task must include 'exit_code: 0'");
+    }
+
     console.log("✓ ALL CHAT TOOL BADGES CHARACTERIZATION TESTS PASSED!");
 }
 
