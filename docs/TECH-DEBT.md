@@ -6,7 +6,7 @@
 | Monolithic Tool Call Parsing | `src/providers/llm/base.js` | Architecture / Complexity | High | Medium | P0 | Resolved (Extracted `tool_extractor.js`) |
 | Monolithic Tool Badges in Chat UI | `client/src/components/chat-ui.js` | Monolith / UI Churn | High | Medium | P0 | Resolved (Extracted `chat-tool-badges.js`) |
 | Chat History & Modal Coupling | `client/src/components/side-panel.js` | SRP Violation | Medium | Medium | P1 | Open |
-| Dual-role Workspace & JSONL streaming | `src/core/conversations_manager.js` | SRP Violation | Medium | Medium | P1 | Open |
+| Dual-role Workspace & JSONL streaming | `src/core/conversations_manager.js` | SRP Violation | Medium | Medium | P1 | Resolved (Extracted `jsonl_session_store.js` & `build_projects_manager.js`) |
 | Missing Outbound Request Timeouts on raw providers | `src/providers/llm/` | Reliability | Medium | Low | P2 | Open |
 
 ## Smell Inventory
@@ -14,11 +14,14 @@
 |---|---|---|---|
 | Large Class (~700 lines of regex heuristics in `BaseProvider`) | `src/providers/llm/base.js` | Extract Class / Module (`tool_extractor.js`) | done |
 | Long Method / Divergent Change (700+ lines of DOM badge & modal creation in `chat-ui.js`) | `client/src/components/chat-ui.js` | Extract Class / Component (`chat-tool-badges.js`) | done |
+| Large File / Dual-role Workspace & JSONL Streaming | `src/core/conversations_manager.js` | Extract Modules (`jsonl_session_store.js`, `build_projects_manager.js`) | done |
 | Mixed Abstraction Levels (HTML string concatenation mixed with websocket handling) | `client/src/components/chat-ui.js` | Extract Method / Component separation | pending |
 
 ## Sprout / Wrap Register
 - `src/providers/llm/tool_extractor.js`: Sprouted module housing all tool parsing and normalization functions; wrapped cleanly with delegates in `BaseProvider`.
 - `client/src/components/chat-tool-badges.js`: Sprouted component housing all tool badges, compaction badges, and checkpoint modal rendering; cleanly re-exported from `chat-ui.js`.
+- `src/core/jsonl_session_store.js`: Sprouted session storage engine handling atomic append, truncation protection, and JSON parsing.
+- `src/core/build_projects_manager.js`: Sprouted Build Mode project lifecycle and project chat management; wrapped cleanly with delegates in `conversations_manager.js`.
 
 ## Debt Budget & Broken-Windows Policy
 - **Policy**: Fix bugs and extract monoliths along active change paths.
