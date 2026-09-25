@@ -588,13 +588,14 @@ class BaseProvider {
             } catch (_) {}
         }
         const argsObj = {};
-        const argRegex = /["\x27]?([a-zA-Z0-9_\-]+)["\x27]?\s*:\s*(?:<\|"\|>([\s\S]*?)<\|"\|>|"([^"]*)"|'([^']*)'|([^,}\s]+))/g;
+        const argRegex = /["\x27]?([a-zA-Z0-9_\-]+)["\x27]?\s*[:=]\s*(?:<\|"\|>([\s\S]*?)<\|"\|>|"""([\s\S]*?)"""|"([^"]*)"|'([^']*)'|([^,}\n\)]+))/g;
         let match;
         let found = false;
         while ((match = argRegex.exec(trimmed)) !== null) {
             found = true;
             const key = match[1];
-            let val = match[2] !== undefined ? match[2] : (match[3] !== undefined ? match[3] : (match[4] !== undefined ? match[4] : match[5]));
+            let val = match[2] !== undefined ? match[2] : (match[3] !== undefined ? match[3] : (match[4] !== undefined ? match[4] : (match[5] !== undefined ? match[5] : match[6])));
+            if (typeof val === "string") val = val.trim();
             if (val === "true") val = true;
             else if (val === "false") val = false;
             else if (val === "null") val = null;
@@ -672,6 +673,67 @@ class BaseProvider {
             cleaned = cleaned.replace(om[0], "").trim();
         }
 
+        // 0b. Open/Sep/Close delimited tool call format (e.g. Logflare Auto / Qwen / MiniMax / DeepSeek chat templates):
+        //     <|open|>tools<|sep|><|open|>call tool="run_task" index="1"<|sep|><|open|>argument key="command" type="string"<|sep|>...<|close|>argument<|sep|><|close|>call<|sep|><|close|>tools<|sep|>
+        const openToolsSectionRegex = /<\|open\|>tools<\|sep\|>([\s\S]*?)<\|close\|>tools<\|sep\|>/gi;
+        let ots;
+        while ((ots = openToolsSectionRegex.exec(cleaned)) !== null) {
+            const sectionBody = ots[1];
+            const callRegex = /<\|open\|>call\s+tool=["\x27]?([a-zA-Z0-9_\-]+)["\x27]?(?:\s+[^>]*?)?<\|sep\|>([\s\S]*?)<\|close\|>call<\|sep\|>/gi;
+            let cm;
+            while ((cm = callRegex.exec(sectionBody)) !== null) {
+                const name = cm[1];
+                const callBody = cm[2];
+                const argsObj = {};
+                const argRegex = /<\|open\|>argument\s+key=["\x27]?([a-zA-Z0-9_\-]+)["\x27]?(?:\s+[^>]*?)?<\|sep\|>([\s\S]*?)<\|close\|>argument<\|sep\|>/gi;
+                let am;
+                while ((am = argRegex.exec(callBody)) !== null) {
+                    const k = am[1];
+                    let v = am[2].trim();
+                    try { v = JSON.parse(v); } catch (_) {}
+                    argsObj[k] = v;
+                }
+                toolCalls.push({
+                    id: "call_" + Math.random().toString(36).substring(2, 9),
+                    type: "function",
+                    function: {
+                        name,
+                        arguments: JSON.stringify(argsObj)
+                    }
+                });
+            }
+            cleaned = cleaned.replace(ots[0], "").trim();
+        }
+
+        // Orphaned individual <|open|>call tool="..." ... <|close|>call<|sep|>
+        const orphanOpenCallRegex = /<\|open\|>call\s+tool=["\x27]?([a-zA-Z0-9_\-]+)["\x27]?(?:\s+[^>]*?)?<\|sep\|>([\s\S]*?)<\|close\|>call<\|sep\|>/gi;
+        let ooc;
+        while ((ooc = orphanOpenCallRegex.exec(cleaned)) !== null) {
+            const name = ooc[1];
+            const callBody = ooc[2];
+            const argsObj = {};
+            const argRegex = /<\|open\|>argument\s+key=["\x27]?([a-zA-Z0-9_\-]+)["\x27]?(?:\s+[^>]*?)?<\|sep\|>([\s\S]*?)<\|close\|>argument<\|sep\|>/gi;
+            let am;
+            while ((am = argRegex.exec(callBody)) !== null) {
+                const k = am[1];
+                let v = am[2].trim();
+                try { v = JSON.parse(v); } catch (_) {}
+                argsObj[k] = v;
+            }
+            toolCalls.push({
+                id: "call_" + Math.random().toString(36).substring(2, 9),
+                type: "function",
+                function: {
+                    name,
+                    arguments: JSON.stringify(argsObj)
+                }
+            });
+            cleaned = cleaned.replace(ooc[0], "").trim();
+        }
+
+        // Strip any remaining boundary/message tokens
+        cleaned = cleaned.replace(/<\|(?:open|close)\|>(?:message|tools|call|argument)<\|sep\|>/gi, "").trim();
+
         // 1. Template tokens: <|tool_call>call:NAME{...}<tool_call|> or call:NAME{...}
         const callDelimRegex = /(?:<\|?(?:tool_call|tool)\|?>\s*)?call:([a-zA-Z0-9_\-]+)\s*\{([\s\S]*?)\}(?:\s*<\|?\/?(?:tool_call|tool)\|?>)?/gi;
         let m;
@@ -690,11 +752,13 @@ class BaseProvider {
             cleaned = cleaned.replace(m[0], "").trim();
         }
 
-        // 2. XML wrapped calls: <tool_call> JSON </tool_call>
+        // 2. XML wrapped calls: <tool_call> JSON </tool_call> or <tool_call> NAME(...) </tool_call>
         const xmlRegex = /<\|?(?:tool_call|tool)\|?>\s*([\s\S]*?)\s*<\|?\/(?:tool_call|tool)\|?>/gi;
         while ((m = xmlRegex.exec(cleaned)) !== null) {
+            const body = m[1].trim();
+            let parsedSuccessfully = false;
             try {
-                const parsed = JSON.parse(m[1].trim());
+                const parsed = JSON.parse(body);
                 const name = parsed.name || parsed.tool || parsed.function?.name;
                 const rawArgs = parsed.arguments !== undefined ? parsed.arguments : (parsed.args !== undefined ? parsed.args : parsed.parameters);
                 if (name) {
@@ -707,8 +771,27 @@ class BaseProvider {
                         }
                     });
                     cleaned = cleaned.replace(m[0], "").trim();
+                    parsedSuccessfully = true;
                 }
             } catch (_) {}
+
+            if (!parsedSuccessfully) {
+                const funcMatch = /^([a-zA-Z0-9_\-]+)\s*(?:\(([\s\S]*)\)|\{([\s\S]*)\})$/.exec(body);
+                if (funcMatch) {
+                    const name = funcMatch[1];
+                    const rawArgs = funcMatch[2] !== undefined ? funcMatch[2] : funcMatch[3];
+                    const parsedArgs = this.parseToolCallArgs(rawArgs);
+                    toolCalls.push({
+                        id: "call_" + Math.random().toString(36).substring(2, 9),
+                        type: "function",
+                        function: {
+                            name,
+                            arguments: typeof parsedArgs === "string" ? parsedArgs : JSON.stringify(parsedArgs || {})
+                        }
+                    });
+                    cleaned = cleaned.replace(m[0], "").trim();
+                }
+            }
         }
 
         // 3. Fenced code block calls: ```tool_call ... ```
