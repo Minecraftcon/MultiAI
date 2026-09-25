@@ -169,13 +169,23 @@ def check_setup():
 class ProcessSupervisor:
     def __init__(self):
         self.processes = []
+        self.service_configs = {}
         self.is_shutting_down = False
+        self.is_restarting = False
+        self.start_time = time.time()
         self.lock = threading.Lock()
 
     def spawn(self, name, cmd, color=RESET, cwd=None, env=None):
         """Spawn a child process in a new process group for clean termination."""
         prefix = f"{color}[{name}]{RESET} "
         
+        self.service_configs[name] = {
+            "cmd": cmd,
+            "color": color,
+            "cwd": cwd,
+            "env": env
+        }
+
         kwargs = {
             "stdout": subprocess.PIPE,
             "stderr": subprocess.STDOUT,
@@ -192,7 +202,8 @@ class ProcessSupervisor:
             kwargs["preexec_fn"] = os.setsid
 
         proc = subprocess.Popen(cmd, **kwargs)
-        self.processes.append((name, proc))
+        with self.lock:
+            self.processes.append((name, proc))
 
         # Stream output in background thread
         def stream_output():
@@ -210,6 +221,71 @@ class ProcessSupervisor:
         t.start()
         return proc
 
+    def stop_service(self, name):
+        """Stop a specific named service without stopping the whole supervisor."""
+        with self.lock:
+            target_procs = [(n, p) for n, p in self.processes if n == name]
+            self.processes = [(n, p) for n, p in self.processes if n != name]
+
+        for n, proc in target_procs:
+            if proc.poll() is None:
+                log_info(f"Stopping {n} (PID {proc.pid})...")
+                if sys.platform == "win32":
+                    try:
+                        subprocess.run(f"taskkill /F /T /PID {proc.pid}", shell=True, capture_output=True)
+                    except Exception:
+                        proc.terminate()
+                else:
+                    try:
+                        pgid = os.getpgid(proc.pid)
+                        os.killpg(pgid, signal.SIGTERM)
+                    except Exception:
+                        proc.terminate()
+
+        deadline = time.time() + 1.5
+        for n, proc in target_procs:
+            while proc.poll() is None and time.time() < deadline:
+                time.sleep(0.1)
+            if proc.poll() is None:
+                log_warn(f"Force-killing {n}...")
+                if sys.platform != "win32":
+                    try:
+                        pgid = os.getpgid(proc.pid)
+                        os.killpg(pgid, signal.SIGKILL)
+                    except Exception:
+                        proc.kill()
+                else:
+                    proc.kill()
+
+    def restart_service(self, name, port=8080):
+        """Restart a specific named service cleanly."""
+        if name not in self.service_configs:
+            log_error(f"Cannot restart unknown service: {name}")
+            return False
+
+        self.is_restarting = True
+        try:
+            log_info(f"Restarting {name}...")
+            self.stop_service(name)
+            time.sleep(0.3)
+            kill_process_on_port(port)
+            kill_process_on_port(5000)
+            time.sleep(0.3)
+
+            cfg = self.service_configs[name]
+            self.spawn(name, cfg["cmd"], color=cfg["color"], cwd=cfg["cwd"], env=cfg["env"])
+
+            # Wait for service readiness
+            ready = False
+            for _ in range(40):
+                if is_port_in_use(port):
+                    ready = True
+                    break
+                time.sleep(0.2)
+            return ready
+        finally:
+            self.is_restarting = False
+
     def stop_all(self):
         """Gracefully and thoroughly terminate all child processes and process trees."""
         with self.lock:
@@ -219,7 +295,7 @@ class ProcessSupervisor:
 
         print(f"\n{YELLOW}[MultiAI] Stopping all servers...{RESET}", flush=True)
 
-        for name, proc in self.processes:
+        for name, proc in list(self.processes):
             if proc.poll() is None:
                 log_info(f"Stopping {name} (PID {proc.pid})...")
                 if sys.platform == "win32":
@@ -236,12 +312,12 @@ class ProcessSupervisor:
 
         # Allow brief grace period
         deadline = time.time() + 1.5
-        for name, proc in self.processes:
+        for name, proc in list(self.processes):
             while proc.poll() is None and time.time() < deadline:
                 time.sleep(0.1)
 
         # Force kill any stubborn process
-        for name, proc in self.processes:
+        for name, proc in list(self.processes):
             if proc.poll() is None:
                 log_warn(f"Force-killing {name}...")
                 if sys.platform != "win32":
@@ -258,6 +334,133 @@ class ProcessSupervisor:
         kill_process_on_port(5000)
 
         print(f"{GREEN}[MultiAI] All servers stopped cleanly. Goodbye!{RESET}\n", flush=True)
+
+def run_console(supervisor, root_dir, workspace_dir, port):
+    """Interactive server-side console."""
+    try:
+        import readline
+    except ImportError:
+        pass
+
+    def print_help():
+        print(f"\n{BOLD}{CYAN}MultiAI Server Console Commands:{RESET}")
+        print(f"  {BOLD}stop{RESET} | {BOLD}exit{RESET} | {BOLD}quit{RESET}     Stop all servers and exit cleanly")
+        print(f"  {BOLD}restart{RESET} | {BOLD}reload{RESET}       Restart web server and task server")
+        print(f"  {BOLD}pull{RESET} [args]            Run 'git pull' and auto-restart if updated")
+        print(f"  {BOLD}status{RESET} | {BOLD}info{RESET}         Show server status, active ports, PID, uptime")
+        print(f"  {BOLD}clear{RESET} | {BOLD}cls{RESET}           Clear console screen")
+        print(f"  {BOLD}help{RESET} | {BOLD}?{RESET}              Show this help message\n", flush=True)
+
+    def print_status():
+        uptime_sec = int(time.time() - supervisor.start_time)
+        hrs = uptime_sec // 3600
+        mins = (uptime_sec % 3600) // 60
+        secs = uptime_sec % 60
+        uptime_str = f"{hrs}h {mins}m {secs}s" if hrs > 0 else f"{mins}m {secs}s"
+
+        branch = "unknown"
+        commit = "unknown"
+        try:
+            branch = subprocess.check_output(["git", "branch", "--show-current"], cwd=root_dir, text=True, stderr=subprocess.DEVNULL).strip()
+            commit = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], cwd=root_dir, text=True, stderr=subprocess.DEVNULL).strip()
+        except Exception:
+            pass
+
+        print(f"\n{BOLD}{CYAN}=== MultiAI Server Status ==={RESET}")
+        print(f"  {BOLD}State:{RESET}        {GREEN}Running{RESET}")
+        print(f"  {BOLD}Web URL:{RESET}      {CYAN}http://localhost:{port}{RESET}")
+        print(f"  {BOLD}Uptime:{RESET}       {uptime_str}")
+        print(f"  {BOLD}Git Branch:{RESET}   {YELLOW}{branch}{RESET} ({commit})")
+        print(f"  {BOLD}Workspace:{RESET}    {workspace_dir}")
+        print(f"  {BOLD}Ports:{RESET}        Web: {port} (active: {is_port_in_use(port)}), Task Server: 5000 (active: {is_port_in_use(5000)})")
+        print(f"  {BOLD}Processes:{RESET}")
+        for name, proc in list(supervisor.processes):
+            p_status = "Alive" if proc.poll() is None else f"Exited ({proc.returncode})"
+            print(f"    - {name}: PID {proc.pid} [{p_status}]")
+        print(f"{CYAN}============================={RESET}\n", flush=True)
+
+    def do_pull(args_str="", force_restart=False):
+        log_info("Fetching latest changes from git repository...")
+        try:
+            cmd = ["git", "pull"]
+            if args_str:
+                cmd.extend(args_str.split())
+            res = subprocess.run(cmd, cwd=root_dir, text=True, capture_output=True)
+            if res.returncode == 0:
+                out = res.stdout.strip()
+                print(f"{GREEN}{out}{RESET}", flush=True)
+                if "Already up to date." not in out or force_restart:
+                    log_success("Updates detected! Restarting server to apply updates...")
+                    if supervisor.restart_service("Server", port=port):
+                        log_success(f"MultiAI updated and live at http://localhost:{port}")
+                    else:
+                        log_error("Restart failed after pull. Type 'restart' to try again.")
+                else:
+                    log_info("Repository is already up to date. Use 'restart' if you wish to reload.")
+            else:
+                err = res.stderr.strip() or res.stdout.strip()
+                log_error(f"Git pull failed:\n{err}")
+        except Exception as e:
+            log_error(f"Failed to execute git pull: {e}")
+
+    # Wait briefly for startup logs to finish printing
+    time.sleep(0.5)
+
+    is_interactive = sys.stdin.isatty()
+    prompt = f"{BOLD}{CYAN}multiai>{RESET} " if is_interactive else ""
+
+    while not supervisor.is_shutting_down:
+        try:
+            if is_interactive:
+                cmd_line = input(prompt).strip()
+            else:
+                line = sys.stdin.readline()
+                if not line:
+                    time.sleep(1)
+                    continue
+                cmd_line = line.strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            supervisor.stop_all()
+            os._exit(0)
+            break
+
+        if not cmd_line:
+            continue
+
+        parts = cmd_line.split(maxsplit=1)
+        command = parts[0].lower()
+        arg = parts[1].strip() if len(parts) > 1 else ""
+
+        if command in ("stop", "exit", "quit", "q", "shutdown"):
+            log_info("Shutting down MultiAI server...")
+            supervisor.stop_all()
+            os._exit(0)
+
+        elif command in ("restart", "reload", "r"):
+            log_info(f"Restarting MultiAI on port {port}...")
+            if supervisor.restart_service("Server", port=port):
+                log_success(f"MultiAI restarted and live at http://localhost:{port}")
+            else:
+                log_error("Failed to restart cleanly. Check logs above.")
+
+        elif command in ("pull", "update"):
+            force_restart = "restart" in arg.lower()
+            clean_arg = arg.replace("restart", "").strip()
+            do_pull(clean_arg, force_restart=force_restart)
+
+        elif command in ("status", "info", "st"):
+            print_status()
+
+        elif command in ("clear", "cls"):
+            os.system("cls" if sys.platform == "win32" else "clear")
+            print(f"\n{BOLD}{CYAN}MultiAI Console Active{RESET} (type 'help' for commands)\n", flush=True)
+
+        elif command in ("help", "?", "h"):
+            print_help()
+
+        else:
+            print(f"{YELLOW}Unknown command: '{command}'. Type 'help' for available commands.{RESET}", flush=True)
 
 import configparser
 
@@ -318,6 +521,7 @@ def main():
     node_env = os.environ.copy()
     node_env["MULTIAI_REPO_DIR"] = root_dir
     node_env["MULTIAI_WORKSPACE_DIR"] = workspace_dir
+    node_env["MULTIAI_SUPERVISED"] = "1"
     node_modules_path = os.path.join(root_dir, "node_modules")
     existing_node_path = node_env.get("NODE_PATH", "")
     node_env["NODE_PATH"] = f"{node_modules_path}:{existing_node_path}" if existing_node_path else node_modules_path
@@ -342,7 +546,8 @@ def main():
         print("\n" + "=" * 62, flush=True)
         print(f"  {BOLD}{GREEN}✓ MultiSearch AI is live and ready!{RESET}", flush=True)
         print(f"  {BOLD}Local URL:{RESET} {CYAN}{url}{RESET}", flush=True)
-        print(f"  {DIM}Auto-kill active: Press Ctrl+C at any time to shut down.{RESET}", flush=True)
+        print(f"  {BOLD}Server Console:{RESET} Type {CYAN}help{RESET} for commands ({CYAN}stop{RESET}, {CYAN}restart{RESET}, {CYAN}pull{RESET}, {CYAN}status{RESET})", flush=True)
+        print(f"  {DIM}Press Ctrl+C or type 'stop' to shut down.{RESET}", flush=True)
         print("=" * 62 + "\n", flush=True)
 
         if not args.no_browser:
@@ -353,14 +558,24 @@ def main():
     else:
         log_warn("Server startup is taking longer than expected. Check logs above.")
 
+    # Start Interactive Server Console Thread
+    console_thread = threading.Thread(
+        target=run_console,
+        args=(supervisor, root_dir, workspace_dir, args.port),
+        daemon=True,
+        name="ServerConsole"
+    )
+    console_thread.start()
+
     # Main monitoring loop
     try:
-        while True:
-            for name, proc in supervisor.processes:
-                if proc.poll() is not None and not supervisor.is_shutting_down:
-                    log_warn(f"{name} exited with code {proc.returncode}.")
-                    supervisor.stop_all()
-                    sys.exit(proc.returncode or 1)
+        while not supervisor.is_shutting_down:
+            if not supervisor.is_restarting:
+                for name, proc in list(supervisor.processes):
+                    if proc.poll() is not None and not supervisor.is_shutting_down and not supervisor.is_restarting:
+                        log_warn(f"{name} exited with code {proc.returncode}.")
+                        supervisor.stop_all()
+                        sys.exit(proc.returncode or 1)
             time.sleep(0.5)
     except KeyboardInterrupt:
         pass

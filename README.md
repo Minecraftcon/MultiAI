@@ -32,9 +32,10 @@ That script:
 1. Checks Python, Node, and npm
 2. Runs `npm install` if LangGraph / yaml are missing
 3. Frees ports **8080** (web) and **5000** (task server)
-4. Starts `node --watch server.js`
+4. Starts `node --watch src/index.js`
 5. Opens `http://localhost:8080`
-6. Kills the whole process tree on Ctrl+C
+6. Runs an interactive server console in the terminal
+7. Kills the whole process tree cleanly on exit
 
 Flags:
 
@@ -43,6 +44,19 @@ Flags:
 | `--check-only` | Verify setup and exit |
 | `--no-browser` | Don't open the browser |
 | `--port N` | Web port (default from `config.ini`, usually 8080) |
+
+### Server Console Commands
+
+Once running, type commands directly into the terminal running `start.py` (or `node src/index.js`):
+
+| Command | Action |
+|---|---|
+| `stop` / `exit` / `quit` | Gracefully terminate all server processes and exit |
+| `restart` / `reload` | Cleanly restart web server and Python task server |
+| `pull` [args] | Fetch latest git commits and auto-restart if updates were pulled |
+| `status` / `info` | Display active ports, server PID, git branch, and uptime |
+| `clear` / `cls` | Clear terminal screen |
+| `help` / `?` | Display list of available commands |
 
 ## Architecture
 

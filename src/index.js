@@ -4,6 +4,8 @@ const { getConfig } = require("./core/config_manager");
 const { initSupervisor } = require("./server/supervisor");
 const { routeRequest } = require("./server/router");
 
+const { initConsole } = require("./server/console");
+
 // If MULTIAI_WORKSPACE_DIR is set, anchor runtime process.cwd() to it
 if (process.env.MULTIAI_WORKSPACE_DIR && fs.existsSync(process.env.MULTIAI_WORKSPACE_DIR)) {
     try {
@@ -25,4 +27,5 @@ const server = http.createServer(routeRequest);
 server.listen(PORT, HOST, () => {
     const hostDisplay = HOST === "0.0.0.0" ? "localhost" : HOST;
     console.log(`Node Server running at http://${hostDisplay}:${PORT}`);
+    initConsole({ port: PORT, host: hostDisplay });
 });
