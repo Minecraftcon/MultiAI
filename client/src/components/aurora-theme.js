@@ -25,8 +25,16 @@ let currentTheme = DEFAULT_AURORA_THEME;
  * Detects if the current client is an Android or mobile touch device
  */
 export function isAndroidOrMobile() {
-    return /Android/i.test(navigator.userAgent) || 
-           (typeof window !== "undefined" && window.matchMedia && window.matchMedia("(max-width: 768px)").matches);
+    if (typeof navigator !== "undefined" && /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
+        return true;
+    }
+    if (typeof document !== "undefined" && document.documentElement && document.documentElement.classList.contains("is-android")) {
+        return true;
+    }
+    if (typeof window !== "undefined" && window.matchMedia && (window.matchMedia("(max-width: 768px)").matches || window.matchMedia("(pointer: coarse)").matches)) {
+        return true;
+    }
+    return false;
 }
 
 export function getAuroraTheme() {

@@ -9,6 +9,7 @@ import { chatbox } from "./chatbox.js";
 import { parseMarkdown, extractThoughtAndContent, bindInteractiveCodeBlocks, renderMermaidInElement, renderMath, bindAIImageCards } from "./renderer.js";
 import { saveCurrentChatState } from "../services/storage.js";
 import { onToolComplete } from "../tools/badge-sync.js";
+import { isAndroidOrMobile } from "./aurora-theme.js";
 
 let streamScrollRafId = null;
 
@@ -774,8 +775,205 @@ export function wrapHugeThoughts(root) {
 }
 
 /**
+ * Renders a single conversation turn (user message + corresponding AI messages) into a DocumentFragment.
+ */
+export function renderTurn(turn, session, compactionRef, isLastTurn) {
+    const fragment = document.createDocumentFragment();
+    const cp = session?.compactionState;
+
+    // 1. Render User Message
+    if (turn.userMessage) {
+        const userMsg = turn.userMessage;
+        const userDiv = document.createElement("div");
+        userDiv.className = "message user";
+
+        let rawText = "";
+        let imgsHtml = "";
+
+        if (typeof userMsg.content === "string") {
+            rawText = userMsg.content;
+        } else if (Array.isArray(userMsg.content)) {
+            const textPart = userMsg.content.find(p => p.type === "text" || p.text);
+            rawText = textPart ? (textPart.text || textPart.content || "") : "";
+            
+            const imgParts = userMsg.content.filter(p => p.type === "image_url" || p.image_url);
+            if (imgParts.length > 0) {
+                imgsHtml = `<div class="composer-media-strip">${imgParts.map(img => {
+                    const url = img.image_url?.url || img.url || "";
+                    return `<div class="msg-img-card" data-full-img="${escapeHTML(url)}"><img src="${escapeHTML(url)}" alt="Attached image"></div>`;
+                }).join("")}</div>`;
+            }
+        } else if (userMsg.content) {
+            rawText = JSON.stringify(userMsg.content);
+        }
+
+        userDiv.dataset.rawText = rawText;
+        const textHtml = rawText ? `<div class="msg-bubble-text">${escapeHTML(rawText)}</div>` : "";
+        userDiv.innerHTML = `
+            <div class="user-bubble-content">
+                ${imgsHtml}
+                ${textHtml}
+            </div>
+        `;
+        fragment.appendChild(userDiv);
+    }
+
+    // 2. Render AI Turn
+    if (turn.aiMessages && turn.aiMessages.length > 0) {
+        const aiDiv = document.createElement("div");
+        aiDiv.className = "message ai";
+        aiDiv.innerHTML = `
+            <div class="pre-search-content"></div>
+            <div class="activity-wrapper" style="display: none;">
+                <button type="button" class="activity-toggle">
+                    <span class="chevron">▶</span>
+                    <span class="activity-label">Activity</span>
+                </button>
+                <div class="activity-collapse">
+                    <div class="activity-overflow">
+                        <div class="activity-content">
+                            <div class="search-items-container"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="final-content"></div>
+            <div class="followup-suggestions" style="display: none;"></div>
+        `;
+
+        const preSearchContent = aiDiv.querySelector(".pre-search-content");
+        const activityWrapper = aiDiv.querySelector(".activity-wrapper");
+        const searchContainer = aiDiv.querySelector(".search-items-container");
+        const activityLabel = aiDiv.querySelector(".activity-label");
+        const finalContent = aiDiv.querySelector(".final-content");
+
+        const toolResults = new Map();
+        turn.aiMessages.forEach(m => {
+            if (m.role === "tool" && m.tool_call_id) {
+                toolResults.set(m.tool_call_id, m);
+            }
+        });
+
+        const assistantMsgs = turn.aiMessages.filter(m => m.role === "assistant");
+        const finalAssistantMsg = assistantMsgs.length > 0 ? assistantMsgs[assistantMsgs.length - 1] : null;
+
+        let totalToolCalls = 0;
+
+        for (let i = 0; i < assistantMsgs.length; i++) {
+            const aMsg = assistantMsgs[i];
+            const isFinal = (aMsg === finalAssistantMsg);
+
+            // Intermediate thoughts / reasoning traces
+            if (!isFinal && aMsg.content && aMsg.content.trim()) {
+                const { thoughtHtml, content } = extractThoughtAndContent(aMsg.content);
+                const traceText = content || thoughtHtml || aMsg.content;
+                if (traceText && traceText.trim()) {
+                    addThoughtTrace(aiDiv, traceText);
+                }
+            }
+
+            // Render tool badges for tool calls
+            if (Array.isArray(aMsg.tool_calls) && aMsg.tool_calls.length > 0) {
+                for (const tc of aMsg.tool_calls) {
+                    totalToolCalls++;
+                    const toolName = tc.function?.name || "tool";
+                    let args = {};
+                    try {
+                        args = typeof tc.function?.arguments === "string" 
+                            ? JSON.parse(tc.function.arguments) 
+                            : (tc.function?.arguments || {});
+                    } catch (_) {
+                        args = {};
+                    }
+
+                    const badgeEl = addToolBadge(aiDiv, toolName, args);
+                    const toolMsg = toolResults.get(tc.id);
+                    let toolData = {};
+                    if (toolMsg && toolMsg.content !== undefined) {
+                        try {
+                            toolData = typeof toolMsg.content === "string" 
+                                ? JSON.parse(toolMsg.content) 
+                                : toolMsg.content;
+                        } catch (_) {
+                            toolData = { stdout: toolMsg.content };
+                        }
+                    }
+                    onToolComplete(toolName, args, badgeEl, toolData);
+                }
+            }
+        }
+
+        // Check if context compaction occurred up to this turn
+        if (cp && cp.summary && compactionRef && !compactionRef.rendered) {
+            const lastMsg = turn.aiMessages[turn.aiMessages.length - 1];
+            const lastIdx = Array.isArray(session.messages) ? session.messages.indexOf(lastMsg) : -1;
+            if (lastIdx >= (cp.sliceEndIdx || 0) || isLastTurn) {
+                compactionRef.rendered = true;
+                const cBadge = addCompactionBadge(aiDiv, {
+                    checkpointNum: cp.checkpointNum || 1,
+                    sliceStartIdx: cp.sliceStartIdx || 0,
+                    sliceEndIdx: cp.sliceEndIdx || 0,
+                    tokensSaved: cp.tokensSaved || 0
+                });
+                cBadge.update({
+                    status: "success",
+                    artifactPath: cp.artifactPath,
+                    summaryText: cp.summary,
+                    checkpointNum: cp.checkpointNum || 1,
+                    sliceStartIdx: cp.sliceStartIdx || 0,
+                    sliceEndIdx: cp.sliceEndIdx || 0,
+                    tokensSaved: cp.tokensSaved || 0
+                });
+            }
+        }
+
+        // Render final assistant message
+        if (finalAssistantMsg) {
+            const rawText = finalAssistantMsg.content || "";
+            aiDiv.dataset.rawText = rawText;
+
+            const { thoughtHtml, content, followups } = extractThoughtAndContent(rawText);
+            
+            if (thoughtHtml) {
+                preSearchContent.innerHTML = thoughtHtml;
+                wrapTablesForScroll(preSearchContent);
+                renderIcons(preSearchContent);
+            }
+
+            if (content) {
+                finalContent.innerHTML = parseMarkdown(content);
+                wrapTablesForScroll(finalContent);
+                renderIcons(finalContent);
+                bindAIImageCards(finalContent);
+            } else if (totalToolCalls === 0) {
+                finalContent.innerHTML = "<em>(Empty response)</em>";
+            }
+
+            if (Array.isArray(followups) && followups.length > 0) {
+                renderFollowupSuggestions(aiDiv, followups, true);
+            }
+        }
+
+        if (searchContainer && searchContainer.children.length > 0) {
+            activityWrapper.style.display = "block";
+            activityWrapper.classList.remove("open");
+            activityLabel.textContent = totalToolCalls > 0 
+                ? `Executed ${totalToolCalls} action${totalToolCalls > 1 ? "s" : ""}` 
+                : `Activity`;
+        } else {
+            activityWrapper.style.display = "none";
+        }
+
+        fragment.appendChild(aiDiv);
+    }
+
+    return fragment;
+}
+
+/**
  * Accurately reconstructs and renders past conversation history from session.messages.
  * Groups multi-round tool executions and assistant steps into structured, clean message turns.
+ * On mobile browsers, optimizes DOM size by rendering only visible parts on demand.
  */
 export function renderSessionMessages(session, chat) {
     if (!chat || !session) return;
@@ -810,199 +1008,82 @@ export function renderSessionMessages(session, chat) {
         turns.push(currentTurn);
     }
 
-    const fragment = document.createDocumentFragment();
-    let renderedCompaction = false;
-    const cp = session.compactionState;
+    const isMobile = isAndroidOrMobile();
+    const limitMobileTurns = state.config?.Mobile?.LimitVisibleTurns !== false;
+    const configuredLimit = parseInt(state.config?.Mobile?.VisibleTurns, 10);
+    const visibleLimit = (!isNaN(configuredLimit) && configuredLimit > 0) ? configuredLimit : 15;
 
-    for (const turn of turns) {
-        // 1. Render User Message
-        if (turn.userMessage) {
-            const userMsg = turn.userMessage;
-            const userDiv = document.createElement("div");
-            userDiv.className = "message user";
+    const compactionRef = { rendered: false };
 
-            let rawText = "";
-            let imgsHtml = "";
+    // On mobile devices only: limit initial rendering to visible parts if enabled
+    if (isMobile && limitMobileTurns && turns.length > visibleLimit) {
+        let startIndex = turns.length - visibleLimit;
 
-            if (typeof userMsg.content === "string") {
-                rawText = userMsg.content;
-            } else if (Array.isArray(userMsg.content)) {
-                const textPart = userMsg.content.find(p => p.type === "text" || p.text);
-                rawText = textPart ? (textPart.text || textPart.content || "") : "";
-                
-                const imgParts = userMsg.content.filter(p => p.type === "image_url" || p.image_url);
-                if (imgParts.length > 0) {
-                    imgsHtml = `<div class="composer-media-strip">${imgParts.map(img => {
-                        const url = img.image_url?.url || img.url || "";
-                        return `<div class="msg-img-card" data-full-img="${escapeHTML(url)}"><img src="${escapeHTML(url)}" alt="Attached image"></div>`;
-                    }).join("")}</div>`;
-                }
-            } else if (userMsg.content) {
-                rawText = JSON.stringify(userMsg.content);
-            }
-
-            userDiv.dataset.rawText = rawText;
-            const textHtml = rawText ? `<div class="msg-bubble-text">${escapeHTML(rawText)}</div>` : "";
-            userDiv.innerHTML = `
-                <div class="user-bubble-content">
-                    ${imgsHtml}
-                    ${textHtml}
-                </div>
-            `;
-            fragment.appendChild(userDiv);
+        // Render the most recent visibleLimit turns
+        const fragment = document.createDocumentFragment();
+        for (let i = startIndex; i < turns.length; i++) {
+            fragment.appendChild(renderTurn(turns[i], session, compactionRef, i === turns.length - 1));
         }
 
-        // 2. Render AI Turn
-        if (turn.aiMessages && turn.aiMessages.length > 0) {
-            const aiDiv = document.createElement("div");
-            aiDiv.className = "message ai";
-            aiDiv.innerHTML = `
-                <div class="pre-search-content"></div>
-                <div class="activity-wrapper" style="display: none;">
-                    <button type="button" class="activity-toggle">
-                        <span class="chevron">▶</span>
-                        <span class="activity-label">Activity</span>
-                    </button>
-                    <div class="activity-collapse">
-                        <div class="activity-overflow">
-                            <div class="activity-content">
-                                <div class="search-items-container"></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="final-content"></div>
-                <div class="followup-suggestions" style="display: none;"></div>
-            `;
+        // Create container for loading earlier turns
+        const loadEarlierContainer = document.createElement("div");
+        loadEarlierContainer.className = "load-earlier-container";
 
-            const preSearchContent = aiDiv.querySelector(".pre-search-content");
-            const activityWrapper = aiDiv.querySelector(".activity-wrapper");
-            const searchContainer = aiDiv.querySelector(".search-items-container");
-            const activityLabel = aiDiv.querySelector(".activity-label");
-            const finalContent = aiDiv.querySelector(".final-content");
+        const loadEarlierBtn = document.createElement("button");
+        loadEarlierBtn.className = "load-earlier-btn";
+        loadEarlierBtn.type = "button";
+        loadEarlierBtn.innerHTML = `
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="18 15 12 9 6 15"></polyline>
+            </svg>
+            <span>Load earlier messages <span class="load-earlier-count">(${startIndex} remaining)</span></span>
+        `;
 
-            const toolResults = new Map();
-            turn.aiMessages.forEach(m => {
-                if (m.role === "tool" && m.tool_call_id) {
-                    toolResults.set(m.tool_call_id, m);
-                }
-            });
+        loadEarlierBtn.addEventListener("click", () => {
+            if (startIndex <= 0) return;
+            const batchSize = Math.min(startIndex, visibleLimit);
+            const newStartIndex = startIndex - batchSize;
+            const batchFragment = document.createDocumentFragment();
 
-            const assistantMsgs = turn.aiMessages.filter(m => m.role === "assistant");
-            const finalAssistantMsg = assistantMsgs.length > 0 ? assistantMsgs[assistantMsgs.length - 1] : null;
-
-            let totalToolCalls = 0;
-
-            for (let i = 0; i < assistantMsgs.length; i++) {
-                const aMsg = assistantMsgs[i];
-                const isFinal = (aMsg === finalAssistantMsg);
-
-                // Intermediate thoughts / reasoning traces
-                if (!isFinal && aMsg.content && aMsg.content.trim()) {
-                    const { thoughtHtml, content } = extractThoughtAndContent(aMsg.content);
-                    const traceText = content || thoughtHtml || aMsg.content;
-                    if (traceText && traceText.trim()) {
-                        addThoughtTrace(aiDiv, traceText);
-                    }
-                }
-
-                // Render tool badges for tool calls
-                if (Array.isArray(aMsg.tool_calls) && aMsg.tool_calls.length > 0) {
-                    for (const tc of aMsg.tool_calls) {
-                        totalToolCalls++;
-                        const toolName = tc.function?.name || "tool";
-                        let args = {};
-                        try {
-                            args = typeof tc.function?.arguments === "string" 
-                                ? JSON.parse(tc.function.arguments) 
-                                : (tc.function?.arguments || {});
-                        } catch (_) {
-                            args = {};
-                        }
-
-                        const badgeEl = addToolBadge(aiDiv, toolName, args);
-                        const toolMsg = toolResults.get(tc.id);
-                        let toolData = {};
-                        if (toolMsg && toolMsg.content !== undefined) {
-                            try {
-                                toolData = typeof toolMsg.content === "string" 
-                                    ? JSON.parse(toolMsg.content) 
-                                    : toolMsg.content;
-                            } catch (_) {
-                                toolData = { stdout: toolMsg.content };
-                            }
-                        }
-                        onToolComplete(toolName, args, badgeEl, toolData);
-                    }
-                }
+            for (let i = newStartIndex; i < startIndex; i++) {
+                batchFragment.appendChild(renderTurn(turns[i], session, compactionRef, i === turns.length - 1));
             }
 
-            // Check if context compaction occurred up to this turn
-            if (cp && cp.summary && !renderedCompaction) {
-                const lastMsg = turn.aiMessages[turn.aiMessages.length - 1];
-                const lastIdx = session.messages.indexOf(lastMsg);
-                if (lastIdx >= (cp.sliceEndIdx || 0) || turn === turns[turns.length - 1]) {
-                    renderedCompaction = true;
-                    const cBadge = addCompactionBadge(aiDiv, {
-                        checkpointNum: cp.checkpointNum || 1,
-                        sliceStartIdx: cp.sliceStartIdx || 0,
-                        sliceEndIdx: cp.sliceEndIdx || 0,
-                        tokensSaved: cp.tokensSaved || 0
-                    });
-                    cBadge.update({
-                        status: "success",
-                        artifactPath: cp.artifactPath,
-                        summaryText: cp.summary,
-                        checkpointNum: cp.checkpointNum || 1,
-                        sliceStartIdx: cp.sliceStartIdx || 0,
-                        sliceEndIdx: cp.sliceEndIdx || 0,
-                        tokensSaved: cp.tokensSaved || 0
-                    });
-                }
-            }
+            const prevScrollHeight = chat.scrollHeight;
+            const prevScrollTop = chat.scrollTop;
 
-            // Render final assistant message
-            if (finalAssistantMsg) {
-                const rawText = finalAssistantMsg.content || "";
-                aiDiv.dataset.rawText = rawText;
-
-                const { thoughtHtml, content, followups } = extractThoughtAndContent(rawText);
-                
-                if (thoughtHtml) {
-                    preSearchContent.innerHTML = thoughtHtml;
-                    wrapTablesForScroll(preSearchContent);
-                    renderIcons(preSearchContent);
-                }
-
-                if (content) {
-                    finalContent.innerHTML = parseMarkdown(content);
-                    wrapTablesForScroll(finalContent);
-                    renderIcons(finalContent);
-                    bindAIImageCards(finalContent);
-                } else if (totalToolCalls === 0) {
-                    finalContent.innerHTML = "<em>(Empty response)</em>";
-                }
-
-                if (Array.isArray(followups) && followups.length > 0) {
-                    renderFollowupSuggestions(aiDiv, followups, true);
-                }
-            }
-
-            if (searchContainer && searchContainer.children.length > 0) {
-                activityWrapper.style.display = "block";
-                activityWrapper.classList.remove("open");
-                activityLabel.textContent = totalToolCalls > 0 
-                    ? `Executed ${totalToolCalls} action${totalToolCalls > 1 ? "s" : ""}` 
-                    : `Activity`;
+            if (loadEarlierContainer.nextSibling) {
+                chat.insertBefore(batchFragment, loadEarlierContainer.nextSibling);
             } else {
-                activityWrapper.style.display = "none";
+                chat.appendChild(batchFragment);
             }
 
-            fragment.appendChild(aiDiv);
-        }
-    }
+            // Anchor scroll position seamlessly so viewport doesn't jump
+            const newScrollHeight = chat.scrollHeight;
+            chat.scrollTop = prevScrollTop + (newScrollHeight - prevScrollHeight);
 
-    chat.appendChild(fragment);
+            startIndex = newStartIndex;
+            if (startIndex <= 0) {
+                loadEarlierContainer.remove();
+            } else {
+                const countSpan = loadEarlierBtn.querySelector(".load-earlier-count");
+                if (countSpan) {
+                    countSpan.textContent = `(${startIndex} remaining)`;
+                }
+            }
+        });
+
+        loadEarlierContainer.appendChild(loadEarlierBtn);
+        chat.appendChild(loadEarlierContainer);
+        chat.appendChild(fragment);
+    } else {
+        // Desktop or under limit: full eager render as usual
+        const fragment = document.createDocumentFragment();
+        for (let i = 0; i < turns.length; i++) {
+            fragment.appendChild(renderTurn(turns[i], session, compactionRef, i === turns.length - 1));
+        }
+        chat.appendChild(fragment);
+    }
 }
 
 export function updateAIStream(element, fullText, isDone, startTime, hasTools) {

@@ -41,6 +41,10 @@ const DEFAULT_CONFIG = {
         AuroraTheme: "saturn",
         ShowLineNumbers: true,
         CompactMobileView: true
+    },
+    Mobile: {
+        LimitVisibleTurns: true,
+        VisibleTurns: 15
     }
 };
 

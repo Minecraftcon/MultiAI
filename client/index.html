@@ -599,6 +599,30 @@
                                 <span class="settings-slider"></span>
                             </label>
                         </div>
+
+                        <div class="settings-row">
+                            <div class="settings-item-info">
+                                <span class="settings-item-title">Limit Mobile Chat Rendering</span>
+                                <span class="settings-item-desc">On mobile browsers, render only the latest turns to keep scrolling fast</span>
+                            </div>
+                            <label class="settings-switch">
+                                <input type="checkbox" id="cfgMobileLimitVisibleTurns" checked>
+                                <span class="settings-slider"></span>
+                            </label>
+                        </div>
+
+                        <div class="settings-row" id="cfgMobileVisibleTurnsRow">
+                            <div class="settings-item-info">
+                                <span class="settings-item-title">Mobile Visible Turns</span>
+                                <span class="settings-item-desc">Number of recent turns to render on mobile before "Load earlier"</span>
+                            </div>
+                            <select id="cfgMobileVisibleTurns" class="settings-select">
+                                <option value="10">10 turns</option>
+                                <option value="15" selected>15 turns (Recommended)</option>
+                                <option value="25">25 turns</option>
+                                <option value="50">50 turns</option>
+                            </select>
+                        </div>
                     </div>
                 </section>
 

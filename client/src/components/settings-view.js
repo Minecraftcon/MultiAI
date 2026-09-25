@@ -204,6 +204,36 @@ export function populateSettingsValues() {
     const compactMobile = document.getElementById("cfgCompactMobileView");
     if (compactMobile) compactMobile.checked = ui.CompactMobileView !== false;
 
+    // Mobile rendering limit settings
+    const mobile = cfg.Mobile || {};
+    const limitMobileTurns = document.getElementById("cfgMobileLimitVisibleTurns");
+    if (limitMobileTurns) {
+        limitMobileTurns.checked = mobile.LimitVisibleTurns !== false;
+    }
+
+    const visibleTurnsSelect = document.getElementById("cfgMobileVisibleTurns");
+    const visibleTurnsRow = document.getElementById("cfgMobileVisibleTurnsRow");
+    if (visibleTurnsRow && limitMobileTurns) {
+        visibleTurnsRow.style.display = limitMobileTurns.checked ? "flex" : "none";
+    }
+    if (visibleTurnsSelect) {
+        const configuredVal = String(mobile.VisibleTurns || 15);
+        let exists = false;
+        for (let i = 0; i < visibleTurnsSelect.options.length; i++) {
+            if (visibleTurnsSelect.options[i].value === configuredVal) {
+                exists = true;
+                break;
+            }
+        }
+        if (!exists && configuredVal) {
+            const opt = document.createElement("option");
+            opt.value = configuredVal;
+            opt.textContent = `${configuredVal} turns`;
+            visibleTurnsSelect.appendChild(opt);
+        }
+        visibleTurnsSelect.value = configuredVal;
+    }
+
     const uiScaleSlider = document.getElementById("cfgUiScale");
     const uiScaleVal = document.getElementById("cfgUiScaleVal");
     if (uiScaleSlider && uiScaleVal) {
@@ -575,6 +605,23 @@ export function initSettingsView() {
         });
     }
 
+    const limitMobileTurns = document.getElementById("cfgMobileLimitVisibleTurns");
+    if (limitMobileTurns) {
+        limitMobileTurns.addEventListener("change", (e) => {
+            saveSetting("Mobile", "LimitVisibleTurns", e.target.checked);
+            const row = document.getElementById("cfgMobileVisibleTurnsRow");
+            if (row) row.style.display = e.target.checked ? "flex" : "none";
+        });
+    }
+
+    const visibleTurnsSelect = document.getElementById("cfgMobileVisibleTurns");
+    if (visibleTurnsSelect) {
+        visibleTurnsSelect.addEventListener("change", (e) => {
+            const val = parseInt(e.target.value, 10) || 15;
+            saveSetting("Mobile", "VisibleTurns", val);
+        });
+    }
+
     // 6. Storage & History Controls
     const recordHistory = document.getElementById("cfgRecordHistory");
     if (recordHistory) {
@@ -674,6 +721,10 @@ export function initSettingsView() {
                         Theme: "dark",
                         ShowLineNumbers: true,
                         CompactMobileView: true
+                    },
+                    Mobile: {
+                        LimitVisibleTurns: true,
+                        VisibleTurns: 15
                     }
                 };
 
