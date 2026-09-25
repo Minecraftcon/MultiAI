@@ -158,6 +158,10 @@ export function sanitizeWorkingTurn(m) {
 
     if (m.role === "tool") {
         const raw = typeof m.content === "string" ? m.content : JSON.stringify(m.content);
+        // Do NOT slice if it is an image payload (contains base64 data_url) - slicing destroys base64 and corrupts the image
+        if (raw.includes("data:image/") || raw.includes('"data_url"') || m.type === "image") {
+            return m;
+        }
         if (raw.length > 20000) {
             const head = raw.slice(0, 8000);
             const tail = raw.slice(-8000);

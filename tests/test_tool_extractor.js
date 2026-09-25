@@ -155,10 +155,43 @@ console.log("Test: extractImageFromToolResult");
         human_size: "68 B"
     });
 
+    // 5a. Valid 1x1 test image
     const img = BaseProvider.extractImageFromToolResult(toolResult);
     assert.strictEqual(img.mime, "image/png");
     assert(img.base64.startsWith("iVBORw0"));
     assert.strictEqual(img.path, "generated.png");
+
+    // 5b. Corrupted / Truncated image should return null
+    const truncatedPayload1 = `{"type":"image","mime":"image/png","data_url":"data:image/png;base64,iVBORw0KGgo\n\n[... Output truncated to fit model context window ...]\n\nASUVORK5CYII="}`;
+    assert.strictEqual(BaseProvider.extractImageFromToolResult(truncatedPayload1), null);
+
+    const truncatedPayload2 = `{"type":"image","mime":"image/png","data_url":"data:image/png;base64,iVBORw0KGgo[... OMITTED 50000 CHARS ...]CYII="}`;
+    assert.strictEqual(BaseProvider.extractImageFromToolResult(truncatedPayload2), null);
+
+    // 5c. Large image in older turn must NOT be sliced by pruneMessagesForContext
+    const largeB64 = "iVBORw0KGgoAAAANSUhEUgAA" + "A".repeat(8000) + "ASUVORK5CYII=";
+    const testMessages = [
+        { role: "system", content: "You are an assistant." },
+        { role: "user", content: "Take a screenshot" },
+        { role: "assistant", content: "", tool_calls: [{ id: "call_1", type: "function", function: { name: "screenshot", arguments: "{}" } }] },
+        { role: "tool", tool_call_id: "call_1", content: JSON.stringify({ type: "image", mime: "image/png", data_url: `data:image/png;base64,${largeB64}` }) },
+        { role: "assistant", content: "Here is your screenshot." },
+        { role: "user", content: "Now do step 2" }
+    ];
+
+    const pruned = provider.pruneMessagesForContext(testMessages, 4000, { maxToolChars: 2000 });
+    const toolMsg = pruned.find(m => m.role === "tool");
+    assert(!toolMsg.content.includes("[... Output truncated"), "Tool image payload must not be truncated by pruneMessagesForContext");
+    assert(toolMsg.content.includes("data:image/png;base64,"), "Tool image base64 must remain intact");
+
+    // 5d. normalizeMessages with vision support must successfully extract image and clean tool message
+    const normalized = provider.normalizeMessages(pruned, true, true);
+    const userImgMsg = normalized.find(m => m.role === "user" && Array.isArray(m.content) && m.content.some(c => c.type === "image_url"));
+    assert(userImgMsg, "Image should be extracted and attached as user vision message");
+    const normToolMsg = normalized.find(m => m.role === "tool");
+    assert(!normToolMsg.content.includes(largeB64), "Normalized tool message should have base64 stripped out");
+    assert(normToolMsg.content.includes('"type":"image"'), "Normalized tool message should retain metadata");
 }
 
 console.log("✓ ALL SAFETY NET TESTS PASSED CLEANLY!");
+

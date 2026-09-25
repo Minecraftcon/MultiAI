@@ -335,6 +335,10 @@ class BaseProvider {
         const processed = nonSystem.map((m, idx) => {
             const isRecent = idx >= nonSystem.length - 2;
             if (!isRecent && m.role === "tool" && typeof m.content === "string" && m.content.length > maxToolChars) {
+                // Do not slice if it is an image payload (contains base64 data_url)
+                if (m.content.includes("data:image/") || m.content.includes('"data_url"') || m.type === "image") {
+                    return m;
+                }
                 const half = Math.floor(maxToolChars / 2);
                 return {
                     ...m,

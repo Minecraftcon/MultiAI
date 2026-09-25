@@ -21,8 +21,11 @@ function extractImageFromToolResult(content) {
         try {
             obj = JSON.parse(content);
         } catch (_) {
+            if (/truncated|omitted/i.test(content)) {
+                return null;
+            }
             const match = content.match(/data:(image\/[^;]+);base64,([A-Za-z0-9+/=]+)/);
-            if (match) {
+            if (match && match[2].length >= 16) {
                 return {
                     mime: match[1],
                     base64: match[2],
@@ -38,8 +41,8 @@ function extractImageFromToolResult(content) {
     if (obj && (obj.type === "image" || (typeof obj.mime === "string" && obj.mime.startsWith("image/")))) {
         const rawUrl = obj.data_url || obj.url;
         if (rawUrl && typeof rawUrl === "string") {
-            const match = rawUrl.match(/^data:([^;]+);base64,(.+)$/);
-            if (match) {
+            const match = rawUrl.match(/^data:([^;]+);base64,([A-Za-z0-9+/=]+)$/);
+            if (match && match[2].length >= 16) {
                 const cleanObj = {
                     path: obj.path || "image",
                     type: "image",
