@@ -11,7 +11,7 @@ export const readFileTool = {
         type: "function",
         function: {
             name: "read_file",
-            description: "Read contents from a file or directory. Lines are 1-indexed and capped at max 400 lines per read (with a 45KB byte limit). Supports bidirectional slicing: specify start_line only (next 400 lines), end_line only (preceding 400 lines), or both. If content exceeds 45KB, use content_offset to paginate.",
+            description: "Read contents from a file or directory. Supports text/source code files and image files (PNG, JPG, WEBP, GIF, SVG, etc.). When reading an image file, the image is automatically attached to your vision context so you can visually view, inspect, and analyze it. For text files, lines are 1-indexed and capped at max 400 lines per read (with a 45KB byte limit). Supports bidirectional slicing: specify start_line only (next 400 lines), end_line only (preceding 400 lines), or both. If content exceeds 45KB, use content_offset to paginate.",
             parameters: {
                 type: "object",
                 properties: {
