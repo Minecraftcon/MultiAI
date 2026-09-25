@@ -10,12 +10,7 @@
     flex-direction: column;
     position: relative;
     overflow-x: hidden;
-    transform: translateX(0px);
     background: var(--bg);
-}
-
-#appShell.animate-transition {
-    transition: transform var(--panel-speed) var(--panel-ease);
 }
 
 header {
