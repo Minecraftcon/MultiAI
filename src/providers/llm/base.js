@@ -457,9 +457,9 @@ class BaseProvider {
                 body: JSON.stringify(payload),
                 signal: controller.signal
             });
-            clearTimeout(timeout);
 
             const resText = await res.text();
+            clearTimeout(timeout);
             if (!res.ok) {
                 let cleanErr = (resText || "").trim();
                 if (cleanErr.includes("<html") || cleanErr.includes("<!DOCTYPE") || cleanErr.includes("<body")) {

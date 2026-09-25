@@ -223,10 +223,10 @@ class LocalProvider extends BaseProvider {
                 body: JSON.stringify(streamPayload),
                 signal: controller.signal
             });
-            clearTimeout(timeout);
 
             if (!res.ok) {
                 const resText = await res.text();
+                clearTimeout(timeout);
                 let cleanErr = (resText || "").trim();
                 if (cleanErr.includes("<html") || cleanErr.includes("<!DOCTYPE") || cleanErr.includes("<body")) {
                     const titleMatch = cleanErr.match(/<title>([^<]+)<\/title>/i);
@@ -259,6 +259,7 @@ class LocalProvider extends BaseProvider {
             // If upstream backend returned standard JSON directly (ignored stream flag)
             if (!contentType.includes("event-stream") && !contentType.includes("ndjson") && contentType.includes("json")) {
                 const data = await res.json();
+                clearTimeout(timeout);
                 const elapsedSec = ((Date.now() - startTime) / 1000).toFixed(1);
                 if (data && typeof data === "object") data._durationSec = elapsedSec;
                 return { ok: true, status: res.status, data };
@@ -358,6 +359,7 @@ class LocalProvider extends BaseProvider {
                 }
                 if (isDone) break;
             }
+            clearTimeout(timeout);
 
             // If main content is empty but model produced reasoning, fallback so user receives response
             if (!fullContent.trim() && fullReasoning.trim()) {

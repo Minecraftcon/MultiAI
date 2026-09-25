@@ -7,7 +7,7 @@
 | Monolithic Tool Badges in Chat UI | `client/src/components/chat-ui.js` | Monolith / UI Churn | High | Medium | P0 | Resolved (Extracted `chat-tool-badges.js`) |
 | Chat History & Modal Coupling | `client/src/components/side-panel.js` | SRP Violation | Medium | Medium | P1 | Resolved (Extracted `models.js`, `build-projects-panel.js`, `chat-history-list.js`) |
 | Dual-role Workspace & JSONL streaming | `src/core/conversations_manager.js` | SRP Violation | Medium | Medium | P1 | Resolved (Extracted `jsonl_session_store.js` & `build_projects_manager.js`) |
-| Missing Outbound Request Timeouts on raw providers | `src/providers/llm/` | Reliability | Medium | Low | P2 | Open |
+| Missing Outbound Request Timeouts on raw providers | `src/providers/llm/` | Reliability | Medium | Low | P2 | Resolved (`base.js`, `local.js`, `opencode.js` stream & body timeout protection) |
 
 ## Smell Inventory
 | Smell | Location | Refactoring | Status |

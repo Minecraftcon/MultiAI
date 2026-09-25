@@ -151,10 +151,10 @@ class OpenCodeProvider extends BaseProvider {
                 body: JSON.stringify(streamPayload),
                 signal: controller.signal
             });
-            clearTimeout(timeout);
 
             if (!res.ok) {
                 const resText = await res.text();
+                clearTimeout(timeout);
                 let cleanErr = (resText || "").trim();
                 try {
                     const parsedErr = JSON.parse(cleanErr);
@@ -174,6 +174,7 @@ class OpenCodeProvider extends BaseProvider {
             // If upstream returned standard JSON directly
             if (!contentType.includes("event-stream") && !contentType.includes("ndjson") && contentType.includes("json")) {
                 const data = await res.json();
+                clearTimeout(timeout);
                 const elapsedSec = ((Date.now() - startTime) / 1000).toFixed(1);
                 if (data && typeof data === "object") data._durationSec = elapsedSec;
                 return { ok: true, status: res.status, data };
@@ -252,6 +253,7 @@ class OpenCodeProvider extends BaseProvider {
                 }
                 if (isDone) break;
             }
+            clearTimeout(timeout);
 
             // Fallback if main content empty but reasoning present
             if (!fullContent.trim() && fullReasoning.trim()) {
