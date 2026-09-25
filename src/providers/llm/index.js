@@ -28,7 +28,7 @@ function loadAllProviders() {
     const files = fs.readdirSync(dir);
 
     for (const file of files) {
-        if (!file.endsWith(".js") || file === "index.js" || file === "base.js" || file === "generic.js") {
+        if (!file.endsWith(".js") || file === "index.js" || file === "base.js" || file === "generic.js" || file === "tool_extractor.js") {
             continue;
         }
         try {
