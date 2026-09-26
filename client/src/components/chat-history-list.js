@@ -23,7 +23,10 @@ import {
     renderProjectList, 
     hideProjectMenu, 
     activeMenuProjectId, 
-    activeMenuProjectChatId 
+    activeMenuProjectChatId,
+    resetBuildChatMenuState,
+    switchToBuildChat,
+    startFreshBuildChat
 } from "./build-projects-panel.js";
 
 /** Cached snapshot per chat-item so we know what's already rendered. */
@@ -466,6 +469,7 @@ export function showChatItemMenu(id, targetBtn) {
  */
 export function hideChatItemMenu() {
     activeMenuChatId = null;
+    resetBuildChatMenuState();
     const menu = document.getElementById("chatItemMenu");
     if (menu) menu.style.display = "none";
 }
@@ -480,18 +484,54 @@ export function initChatListListeners() {
     if (chatRenameBtn) {
         chatRenameBtn.addEventListener("click", () => {
             if (activeMenuProjectChatId && activeMenuProjectId) {
-                hideChatItemMenu();
                 const pid = activeMenuProjectId;
                 const cid = activeMenuProjectChatId;
+                hideChatItemMenu();
+
                 const project = state.buildProjects?.find(p => p.id === pid);
                 const chat = project?.chats?.find(c => c.id === cid);
                 const oldTitle = chat?.title || state.chatSessions[cid]?.title || "Build Task";
-                const newTitle = window.prompt("Rename task:", oldTitle);
-                if (newTitle !== null && newTitle.trim()) {
-                    if (chat) chat.title = newTitle.trim();
-                    if (state.chatSessions[cid]) state.chatSessions[cid].title = newTitle.trim();
-                    saveBuildChatToDisk(pid, state.chatSessions[cid] || { id: cid, title: newTitle.trim(), projectId: pid, mode: "build" });
-                    renderProjectList();
+
+                // Find the rendered list item and inline-edit its title span
+                const listItem = document.querySelector(
+                    `.project-chat-item[data-chat-id="${CSS.escape(cid)}"]`
+                );
+                const titleSpan = listItem?.querySelector(".project-chat-title");
+
+                if (titleSpan) {
+                    const input = document.createElement("input");
+                    input.className = "project-chat-title-edit";
+                    input.value = oldTitle;
+                    input.maxLength = 80;
+                    titleSpan.replaceWith(input);
+                    input.select();
+
+                    const commit = () => {
+                        const val = input.value.trim() || oldTitle;
+                        const span = document.createElement("span");
+                        span.className = "project-chat-title";
+                        span.textContent = val;
+                        input.replaceWith(span);
+                        if (val !== oldTitle) {
+                            if (chat) chat.title = val;
+                            if (state.chatSessions[cid]) state.chatSessions[cid].title = val;
+                            saveBuildChatToDisk(pid, state.chatSessions[cid] || { id: cid, title: val, projectId: pid, mode: "build" });
+                        }
+                    };
+                    input.addEventListener("blur", commit, { once: true });
+                    input.addEventListener("keydown", (e) => {
+                        if (e.key === "Enter") { e.preventDefault(); input.blur(); }
+                        if (e.key === "Escape") { input.value = oldTitle; input.blur(); }
+                    });
+                } else {
+                    // fallback if item not visible in DOM
+                    const newTitle = window.prompt("Rename task:", oldTitle);
+                    if (newTitle !== null && newTitle.trim()) {
+                        if (chat) chat.title = newTitle.trim();
+                        if (state.chatSessions[cid]) state.chatSessions[cid].title = newTitle.trim();
+                        saveBuildChatToDisk(pid, state.chatSessions[cid] || { id: cid, title: newTitle.trim(), projectId: pid, mode: "build" });
+                        renderProjectList();
+                    }
                 }
             } else if (activeMenuChatId) {
                 renameChatSession(activeMenuChatId);

@@ -970,6 +970,20 @@
     text-overflow: ellipsis;
 }
 
+.project-chat-title-edit {
+    flex: 1;
+    min-width: 0;
+    font-size: 12.5px;
+    font-family: inherit;
+    color: var(--text-primary);
+    background: var(--surface-2, var(--bubble-bg));
+    border: 1px solid var(--accent);
+    border-radius: 4px;
+    padding: 1px 4px;
+    outline: none;
+    width: 100%;
+}
+
 .project-chat-date {
     font-size: 10.5px;
     color: #52525b;

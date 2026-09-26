@@ -210,8 +210,15 @@ export async function syncActiveModeConversation(mode = state.appMode) {
             return;
         }
 
+        // Projects exist but none have chats yet — show start page, don't auto-create
+        // (user must explicitly click New Chat so we don't accumulate empty sessions)
         if (allProjects.length > 0) {
-            await startFreshBuildChat(allProjects[0].id);
+            state.currentProjectId = allProjects[0].id;
+            state.currentChatId = null;
+            if (chat) chat.innerHTML = "";
+            state.messages = [{ role: "system", content: state.activeSystemPrompt }];
+            setStartPageMode(true);
+            updateSidePanelView("build");
             return;
         }
 

@@ -170,6 +170,27 @@ export function renderProjectList(filterQuery = "") {
                 });
 
                 const chatMoreBtn = item.querySelector(".project-chat-more-btn");
+
+                // Right-click → context menu
+                item.addEventListener("contextmenu", (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    showBuildChatMenu(project.id, chat.id, chatMoreBtn || item);
+                });
+
+                // Long-press → context menu
+                let _lpTimer = null;
+                item.addEventListener("pointerdown", (e) => {
+                    if (e.target.closest(".project-chat-more-btn")) return;
+                    _lpTimer = setTimeout(() => {
+                        _lpTimer = null;
+                        showBuildChatMenu(project.id, chat.id, chatMoreBtn || item);
+                    }, 500);
+                });
+                item.addEventListener("pointerup",    () => { clearTimeout(_lpTimer); _lpTimer = null; });
+                item.addEventListener("pointercancel",() => { clearTimeout(_lpTimer); _lpTimer = null; });
+                item.addEventListener("pointermove",  () => { clearTimeout(_lpTimer); _lpTimer = null; });
+
                 if (chatMoreBtn) {
                     chatMoreBtn.addEventListener("click", (e) => {
                         e.stopPropagation();
@@ -356,8 +377,18 @@ export function showProjectMenu(projectId, targetBtn) {
  */
 export function hideProjectMenu() {
     activeMenuProjectId = null;
+    activeMenuProjectChatId = null;
     const menu = document.getElementById("projectItemMenu");
     if (menu) menu.style.display = "none";
+}
+
+/**
+ * Resets build-panel menu state — called by hideChatItemMenu in chat-history-list
+ * so the shared chatItemMenu doesn't carry stale build-chat context.
+ */
+export function resetBuildChatMenuState() {
+    activeMenuProjectId = null;
+    activeMenuProjectChatId = null;
 }
 
 /**
