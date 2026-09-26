@@ -93,17 +93,26 @@ export function renderProjectList(filterQuery = "") {
                     </button>
                 </div>
             </div>
-            <div class="project-chats-container"></div>
+            <div class="project-chats-container">
+                <div class="project-chats-inner"></div>
+            </div>
         `;
 
         const header = group.querySelector(".project-header");
+        const collapseBtn = group.querySelector(".project-collapse-btn");
+        if (collapseBtn) {
+            collapseBtn.setAttribute("aria-expanded", isCollapsed ? "false" : "true");
+        }
+
         const toggleCollapse = () => {
             if (collapsedProjects.has(project.id)) {
                 collapsedProjects.delete(project.id);
                 group.classList.remove("is-collapsed");
+                if (collapseBtn) collapseBtn.setAttribute("aria-expanded", "true");
             } else {
                 collapsedProjects.add(project.id);
                 group.classList.add("is-collapsed");
+                if (collapseBtn) collapseBtn.setAttribute("aria-expanded", "false");
             }
         };
 
@@ -160,6 +169,7 @@ export function renderProjectList(filterQuery = "") {
         }
 
         const chatsContainer = group.querySelector(".project-chats-container");
+        const chatsInner = group.querySelector(".project-chats-inner") || chatsContainer;
         if (chats.length === 0) {
             const noChats = document.createElement("div");
             noChats.className = "project-no-chats";
@@ -174,7 +184,7 @@ export function renderProjectList(filterQuery = "") {
                     startFreshBuildChat(project.id);
                 });
             }
-            chatsContainer.appendChild(noChats);
+            chatsInner.appendChild(noChats);
         } else {
             chats.forEach(chat => {
                 const isActive = chat.id === state.currentChatId;
@@ -234,7 +244,7 @@ export function renderProjectList(filterQuery = "") {
                     });
                 }
 
-                chatsContainer.appendChild(item);
+                chatsInner.appendChild(item);
             });
         }
 
