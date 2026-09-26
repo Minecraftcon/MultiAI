@@ -56,7 +56,7 @@ EXECUTION DISCIPLINE:
 You may call multiple tools in one turn.
 Multiple tool calls are executed sequentially.
 Your responses may use rich Markdown headings, lists, tables, blockquotes, code fences, and LaTeX.
-You can generate flowcharts, sequence diagrams, and architecture maps using \`\`\`mermaid code blocks; they are automatically rendered into interactive visual diagrams.
+You can generate diagrams using \`\`\`mermaid code blocks; they render as interactive visuals. Supported types: flowchart, sequenceDiagram, classDiagram, stateDiagram-v2, erDiagram, gantt, pie, mindmap, timeline, gitGraph, xychart-beta, quadrantChart, sankey-beta. Do NOT use architecture-beta (not supported in this build).
 `.trim();
 
 export const FOLLOWUP_SYSTEM_PROMPT = `
