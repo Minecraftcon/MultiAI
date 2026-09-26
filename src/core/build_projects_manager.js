@@ -335,6 +335,37 @@ function createBuildProjectsManager(getBuildProjectsRoot, resolveHome) {
         return false;
     }
 
+    /**
+     * Finds which project owns a given chatId (if any).
+     */
+    function findProjectForChat(chatId) {
+        if (!chatId) return null;
+        const projectsRoot = getBuildProjectsRoot();
+        if (!fs.existsSync(projectsRoot)) return null;
+
+        try {
+            const pDirs = fs.readdirSync(projectsRoot);
+            for (const pId of pDirs) {
+                const pDir = path.join(projectsRoot, pId);
+                if (!fs.statSync(pDir).isDirectory()) continue;
+                const chatDir = path.join(pDir, "chats", chatId);
+                if (fs.existsSync(chatDir) && fs.statSync(chatDir).isDirectory()) {
+                    const projectFile = path.join(pDir, "project.json");
+                    const project = readJsonFile(projectFile, { id: pId });
+                    const workspace = ensureProjectChatWorkspace(pId, chatId);
+                    return {
+                        projectId: pId,
+                        project,
+                        workspace
+                    };
+                }
+            }
+        } catch (err) {
+            console.warn(`[BUILD] Error searching project for chat ${chatId}:`, err.message);
+        }
+        return null;
+    }
+
     return {
         generateProjectId,
         addProject,
@@ -344,7 +375,8 @@ function createBuildProjectsManager(getBuildProjectsRoot, resolveHome) {
         listProjectChats,
         getProjectChat,
         saveProjectChat,
-        deleteProjectChat
+        deleteProjectChat,
+        findProjectForChat
     };
 }
 

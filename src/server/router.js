@@ -7,6 +7,7 @@ const { handleSearchRoute } = require("./routes/search");
 const { handleDeepSearchRoute } = require("./routes/deepsearch");
 const { handleChat, handleAgentStream } = require("./routes/chat");
 const { handleConversationsRoute } = require("./routes/conversations");
+const { handleBuildProjectsRoute, handleValidateDirRoute } = require("./routes/build_projects");
 const { sendJSON } = require("./utils");
 
 async function routeRequest(req, res) {
@@ -88,6 +89,14 @@ async function routeRequest(req, res) {
         // Persistent Chat & Workspace Endpoints
         if (reqUrl.startsWith("/api/chats")) {
             return handleConversationsRoute(req, res);
+        }
+
+        // Build Projects & Directory Validation Endpoints
+        if (reqUrl === "/api/fs/validate-dir") {
+            return handleValidateDirRoute(req, res);
+        }
+        if (reqUrl.startsWith("/api/build/projects")) {
+            return handleBuildProjectsRoute(req, res);
         }
 
         // Static assets

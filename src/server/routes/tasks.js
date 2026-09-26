@@ -1,7 +1,7 @@
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
-const { sendJSON, postJSON } = require("../utils");
+const { sendJSON, postJSON, getChatWorkspace, getChatScratchDir, getChatArtifactsDir } = require("../utils");
 const conversationsManager = require("../../core/conversations_manager");
 const { imageGenTasks } = require("./media");
 
@@ -81,23 +81,12 @@ async function handleTaskRoute(req, res) {
         } catch (_) {}
 
         const chatId = req.headers["x-chat-id"] || parsedBody.chatId || parsedBody.chat_id || "";
-        let scratchDir = "";
-        let artifactsDir = "";
-        if (chatId) {
-            try {
-                const ws = conversationsManager.ensureChatWorkspace(chatId);
-                scratchDir = ws.scratchDir;
-                artifactsDir = ws.artifactsDir;
-            } catch (_) {}
-        }
-        if (!scratchDir) {
-            scratchDir = path.join(conversationsManager.getStorageRoot(), "scratch");
-        }
+        const wsContext = getChatWorkspace(chatId);
+        const scratchDir = wsContext?.workspace?.scratchDir || getChatScratchDir(chatId);
+        const artifactsDir = wsContext?.workspace?.artifactsDir || getChatArtifactsDir(chatId);
+
         if (!fs.existsSync(scratchDir)) {
             fs.mkdirSync(scratchDir, { recursive: true });
-        }
-        if (!artifactsDir) {
-            artifactsDir = path.join(conversationsManager.getStorageRoot(), "artifacts");
         }
         if (!fs.existsSync(artifactsDir)) {
             fs.mkdirSync(artifactsDir, { recursive: true });
@@ -106,6 +95,9 @@ async function handleTaskRoute(req, res) {
         if (parsedBody && typeof parsedBody === "object") {
             parsedBody.scratch_dir = scratchDir;
             parsedBody.artifacts_dir = artifactsDir;
+            if (!parsedBody.cwd && wsContext?.project?.rootPath) {
+                parsedBody.cwd = wsContext.project.rootPath;
+            }
             reqBody = JSON.stringify(parsedBody);
         }
 
@@ -151,15 +143,8 @@ async function handleTaskRoute(req, res) {
                     const taskId = json.task_id || extractedTaskId || parsedBody.task_id || parsedBody.id || "";
 
                     const chatId = req.headers["x-chat-id"] || parsedBody.chatId || "";
-                    let scratchDir = "";
-                    if (chatId) {
-                        try {
-                            scratchDir = conversationsManager.ensureChatWorkspace(chatId).scratchDir;
-                        } catch (_) {}
-                    }
-                    if (!scratchDir) {
-                        scratchDir = path.join(conversationsManager.getStorageRoot(), "scratch");
-                    }
+                    const wsContext = getChatWorkspace(chatId);
+                    const scratchDir = wsContext?.workspace?.scratchDir || getChatScratchDir(chatId);
                     if (!fs.existsSync(scratchDir)) {
                         fs.mkdirSync(scratchDir, { recursive: true });
                     }

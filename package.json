@@ -1,7 +1,8 @@
 {
   "main": "src/index.js",
   "scripts": {
-    "start": "node src/index.js"
+    "start": "node src/index.js",
+    "vendor": "node scripts/vendor_download.js"
   },
   "dependencies": {
     "@langchain/core": "^1.2.11",

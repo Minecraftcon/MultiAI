@@ -90,6 +90,12 @@ async function runTests() {
         assert.strictEqual(editCfg.icon, "edit-3");
         assert.strictEqual(editCfg.label, "Edited file");
         assert.strictEqual(editCfg.displayCmd, "EDIT: src/index.js (fix port bug)");
+
+        const listDirCfg = getToolBadgeConfig("list_dir", { DirectoryPath: "src" });
+        assert.strictEqual(listDirCfg.icon, "folder");
+        assert.strictEqual(listDirCfg.label, "Listed directory");
+        assert.strictEqual(listDirCfg.detail, "src");
+        assert.strictEqual(listDirCfg.displayCmd, "LIST DIR: src");
     }
 
     // 5. Timer tools
@@ -134,6 +140,40 @@ async function runTests() {
         });
         assert(!completedResult.includes("status: running"), "Completed task must not include 'status: running'");
         assert(completedResult.includes("exit_code: 0"), "Completed task must include 'exit_code: 0'");
+    }
+
+    // 7. list_dir execution & read_file directory rejection
+    console.log("Test: list_dir execution and read_file directory rejection");
+    {
+        const { handleListDir, handleFileRead } = require("../src/server/routes/files.js");
+        const { resolveSafePath } = require("../src/server/utils.js");
+
+        // 1. handleListDir on tests directory
+        const listRes = await handleListDir({ DirectoryPath: "tests" }, "", { resolveSafePath });
+        assert(listRes.subdirectories >= 0, "Must count subdirectories");
+        assert(listRes.files > 0, "Must count files in tests");
+        assert(listRes.output.includes("Summary: This directory contains"), "Output must contain summary");
+        assert(listRes.entries.some(e => e.name === "test_chat_tool_badges.js"), "Entries must include this test file");
+
+        // 2. handleListDir on a non-directory file should throw
+        let fileErr = null;
+        try {
+            await handleListDir({ DirectoryPath: "package.json" }, "", { resolveSafePath });
+        } catch (e) {
+            fileErr = e;
+        }
+        assert(fileErr, "handleListDir must reject non-directory file");
+        assert(fileErr.message.includes("is a file, not a directory"), "Error must state path is a file");
+
+        // 3. handleFileRead on a directory should throw
+        let dirErr = null;
+        try {
+            await handleFileRead({ path: "tests" }, "");
+        } catch (e) {
+            dirErr = e;
+        }
+        assert(dirErr, "handleFileRead must reject directory");
+        assert(dirErr.message.includes("is a directory, not a file"), "Error must state path is a directory");
     }
 
     console.log("✓ ALL CHAT TOOL BADGES CHARACTERIZATION TESTS PASSED!");

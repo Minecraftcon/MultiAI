@@ -96,6 +96,15 @@ export function onToolComplete(name, args, badgeEl, data) {
         }
     }
 
+    if (name === "list_dir" && data) {
+        const queryEl = badgeEl.querySelector(".search-query");
+        if (queryEl) {
+            const countStr = `${data.subdirectories ?? 0} dir(s), ${data.files ?? 0} file(s)`;
+            const dirPath = args.DirectoryPath || args.path || args.dir_path || args.dirPath || ".";
+            queryEl.textContent = `${dirPath} (${countStr})`;
+        }
+    }
+
     // Format output in collapse div if present
     if (badgeEl._collapseDiv && data) {
         const resEl = badgeEl._collapseDiv.querySelector(".command-output-res");
@@ -163,12 +172,14 @@ export function onToolComplete(name, args, badgeEl, data) {
                         imgPreview.src = data.data_url;
                     }
                 } else if (data.content !== undefined) {
-                    outText = data.content || (data.entries ? JSON.stringify(data.entries, null, 2) : "(Empty file or directory)");
+                    outText = data.content || "(Empty file)";
                 } else if (data.message || data.note || data.status || data.error) {
                     outText = data.message || data.note || data.error || data.status;
                 } else {
                     outText = JSON.stringify(data, null, 2);
                 }
+            } else if (name === "list_dir") {
+                outText = data.output || (data.entries ? JSON.stringify(data.entries, null, 2) : JSON.stringify(data, null, 2));
             } else if (name === "write_file") {
                 outText = data.message || JSON.stringify(data, null, 2);
             } else if (name === "replace_file_content" || name === "multi_replace_file_content" || name === "search_and_replace") {

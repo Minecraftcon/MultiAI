@@ -22,7 +22,7 @@ function handleStatic(req, res) {
     let filePath = "";
     if (reqPath === "/" || reqPath === "/index.html" || reqPath === "/modular") {
         filePath = path.join(webRoot, "index.html");
-    } else if (reqPath.startsWith("/styles/") || reqPath.startsWith("/src/") || reqPath.startsWith("/scripts/")) {
+    } else if (reqPath.startsWith("/styles/") || reqPath.startsWith("/src/") || reqPath.startsWith("/scripts/") || reqPath.startsWith("/vendor/")) {
         filePath = path.join(webRoot, reqPath);
     } else if (fs.existsSync(path.join(webRoot, reqPath)) && !fs.statSync(path.join(webRoot, reqPath)).isDirectory()) {
         filePath = path.join(webRoot, reqPath);

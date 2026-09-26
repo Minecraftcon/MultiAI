@@ -14,11 +14,7 @@
     <!-- Puter -->
     <script src="https://js.puter.com/v2/"></script>
 
-    <!-- CDN preconnects -->
-    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
-    <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
-    <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
-    <link rel="dns-prefetch" href="https://cdnjs.cloudflare.com">
+    <!-- Vendor libraries served locally (no CDN required) -->
 
     <!-- UI Font -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -26,10 +22,10 @@
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 
     <!-- Markdown -->
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="/vendor/marked/marked.min.js"></script>
 
     <!-- HTML sanitizer -->
-    <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
+    <script src="/vendor/dompurify/purify.min.js"></script>
 
     <!-- Immediate theme restoration to prevent FOUC -->
     <script>
@@ -49,21 +45,16 @@
     </script>
 
     <!-- Syntax highlighting -->
-    <link id="hljsTheme" rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/styles/github-dark.min.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
+    <link id="hljsTheme" rel="stylesheet" href="/vendor/highlightjs/github-dark.min.css">
+    <script src="/vendor/highlightjs/highlight.min.js"></script>
 
     <!-- KaTeX -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/contrib/auto-render.min.js"></script>
+    <link rel="stylesheet" href="/vendor/katex/katex.min.css">
+    <script src="/vendor/katex/katex.min.js"></script>
+    <script src="/vendor/katex/auto-render.min.js"></script>
 
     <!-- Lucide Icons -->
-    <script src="https://cdn.jsdelivr.net/npm/lucide@latest/dist/umd/lucide.min.js"></script>
-    <script>
-        if (typeof lucide === "undefined") {
-            document.write('<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"><\/script>');
-        }
-    </script>
+    <script src="/vendor/lucide/lucide.min.js"></script>
 
     <!-- Modular Stylesheets -->
     <link rel="stylesheet" href="./styles/variables.css">

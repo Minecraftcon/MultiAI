@@ -181,7 +181,7 @@ function ensureThreeJS() {
     if (_threePromise) return _threePromise;
     _threePromise = new Promise((resolve, reject) => {
         const s = document.createElement("script");
-        s.src = "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js";
+        s.src = "/vendor/three/three.min.js";
         s.async = true;
         s.onload = () => {
             if (typeof THREE !== "undefined") resolve(THREE);
@@ -189,7 +189,7 @@ function ensureThreeJS() {
         };
         s.onerror = () => {
             _threePromise = null;
-            reject(new Error("Failed to load Three.js from CDN"));
+            reject(new Error("Failed to load Three.js from vendor"));
         };
         document.head.appendChild(s);
     });

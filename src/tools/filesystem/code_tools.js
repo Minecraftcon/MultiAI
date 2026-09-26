@@ -654,10 +654,93 @@ async function handleWriteFile(args, chatId, { resolveSafePath }) {
     };
 }
 
+async function handleListDir(args, chatId, { resolveSafePath }) {
+    const rawPath = args.DirectoryPath || args.path || args.dir_path || args.dirPath || ".";
+    if (!rawPath) {
+        throw new Error("Missing required parameter 'DirectoryPath'.");
+    }
+
+    const targetPath = resolveSafePath(rawPath, chatId);
+    if (!fs.existsSync(targetPath)) {
+        throw new Error(`Directory not found: ${rawPath}`);
+    }
+
+    const stat = await fs.promises.stat(targetPath);
+    if (!stat.isDirectory()) {
+        throw new Error(`Path '${rawPath}' is a file, not a directory. Use the 'read_file' tool to view file contents.`);
+    }
+
+    const entries = await fs.promises.readdir(targetPath, { withFileTypes: true });
+
+    // Sort directories first, then alphabetical
+    entries.sort((a, b) => {
+        if (a.isDirectory() && !b.isDirectory()) return -1;
+        if (!a.isDirectory() && b.isDirectory()) return 1;
+        return a.name.localeCompare(b.name);
+    });
+
+    let subDirCount = 0;
+    let fileCount = 0;
+    const formattedEntries = [];
+    const jsonLines = [];
+
+    for (const entry of entries) {
+        const fullChildPath = path.join(targetPath, entry.name);
+        if (entry.isDirectory()) {
+            subDirCount++;
+            let childCount = 0;
+            try {
+                const subChildren = fs.readdirSync(fullChildPath);
+                childCount = subChildren.length;
+            } catch (_) {}
+
+            formattedEntries.push({
+                name: entry.name,
+                isDir: true,
+                children: childCount
+            });
+            jsonLines.push(JSON.stringify({
+                name: entry.name,
+                isDir: true,
+                children: childCount
+            }));
+        } else {
+            fileCount++;
+            let size = 0;
+            try {
+                const s = fs.statSync(fullChildPath);
+                size = s.size;
+            } catch (_) {}
+
+            formattedEntries.push({
+                name: entry.name,
+                sizeBytes: String(size)
+            });
+            jsonLines.push(JSON.stringify({
+                name: entry.name,
+                sizeBytes: String(size)
+            }));
+        }
+    }
+
+    const summary = `Summary: This directory contains ${subDirCount} subdirectories and ${fileCount} files.`;
+    const output = jsonLines.length > 0 ? `${jsonLines.join("\n")}\n\n${summary}` : summary;
+
+    return {
+        path: rawPath,
+        resolved_path: targetPath,
+        entries: formattedEntries,
+        subdirectories: subDirCount,
+        files: fileCount,
+        output
+    };
+}
+
 module.exports = {
     handleCodeGrep,
     handleSearchAndReplace: handleReplaceFileContent,
     handleReplaceFileContent,
     handleMultiReplaceFileContent,
-    handleWriteFile
+    handleWriteFile,
+    handleListDir
 };

@@ -198,6 +198,11 @@ function getMimeType(ext) {
         ".html": "text/html",
         ".htm": "text/html",
         ".css": "text/css",
+        ".woff2": "font/woff2",
+        ".woff": "font/woff",
+        ".ttf": "font/ttf",
+        ".otf": "font/otf",
+        ".eot": "application/vnd.ms-fontobject",
         ".mp4": "video/mp4",
         ".webm": "video/webm",
         ".ogv": "video/ogg",
@@ -227,20 +232,39 @@ function getMimeType(ext) {
     return map[(ext || "").toLowerCase()] || "application/octet-stream";
 }
 
-function getChatScratchDir(chatId) {
+function getChatWorkspace(chatId) {
     if (chatId) {
         try {
-            return conversationsManager.ensureChatWorkspace(chatId).scratchDir;
+            const projContext = conversationsManager.findProjectForChat?.(chatId);
+            if (projContext && projContext.workspace) {
+                return {
+                    workspace: projContext.workspace,
+                    project: projContext.project,
+                    isProject: true
+                };
+            }
+            return {
+                workspace: conversationsManager.ensureChatWorkspace(chatId),
+                project: null,
+                isProject: false
+            };
         } catch (_) {}
+    }
+    return null;
+}
+
+function getChatScratchDir(chatId) {
+    const wsContext = getChatWorkspace(chatId);
+    if (wsContext && wsContext.workspace && wsContext.workspace.scratchDir) {
+        return wsContext.workspace.scratchDir;
     }
     return path.join(conversationsManager.getStorageRoot(), "scratch");
 }
 
 function getChatArtifactsDir(chatId) {
-    if (chatId) {
-        try {
-            return conversationsManager.ensureChatWorkspace(chatId).artifactsDir;
-        } catch (_) {}
+    const wsContext = getChatWorkspace(chatId);
+    if (wsContext && wsContext.workspace && wsContext.workspace.artifactsDir) {
+        return wsContext.workspace.artifactsDir;
     }
     return path.join(conversationsManager.getStorageRoot(), "artifacts");
 }
@@ -293,7 +317,15 @@ function resolveSafePath(inputPath, chatId) {
         return rel ? path.resolve(artifactsDir, rel) : artifactsDir;
     }
 
-    return path.isAbsolute(raw) ? path.normalize(raw) : path.resolve(process.cwd(), raw);
+    let baseDir = process.cwd();
+    if (chatId) {
+        const wsContext = getChatWorkspace(chatId);
+        if (wsContext && wsContext.project && wsContext.project.rootPath) {
+            baseDir = wsContext.project.rootPath;
+        }
+    }
+
+    return path.isAbsolute(raw) ? path.normalize(raw) : path.resolve(baseDir, raw);
 }
 
 function postJSON(port, reqPath, data, timeoutMs = 3000) {
@@ -352,6 +384,7 @@ module.exports = {
     logToFile,
     formatBytes,
     getMimeType,
+    getChatWorkspace,
     getChatScratchDir,
     getChatArtifactsDir,
     resolveSafePath,

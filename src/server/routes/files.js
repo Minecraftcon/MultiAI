@@ -1,7 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const { resolveSafePath, formatBytes, getMimeType, sendJSON, postJSON } = require("../utils");
-const { handleCodeGrep, handleSearchAndReplace, handleReplaceFileContent, handleMultiReplaceFileContent, handleWriteFile } = require("../../tools/filesystem/code_tools");
+const { handleCodeGrep, handleSearchAndReplace, handleReplaceFileContent, handleMultiReplaceFileContent, handleWriteFile, handleListDir } = require("../../tools/filesystem/code_tools");
 
 async function handleFileRead(args, chatId) {
     const rawPath = args.path || args.AbsolutePath || args.target_file || args.file_path;
@@ -16,29 +16,9 @@ async function handleFileRead(args, chatId) {
 
     const stat = await fs.promises.stat(targetPath);
 
-    // 1. Directory inspection (with 100-entry truncation cap)
+    // 1. Strict directory guard: do not allow directory reads via read_file
     if (stat.isDirectory()) {
-        const entries = await fs.promises.readdir(targetPath, { withFileTypes: true });
-        const formattedEntries = entries.map(e => ({
-            name: e.name,
-            type: e.isDirectory() ? "directory" : "file"
-        }));
-        const slicedEntries = entries.slice(0, 100);
-        const isDirTruncated = entries.length > 100;
-        let content = slicedEntries.map(e => `${e.isDirectory() ? "[DIR] " : "      "}${e.name}`).join("\n");
-        if (isDirTruncated) {
-            content += `\n\n[Directory truncated: showing first 100 of ${entries.length} items.]`;
-        }
-        return {
-            path: rawPath,
-            resolved_path: targetPath,
-            type: "directory",
-            is_dir: true,
-            entry_count: entries.length,
-            entries: formattedEntries.slice(0, 100),
-            content,
-            is_truncated: isDirTruncated
-        };
+        throw new Error(`Path '${rawPath}' is a directory, not a file. Use the 'list_dir' tool to inspect directory contents.`);
     }
 
     // 2. Automatic Image Detection & Multimodal Preview
@@ -228,6 +208,11 @@ async function handleFilesRoute(req, res) {
             return sendJSON(res, 200, result);
         }
 
+        if (reqUrl === "/api/file/list-dir") {
+            const result = await handleListDir(args, chatId, { resolveSafePath });
+            return sendJSON(res, 200, result);
+        }
+
         if (reqUrl === "/api/code/grep") {
             const result = await handleCodeGrep(args, chatId, { resolveSafePath, postJSON });
             return sendJSON(res, 200, result);
@@ -242,5 +227,6 @@ async function handleFilesRoute(req, res) {
 
 module.exports = {
     handleFilesRoute,
-    handleFileRead
+    handleFileRead,
+    handleListDir
 };

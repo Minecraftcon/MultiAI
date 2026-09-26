@@ -532,6 +532,7 @@ module.exports = {
     getProjectChat: buildProjects.getProjectChat,
     saveProjectChat: buildProjects.saveProjectChat,
     deleteProjectChat: buildProjects.deleteProjectChat,
+    findProjectForChat: buildProjects.findProjectForChat,
     // Storage primitives
     safelyWriteMessages,
     readMessages,

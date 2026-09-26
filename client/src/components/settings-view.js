@@ -788,8 +788,8 @@ export function applyTheme(val) {
             isLight = window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches;
         }
 
-        const darkHljs = "https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/styles/github-dark.min.css";
-        const lightHljs = "https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/styles/github.min.css";
+        const darkHljs = "/vendor/highlightjs/github-dark.min.css";
+        const lightHljs = "/vendor/highlightjs/github.min.css";
         const targetHref = isLight ? lightHljs : darkHljs;
         if (hljsLink.getAttribute("href") !== targetHref) {
             hljsLink.setAttribute("href", targetHref);

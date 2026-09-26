@@ -2,8 +2,36 @@ import { toolFetch } from "../http.js";
 import { state } from "../../state/index.js";
 
 /* =========================================================
-   FILESYSTEM TOOLS (READ_FILE, WRITE_FILE)
+   FILESYSTEM TOOLS (LIST_DIR, READ_FILE, WRITE_FILE)
    ========================================================= */
+
+export const listDirTool = {
+    name: "list_dir",
+    schema: {
+        type: "function",
+        function: {
+            name: "list_dir",
+            description: "List the contents of a directory, including all files and subdirectories with sizes and child counts. Directory path must be an absolute path or relative path to a directory that exists (e.g. '.' for project workspace root).",
+            parameters: {
+                type: "object",
+                properties: {
+                    DirectoryPath: {
+                        type: "string",
+                        description: "Path to the directory to inspect (e.g. '.' or absolute/relative directory path)."
+                    }
+                },
+                required: ["DirectoryPath"]
+            }
+        }
+    },
+    handler: async (args, { genState }) => {
+        const payload = {
+            DirectoryPath: args.DirectoryPath || args.path || args.dir_path || args.dirPath || ".",
+            chatId: state.currentChatId
+        };
+        return await toolFetch("/api/file/list-dir", { method: "POST", body: payload, genState });
+    }
+};
 
 export const readFileTool = {
     name: "read_file",
@@ -11,13 +39,13 @@ export const readFileTool = {
         type: "function",
         function: {
             name: "read_file",
-            description: "Read contents from a file or directory. Supports text/source code files and image files (PNG, JPG, WEBP, GIF, SVG, etc.). When reading an image file, the image is automatically attached to your vision context so you can visually view, inspect, and analyze it. For text files, lines are 1-indexed and capped at max 400 lines per read (with a 45KB byte limit). Supports bidirectional slicing: specify start_line only (next 400 lines), end_line only (preceding 400 lines), or both. If content exceeds 45KB, use content_offset to paginate.",
+            description: "Read contents from a file. Supports text/source code files and image files (PNG, JPG, WEBP, GIF, SVG, etc.). When reading an image file, the image is automatically attached to your vision context so you can visually view, inspect, and analyze it. For text files, lines are 1-indexed and capped at max 400 lines per read (with a 45KB byte limit). Supports bidirectional slicing: specify start_line only (next 400 lines), end_line only (preceding 400 lines), or both. If content exceeds 45KB, use content_offset to paginate. NOTE: Do not use read_file on directories; use list_dir to inspect directory contents.",
             parameters: {
                 type: "object",
                 properties: {
                     path: {
                         type: "string",
-                        description: "Path to the file or directory to inspect."
+                        description: "Path to the file to inspect."
                     },
                     start_line: {
                         type: "integer",
@@ -268,6 +296,7 @@ export const grepSearchTool = {
 };
 
 export const filesystemTools = [
+    listDirTool,
     readFileTool,
     writeFileTool,
     replaceFileContentTool,

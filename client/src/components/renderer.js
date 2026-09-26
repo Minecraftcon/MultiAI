@@ -11,7 +11,7 @@ export function ensureMermaid() {
 
     _mermaidPromise = new Promise((resolve, reject) => {
         const s = document.createElement("script");
-        s.src = "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js";
+        s.src = "/vendor/mermaid/mermaid.min.js";
         s.async = true;
         s.onload = () => {
             if (typeof mermaid !== "undefined") {

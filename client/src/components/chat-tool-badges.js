@@ -105,6 +105,11 @@ export function getToolBadgeConfig(toolName, args = {}) {
             detail = `${filePath || "file"}${lineSpan}${offsetSpan}`;
         }
         isCommandTask = true;
+    } else if (toolName === "list_dir") {
+        icon = "folder";
+        label = "Listed directory";
+        detail = args.DirectoryPath || args.path || args.dir_path || args.dirPath || ".";
+        isCommandTask = true;
     } else if (toolName === "write_file") {
         const isArtifact = (args.path || "").startsWith("$ARTIFACTS/") || (args.path || "").startsWith("${ARTIFACTS}/");
         icon = isArtifact ? "file-code" : "file-edit";
@@ -169,6 +174,8 @@ export function getToolBadgeConfig(toolName, args = {}) {
         displayCmd = `EDIT: ${args.path || "file"}${args.description ? ` (${args.description})` : ""}`;
     } else if (toolName === "multi_replace_file_content") {
         displayCmd = `MULTI-EDIT: ${args.path || "file"}${args.description ? ` (${args.description})` : ""}`;
+    } else if (toolName === "list_dir") {
+        displayCmd = `LIST DIR: ${args.DirectoryPath || args.path || args.dir_path || "."}`;
     } else if (toolName === "read_file") {
         const filePath = args.path || args.AbsolutePath || args.file_path || args.target_file || "";
         const isImg = /\.(png|jpe?g|webp|gif|svg|bmp|ico|tiff?)$/i.test(filePath) 
