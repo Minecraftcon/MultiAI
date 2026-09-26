@@ -242,7 +242,7 @@ if (markedRenderer) {
                 <div class="code-bubble ${isSingleLine ? 'single-line' : ''}">
                     <div class="code-bubble-inner">
                         <pre><code class="hljs ${lang ? 'language-' + escapeHTML(lang) : ''}">${highlighted}</code></pre>
-                        ${isPlayable ? `<iframe class="code-preview-frame" sandbox="allow-scripts allow-modals"></iframe>` : ''}
+                        ${isPlayable ? `<iframe class="code-preview-frame" sandbox="allow-scripts allow-modals allow-same-origin"></iframe>` : ''}
                         <button class="code-copy-btn" data-code="${encoded}" type="button" title="Copy code">
                             <i data-lucide="copy"></i>
                         </button>

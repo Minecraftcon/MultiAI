@@ -112,14 +112,17 @@
 
 .code-preview-frame {
     display: none;
-    width: 100%;
-    min-height: 220px;
+    flex: 1;
+    min-height: 320px;
+    height: 320px;
     border: none;
+    border-radius: 0 0 12px 12px;
     background: #ffffff;
 }
 
 .code-bubble.view-preview pre { display: none; }
 .code-bubble.view-preview .code-preview-frame { display: block; }
+.code-bubble.view-preview .code-copy-btn { display: none; }
 
 .mermaid-diagram-wrapper {
     display: none;
