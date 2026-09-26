@@ -162,7 +162,7 @@ export function renderDeepSearchStepper(rawText) {
 }
 
 if (markedRenderer) {
-    markedRenderer.code = function(code, language) {
+    markedRenderer.code = function (code, language) {
         const rawCode = typeof code === "object" ? code.text : code;
         const rawLang = (typeof code === "object" ? code.lang : language) || "";
 
@@ -179,8 +179,8 @@ if (markedRenderer) {
 
         let highlighted;
         try {
-            highlighted = (lang && typeof hljs !== "undefined" && hljs.getLanguage(lang)) 
-                ? hljs.highlight(rawCode, { language: lang }).value 
+            highlighted = (lang && typeof hljs !== "undefined" && hljs.getLanguage(lang))
+                ? hljs.highlight(rawCode, { language: lang }).value
                 : (typeof hljs !== "undefined" ? hljs.highlightAuto(rawCode).value : escapeHTML(rawCode));
         } catch {
             highlighted = escapeHTML(rawCode);
@@ -242,7 +242,7 @@ if (markedRenderer) {
                 <div class="code-bubble ${isSingleLine ? 'single-line' : ''}">
                     <div class="code-bubble-inner">
                         <pre><code class="hljs ${lang ? 'language-' + escapeHTML(lang) : ''}">${highlighted}</code></pre>
-                        ${isPlayable ? `<iframe class="code-preview-frame" sandbox="allow-scripts allow-modals allow-same-origin"></iframe>` : ''}
+                        ${isPlayable ? `<iframe class="code-preview-frame" sandbox="allow-scripts allow-modals"></iframe>` : ''}
                         <button class="code-copy-btn" data-code="${encoded}" type="button" title="Copy code">
                             <i data-lucide="copy"></i>
                         </button>
@@ -252,15 +252,15 @@ if (markedRenderer) {
         `;
     };
 
-const VIDEO_EXTENSIONS = new Set([
-    ".mp4", ".webm", ".ogg", ".ogv", ".mov", ".m4v", ".mkv",
-    ".avi", ".mpg", ".mpeg", ".wmv", ".flv", ".3gp", ".3gpp", ".ts", ".m2ts"
-]);
-const AUDIO_EXTENSIONS = new Set([
-    ".mp3", ".wav", ".m4a", ".aac", ".flac", ".oga", ".opus", ".weba", ".wma"
-]);
+    const VIDEO_EXTENSIONS = new Set([
+        ".mp4", ".webm", ".ogg", ".ogv", ".mov", ".m4v", ".mkv",
+        ".avi", ".mpg", ".mpeg", ".wmv", ".flv", ".3gp", ".3gpp", ".ts", ".m2ts"
+    ]);
+    const AUDIO_EXTENSIONS = new Set([
+        ".mp3", ".wav", ".m4a", ".aac", ".flac", ".oga", ".opus", ".weba", ".wma"
+    ]);
 
-    markedRenderer.image = function(href, title, text) {
+    markedRenderer.image = function (href, title, text) {
         let cleanHref = href;
         let cleanAlt = text || "";
         let cleanTitle = title || "";
@@ -679,7 +679,7 @@ export function parseMarkdown(text) {
                 "video", "audio", "source", "track", "a"
             ],
             ADD_ATTR: [
-                "target", "rel", "class", "data-code", "data-chart", 
+                "target", "rel", "class", "data-code", "data-chart",
                 "data-state", "data-src", "sandbox", "srcdoc", "loading", "style",
                 "open", "viewBox", "stroke", "stroke-width", "fill",
                 "stroke-linecap", "stroke-linejoin", "d", "data-duration",
@@ -931,7 +931,7 @@ export function renderMath(container) {
                     const math = m[1].trim();
                     try {
                         el.innerHTML = `<div class="katex-display-wrapper">${katexFn.renderToString(math, { displayMode: true, throwOnError: false })}</div>`;
-                    } catch (_) {}
+                    } catch (_) { }
                 }
             }
         } catch (e) {

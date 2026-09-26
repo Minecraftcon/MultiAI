@@ -97,8 +97,7 @@ export function renderProjectList(filterQuery = "") {
         `;
 
         const header = group.querySelector(".project-header");
-        header.addEventListener("click", (e) => {
-            if (e.target.closest(".project-action-btn")) return;
+        const toggleCollapse = () => {
             if (collapsedProjects.has(project.id)) {
                 collapsedProjects.delete(project.id);
                 group.classList.remove("is-collapsed");
@@ -106,7 +105,43 @@ export function renderProjectList(filterQuery = "") {
                 collapsedProjects.add(project.id);
                 group.classList.add("is-collapsed");
             }
+        };
+
+        header.addEventListener("click", (e) => {
+            if (e.target.closest(".project-action-btn")) return;
+            toggleCollapse();
         });
+
+        header.addEventListener("keydown", (e) => {
+            if (e.target.closest(".project-action-btn")) return;
+            if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                toggleCollapse();
+            }
+        });
+
+        // Right-click over project directory header → project context menu
+        header.addEventListener("contextmenu", (e) => {
+            if (e.target.closest(".project-action-btn")) return;
+            e.preventDefault();
+            e.stopPropagation();
+            showProjectMenu(project.id, { x: e.clientX, y: e.clientY });
+        });
+
+        // Long-press over project directory header (mobile)
+        let _projLpTimer = null;
+        header.addEventListener("pointerdown", (e) => {
+            if (e.target.closest(".project-action-btn")) return;
+            const px = e.clientX;
+            const py = e.clientY;
+            _projLpTimer = setTimeout(() => {
+                _projLpTimer = null;
+                showProjectMenu(project.id, { x: px, y: py });
+            }, 500);
+        });
+        header.addEventListener("pointerup", () => { clearTimeout(_projLpTimer); _projLpTimer = null; });
+        header.addEventListener("pointercancel", () => { clearTimeout(_projLpTimer); _projLpTimer = null; });
+        header.addEventListener("pointermove", () => { clearTimeout(_projLpTimer); _projLpTimer = null; });
 
         const addChatBtn = group.querySelector(".project-add-chat-btn");
         if (addChatBtn) {
@@ -349,7 +384,6 @@ export function showProjectMenu(projectId, targetBtn) {
     const menu = document.getElementById("projectItemMenu");
     if (!menu) return;
 
-    const rect = targetBtn.getBoundingClientRect();
     menu.style.display = "flex";
     menu.style.position = "fixed";
     renderIcons(menu);
@@ -360,13 +394,26 @@ export function showProjectMenu(projectId, targetBtn) {
     const vh = window.innerHeight;
     const GAP = 6;
 
-    let left = rect.right - mw;
-    let top = rect.bottom + GAP;
-
-    if (left + mw > vw - GAP) left = vw - mw - GAP;
-    if (left < GAP) left = GAP;
-    if (top + mh > vh - GAP) top = rect.top - mh - GAP;
-    if (top < GAP) top = GAP;
+    let left, top;
+    if (targetBtn && typeof targetBtn.getBoundingClientRect === "function") {
+        const rect = targetBtn.getBoundingClientRect();
+        left = rect.right - mw;
+        top = rect.bottom + GAP;
+        if (left + mw > vw - GAP) left = vw - mw - GAP;
+        if (left < GAP) left = GAP;
+        if (top + mh > vh - GAP) top = rect.top - mh - GAP;
+        if (top < GAP) top = GAP;
+    } else if (targetBtn && typeof targetBtn.x === "number") {
+        left = targetBtn.x;
+        top = targetBtn.y + GAP;
+        if (left + mw > vw - GAP) left = vw - mw - GAP;
+        if (left < GAP) left = GAP;
+        if (top + mh > vh - GAP) top = targetBtn.y - mh - GAP;
+        if (top < GAP) top = GAP;
+    } else {
+        left = vw / 2 - mw / 2;
+        top = vh / 2 - mh / 2;
+    }
 
     menu.style.left = `${Math.round(left)}px`;
     menu.style.top = `${Math.round(top)}px`;
