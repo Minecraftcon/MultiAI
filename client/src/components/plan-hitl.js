@@ -1,9 +1,12 @@
 /* =========================================================
-   PLAN HUMAN-IN-THE-LOOP (HITL) APPROVAL COMPONENT
-   Modular detection, rendering, and interaction for Build Mode plans
+   PLAN HUMAN-IN-THE-LOOP (HITL) APPROVAL & CARD COMPONENT
+   Renders compact artifact cards in chat (Image 3)
+   and launches the fullscreen review modal (Image 1 & 2).
    ========================================================= */
 import { state } from "../state/index.js";
+import { escapeHTML } from "../utils/dom.js";
 import { chatbox } from "./chatbox.js";
+import { openPlanModal } from "./plan-modal.js";
 
 const PLAN_STRUCTURE_REGEX = /(##\s*(Implementation\s*Plan|Build\s*Plan|Milestones|Planned\s*Tasks)|\[(BUILD|IMPLEMENTATION)\s*PLAN\]|<plan>|Tasklist-.*\.md)/i;
 const PLAN_CONFIRMATION_REGEX = /(proceed\b|ready to (proceed|start|implement)|let me know if (you'd like|this looks good|you want to make changes)|shall i proceed|would you like me to proceed|approve the plan|before i (start|proceed))/i;
@@ -21,7 +24,6 @@ export function isPlanApprovalRequired(text, session = null) {
     const hasStructure = PLAN_STRUCTURE_REGEX.test(text);
     const hasConfirmation = PLAN_CONFIRMATION_REGEX.test(text);
 
-    // If in build mode, either explicit structure or asking to proceed on plan triggers the HITL strip
     if (isBuild && (hasStructure || hasConfirmation)) {
         return true;
     }
@@ -29,7 +31,38 @@ export function isPlanApprovalRequired(text, session = null) {
 }
 
 /**
- * Renders the interactive HITL action strip into the assistant message element.
+ * Extracts a clean title and summary snippet from the plan markdown.
+ *
+ * @param {string} text
+ * @returns {{ title: string, snippet: string }}
+ */
+export function extractPlanMetadata(text) {
+    if (!text) {
+        return { title: "Implementation Plan", snippet: "Click to review the implementation plan in fullscreen." };
+    }
+
+    let title = "Implementation Plan";
+    const titleMatch = text.match(/#+\s*(Implementation\s*Plan[^\n]*|Build\s*Plan[^\n]*|Task\s*Plan:[^\n]*)/i);
+    if (titleMatch) {
+        title = titleMatch[1].replace(/^Task\s*Plan:\s*/i, "").trim();
+    }
+
+    // Extract first descriptive non-heading, non-code line as preview snippet
+    const cleanLines = text
+        .split(/\r?\n/)
+        .map(line => line.trim())
+        .filter(line => line && !line.startsWith("#") && !line.startsWith("```") && !line.startsWith(">") && !line.startsWith("[") && !/^\d+\.\s/.test(line) && !/^[-*]\s/.test(line));
+
+    let snippet = cleanLines[0] || "Review the proposed phases, milestones, and verification criteria.";
+    if (snippet.length > 180) {
+        snippet = snippet.slice(0, 180) + "…";
+    }
+
+    return { title, snippet };
+}
+
+/**
+ * Renders the compact Plan Card into the assistant message element.
  *
  * @param {HTMLElement} aiMessageElement
  * @param {string} rawText
@@ -39,71 +72,100 @@ export function isPlanApprovalRequired(text, session = null) {
 export function renderPlanApprovalActions(aiMessageElement, rawText, isDone, session = null) {
     if (!aiMessageElement || !isDone) return;
 
-    // Check if already rendered
-    let strip = aiMessageElement.querySelector(".plan-hitl-strip");
+    let existingCard = aiMessageElement.querySelector(".plan-card");
     const activeSession = session || (state.currentChatId ? state.chatSessions[state.currentChatId] : null);
 
     if (!isPlanApprovalRequired(rawText, activeSession)) {
-        if (strip) strip.remove();
+        if (existingCard) existingCard.remove();
         return;
     }
 
-    if (strip) return; // Already present
+    if (existingCard) return; // Already present
 
-    strip = document.createElement("div");
-    strip.className = "plan-hitl-strip";
-    strip.setAttribute("role", "group");
-    strip.setAttribute("aria-label", "Plan approval actions");
+    const { title, snippet } = extractPlanMetadata(rawText);
+    const artifactPath = activeSession?.artifactPath || "";
 
-    strip.innerHTML = `
-        <div class="plan-hitl-label">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="plan-hitl-icon" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
-            <span>Review Plan Before Execution</span>
+    const card = document.createElement("div");
+    card.className = "plan-card";
+    card.setAttribute("role", "region");
+    card.setAttribute("aria-label", "Implementation Plan");
+    // Store markdown in dataset for easy retrieval by click handler
+    card._planMarkdown = rawText;
+    card._planTitle = title;
+    card._artifactPath = artifactPath;
+
+    card.innerHTML = `
+        <div class="plan-card-header">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="plan-card-icon" aria-hidden="true">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+                <line x1="16" y1="13" x2="8" y2="13"></line>
+                <line x1="16" y1="17" x2="8" y2="17"></line>
+                <polyline points="10 9 9 9 8 9"></polyline>
+            </svg>
+            <span class="plan-card-title">${escapeHTML(title)}</span>
+            <span class="plan-card-open-hint" title="Open full screen">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+            </span>
         </div>
-        <div class="plan-hitl-buttons">
-            <button type="button" class="plan-proceed-btn" title="Approve this plan and begin execution" aria-label="Proceed with Plan">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
-                <span>Proceed with Plan</span>
+        <div class="plan-card-body">
+            <p class="plan-card-desc">${escapeHTML(snippet)}</p>
+        </div>
+        <div class="plan-card-footer">
+            <button type="button" class="plan-card-proceed-btn" title="Approve this plan and begin execution" aria-label="Proceed">
+                Proceed
             </button>
-            <button type="button" class="plan-modify-btn" title="Request adjustments to this plan" aria-label="Request Changes">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-                <span>Request Changes</span>
+            <button type="button" class="plan-card-review-btn" title="Review plan in fullscreen with live commenting" aria-label="Review Plan">
+                Review Plan ↗
             </button>
         </div>
     `;
 
     const finalContent = aiMessageElement.querySelector(".final-content") || aiMessageElement;
-    finalContent.appendChild(strip);
+    finalContent.appendChild(card);
 }
 
 /**
- * Handles clicks on plan HITL action buttons.
+ * Handles clicks on plan card elements (delegated from chat container).
  *
  * @param {MouseEvent} e
  * @returns {boolean} True if handled
  */
 export function handlePlanApprovalClick(e) {
-    const proceedBtn = e.target.closest(".plan-proceed-btn");
+    const card = e.target.closest(".plan-card");
+    if (!card) return false;
+
+    // Fast path: Clicked [ Proceed ] directly inside the card
+    const proceedBtn = e.target.closest(".plan-card-proceed-btn");
     if (proceedBtn) {
         if (state.currentChatId && state.activeGenerations[state.currentChatId]?.isGenerating) {
             return true;
         }
         proceedBtn.disabled = true;
-        proceedBtn.classList.add("is-proceeding");
-        const span = proceedBtn.querySelector("span");
-        if (span) span.textContent = "Starting execution...";
-        
+        proceedBtn.textContent = "Starting...";
         chatbox.setValue("Proceed with the implementation plan.");
         chatbox.triggerSend();
         return true;
     }
 
-    const modifyBtn = e.target.closest(".plan-modify-btn");
-    if (modifyBtn) {
-        chatbox.setValue("Please adjust the plan: ");
-        chatbox.focus();
-        return true;
-    }
+    // Deep review path: Clicked card or [ Review Plan ↗ ]
+    const markdown = card._planMarkdown || "";
+    const title = card._planTitle || "Implementation Plan";
+    const artifactPath = card._artifactPath || "";
 
-    return false;
+    openPlanModal({
+        title,
+        markdown,
+        artifactPath,
+        onProceed: () => {
+            chatbox.setValue("Proceed with the implementation plan.");
+            chatbox.triggerSend();
+        },
+        onCommentsSubmit: (prompt) => {
+            chatbox.setValue(prompt);
+            chatbox.triggerSend();
+        }
+    });
+
+    return true;
 }

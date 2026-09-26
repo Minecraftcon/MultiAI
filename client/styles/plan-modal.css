@@ -1,0 +1,488 @@
+/* =========================================================
+   IMPLEMENTATION PLAN & FULLSCREEN REVIEW STYLES
+   Dark mode aesthetic matching Google Antigravity IDE
+   ========================================================= */
+
+/* --- Compact Chat Plan Card (Image 3) --- */
+.plan-card {
+    margin-top: 14px;
+    margin-bottom: 8px;
+    padding: 14px 16px;
+    background: var(--bg-surface-secondary, rgba(255, 255, 255, 0.035));
+    border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    transition: all 0.18s ease;
+    cursor: pointer;
+    position: relative;
+    max-width: 580px;
+}
+
+.plan-card:hover {
+    background: var(--bg-surface-hover, rgba(255, 255, 255, 0.055));
+    border-color: rgba(255, 255, 255, 0.15);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+}
+
+.plan-card-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-primary, #f3f4f6);
+}
+
+.plan-card-icon {
+    color: var(--text-secondary, #9ca3af);
+    flex-shrink: 0;
+}
+
+.plan-card-title {
+    font-size: 13.5px;
+    font-weight: 600;
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: -0.2px;
+}
+
+.plan-card-open-hint {
+    margin-left: auto;
+    color: var(--text-muted, #6b7280);
+    opacity: 0.7;
+    transition: opacity 0.15s ease;
+}
+
+.plan-card:hover .plan-card-open-hint {
+    opacity: 1;
+    color: var(--text-primary, #f3f4f6);
+}
+
+.plan-card-body {
+    margin: 2px 0 4px 0;
+}
+
+.plan-card-desc {
+    margin: 0;
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: var(--text-secondary, #9ca3af);
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.plan-card-footer {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 6px;
+}
+
+.plan-card-proceed-btn {
+    background: #1a73e8;
+    color: #ffffff;
+    border: none;
+    border-radius: 6px;
+    padding: 6px 16px;
+    font-size: 12.5px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.plan-card-proceed-btn:hover {
+    background: #1557b0;
+}
+
+.plan-card-proceed-btn:active {
+    transform: scale(0.98);
+}
+
+.plan-card-review-btn {
+    background: transparent;
+    color: var(--text-secondary, #9ca3af);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.plan-card-review-btn:hover {
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--text-primary, #f3f4f6);
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+/* --- Fullscreen Plan Modal (Image 1) --- */
+body.plan-modal-open {
+    overflow: hidden;
+}
+
+.plan-modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 99999;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(8px);
+    display: flex;
+    flex-direction: column;
+    animation: planModalFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes planModalFadeIn {
+    from {
+        opacity: 0;
+        transform: scale(0.99);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.plan-modal-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-surface, #131314);
+    color: var(--text-primary, #e5e7eb);
+    height: 100vh;
+    width: 100vw;
+}
+
+.plan-modal-header {
+    height: 54px;
+    padding: 0 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(19, 19, 20, 0.95);
+    flex-shrink: 0;
+}
+
+.plan-modal-header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.plan-modal-title {
+    font-size: 14px;
+    font-weight: 600;
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: -0.2px;
+}
+
+.plan-modal-path {
+    font-size: 11.5px;
+    color: var(--text-muted, #6b7280);
+    background: rgba(255, 255, 255, 0.05);
+    padding: 2px 8px;
+    border-radius: 4px;
+}
+
+.plan-modal-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.plan-action-icon-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary, #9ca3af);
+    padding: 6px;
+    border-radius: 6px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+}
+
+.plan-action-icon-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-primary, #f3f4f6);
+}
+
+.plan-copy-btn.copied {
+    color: #10b981;
+}
+
+.plan-modal-review-indicator {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 6px;
+    font-size: 12px;
+    color: var(--text-secondary, #9ca3af);
+}
+
+.plan-comments-count-pill {
+    background: #1a73e8;
+    color: #ffffff;
+    font-size: 10.5px;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 10px;
+}
+
+.plan-modal-proceed-btn {
+    background: #1a73e8;
+    color: #ffffff;
+    border: none;
+    border-radius: 6px;
+    padding: 6px 20px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.plan-modal-proceed-btn:hover {
+    background: #1557b0;
+}
+
+.plan-modal-proceed-btn.has-feedback {
+    background: #0284c7;
+    box-shadow: 0 0 12px rgba(2, 132, 199, 0.4);
+}
+
+.plan-modal-close-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted, #6b7280);
+    padding: 6px;
+    border-radius: 6px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: 6px;
+    transition: all 0.15s ease;
+}
+
+.plan-modal-close-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-primary, #f3f4f6);
+}
+
+/* --- Plan Body & Typography --- */
+.plan-modal-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 36px 24px;
+    display: flex;
+    justify-content: center;
+}
+
+.plan-modal-content {
+    width: 100%;
+    max-width: 860px;
+    font-size: 14.5px;
+    line-height: 1.75;
+    color: var(--text-primary, #d1d5db);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    user-select: text;
+}
+
+.plan-modal-content h1,
+.plan-modal-content h2,
+.plan-modal-content h3 {
+    color: var(--text-primary, #f9fafb);
+    font-weight: 600;
+    margin-top: 1.6em;
+    margin-bottom: 0.6em;
+    line-height: 1.35;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.plan-modal-content h1 {
+    font-size: 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    padding-bottom: 8px;
+    margin-top: 0;
+}
+
+.plan-modal-content h2 {
+    font-size: 16px;
+}
+
+.plan-modal-content h3 {
+    font-size: 14.5px;
+}
+
+.plan-modal-content p {
+    margin: 0.8em 0;
+}
+
+.plan-modal-content ul,
+.plan-modal-content ol {
+    padding-left: 20px;
+    margin: 0.8em 0;
+}
+
+.plan-modal-content li {
+    margin: 0.35em 0;
+}
+
+.plan-modal-content blockquote {
+    border-left: 3px solid #1a73e8;
+    background: rgba(26, 115, 232, 0.06);
+    padding: 6px 14px;
+    margin: 1em 0;
+    color: var(--text-secondary, #9ca3af);
+    border-radius: 0 4px 4px 0;
+}
+
+.plan-modal-content code {
+    background: rgba(255, 255, 255, 0.06);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12.5px;
+}
+
+.plan-modal-content pre code {
+    display: block;
+    padding: 12px;
+    overflow-x: auto;
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 6px;
+}
+
+/* --- Live Selection Comment Bubble (Image 2) --- */
+.plan-comment-bubble {
+    position: absolute;
+    z-index: 100001;
+    background: #1a73e8;
+    color: #ffffff;
+    padding: 5px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    user-select: none;
+    transition: transform 0.12s ease, background 0.15s ease;
+}
+
+.plan-comment-bubble:hover {
+    background: #1557b0;
+    transform: translateY(-1px);
+}
+
+.plan-comment-bubble kbd {
+    background: rgba(0, 0, 0, 0.25);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+/* --- Comment Popover Input --- */
+.plan-comment-popover {
+    position: absolute;
+    z-index: 100002;
+    width: 320px;
+    background: #1e1e20;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 8px;
+    padding: 12px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.plan-popover-quote {
+    font-size: 11px;
+    color: var(--text-muted, #9ca3af);
+    background: rgba(255, 255, 255, 0.04);
+    padding: 4px 8px;
+    border-radius: 4px;
+    border-left: 2px solid #1a73e8;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.plan-popover-input {
+    width: 100%;
+    background: #141416;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    padding: 8px 10px;
+    color: #ffffff;
+    font-size: 12.5px;
+    resize: vertical;
+    min-height: 52px;
+    font-family: inherit;
+    box-sizing: border-box;
+}
+
+.plan-popover-input:focus {
+    outline: none;
+    border-color: #1a73e8;
+    box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.25);
+}
+
+.plan-popover-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.plan-popover-btn {
+    border: none;
+    border-radius: 4px;
+    padding: 4px 10px;
+    font-size: 11.5px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.plan-popover-btn.cancel {
+    background: transparent;
+    color: var(--text-secondary, #9ca3af);
+}
+
+.plan-popover-btn.cancel:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #ffffff;
+}
+
+.plan-popover-btn.add {
+    background: #1a73e8;
+    color: #ffffff;
+    font-weight: 500;
+}
+
+.plan-popover-btn.add:hover {
+    background: #1557b0;
+}
+
+/* --- Inline Comment Highlights --- */
+.plan-comment-mark {
+    background: rgba(26, 115, 232, 0.22);
+    border-bottom: 2px solid #1a73e8;
+    border-radius: 2px;
+    padding: 1px 2px;
+    color: inherit;
+    cursor: pointer;
+}
+
+.plan-comment-mark:hover {
+    background: rgba(26, 115, 232, 0.35);
+}

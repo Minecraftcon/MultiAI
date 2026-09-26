@@ -69,12 +69,30 @@ async function runTests() {
     const artPath = resolvePlanArtifactPath("My New Feature / Step 1");
     assert.strictEqual(artPath, "$ARTIFACTS/Tasklist-my_new_feature_step_1.md");
 
-    // 5. Plan HITL Detection
+    // 5. Plan HITL Detection & Card Metadata
     console.log("Test: Plan HITL detection detects plan text vs normal chat");
-    const { isPlanApprovalRequired } = await import("../client/src/components/plan-hitl.js");
-    const planText = "## Implementation Plan\n1. Add component\n2. Add test\nShall I proceed with this plan?";
+    const { isPlanApprovalRequired, extractPlanMetadata } = await import("../client/src/components/plan-hitl.js");
+    const planText = "## Implementation Plan - Core Engine\nThis is the plan description.\n1. Add component\n2. Add test\nShall I proceed with this plan?";
     assert(isPlanApprovalRequired(planText, { mode: "build" }), "Must detect plan requiring approval in build mode");
     assert(!isPlanApprovalRequired("Hello, what is the weather today?", { mode: "build" }), "Normal chat must not require plan approval");
+
+    const meta = extractPlanMetadata(planText);
+    assert.strictEqual(meta.title, "Implementation Plan - Core Engine");
+    assert(meta.snippet.includes("This is the plan description."), "Snippet must extract descriptive text");
+
+    // 5b. Plan Commenting Prompt Formatter
+    console.log("Test: Plan commenting formats structured feedback prompt");
+    const { formatCommentsFeedbackPrompt } = await import("../client/src/components/plan-commenting.js");
+    const sampleComments = [
+        { quote: "Add component", text: "Please use ES modules" },
+        { quote: "Add test", text: "Include safety net unit tests" }
+    ];
+    const prompt = formatCommentsFeedbackPrompt(sampleComments, "Core Engine");
+    assert(prompt.includes("[Implementation Plan Review Feedback]:"), "Must have review header");
+    assert(prompt.includes('> "Add component"'), "Must quote selected text");
+    assert(prompt.includes("Feedback: Please use ES modules"), "Must include feedback note");
+    assert(prompt.includes('> "Add test"'), "Must quote second selected text");
+    assert(prompt.includes("write_todos"), "Must remind model to update write_todos");
 
     // 6. Verification Gate
     console.log("Test: Verification gate evaluates test tool calls and completion conditions");
