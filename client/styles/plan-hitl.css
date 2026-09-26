@@ -1,0 +1,109 @@
+/* =========================================================
+   PLAN HUMAN-IN-THE-LOOP (HITL) APPROVAL ACTIONS
+   ========================================================= */
+
+.plan-hitl-strip {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px dashed var(--border, rgba(255, 255, 255, 0.12));
+    animation: fadeIn 0.3s ease;
+}
+
+.plan-hitl-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--text-tertiary, #9ca3af);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.plan-hitl-icon {
+    color: var(--accent, #3b82f6);
+}
+
+.plan-hitl-buttons {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.plan-proceed-btn {
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 600;
+    font-family: inherit;
+    border: none;
+    border-radius: 7px;
+    padding: 7px 15px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.28);
+    transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+    user-select: none;
+}
+
+.plan-proceed-btn:hover {
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 14px rgba(37, 99, 235, 0.42);
+}
+
+.plan-proceed-btn:active {
+    transform: translateY(0);
+}
+
+.plan-proceed-btn.is-proceeding {
+    opacity: 0.75;
+    pointer-events: none;
+}
+
+.plan-modify-btn {
+    background: var(--surface-2, #212121);
+    color: var(--text-primary, #f2f2f2);
+    font-size: 13px;
+    font-weight: 500;
+    font-family: inherit;
+    border: 1px solid var(--border-strong, rgba(255, 255, 255, 0.16));
+    border-radius: 7px;
+    padding: 7px 14px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+    user-select: none;
+}
+
+.plan-modify-btn:hover {
+    background: var(--hover, rgba(255, 255, 255, 0.08));
+    border-color: var(--text-secondary, #9ca3af);
+    transform: translateY(-1px);
+}
+
+.plan-modify-btn:active {
+    transform: translateY(0);
+}
+
+@media (max-width: 640px) {
+    .plan-hitl-buttons {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .plan-proceed-btn,
+    .plan-modify-btn {
+        justify-content: center;
+        width: 100%;
+        padding: 9px 14px;
+    }
+}

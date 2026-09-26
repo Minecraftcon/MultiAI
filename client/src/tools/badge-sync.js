@@ -2,6 +2,7 @@
  * Badge Synchronization & UI Presentation for Tool Executions
  */
 import { renderIcons } from "../utils/icons.js";
+import { escapeHTML } from "../utils/dom.js";
 
 /**
  * Initializes visual timers and indicators on tool badge start.
@@ -105,14 +106,71 @@ export function onToolComplete(name, args, badgeEl, data) {
         }
     }
 
+    if (name === "write_todos" && data) {
+        const labelEl = badgeEl.querySelector(".search-label");
+        const queryEl = badgeEl.querySelector(".search-query");
+        if (labelEl) labelEl.textContent = "Task plan";
+        if (queryEl) {
+            const inProg = (data.todos || []).find(t => t.status === "in_progress");
+            const inProgText = inProg ? ` • In progress: ${inProg.content}` : (data.completed === data.total ? " • All completed" : "");
+            queryEl.textContent = `${data.completed}/${data.total} completed${inProgText}`;
+        }
+    }
+
+    if (name === "task" && data) {
+        const labelEl = badgeEl.querySelector(".search-label");
+        const queryEl = badgeEl.querySelector(".search-query");
+        if (labelEl) labelEl.textContent = `Subagent [${data.subagent_type || args.subagent_type || "task"}]`;
+        if (queryEl) {
+            queryEl.textContent = `Completed (${data.rounds || 1} round${data.rounds === 1 ? '' : 's'})`;
+        }
+    }
+
     // Format output in collapse div if present
     if (badgeEl._collapseDiv && data) {
         const resEl = badgeEl._collapseDiv.querySelector(".command-output-res");
         if (resEl) {
+            if (name === "write_todos") {
+                const todos = data.todos || args.todos || [];
+                const total = todos.length || 1;
+                const completed = todos.filter(t => t.status === "completed").length;
+                const pct = Math.round((completed / total) * 100);
+                let checklistHtml = `
+                <div class="todo-checklist-card">
+                    <div class="todo-progress-header">
+                        <span class="todo-progress-title">Plan Progress (${completed}/${total} completed)</span>
+                        <span class="todo-progress-pct">${pct}%</span>
+                    </div>
+                    <div class="todo-progress-bar-track">
+                        <div class="todo-progress-bar-fill" style="width: ${pct}%"></div>
+                    </div>
+                    <div class="todo-items-list">
+                        ${todos.map(t => {
+                            const isDone = t.status === "completed";
+                            const isProg = t.status === "in_progress";
+                            const iconSvg = isDone 
+                                ? `<span class="todo-check-icon">✓</span>` 
+                                : (isProg 
+                                    ? `<span class="todo-spinner"></span>` 
+                                    : `<span class="todo-circle-icon">○</span>`);
+                            const statusClass = isDone ? "todo-done" : (isProg ? "todo-active" : "todo-pending");
+                            return `<div class="todo-row ${statusClass}">
+                                <span class="todo-status-icon">${iconSvg}</span>
+                                <span class="todo-content">${escapeHTML(t.content)}</span>
+                            </div>`;
+                        }).join("")}
+                    </div>
+                </div>`;
+                resEl.innerHTML = checklistHtml;
+                return;
+            }
+
             let outText = "";
             const isRunning = data.running === true || data.status === "running" || data.status === "in_progress";
             const isLarge = data.is_large_output || (data.stdout && data.stdout.split("\n").length > 150);
-            if (name === "run_task" || name === "run_command") {
+            if (name === "task") {
+                outText = `[Subagent: ${data.subagent_type || args.subagent_type || "general-purpose"}] (${data.rounds || 1} rounds)\nInstruction: ${args.instruction || ""}\n\nReport:\n${data.report || "(No report provided)"}`;
+            } else if (name === "run_task" || name === "run_command") {
                 const rawOutput = data.truncated_lines || data.stdout || "";
                 outText = `id: ${data.task_id || args.task_id || args.task_name || "task"}\n`;
                 if (isRunning) {

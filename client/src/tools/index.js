@@ -8,12 +8,14 @@ import { terminalTools } from "./terminal/index.js";
 import { webTools } from "./web/index.js";
 import { mediaTools } from "./media/index.js";
 import { filesystemTools } from "./filesystem/index.js";
+import { planningTools } from "./planning/index.js";
 
-// Register terminal, web, media, and filesystem tools
+// Register terminal, web, media, filesystem, and planning tools
 terminalTools.forEach(registerTool);
 webTools.forEach(registerTool);
 mediaTools.forEach(registerTool);
 filesystemTools.forEach(registerTool);
+planningTools.forEach(registerTool);
 
 /**
  * Array of all tool schemas provided to LLM chat requests.
@@ -24,7 +26,7 @@ export const tools = getAllToolSchemas();
  * Returns strictly isolated on-chat tool schemas for DeepSearch chats.
  */
 export function getDeepSearchOnChatTools() {
-    const allowed = ["run_task", "manage_tasks", "web_search", "schedule", "list_dir", "read_file", "write_file", "replace_file_content", "multi_replace_file_content", "grep_search"];
+    const allowed = ["run_task", "manage_tasks", "web_search", "schedule", "list_dir", "read_file", "write_file", "replace_file_content", "multi_replace_file_content", "grep_search", "write_todos", "task"];
     return allowed.map(name => getTool(name)?.schema).filter(Boolean);
 }
 

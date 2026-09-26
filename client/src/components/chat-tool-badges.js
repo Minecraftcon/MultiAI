@@ -152,6 +152,21 @@ export function getToolBadgeConfig(toolName, args = {}) {
         label = "Checked image";
         detail = args.task_id || "image status";
         isCommandTask = false;
+    } else if (toolName === "write_todos") {
+        icon = "list-todo";
+        label = "Task plan";
+        const todos = Array.isArray(args.todos) ? args.todos : [];
+        const completed = todos.filter(t => t.status === "completed").length;
+        const inProg = todos.find(t => t.status === "in_progress");
+        const inProgText = inProg ? ` • In progress: ${inProg.content}` : (todos.length > 0 && completed === todos.length ? " • All completed" : "");
+        detail = `${completed}/${todos.length} completed${inProgText}`;
+        isCommandTask = true;
+    } else if (toolName === "task") {
+        icon = "bot";
+        const subType = args.subagent_type || "general-purpose";
+        label = `Subagent [${subType}]`;
+        detail = args.instruction || "subagent task";
+        isCommandTask = true;
     }
 
     const isTimer = toolName === "sleep" || toolName === "idle" || toolName === "schedule";
@@ -168,7 +183,17 @@ export function getToolBadgeConfig(toolName, args = {}) {
     const isArtifact = toolName === "write_file" && ((args.path || "").startsWith("$ARTIFACTS/") || (args.path || "").startsWith("${ARTIFACTS}/"));
 
     let displayCmd = "";
-    if (toolName === "write_file") {
+    if (toolName === "write_todos") {
+        const todos = Array.isArray(args.todos) ? args.todos : [];
+        const completed = todos.filter(t => t.status === "completed").length;
+        const items = todos.map(t => {
+            const sym = t.status === "completed" ? "[✓]" : (t.status === "in_progress" ? "[▶]" : "[ ]");
+            return `${sym} ${t.content}`;
+        }).join("\n");
+        displayCmd = `PLAN (${completed}/${todos.length} completed):\n${items}`;
+    } else if (toolName === "task") {
+        displayCmd = `SUBAGENT [${args.subagent_type || "general-purpose"}]:\n${args.instruction || ""}`;
+    } else if (toolName === "write_file") {
         displayCmd = `Write to ${args.path || "file"}`;
     } else if (toolName === "replace_file_content" || toolName === "search_and_replace") {
         displayCmd = `EDIT: ${args.path || "file"}${args.description ? ` (${args.description})` : ""}`;

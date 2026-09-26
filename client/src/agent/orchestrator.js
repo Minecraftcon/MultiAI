@@ -10,6 +10,7 @@ import { sanitizeMessage } from "./sanitizer.js";
 import { callChatModel } from "./chat-client.js";
 import { extractThoughtAndContent } from "../components/renderer.js";
 import { shouldCompact, compactSessionContext, compileWorkingMessages } from "./compactor.js";
+import { isVerificationToolCall, shouldTriggerVerification, getVerificationPrompt } from "./verification-gate.js";
 
 function isPromissoryAnnouncement(text) {
     if (!text) return false;
@@ -50,6 +51,11 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
     const session = state.chatSessions[chatId];
     if (!session) return;
 
+    if (!session.projectId && state.appMode === "build" && state.currentProjectId) {
+        session.projectId = state.currentProjectId;
+        session.mode = "build";
+    }
+
     const modelSelect = document.getElementById("modelSelect");
 
     let userContent = userText;
@@ -78,6 +84,9 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
     let emptyRetryUsed = false;
     let emptyAfterToolsRetries = 0;
     let promissoryRetries = 0;
+    let todoContinueRetries = 0;
+    let hasRunVerification = false;
+    let verificationNudgeCount = 0;
     let invalidToolRetries = 0;
     let lastInvalidToolNotice = null;
     const fileReadCounts = new Map();
@@ -262,6 +271,54 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
                     session.messages.push({
                         role: "user",
                         content: "Proceed with the action."
+                    });
+                    state.messages = session.messages;
+                    saveStoredChats();
+                    continue;
+                }
+
+                // Autonomous Task Loop (Build Mode / Planned Tasks Engine):
+                // If the session has planned todos with incomplete items, and the model merely summarized
+                // intermediate progress without asking a user question or calling further tools,
+                // route the intermediate synthesis to thought trace and automatically drive the next planned task.
+                const hasActiveTodos = Array.isArray(session.todos) && session.todos.length > 0;
+                const activeOrPendingTask = hasActiveTodos
+                    ? (session.todos.find(t => t.status === "in_progress") || session.todos.find(t => t.status === "pending"))
+                    : null;
+                const isQuestionOrApproval = /(\?|confirm\b|what would you like|do you want me to|should i\b|which option)/i.test(finalDisplay);
+
+                if (activeOrPendingTask && !isQuestionOrApproval && (hasRunTools || round > 0) && todoContinueRetries < 20 && (maxRounds === Infinity || round < maxRounds - 1)) {
+                    todoContinueRetries++;
+                    logEvent("BUILD_TODO_CONTINUE", { round, model: selectedModel, task: activeOrPendingTask.content });
+                    if (finalDisplay) {
+                        addThoughtTrace(currentAIMessage, finalDisplay);
+                    }
+                    session.messages.push({
+                        role: "user",
+                        content: `[Build Mode Engine]: Proceed with the next planned task: "${activeOrPendingTask.content}". Update your plan status with write_todos and execute the necessary tool actions.`
+                    });
+                    state.messages = session.messages;
+                    saveStoredChats();
+                    continue;
+                }
+
+                // Build Mode Pre-Done Verification Gate:
+                // If all planned tasks are completed, verify changes via tests/linters before final conclusion
+                if (shouldTriggerVerification({
+                    session,
+                    isBuildMode: state.appMode === "build" || session.mode === "build",
+                    hasRunVerification,
+                    verificationNudgeCount,
+                    hasRunTools
+                })) {
+                    verificationNudgeCount++;
+                    logEvent("BUILD_VERIFICATION_GATE", { round, model: selectedModel });
+                    if (finalDisplay) {
+                        addThoughtTrace(currentAIMessage, finalDisplay);
+                    }
+                    session.messages.push({
+                        role: "user",
+                        content: getVerificationPrompt()
                     });
                     state.messages = session.messages;
                     saveStoredChats();
@@ -455,6 +512,9 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
                     } else {
                         onToolStart(toolName, args, badgeEl);
                         onToolComplete(toolName, args, badgeEl, result);
+                    }
+                    if (isVerificationToolCall(toolName, args)) {
+                        hasRunVerification = true;
                     }
                     if (genState.abortRequested) {
                         // Fill synthetic cancelled results for remaining tool calls

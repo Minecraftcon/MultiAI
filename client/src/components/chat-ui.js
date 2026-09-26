@@ -20,6 +20,7 @@ import {
 } from "./chat-tool-badges.js";
 import { requestScrollToBottom, initScrollToBottom } from "./chat-scroll.js";
 import { openImageLightbox } from "./composer-attachments.js";
+import { renderPlanApprovalActions, handlePlanApprovalClick } from "./plan-hitl.js";
 
 export {
     getToolBadgeConfig,
@@ -251,6 +252,7 @@ export function renderTurn(turn, session, compactionRef, isLastTurn) {
             if (Array.isArray(followups) && followups.length > 0) {
                 renderFollowupSuggestions(aiDiv, followups, true);
             }
+            renderPlanApprovalActions(aiDiv, rawText, true, session);
         }
 
         if (searchContainer && searchContainer.children.length > 0) {
@@ -448,6 +450,7 @@ export function updateAIStream(element, fullText, isDone, startTime, hasTools) {
         if (cursor) cursor.remove();
 
         renderFollowupSuggestions(element, followups, isDone);
+        renderPlanApprovalActions(element, answerText, isDone);
 
         // Clean up any empty thought boxes and finalize duration
         element.querySelectorAll(".thought-box").forEach(tb => {
@@ -546,6 +549,10 @@ export function initChatDelegation() {
     if (!chat) return;
 
     chat.addEventListener("click", (e) => {
+        if (handlePlanApprovalClick(e)) {
+            return;
+        }
+
         const followupBtn = e.target.closest(".followup-item");
         if (followupBtn) {
             const question = followupBtn.dataset.question;

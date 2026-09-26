@@ -542,28 +542,28 @@ export function initChatListListeners() {
     if (chatDeleteBtn) {
         chatDeleteBtn.addEventListener("click", () => {
             if (activeMenuProjectChatId && activeMenuProjectId) {
-                hideChatItemMenu();
                 const pid = activeMenuProjectId;
                 const cid = activeMenuProjectChatId;
+                hideChatItemMenu();
+
                 const project = state.buildProjects?.find(p => p.id === pid);
-                const chat = project?.chats?.find(c => c.id === cid);
-                const chatName = chat?.title || "this build task";
-                if (window.confirm(`Delete "${chatName}"?`)) {
-                    if (project && Array.isArray(project.chats)) {
-                        project.chats = project.chats.filter(c => c.id !== cid);
-                    }
-                    delete state.chatSessions[cid];
-                    fetch(`/api/build/projects/${encodeURIComponent(pid)}/chats/${encodeURIComponent(cid)}`, { method: "DELETE" }).catch(() => {});
-                    if (state.currentChatId === cid) {
-                        const remaining = project?.chats || [];
-                        if (remaining.length > 0) {
-                            switchToBuildChat(pid, remaining[0].id);
-                        } else {
-                            startFreshBuildChat(pid);
-                        }
+                if (state.activeGenerations[cid]) {
+                    stopChatGeneration(cid);
+                }
+                if (project && Array.isArray(project.chats)) {
+                    project.chats = project.chats.filter(c => c.id !== cid);
+                }
+                delete state.chatSessions[cid];
+                fetch(`/api/build/projects/${encodeURIComponent(pid)}/chats/${encodeURIComponent(cid)}`, { method: "DELETE" }).catch(() => {});
+                if (state.currentChatId === cid) {
+                    const remaining = project?.chats || [];
+                    if (remaining.length > 0) {
+                        switchToBuildChat(pid, remaining[0].id);
                     } else {
-                        renderProjectList();
+                        startFreshBuildChat(pid);
                     }
+                } else {
+                    renderProjectList();
                 }
             } else if (activeMenuChatId) {
                 deleteChatSession(activeMenuChatId);

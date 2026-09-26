@@ -924,3 +924,112 @@
     outline: 2px solid rgba(255, 255, 255, 0.45);
     outline-offset: 2px;
 }
+
+/* ── Todo Checklist Card (Build Mode Plan Engine) ────────── */
+.todo-checklist-card {
+    background: var(--card-bg, #161618);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin: 4px 0;
+    font-family: inherit;
+}
+
+.todo-progress-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 6px;
+}
+
+.todo-progress-pct {
+    color: var(--accent, #3b82f6);
+    font-size: 11.5px;
+    font-weight: 700;
+}
+
+.todo-progress-bar-track {
+    width: 100%;
+    height: 4px;
+    background: var(--surface-3, rgba(255, 255, 255, 0.08));
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 10px;
+}
+
+.todo-progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #3b82f6 0%, #10b981 100%);
+    border-radius: 4px;
+    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.todo-items-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.todo-row {
+    display: flex;
+    align-items: baseline;
+    gap: 9px;
+    font-size: 13px;
+    line-height: 1.4;
+    transition: opacity 0.2s ease;
+}
+
+.todo-status-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    font-size: 12px;
+}
+
+.todo-check-icon {
+    color: #10b981;
+    font-weight: 700;
+}
+
+.todo-circle-icon {
+    color: var(--text-tertiary);
+    font-size: 10px;
+}
+
+.todo-spinner {
+    width: 11px;
+    height: 11px;
+    border: 2px solid var(--accent, #3b82f6);
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: todoSpin 0.75s linear infinite;
+    display: inline-block;
+}
+
+@keyframes todoSpin {
+    to { transform: rotate(360deg); }
+}
+
+.todo-row.todo-done {
+    color: var(--text-tertiary);
+}
+
+.todo-row.todo-done .todo-content {
+    text-decoration: line-through;
+    opacity: 0.8;
+}
+
+.todo-row.todo-active {
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.todo-row.todo-pending {
+    color: var(--text-secondary);
+}

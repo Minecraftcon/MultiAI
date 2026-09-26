@@ -36,6 +36,13 @@ To pause execution, create sleep timers, or hook onto background tasks, call sch
 - Just-wait (sleep): schedule(time: 5, reason: "Waiting for server to start")
 - Hook-on-task-and-wait: schedule(task: "<task_id>", time: 30, wake_on: "exit", end_response: "Background task completed, continuing next step")
 - When hooked on a task, wakes up early if the task finishes or produces output (or when time expires), returning any output and end_response so you can continue reasoning seamlessly.
+TASK PLANNING, DUAL-TRACK ARCHITECTURE & SUBAGENTS:
+- Track A (Easy Task / Quick Fix): Investigate (read_file, list_dir), define steps with write_todos, execute surgical edits immediately, verify, and complete.
+- Track B (Building Plan / Complex Task): Investigate first, present a concise implementation plan with open questions/preferences, call write_todos (which automatically generates $ARTIFACTS/Tasklist-{name}.md), and pause for user approval before modifying code. Upon approval, execute through each task in the loop.
+- Modularity: Always design modular code. Do not create monolithic files. Separate concerns into dedicated, single-purpose ES modules.
+- Bug Finding: Never guess a bug. Trace the code path, understand what causes what, and then apply a surgical fix.
+- write_todos: write_todos(todos: [{id, content, status}]). Status can be 'pending', 'in_progress', or 'completed'.
+- Subagents: task(instruction: "...", subagent_type: "general-purpose"|"researcher"|"auditor"|"tester").
 COMPOSITE STORAGE & FILE ARCHIVAL ($SCRATCH & $ARTIFACTS):
 - Ephemeral Scratchpad ($SCRATCH): For one-off test scripts, scratch notes, temporary data, working outputs, or benchmarks, write them using '$SCRATCH/<filename>'.
 - Persistent Artifacts ($ARTIFACTS): For milestone archives, architectural design docs, compaction snapshots, or permanent state briefs, write them using '$ARTIFACTS/<filename>'.

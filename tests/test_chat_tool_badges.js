@@ -98,6 +98,34 @@ async function runTests() {
         assert.strictEqual(listDirCfg.displayCmd, "LIST DIR: src");
     }
 
+    // 4.5. Planning & Subagent tools
+    console.log("Test: planning & subagent tools (write_todos, task)");
+    {
+        const todoCfg = getToolBadgeConfig("write_todos", {
+            todos: [
+                { id: "1", content: "Inspect codebase", status: "completed" },
+                { id: "2", content: "Implement feature", status: "in_progress" },
+                { id: "3", content: "Run test suite", status: "pending" }
+            ]
+        });
+        assert.strictEqual(todoCfg.icon, "list-todo");
+        assert.strictEqual(todoCfg.label, "Task plan");
+        assert(todoCfg.detail.includes("1/3 completed"), "Detail must show completed count");
+        assert(todoCfg.detail.includes("Implement feature"), "Detail must show in-progress task");
+        assert.strictEqual(todoCfg.isCommandTask, true);
+        assert(todoCfg.displayCmd.includes("[✓] Inspect codebase"), "Display command must format completed todo");
+        assert(todoCfg.displayCmd.includes("[▶] Implement feature"), "Display command must format active todo");
+
+        const subagentCfg = getToolBadgeConfig("task", {
+            instruction: "Search for documentation on React view transitions",
+            subagent_type: "researcher"
+        });
+        assert.strictEqual(subagentCfg.icon, "bot");
+        assert.strictEqual(subagentCfg.label, "Subagent [researcher]");
+        assert.strictEqual(subagentCfg.detail, "Search for documentation on React view transitions");
+        assert.strictEqual(subagentCfg.isCommandTask, true);
+    }
+
     // 5. Timer tools
     console.log("Test: timer tools");
     {
