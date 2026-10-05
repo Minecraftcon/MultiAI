@@ -51,22 +51,32 @@ function generateUnifiedDiff(oldStr, newStr, filename = "file") {
     diffLines.push(`@@ -${startContext + 1},${oldRangeLen} +${startContext + 1},${newRangeLen} @@`);
 
     for (let i = startContext; i < prefix; i++) {
-        diffLines.push(`  ${oldLines[i]}`);
+        diffLines.push(` ${oldLines[i]}`);
     }
 
+    let deletions = 0;
     for (let i = prefix; i < oldLines.length - suffix; i++) {
-        diffLines.push(`- ${oldLines[i]}`);
+        diffLines.push(`-${oldLines[i]}`);
+        deletions++;
     }
 
+    let additions = 0;
     for (let i = prefix; i < newLines.length - suffix; i++) {
-        diffLines.push(`+ ${newLines[i]}`);
+        diffLines.push(`+${newLines[i]}`);
+        additions++;
     }
 
     for (let i = oldLines.length - suffix; i < endContextOld; i++) {
-        diffLines.push(`  ${oldLines[i]}`);
+        diffLines.push(` ${oldLines[i]}`);
     }
 
-    return diffLines.join("\n");
+    const diffStr = diffLines.join("\n");
+    return {
+        diff: diffStr,
+        additions,
+        deletions,
+        toString() { return diffStr; }
+    };
 }
 
 function countOccurrences(source, search) {
@@ -446,7 +456,7 @@ async function handleReplaceFileContent(args, chatId, { resolveSafePath }) {
 
     const oldLinesCount = content.split("\n").length;
     const newLinesCount = newContent.split("\n").length;
-    const diff = generateUnifiedDiff(content, newContent, path.basename(rawPath));
+    const diffRes = generateUnifiedDiff(content, newContent, path.basename(rawPath));
 
     return {
         status: "success",
@@ -456,10 +466,12 @@ async function handleReplaceFileContent(args, chatId, { resolveSafePath }) {
         lines_before: oldLinesCount,
         lines_after: newLinesCount,
         lines_diff: newLinesCount - oldLinesCount,
+        lines_added: diffRes.additions,
+        lines_removed: diffRes.deletions,
         bytes_written: Buffer.byteLength(finalContent, "utf-8"),
         instruction: args.instruction || args.Instruction || null,
         description: args.description || args.Description || null,
-        diff,
+        diff: diffRes.diff,
         message: `Successfully replaced content in ${rawPath}`
     };
 }
@@ -608,7 +620,7 @@ async function handleMultiReplaceFileContent(args, chatId, { resolveSafePath }) 
 
     const oldLinesCount = originalContent.replace(/\r\n/g, "\n").split("\n").length;
     const newLinesCount = currentContent.split("\n").length;
-    const diff = generateUnifiedDiff(originalContent.replace(/\r\n/g, "\n"), currentContent, path.basename(rawPath));
+    const diffRes = generateUnifiedDiff(originalContent.replace(/\r\n/g, "\n"), currentContent, path.basename(rawPath));
 
     return {
         status: "success",
@@ -618,10 +630,12 @@ async function handleMultiReplaceFileContent(args, chatId, { resolveSafePath }) 
         lines_before: oldLinesCount,
         lines_after: newLinesCount,
         lines_diff: newLinesCount - oldLinesCount,
+        lines_added: diffRes.additions,
+        lines_removed: diffRes.deletions,
         bytes_written: Buffer.byteLength(finalContent, "utf-8"),
         instruction: args.instruction || args.Instruction || null,
         description: args.description || args.Description || null,
-        diff,
+        diff: diffRes.diff,
         message: `Successfully applied ${chunks.length} replacement chunks in ${rawPath}`
     };
 }
@@ -638,17 +652,41 @@ async function handleWriteFile(args, chatId, { resolveSafePath }) {
     const parentDir = path.dirname(targetPath);
     await fs.promises.mkdir(parentDir, { recursive: true });
 
+    let existingContent = null;
+    let isOverwrite = false;
+    if (fs.existsSync(targetPath)) {
+        try {
+            existingContent = await fs.promises.readFile(targetPath, "utf-8");
+            isOverwrite = true;
+        } catch {}
+    }
+
     const contentStr = String(args.content);
     await fs.promises.writeFile(targetPath, contentStr, "utf-8");
 
     const lineCount = contentStr.split("\n").length;
     const byteCount = Buffer.byteLength(contentStr, "utf-8");
 
+    let diff = null;
+    let linesAdded = lineCount;
+    let linesRemoved = 0;
+
+    if (isOverwrite && existingContent !== null) {
+        const diffRes = generateUnifiedDiff(existingContent.replace(/\r\n/g, "\n"), contentStr.replace(/\r\n/g, "\n"), path.basename(args.path));
+        diff = diffRes.diff;
+        linesAdded = diffRes.additions;
+        linesRemoved = diffRes.deletions;
+    }
+
     return {
         path: args.path,
         resolved_path: targetPath,
         bytes_written: byteCount,
         line_count: lineCount,
+        lines_added: linesAdded,
+        lines_removed: linesRemoved,
+        is_overwrite: isOverwrite,
+        diff,
         status: "success",
         message: `Successfully wrote ${byteCount} bytes (${lineCount} lines) to ${args.path}`
     };

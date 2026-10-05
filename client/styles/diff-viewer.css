@@ -1,0 +1,322 @@
+/* =========================================================
+   MODERN DIFF & FILE VIEWER STYLES
+   Clean, minimalist card design.
+   ========================================================= */
+
+.modern-viewer-window {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    margin: 8px 0;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-subtle);
+    border-radius: 12px;
+    overflow: hidden;
+    font-family: var(--font-sans);
+    color: var(--text-primary);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    transition: all 0.2s ease;
+}
+
+.modern-viewer-window:hover {
+    border-color: var(--border-hover);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+}
+
+/* ---------------------------------------------------------
+   1. Header
+   --------------------------------------------------------- */
+.mv-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 14px;
+    background: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border-subtle);
+    user-select: none;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.mv-header-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    font-weight: 500;
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.mv-file-icon {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.mv-file-icon svg {
+    width: 16px;
+    height: 16px;
+}
+
+.mv-filename {
+    letter-spacing: -0.01em;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.mv-stats {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.mv-stat {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: var(--bg-primary);
+}
+
+.mv-stat.add {
+    color: var(--text-success, #73c991);
+    background: var(--bg-success-subtle, rgba(115, 201, 145, 0.1));
+}
+
+.mv-stat.del {
+    color: var(--text-danger, #f14c4c);
+    background: var(--bg-danger-subtle, rgba(241, 76, 76, 0.1));
+}
+
+.mv-stat.neutral {
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+/* Header Actions */
+.mv-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.mv-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    color: var(--text-muted);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.mv-btn svg {
+    width: 14px;
+    height: 14px;
+}
+
+.mv-btn:hover {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    border-color: var(--border-subtle);
+}
+
+.mv-btn.active {
+    background: var(--bg-accent-subtle);
+    color: var(--text-accent);
+}
+
+.mv-btn.copied {
+    color: var(--text-success, #73c991);
+}
+
+/* ---------------------------------------------------------
+   2. Hunk Banner
+   --------------------------------------------------------- */
+.mv-hunk-banner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    background: var(--bg-accent-subtle);
+    border-top: 1px solid var(--border-subtle);
+    border-bottom: 1px solid var(--border-subtle);
+    color: var(--text-accent);
+    font-size: 12px;
+    font-family: var(--font-mono);
+}
+
+.mv-hunk-tag {
+    font-weight: 600;
+}
+
+.mv-hunk-context {
+    opacity: 0.8;
+}
+
+/* ---------------------------------------------------------
+   3. Viewer Body
+   --------------------------------------------------------- */
+.mv-body {
+    overflow-x: auto;
+    overflow-y: auto;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    background: var(--bg-primary);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+/* Scrollbar */
+.mv-body::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+.mv-body::-webkit-scrollbar-track {
+    background: transparent;
+}
+.mv-body::-webkit-scrollbar-thumb {
+    background: var(--border-subtle);
+    border-radius: 4px;
+}
+.mv-body::-webkit-scrollbar-thumb:hover {
+    background: var(--text-muted);
+}
+
+.mv-table {
+    display: flex;
+    flex-direction: column;
+    min-width: 100%;
+    width: fit-content;
+    padding: 8px 0;
+    box-sizing: border-box;
+}
+
+/* Rows */
+.mv-row {
+    display: flex;
+    align-items: stretch;
+    width: 100%;
+    min-width: fit-content;
+    padding: 0 16px 0 0;
+    box-sizing: border-box;
+}
+
+/* Gutter (Line Numbers) */
+.mv-gutter {
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-end;
+    user-select: none;
+    flex-shrink: 0;
+    min-width: 48px;
+    padding: 0 12px 0 8px;
+    color: var(--text-muted);
+    opacity: 0.7;
+}
+
+.mv-num {
+    font-size: 12px;
+}
+
+/* Code Line */
+.mv-code-line {
+    flex: 1;
+    white-space: pre;
+    tab-size: 4;
+    color: var(--text-primary);
+    padding: 0 4px;
+}
+
+.modern-viewer-window.word-wrap .mv-table {
+    width: 100%;
+    min-width: 0;
+}
+
+.modern-viewer-window.word-wrap .mv-row {
+    width: 100%;
+    min-width: 0;
+}
+
+.modern-viewer-window.word-wrap .mv-code-line {
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+/* Context / Add / Del lines */
+.mv-row-add {
+    background: var(--bg-success-subtle, rgba(115, 201, 145, 0.08));
+    border-left: 2px solid var(--text-success, #73c991);
+}
+.mv-row-add .mv-code-line {
+    color: var(--text-success, #c7f7d4);
+}
+.mv-row-add .mv-gutter {
+    color: var(--text-success, #73c991);
+    opacity: 1;
+    padding-left: 6px; /* offset for border */
+}
+
+.mv-row-del {
+    background: var(--bg-danger-subtle, rgba(241, 76, 76, 0.08));
+    border-left: 2px solid var(--text-danger, #f14c4c);
+}
+.mv-row-del .mv-code-line {
+    color: var(--text-danger, #ffb8b8);
+    text-decoration: line-through;
+    opacity: 0.8;
+}
+.mv-row-del .mv-gutter {
+    color: var(--text-danger, #f14c4c);
+    opacity: 1;
+    padding-left: 6px; /* offset for border */
+}
+
+.mv-row-ctx {
+    border-left: 2px solid transparent;
+}
+.mv-row-ctx .mv-gutter {
+    padding-left: 6px;
+}
+
+.mv-empty {
+    padding: 24px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 13px;
+}
+
+/* ---------------------------------------------------------
+   4. Badge Integration
+   --------------------------------------------------------- */
+.badge-collapse:has(.modern-viewer-window) {
+    min-width: 0;
+    max-width: calc(100% - 48px);
+    width: auto;
+}
+
+.badge-collapse:has(.modern-viewer-window) .badge-collapse-inner {
+    padding: 0;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+}
+
+.badge-collapse:has(.modern-viewer-window) .modern-viewer-window {
+    margin: 4px 0;
+}

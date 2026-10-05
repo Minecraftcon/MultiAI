@@ -3,6 +3,7 @@
  */
 import { renderIcons } from "../utils/icons.js";
 import { escapeHTML } from "../utils/dom.js";
+import { renderDiffCardHtml, renderCodeViewerCardHtml, bindDiffViewerCards } from "../components/diff-viewer.js";
 
 /**
  * Initializes visual timers and indicators on tool badge start.
@@ -162,6 +163,50 @@ export function onToolComplete(name, args, badgeEl, data) {
                     </div>
                 </div>`;
                 resEl.innerHTML = checklistHtml;
+                return;
+            }
+
+            const collapseInner = badgeEl._collapseDiv.querySelector(".badge-collapse-inner") || badgeEl._collapseDiv;
+
+            if ((name === "replace_file_content" || name === "multi_replace_file_content" || name === "search_and_replace") && data.diff) {
+                const filePath = data.path || args.TargetFile || args.path || args.file_path || "";
+                const stats = {
+                    additions: data.lines_added,
+                    deletions: data.lines_removed
+                };
+                collapseInner.innerHTML = renderDiffCardHtml({
+                    diffStr: data.diff,
+                    filePath,
+                    stats
+                });
+                bindDiffViewerCards(collapseInner);
+                renderIcons(collapseInner);
+                return;
+            }
+
+            if (name === "read_file" && !(data.type === "image" || (typeof data.mime === "string" && data.mime.startsWith("image/"))) && data.content !== undefined) {
+                const filePath = data.path || args.AbsolutePath || args.path || args.file_path || "";
+                const startLine = args.StartLine || 1;
+                collapseInner.innerHTML = renderCodeViewerCardHtml({
+                    code: data.content,
+                    filePath,
+                    startLine
+                });
+                bindDiffViewerCards(collapseInner);
+                renderIcons(collapseInner);
+                return;
+            }
+
+            if (name === "write_file" && (args.content || args.CodeContent || data.content)) {
+                const filePath = data.path || args.TargetFile || args.path || args.file_path || "";
+                const content = args.content || args.CodeContent || data.content || "";
+                collapseInner.innerHTML = renderCodeViewerCardHtml({
+                    code: content,
+                    filePath,
+                    startLine: 1
+                });
+                bindDiffViewerCards(collapseInner);
+                renderIcons(collapseInner);
                 return;
             }
 

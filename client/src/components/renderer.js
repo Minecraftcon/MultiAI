@@ -3,6 +3,7 @@
    ========================================================= */
 import { escapeHTML } from "../utils/dom.js";
 import { renderIcons } from "../utils/icons.js";
+import { renderDiffCardHtml, bindDiffViewerCards } from "./diff-viewer.js";
 
 let _mermaidPromise = null;
 export function ensureMermaid() {
@@ -171,6 +172,10 @@ if (markedRenderer) {
 
         if (cleanLang === "plan" || cleanLang === "stepper" || cleanLang === "deepsearch-plan") {
             return renderDeepSearchStepper(rawCode);
+        }
+
+        if (cleanLang === "diff" || cleanLang === "patch") {
+            return renderDiffCardHtml({ diffStr: rawCode, title: "diff" });
         }
 
         const isSingleLine = !rawCode.trim().includes("\n");
@@ -787,6 +792,7 @@ export function bindAIImageCards(container, immediate = false) {
 }
 
 export function bindInteractiveCodeBlocks(container) {
+    bindDiffViewerCards(container);
     container.querySelectorAll(".code-container").forEach(block => {
         if (block.dataset.bound) return;
         block.dataset.bound = "true";
