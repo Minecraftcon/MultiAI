@@ -191,12 +191,13 @@ if (markedRenderer) {
             return `
             <div class="code-container mermaid-container" data-code="${encoded}">
                 <div class="code-lang-header">
-                    <div class="code-mode-pill">
-                        <button type="button" class="pill-btn active code-mode-diagram">
+                    <div class="code-mode-pill" role="tablist">
+                        <div class="code-mode-pill-thumb" aria-hidden="true"></div>
+                        <button type="button" class="pill-btn active code-mode-diagram" role="tab" aria-selected="true">
                             <i data-lucide="git-merge"></i>
                             <span>Chart</span>
                         </button>
-                        <button type="button" class="pill-btn code-mode-code">
+                        <button type="button" class="pill-btn code-mode-code" role="tab" aria-selected="false">
                             <i data-lucide="code"></i>
                             <span>Code</span>
                         </button>
@@ -225,12 +226,13 @@ if (markedRenderer) {
             <div class="code-container" data-code="${encoded}">
                 <div class="code-lang-header">
                     ${isPlayable ? `
-                    <div class="code-mode-pill">
-                        <button type="button" class="pill-btn active code-mode-code">
+                    <div class="code-mode-pill" role="tablist">
+                        <div class="code-mode-pill-thumb" aria-hidden="true"></div>
+                        <button type="button" class="pill-btn active code-mode-code" role="tab" aria-selected="true">
                             <i data-lucide="code"></i>
                             <span>Code</span>
                         </button>
-                        <button type="button" class="pill-btn code-mode-play">
+                        <button type="button" class="pill-btn code-mode-play" role="tab" aria-selected="false">
                             <i data-lucide="play"></i>
                             <span>Play</span>
                         </button>
@@ -797,25 +799,53 @@ export function bindInteractiveCodeBlocks(container) {
         const iframe = block.querySelector(".code-preview-frame");
         const copyBtn = block.querySelector(".code-copy-btn");
 
+        const pill = block.querySelector(".code-mode-pill");
+        const pillThumb = block.querySelector(".code-mode-pill-thumb");
+
+        function updateCodePillThumb(activeBtn) {
+            if (!pill || !pillThumb || !activeBtn) return;
+            const left = activeBtn.offsetLeft;
+            const width = activeBtn.offsetWidth;
+            pillThumb.style.width = `${width}px`;
+            pillThumb.style.transform = `translateX(${left}px)`;
+        }
+
+        // Initialize thumb position on next frame
+        if (pill && pillThumb) {
+            requestAnimationFrame(() => {
+                const initialActive = pill.querySelector(".pill-btn.active");
+                if (initialActive) updateCodePillThumb(initialActive);
+            });
+        }
+
         if (diagramBtn && codeBtn && bubble) {
             diagramBtn.addEventListener("click", () => {
                 diagramBtn.classList.add("active");
+                diagramBtn.setAttribute("aria-selected", "true");
                 codeBtn.classList.remove("active");
+                codeBtn.setAttribute("aria-selected", "false");
                 bubble.classList.add("view-diagram");
+                updateCodePillThumb(diagramBtn);
             });
 
             codeBtn.addEventListener("click", () => {
                 codeBtn.classList.add("active");
+                codeBtn.setAttribute("aria-selected", "true");
                 diagramBtn.classList.remove("active");
+                diagramBtn.setAttribute("aria-selected", "false");
                 bubble.classList.remove("view-diagram");
+                updateCodePillThumb(codeBtn);
             });
         }
 
         if (playBtn && codeBtn && iframe && bubble) {
             playBtn.addEventListener("click", () => {
                 playBtn.classList.add("active");
+                playBtn.setAttribute("aria-selected", "true");
                 codeBtn.classList.remove("active");
+                codeBtn.setAttribute("aria-selected", "false");
                 bubble.classList.add("view-preview");
+                updateCodePillThumb(playBtn);
 
                 if (!iframe.srcdoc) {
                     iframe.srcdoc = rawCode;
@@ -824,8 +854,11 @@ export function bindInteractiveCodeBlocks(container) {
 
             codeBtn.addEventListener("click", () => {
                 codeBtn.classList.add("active");
+                codeBtn.setAttribute("aria-selected", "true");
                 playBtn.classList.remove("active");
+                playBtn.setAttribute("aria-selected", "false");
                 bubble.classList.remove("view-preview");
+                updateCodePillThumb(codeBtn);
             });
         }
 
