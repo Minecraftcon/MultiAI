@@ -8,6 +8,7 @@ const { handleDeepSearchRoute } = require("./routes/deepsearch");
 const { handleChat, handleAgentStream } = require("./routes/chat");
 const { handleConversationsRoute } = require("./routes/conversations");
 const { handleBuildProjectsRoute, handleValidateDirRoute } = require("./routes/build_projects");
+const { handleBuildAgentRoute } = require("./routes/build_agent");
 const { sendJSON } = require("./utils");
 
 async function routeRequest(req, res) {
@@ -97,6 +98,9 @@ async function routeRequest(req, res) {
         }
         if (reqUrl.startsWith("/api/build/projects")) {
             return handleBuildProjectsRoute(req, res);
+        }
+        if (reqUrl.startsWith("/api/build/agent")) {
+            return handleBuildAgentRoute(req, res);
         }
 
         // Static assets

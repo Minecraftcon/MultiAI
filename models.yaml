@@ -115,15 +115,32 @@ providers:
         name: "MiniMax M2.7 (Reasoning & Tools)"
         supports_tools: true
         supports_vision: false
+        max_context_tokens: 180000
       - id: "codestral-latest"
         name: "Codestral Latest (Coding Specialist & Tools)"
         supports_tools: true
         supports_vision: false
+        max_context_tokens: 32000
       - id: "DeepSeek-V4-Flash-0731"
         name: "DeepSeek V4 Flash (Tools)"
         supports_tools: true
         supports_vision: false
-
+        max_context_tokens: 400000
+      - id: "GLM-5.3-Flash"
+        name: "GLM 5.3 Flash (Turbo & Tools)"
+        supports_tools: true
+        supports_vision: false
+        max_context_tokens: 400000
+      - id: "mistral-Nemo-Instruct-2407"
+        name: "Mistral NeMo 12B Instruct (Turbo)"
+        supports_tools: false
+        supports_vision: false
+        max_context_tokens: 128000
+      - id: "nemotron-3-nano:30b"
+        name: "Nemotron 3 Nano 30B (Turbo & 1M Context)"
+        supports_tools: true
+        supports_vision: false
+        max_context_tokens: 1000000
   logflare:
     name: "Logfare AI"
     type: "logflare"

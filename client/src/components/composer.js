@@ -7,6 +7,7 @@ import { logEvent } from "../utils/logger.js";
 import { renderIcons } from "../utils/icons.js";
 import { createNewChatSession, saveStoredChats, saveCurrentChatState } from "../services/storage.js";
 import { runAgent } from "../services/agent.js";
+import { startServerAgent, stopServerAgent } from "../agent/agent-bridge.js";
 import { createAIMessageShell } from "./chat-ui.js";
 import { hideMobileActions } from "./context-menu.js";
 import { renderChatList } from "./side-panel.js";
@@ -46,6 +47,9 @@ export function updateSendButtonState(active) {
 }
 
 export function stopChatGeneration(chatId) {
+    if (state.appMode === "build") {
+        stopServerAgent(chatId);
+    }
     const genState = state.activeGenerations[chatId];
     if (!genState || !genState.isGenerating) return;
 
@@ -172,6 +176,22 @@ export async function send() {
                 return `[Attached document: ${d.name} (${formatFileSize(d.size)})]`;
             }).join("\n\n");
             promptText = promptText ? `${promptText}\n\n${docContexts}` : docContexts;
+        }
+
+        const modelSelect = document.getElementById("modelSelect");
+        const session = state.chatSessions[targetChatId];
+        const selectedModel = session?.model || (modelSelect ? modelSelect.value : "gemini-2.5-flash");
+        const isPuter = Boolean(session?.provider === "puter" || selectedModel.includes("free") || selectedModel.includes("dots"));
+
+        if (state.appMode === "build" && state.currentProjectId && !isPuter) {
+            await startServerAgent({
+                projectId: state.currentProjectId,
+                chatId: targetChatId,
+                userText: promptText,
+                model: selectedModel,
+                currentAIMessage
+            });
+            return;
         }
 
         await runAgent(promptText, currentAIMessage, targetChatId, images);

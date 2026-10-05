@@ -19,7 +19,8 @@ import { bindInteractiveCodeBlocks, renderMermaidInElement, renderMath, bindAIIm
 import { updateSendButtonState } from "./composer.js";
 import { updateModelPickerDisplay } from "./model-picker.js";
 import { setStartPageMode } from "./chatbox.js";
-import { wrapHugeThoughts, renderSessionMessages } from "./chat-ui.js";
+import { wrapHugeThoughts, renderSessionMessages, createAIMessageShell } from "./chat-ui.js";
+import { checkAgentStatus, connectAgentStream } from "../agent/agent-bridge.js";
 
 export const collapsedProjects = new Set();
 export let activeMenuProjectId = null;
@@ -321,7 +322,22 @@ export async function switchToBuildChat(projectId, chatId) {
 
     const hasUserMsg = Boolean(session.messages && session.messages.some(m => m.role === "user"));
     setStartPageMode(!hasUserMsg);
-    updateSendButtonState(false);
+
+    const status = await checkAgentStatus(chatId);
+    if (status && status.isRunning) {
+        state.activeGenerations[chatId] = {
+            isGenerating: true,
+            abortRequested: false,
+            abortController: new AbortController()
+        };
+        updateSendButtonState(true);
+        const lastMsg = chat?.querySelector(".message.ai:last-of-type");
+        const targetAIEl = lastMsg || createAIMessageShell();
+        connectAgentStream(chatId, targetAIEl);
+    } else {
+        updateSendButtonState(false);
+    }
+
     renderProjectList();
 }
 
