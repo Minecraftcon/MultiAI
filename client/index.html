@@ -78,6 +78,16 @@
 
 <!-- ================= SIDE PANEL ================= -->
 <aside id="sidePanel" class="side-panel" aria-hidden="true">
+    <!-- Panel Header: MultiAI Title & Collapse Button (Always pinned and accessible) -->
+    <div class="panel-header">
+        <div class="panel-brand">
+            <span class="panel-brand-title">MultiAI</span>
+        </div>
+        <button id="panelClose" class="icon-btn panel-close-btn" type="button" aria-label="Close panel" title="Close panel">
+            <i data-lucide="panel-left-close"></i>
+        </button>
+    </div>
+
     <!-- Search View Mode Bar (Revealed smoothly when in search mode) -->
     <div id="panelSearchBar" class="panel-search-bar" aria-hidden="true">
         <div class="panel-search-pill">
@@ -89,17 +99,8 @@
         </button>
     </div>
 
-    <!-- Normal Panel View: Header & Navigation -->
+    <!-- Normal Panel View: Navigation & Modes (Collapses when search is active) -->
     <div id="panelNormalView" class="panel-normal-view">
-        <!-- Panel Header: MultiAI Title & Collapse Button -->
-        <div class="panel-header">
-            <div class="panel-brand">
-                <span class="panel-brand-title">MultiAI</span>
-            </div>
-            <button id="panelClose" class="icon-btn panel-close-btn" type="button" aria-label="Close panel" title="Close panel">
-                <i data-lucide="panel-left-close"></i>
-            </button>
-        </div>
 
         <!-- Mode Switcher Pill (Chat / Build) -->
         <div class="panel-mode-wrap">

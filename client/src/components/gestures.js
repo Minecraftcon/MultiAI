@@ -182,12 +182,8 @@ export function initGestures() {
     closePanel(false);
     const { panelToggle, panelClose, backdrop } = getElements();
 
-    let lastToggleTime = 0;
     const handleToggle = (e) => {
-        const now = Date.now();
-        if (now - lastToggleTime < 150) return;
-        lastToggleTime = now;
-        if (e && e.type !== "click" && e.cancelable) {
+        if (e && e.cancelable && e.type === "touchend") {
             e.preventDefault();
         }
         togglePanel();
@@ -195,15 +191,10 @@ export function initGestures() {
 
     if (panelToggle) {
         panelToggle.addEventListener("click", handleToggle);
-        panelToggle.addEventListener("touchend", handleToggle);
     }
 
-    let lastCloseTime = 0;
     const handleClose = (e) => {
-        const now = Date.now();
-        if (now - lastCloseTime < 150) return;
-        lastCloseTime = now;
-        if (e && e.type !== "click" && e.cancelable) {
+        if (e && e.cancelable && e.type === "touchend") {
             e.preventDefault();
         }
         closePanel(true);
@@ -211,12 +202,10 @@ export function initGestures() {
 
     if (panelClose) {
         panelClose.addEventListener("click", handleClose);
-        panelClose.addEventListener("touchend", handleClose);
     }
 
     if (backdrop) {
         backdrop.addEventListener("click", handleClose);
-        backdrop.addEventListener("touchend", handleClose);
     }
 
     window.addEventListener("touchstart", (e) => {

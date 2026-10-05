@@ -10,7 +10,6 @@
     flex-direction: column;
     position: relative;
     overflow-x: hidden;
-    transform: translateX(0px);
     background: var(--bg);
 }
 

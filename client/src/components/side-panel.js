@@ -84,37 +84,21 @@ export function setPanelSearchMode(enabled) {
     const searchToggle = document.getElementById("panelSearchToggle");
     if (!sidePanel) return;
 
-    const performUpdate = () => {
-        if (enabled) {
-            sidePanel.classList.add("search-active");
-            if (searchBar) searchBar.setAttribute("aria-hidden", "false");
-        } else {
-            sidePanel.classList.remove("search-active");
-            if (searchBar) searchBar.setAttribute("aria-hidden", "true");
-            if (searchInput) searchInput.value = "";
-            currentSearchFilter = "";
-            renderChatList();
-        }
-    };
-
-    if (document.startViewTransition) {
-        const transition = document.startViewTransition(() => {
-            performUpdate();
-        });
-        transition.finished.finally(() => {
-            if (enabled) {
-                searchInput?.focus();
-            } else {
-                searchToggle?.focus();
-            }
-        });
-    } else {
-        performUpdate();
-        if (enabled) {
+    if (enabled) {
+        sidePanel.classList.add("search-active");
+        if (searchBar) searchBar.setAttribute("aria-hidden", "false");
+        setTimeout(() => {
             searchInput?.focus();
-        } else {
+        }, 50);
+    } else {
+        sidePanel.classList.remove("search-active");
+        if (searchBar) searchBar.setAttribute("aria-hidden", "true");
+        if (searchInput) searchInput.value = "";
+        currentSearchFilter = "";
+        renderChatList();
+        setTimeout(() => {
             searchToggle?.focus();
-        }
+        }, 50);
     }
 }
 
