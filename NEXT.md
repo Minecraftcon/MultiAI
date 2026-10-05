@@ -1,103 +1,151 @@
-# NEXT: DeepSearch UI & Subsystem Registry
+# MultiAI: Upcoming Milestones & Architectural Roadmap (NEXT.md)
 
-This document tracks the DeepSearch feature in MultiAI:
-1. **What was removed from the UI** (the `+` menu item)
-2. **Where the code was and how to add it back**
-3. **Complete tracking and information of all DeepSearch files** across client, server, services, and tests.
+This living roadmap tracks active development priorities, architectural specifications, and subsystem registries for MultiAI.
 
 ---
 
-## 1. UI Removal Summary (+ Menu DeepSearch)
+## 1. Active Priority 1: Agent Execution Isolation & Sandboxing
 
-The DeepSearch toggle card was removed from the composer's **Attachment Bottom Sheet** (`+` button menu in the chat input).
+### The Problem
+In Build Mode and Agent workflows, the model can execute shell commands via `run_task` (`start.py` / Python task runner on port 5000) and modify files via file tools. Without sandboxing, an autonomous agent can:
+- Accidentally or intentionally overwrite core server code outside the project root (e.g. `src/server/utils.js`).
+- Mutate user configuration templates (e.g. `src/core/config.ini`).
+- Access sensitive dotfiles in the host home directory (`~/.ssh`, `~/.config`, `~/.bashrc`).
 
-- **Location in DOM**: `#attachSheet` > `.sheet-actions-grid`
-- **Trigger**: Clicking `#attachSheetBtn` (`+` button next to textarea) opens the bottom sheet drawer. Previously it showed 3 cards: **Image**, **Documents**, and **Deep Search**. It now cleanly displays 2 cards: **Image** and **Documents**.
-- **Reason for Removal**: Keeps the primary conversation input streamlined while preserving the entire underlying multi-agent engine, backend routes, state management, and rendering pipelines intact.
+### The Two-Layer Isolation Architecture
 
----
-
-## 2. Where It Was & How to Add It Back
-
-### The Removed Markup
-The button was located in [`client/index.html`](file:///home/shado/Documents/Web-projects/MultiAI/client/index.html) inside `<div class="sheet-actions-grid">` (directly after `<button id="pickDocBtn">`):
-
-```html
-        <button id="pickDeepSearchBtn" type="button" class="sheet-action-card">
-            <div class="sheet-action-icon search-icon-bg">
-                <i data-lucide="compass"></i>
-            </div>
-            <div class="sheet-action-text">
-                <div class="sheet-action-title-row">
-                    <span class="sheet-action-title">Deep Search</span>
-                    <span class="sheet-action-badge" id="deepSearchSheetBadge">OFF</span>
-                </div>
-                <span class="sheet-action-desc" id="deepSearchSheetDesc">Multi-agent research (New chats only)</span>
-            </div>
-        </button>
+```
+                              ┌─────────────────────────────────────────┐
+                              │            MultiAI Enforcer             │
+                              └────────────────────┬────────────────────┘
+                                                   │
+                   ┌───────────────────────────────┴───────────────────────────────┐
+                   ▼                                                               ▼
+        [Layer 1: Native Tools]                                         [Layer 2: run_task Execution]
+    read_file / write_file / list_dir                                  Shell commands & Python scripts
+                   │                                                               │
+  Enforce strict path boundary in JS:                             Detect host environment automatically:
+  • Path MUST resolve within Project Root,                        • Desktop Linux -> Bubblewrap (`bwrap`)
+    $SCRATCH, or $ARTIFACTS.                                      • Termux / Android -> `proot`
+  • Access to ~, /etc, parent dirs -> REJECTED.                   • Fallback -> User-confirmed unconfined
 ```
 
-### Step-by-Step Restoration Instructions
+#### Layer 1: JS-Level Path Boundary Enforcement (Immediate & Zero Overhead)
+- **Target File**: [`src/server/utils.js`](file:///home/shado/Documents/Web-projects/MultiAI/src/server/utils.js) -> `resolveSafePath(inputPath, chatId)`
+- **Behavior**:
+  - Resolve canonical paths for:
+    1. Active Project Root (`wsContext.project.rootPath`)
+    2. Chat Scratchpad Directory (`getChatScratchDir(chatId)`)
+    3. Chat Artifacts Directory (`getChatArtifactsDir(chatId)`)
+  - If a path resolves outside all three allowed roots, throw a strict `PermissionDeniedError`:
+    ```
+    Access Denied: Path '/home/shado/Documents/Web-projects/MultiAI/src/server/utils.js' is outside the active project workspace.
+    ```
+  - Eliminates rogue direct edits from `write_file`, `read_file`, and `list_dir`.
+
+#### Layer 2: Command Execution Sandbox (`run_task`)
+- **Target Files**: 
+  - `start.py` (Local Task Daemon port 5000)
+  - [`src/server/routes/tasks.js`](file:///home/shado/Documents/Web-projects/MultiAI/src/server/routes/tasks.js)
+  - [`src/core/config.ini`](file:///home/shado/Documents/Web-projects/MultiAI/src/core/config.ini)
+- **Engine Selection**:
+  1. **Desktop Linux -> Bubblewrap (`bwrap`)**:
+     - Uses unprivileged user namespaces (`CLONE_NEWUSER`). Requires no root.
+     - Mounts host `/usr`, `/lib`, `/bin` **read-only**.
+     - Binds `/tmp` as ephemeral `tmpfs`.
+     - Completely masks `~/.ssh` and host home directory.
+     - Mounts **read-write ONLY** to `$PROJECT_DIR` and `$SCRATCH_DIR`.
+     ```bash
+     bwrap --ro-bind / / \
+           --bind "$PROJECT_DIR" "$PROJECT_DIR" \
+           --bind "$SCRATCH_DIR" "$SCRATCH_DIR" \
+           --tmpfs /tmp \
+           --dev /dev \
+           --unshare-pid \
+           --dir /run/user/$(id -u) \
+           bash -c "$CMD"
+     ```
+  2. **Rootless Android (Termux) -> `proot`**:
+     - Bubblewrap cannot run on Android because Android kernels disable `CONFIG_USER_NS` and block unprivileged user namespaces.
+     - `proot` (`pkg install proot`) uses user-space `ptrace` syscall interception, which is **100% rootless** and supported by Android.
+     - Maps host project root and scratch directory, preventing access to the Termux home or Android storage outside the workspace:
+     ```bash
+     proot -b "$PROJECT_DIR":/workspace -b "$SCRATCH_DIR":/scratch -b "$PREFIX":/usr -w /workspace bash -c "$CMD"
+     ```
+- **Configuration Spec (`config.ini`)**:
+  ```ini
+  [Security]
+  Isolation = auto        # auto | bwrap | proot | none
+  AllowNetwork = true     # allow outbound network during build tasks
+  ProtectDotfiles = true  # hide ~/.ssh, ~/.config, ~/.env outside workspace
+  ```
+
+---
+
+## 2. Active Priority 2: Safe Streaming & Live Long-Think Reasoning
+
+### The Problem
+Modern reasoning models (DeepSeek-R1, OpenAI o1/o3/o4-mini, Claude 3.7 Sonnet Extended Thinking, Gemini 2.5 Flash Thinking) produce thousands of reasoning tokens before emitting an answer. In MultiAI:
+- Current `/api/chat` waits for the complete HTTP response, leaving the user with a blank "Working... (Xs)" spinner for 30–90 seconds.
+- Previous streaming attempts broke the UI due to:
+  1. **HTML & Markdown Parser Tearing**: Calling `parseMarkdown()` on incomplete chunks (`<think`, unclosed ````python`) broke DOM structure.
+  2. **Thought vs Content Collision**: Streaming reasoning and final answer into the same container caused text jumping and re-renders.
+  3. **Tool Call Leaks**: Partial JSON chunks (`{"command": ...}`) leaked into the message bubble.
+  4. **DOM Thrashing**: Rendering at 100Hz token arrival frequency caused scroll jank and high CPU usage.
+
+### The Solution Architecture
+
+1. **Structured SSE Protocol (`/api/chat/stream`)**:
+   Segregate streams by event type:
+   - `event: thought` -> Live reasoning tokens
+   - `event: tool_call` -> Live function call arguments
+   - `event: text` -> Live user-facing markdown tokens
+   - `event: done` -> Final message, duration, token usage
+
+2. **Frontend Dual-Buffer Engine**:
+   - [`client/src/components/chat-ui.js`](file:///home/shado/Documents/Web-projects/MultiAI/client/src/components/chat-ui.js) maintains two distinct in-memory buffers: `thoughtBuffer` and `contentBuffer`.
+   - `thoughtBuffer` streams directly into `.thought-box .thought-content` with a live stopwatch (`Thinking... 12s`).
+   - When the first `event: text` arrives, `.thought-box` collapses (or marks duration: `Thought for 12.4s`) and `contentBuffer` streams into `.final-content`.
+
+3. **`requestAnimationFrame` (RAF) 30 FPS Throttling**:
+   - Token chunks append to memory instantly.
+   - DOM updates are batched through a 30 FPS RAF loop (every ~30ms).
+   - Heavy post-processing (Prism syntax highlighting, Mermaid charts, KaTeX math) is deferred until `event: done`.
+
+4. **Stream-Tolerant Markdown Helper**:
+   - Detect unclosed code blocks (```````) in the buffer and append a virtual closing delimiter before parsing to prevent layout reflow during active typing.
+
+---
+
+## 3. Subsystem Registry: DeepSearch
+
+The DeepSearch subsystem remains fully intact across the codebase. The composer `+` bottom-sheet toggle card was detached to streamline conversational input.
+
+### Quick Restoration Guide
+To re-enable the DeepSearch card in the `+` menu:
 1. Open [`client/index.html`](file:///home/shado/Documents/Web-projects/MultiAI/client/index.html).
-2. Locate the `<div class="sheet-actions-grid">` container around lines 740–765:
+2. Inside `<div class="sheet-actions-grid">` (after `pickDocBtn`), insert:
    ```html
-   <div class="sheet-actions-grid">
-       <button id="pickImageBtn" type="button" class="sheet-action-card">...</button>
-       <button id="pickDocBtn" type="button" class="sheet-action-card">...</button>
-       <!-- PASTE pickDeepSearchBtn HERE -->
-   </div>
+   <button id="pickDeepSearchBtn" type="button" class="sheet-action-card">
+       <div class="sheet-action-icon search-icon-bg">
+           <i data-lucide="compass"></i>
+       </div>
+       <div class="sheet-action-text">
+           <div class="sheet-action-title-row">
+               <span class="sheet-action-title">Deep Search</span>
+               <span class="sheet-action-badge" id="deepSearchSheetBadge">OFF</span>
+           </div>
+           <span class="sheet-action-desc" id="deepSearchSheetDesc">Multi-agent research (New chats only)</span>
+       </div>
+   </button>
    ```
-3. Paste the removed HTML block shown above right below the `</button>` of `pickDocBtn`.
-4. Save the file.
-5. **No JavaScript modifications are needed!**
-   - [`client/src/components/bottom-sheet.js`](file:///home/shado/Documents/Web-projects/MultiAI/client/src/components/bottom-sheet.js) already contains all the event wiring, disabled-state checks (`updateDeepSearchAvailability()`), toast notifications, and state toggling (`setDeepSearchActive()`).
-   - When the button element with ID `pickDeepSearchBtn` is present in the DOM, `bottom-sheet.js` automatically binds to it on initialization.
+3. [`client/src/components/bottom-sheet.js`](file:///home/shado/Documents/Web-projects/MultiAI/client/src/components/bottom-sheet.js) automatically binds to `#pickDeepSearchBtn` on load. No JS changes are needed.
 
----
-
-## 3. Comprehensive File Tracking & DeepSearch Architecture
-
-All files related to DeepSearch remain fully intact in the codebase. Below is an architectural breakdown of every file, its purpose, and its responsibilities.
-
-### A. Frontend / Client-side Files
-
-| File | Purpose & Responsibilities |
-| :--- | :--- |
-| [`client/index.html`](file:///home/shado/Documents/Web-projects/MultiAI/client/index.html) | Root HTML template. Contains the attachment drawer structure (`#attachSheet`, `#attachBackdrop`, `.sheet-actions-grid`). |
-| [`client/src/components/bottom-sheet.js`](file:///home/shado/Documents/Web-projects/MultiAI/client/src/components/bottom-sheet.js) | Handles the attachment sheet drawer gestures and click handlers. Manages `updateDeepSearchAvailability()` (restricting DeepSearch to new chats without messages), badges ("ON", "OFF", "NEW CHATS ONLY"), and calls `setDeepSearchActive()`. |
-| [`client/src/components/chatbox.js`](file:///home/shado/Documents/Web-projects/MultiAI/client/src/components/chatbox.js) | Composer controller. Hosts `#attachSheetBtn` (`+` button), handles `#deepSearchPill` (active mode pill inside composer dock with close `X` button), and listens to the window event `"deepsearch-state-changed"`. |
-| [`client/src/components/deepsearch-bar.js`](file:///home/shado/Documents/Web-projects/MultiAI/client/src/components/deepsearch-bar.js) | Live polling & UI widget for active research tasks. Renders progress bar, step counter, live queries searched, page scrape count, stop button, and logs accordion. Polls `/api/deepsearch/status/:id`. |
-| [`client/src/components/renderer.js`](file:///home/shado/Documents/Web-projects/MultiAI/client/src/components/renderer.js) | Markdown renderer with dedicated support for DeepSearch research plans. Contains `renderDeepSearchStepper(rawText)` to format ```` ```plan ```` or ```` ```stepper ```` codeblocks into connected roadmap stepper cards. |
-| [`client/src/components/side-panel.js`](file:///home/shado/Documents/Web-projects/MultiAI/client/src/components/side-panel.js) | Chat session switcher. Reads `session.isDeepSearch`, resumes DeepSearch polling if switching into a chat with an active job (`/api/deepsearch/chat/:id`), and resets `setDeepSearchActive(false)` when starting a fresh chat. |
-| [`client/src/state/store.js`](file:///home/shado/Documents/Web-projects/MultiAI/client/src/state/store.js) | Central state store containing `isDeepSearchActive: false`. |
-| [`client/src/state/actions.js`](file:///home/shado/Documents/Web-projects/MultiAI/client/src/state/actions.js) | Action creator `setDeepSearchActive(active)`: toggles state flag and dispatches `"deepsearch-state-changed"` custom DOM event. |
-| [`client/src/tools/index.js`](file:///home/shado/Documents/Web-projects/MultiAI/client/src/tools/index.js) | Defines `getDeepSearchOnChatTools()` to restrict available tools in DeepSearch chats to isolated execution sandboxes. |
-| [`client/src/tools/filesystem/artifact-writer.js`](file:///home/shado/Documents/Web-projects/MultiAI/client/src/tools/filesystem/artifact-writer.js) | Tool for saving multi-step research reports and synthesized findings as downloadable project artifacts. |
-| [`client/styles/chat.css`](file:///home/shado/Documents/Web-projects/MultiAI/client/styles/chat.css) | Styles for `.deepsearch-stats-box`, `.deepsearch-stepper`, `.deepsearch-plan-card`, and research progress indicators. |
-| [`client/styles/composer.css`](file:///home/shado/Documents/Web-projects/MultiAI/client/styles/composer.css) | Styles for bottom sheet action cards (`.sheet-action-card`, `.sheet-actions-grid`) and composer mode pills (`#deepSearchPill`). |
-
----
-
-### B. Backend / Server-side Files
-
-| File | Purpose & Responsibilities |
-| :--- | :--- |
-| [`src/server/routes/deepsearch.js`](file:///home/shado/Documents/Web-projects/MultiAI/src/server/routes/deepsearch.js) | Dedicated HTTP REST route handler: <br>• `POST /api/deepsearch/start` (initiates multi-agent job)<br>• `GET /api/deepsearch/status/:id` (polls job progress & logs)<br>• `POST /api/deepsearch/stop/:id` (aborts execution)<br>• `GET /api/deepsearch/chat/:chatId` (retrieves job for session) |
-| [`src/server/router.js`](file:///home/shado/Documents/Web-projects/MultiAI/src/server/router.js) | Top-level HTTP router. Matches `/api/deepsearch/` prefix and forwards requests to `src/server/routes/deepsearch.js`. |
-| [`src/services/deepsearch/manager.js`](file:///home/shado/Documents/Web-projects/MultiAI/src/services/deepsearch/manager.js) | Job supervisor and lifecycle manager. Stores active/archived jobs, coordinates state updates, handles abort signals, and streams progress milestones. |
-| [`src/services/deepsearch/graph.js`](file:///home/shado/Documents/Web-projects/MultiAI/src/services/deepsearch/graph.js) | LangGraph multi-agent research workflow: <br>1. **Planner**: Analyzes query, forms research questions, and creates execution roadmap.<br>2. **Researcher**: Dispatches search queries, scrapes web pages, and synthesizes source extracts.<br>3. **Synthesizer / Reviewer**: Validates evidence, summarizes findings, and generates final comprehensive markdown document. |
-| [`src/services/deepsearch/tools.js`](file:///home/shado/Documents/Web-projects/MultiAI/src/services/deepsearch/tools.js) | Tool bindings for the research graph agents (search provider invocation, URL reader, summarizer). |
-| [`src/services/deepsearch/engines/duckduckgo.js`](file:///home/shado/Documents/Web-projects/MultiAI/src/services/deepsearch/engines/duckduckgo.js) | Search engine connector querying DuckDuckGo for live web links and snippets without requiring API keys. |
-| [`src/services/deepsearch/engines/google.js`](file:///home/shado/Documents/Web-projects/MultiAI/src/services/deepsearch/engines/google.js) | Google Custom Search API connector. |
-| [`src/services/deepsearch/engines/google_grounding.js`](file:///home/shado/Documents/Web-projects/MultiAI/src/services/deepsearch/engines/google_grounding.js) | Gemini-native Google Search Grounding provider. |
-| [`src/services/deepsearch/engines/fetch_page.js`](file:///home/shado/Documents/Web-projects/MultiAI/src/services/deepsearch/engines/fetch_page.js) | Web page scraper that downloads, parses HTML, and extracts clean markdown/text content for agent analysis. |
-
----
-
-### C. Test Files
-
-| File | Purpose & Responsibilities |
-| :--- | :--- |
-| [`tests/test_live_deepsearch.js`](file:///home/shado/Documents/Web-projects/MultiAI/tests/test_live_deepsearch.js) | End-to-end integration test verifying that the research graph compiles, queries search engines, and produces structured output. |
-| [`tests/test_deepsearch_isolated_tools.js`](file:///home/shado/Documents/Web-projects/MultiAI/tests/test_deepsearch_isolated_tools.js) | Verifies tool security isolation so DeepSearch sessions only invoke safe research tools and cannot execute unauthorized tools. |
-| [`tests/test_complete_screenshot.js`](file:///home/shado/Documents/Web-projects/MultiAI/tests/test_complete_screenshot.js) | Automated Puppeteer visual test verifying full UI layout, stepper rendering, and composer sheet behavior. |
+### DeepSearch Architecture & File Map
+- **Route Handler**: [`src/server/routes/deepsearch.js`](file:///home/shado/Documents/Web-projects/MultiAI/src/server/routes/deepsearch.js) (`/api/deepsearch/*`)
+- **Research Graph**: [`src/services/deepsearch/graph.js`](file:///home/shado/Documents/Web-projects/MultiAI/src/services/deepsearch/graph.js) (Planner -> Researcher -> Synthesizer)
+- **Lifecycle Manager**: [`src/services/deepsearch/manager.js`](file:///home/shado/Documents/Web-projects/MultiAI/src/services/deepsearch/manager.js)
+- **Search Engines**: [`src/services/deepsearch/engines/`](file:///home/shado/Documents/Web-projects/MultiAI/src/services/deepsearch/engines/) (DuckDuckGo, Google, Google Grounding, Fetch Page)
+- **UI Progress Bar**: [`client/src/components/deepsearch-bar.js`](file:///home/shado/Documents/Web-projects/MultiAI/client/src/components/deepsearch-bar.js)
+- **Stepper Renderer**: [`client/src/components/renderer.js`](file:///home/shado/Documents/Web-projects/MultiAI/client/src/components/renderer.js) (`renderDeepSearchStepper`)
+- **Tests**: [`tests/test_live_deepsearch.js`](file:///home/shado/Documents/Web-projects/MultiAI/tests/test_live_deepsearch.js), [`tests/test_deepsearch_isolated_tools.js`](file:///home/shado/Documents/Web-projects/MultiAI/tests/test_deepsearch_isolated_tools.js)

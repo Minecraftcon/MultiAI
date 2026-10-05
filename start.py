@@ -23,6 +23,7 @@ import threading
 import webbrowser
 import atexit
 import argparse
+import shutil
 
 # Enable unbuffered / line-buffered stdout so logs stream immediately
 if hasattr(sys.stdout, "reconfigure"):
@@ -95,6 +96,18 @@ def kill_process_on_port(port):
             except Exception:
                 pass
 
+def find_executable(name):
+    """Resolve executable path across platforms (handling .exe, .cmd, .bat on Windows)."""
+    found = shutil.which(name)
+    if found:
+        return found
+    if sys.platform == "win32":
+        for ext in [".cmd", ".bat", ".exe"]:
+            found = shutil.which(name + ext)
+            if found:
+                return found
+    return None
+
 def check_setup():
     """Verify prerequisites and auto-install missing packages."""
     print(f"\n{BOLD}{CYAN}=== MultiSearch AI Setup & Pre-Flight Check ==={RESET}\n", flush=True)
@@ -107,8 +120,13 @@ def check_setup():
     log_success(f"Python version: {py_ver.major}.{py_ver.minor}.{py_ver.micro}")
 
     # 2. Check Node.js
+    node_bin = find_executable("node")
+    if not node_bin:
+        log_error("Node.js is not installed or not in PATH.")
+        log_info("Please install Node.js (https://nodejs.org) to run MultiSearch AI.")
+        sys.exit(1)
     try:
-        node_ver = subprocess.check_output(["node", "-v"], text=True, stderr=subprocess.STDOUT).strip()
+        node_ver = subprocess.check_output([node_bin, "-v"], text=True, stderr=subprocess.STDOUT, shell=(sys.platform == "win32")).strip()
         log_success(f"Node.js found: {node_ver}")
     except (FileNotFoundError, subprocess.CalledProcessError):
         log_error("Node.js is not installed or not in PATH.")
@@ -116,8 +134,12 @@ def check_setup():
         sys.exit(1)
 
     # 3. Check npm
+    npm_bin = find_executable("npm")
+    if not npm_bin:
+        log_error("npm is not installed or not in PATH.")
+        sys.exit(1)
     try:
-        npm_ver = subprocess.check_output(["npm", "-v"], text=True, stderr=subprocess.STDOUT).strip()
+        npm_ver = subprocess.check_output([npm_bin, "-v"], text=True, stderr=subprocess.STDOUT, shell=(sys.platform == "win32")).strip()
         log_success(f"npm found: v{npm_ver}")
     except (FileNotFoundError, subprocess.CalledProcessError):
         log_error("npm is not installed or not in PATH.")
@@ -137,7 +159,7 @@ def check_setup():
 
     if missing_pkgs:
         log_warn(f"Node dependencies missing ({', '.join(missing_pkgs)}). Running 'npm install'...")
-        res = subprocess.run(["npm", "install"], cwd=root_dir)
+        res = subprocess.run([npm_bin, "install"], cwd=root_dir, shell=(sys.platform == "win32"))
         if res.returncode != 0:
             log_error("Failed to install npm dependencies.")
             sys.exit(1)
@@ -173,6 +195,8 @@ class ProcessSupervisor:
         self.is_shutting_down = False
         self.is_restarting = False
         self.start_time = time.time()
+        self.web_port = 8080
+        self.web_host = "0.0.0.0"
         self.lock = threading.Lock()
 
     def spawn(self, name, cmd, color=RESET, cwd=None, env=None):
@@ -257,18 +281,21 @@ class ProcessSupervisor:
                 else:
                     proc.kill()
 
-    def restart_service(self, name, port=8080):
+    def restart_service(self, name, port=None):
         """Restart a specific named service cleanly."""
         if name not in self.service_configs:
             log_error(f"Cannot restart unknown service: {name}")
             return False
 
+        target_port = port or self.web_port
+        probe_host = "127.0.0.1" if self.web_host in ("0.0.0.0", "", "::") else self.web_host
+
         self.is_restarting = True
         try:
-            log_info(f"Restarting {name}...")
+            log_info(f"Restarting {name} on port {target_port}...")
             self.stop_service(name)
             time.sleep(0.3)
-            kill_process_on_port(port)
+            kill_process_on_port(target_port)
             kill_process_on_port(5000)
             time.sleep(0.3)
 
@@ -278,7 +305,7 @@ class ProcessSupervisor:
             # Wait for service readiness
             ready = False
             for _ in range(40):
-                if is_port_in_use(port):
+                if is_port_in_use(target_port, host=probe_host):
                     ready = True
                     break
                 time.sleep(0.2)
@@ -329,18 +356,23 @@ class ProcessSupervisor:
                 else:
                     proc.kill()
 
-        # Clean up ports 8080 and 5000 to guarantee nothing lingers
-        kill_process_on_port(8080)
+        # Clean up configured web port and 5000 to guarantee nothing lingers
+        kill_process_on_port(self.web_port)
+        if self.web_port != 8080:
+            kill_process_on_port(8080)
         kill_process_on_port(5000)
 
         print(f"{GREEN}[MultiAI] All servers stopped cleanly. Goodbye!{RESET}\n", flush=True)
 
-def run_console(supervisor, root_dir, workspace_dir, port):
+def run_console(supervisor, root_dir, workspace_dir, port, host="0.0.0.0"):
     """Interactive server-side console."""
     try:
         import readline
     except ImportError:
         pass
+
+    display_host = "localhost" if host in ("0.0.0.0", "127.0.0.1", "") else host
+    probe_host = "127.0.0.1" if host in ("0.0.0.0", "", "::") else host
 
     def print_help():
         print(f"\n{BOLD}{CYAN}MultiAI Server Console Commands:{RESET}")
@@ -368,11 +400,11 @@ def run_console(supervisor, root_dir, workspace_dir, port):
 
         print(f"\n{BOLD}{CYAN}=== MultiAI Server Status ==={RESET}")
         print(f"  {BOLD}State:{RESET}        {GREEN}Running{RESET}")
-        print(f"  {BOLD}Web URL:{RESET}      {CYAN}http://localhost:{port}{RESET}")
+        print(f"  {BOLD}Web URL:{RESET}      {CYAN}http://{display_host}:{port}{RESET}")
         print(f"  {BOLD}Uptime:{RESET}       {uptime_str}")
         print(f"  {BOLD}Git Branch:{RESET}   {YELLOW}{branch}{RESET} ({commit})")
         print(f"  {BOLD}Workspace:{RESET}    {workspace_dir}")
-        print(f"  {BOLD}Ports:{RESET}        Web: {port} (active: {is_port_in_use(port)}), Task Server: 5000 (active: {is_port_in_use(5000)})")
+        print(f"  {BOLD}Ports:{RESET}        Web: {port} (active: {is_port_in_use(port, host=probe_host)}), Task Server: 5000 (active: {is_port_in_use(5000, host='127.0.0.1')})")
         print(f"  {BOLD}Processes:{RESET}")
         for name, proc in list(supervisor.processes):
             p_status = "Alive" if proc.poll() is None else f"Exited ({proc.returncode})"
@@ -392,7 +424,7 @@ def run_console(supervisor, root_dir, workspace_dir, port):
                 if "Already up to date." not in out or force_restart:
                     log_success("Updates detected! Restarting server to apply updates...")
                     if supervisor.restart_service("Server", port=port):
-                        log_success(f"MultiAI updated and live at http://localhost:{port}")
+                        log_success(f"MultiAI updated and live at http://{display_host}:{port}")
                     else:
                         log_error("Restart failed after pull. Type 'restart' to try again.")
                 else:
@@ -464,26 +496,42 @@ def run_console(supervisor, root_dir, workspace_dir, port):
 
 import configparser
 
-def get_config_port(default_port=8080):
+def get_config_general(default_port=8080, default_host="0.0.0.0"):
+    port = default_port
+    host = default_host
     try:
         cfg = configparser.ConfigParser()
-        ini_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.ini")
+        root_dir = os.path.dirname(os.path.abspath(__file__))
+        ini_path = os.environ.get("MULTIAI_CONFIG_PATH") or os.path.join(root_dir, "config.ini")
+        if not os.path.exists(ini_path):
+            ini_path = os.path.join(root_dir, "src", "core", "config.ini")
         if os.path.exists(ini_path):
             cfg.read(ini_path)
-            if "General" in cfg and "Port" in cfg["General"]:
-                return int(cfg["General"]["Port"])
+            if "General" in cfg:
+                if "Port" in cfg["General"]:
+                    val = str(cfg["General"]["Port"]).strip()
+                    if val.isdigit():
+                        port = int(val)
+                if "Host" in cfg["General"]:
+                    h = str(cfg["General"]["Host"]).strip().strip("\"'")
+                    if h:
+                        host = h
     except Exception:
         pass
-    return default_port
+    return port, host
 
 def main():
-    configured_port = get_config_port(8080)
+    configured_port, configured_host = get_config_general(8080, "0.0.0.0")
     parser = argparse.ArgumentParser(description="MultiAI Universal Starter & Supervisor")
     parser.add_argument("--check-only", action="store_true", help="Run setup check and exit without starting servers")
     parser.add_argument("--no-browser", action="store_true", help="Do not open browser automatically")
     parser.add_argument("--port", type=int, default=configured_port, help=f"Web server port (default: {configured_port})")
+    parser.add_argument("--host", type=str, default=configured_host, help=f"Web server host (default: {configured_host})")
     parser.add_argument("--workspace", type=str, default=None, help="Target workspace directory (default: current directory)")
     args = parser.parse_args()
+
+    probe_host = "127.0.0.1" if args.host in ("0.0.0.0", "", "::") else args.host
+    display_host = "localhost" if args.host in ("0.0.0.0", "127.0.0.1", "") else args.host
 
     root_dir = os.path.dirname(os.path.abspath(__file__))
     workspace_dir = os.path.abspath(args.workspace or os.environ.get("MULTIAI_WORKSPACE_DIR") or os.getcwd())
@@ -498,12 +546,15 @@ def main():
 
     # 2. Check for port conflicts and clean up stale instances
     for p in (args.port, 5000):
-        if is_port_in_use(p):
+        target_probe = probe_host if p == args.port else "127.0.0.1"
+        if is_port_in_use(p, host=target_probe):
             log_warn(f"Port {p} is in use by a stale process. Releasing port...")
             kill_process_on_port(p)
             time.sleep(0.4)
 
     supervisor = ProcessSupervisor()
+    supervisor.web_port = args.port
+    supervisor.web_host = args.host
 
     # Register exit handlers for auto-kill on stop
     def handle_signal(sig, frame):
@@ -519,27 +570,35 @@ def main():
     # 3. Start Node.js Web Server (which also supervises the Python task server on port 5000)
     server_script = os.path.join(root_dir, "src", "index.js")
     node_env = os.environ.copy()
+    node_env["PORT"] = str(args.port)
+    node_env["HOST"] = str(args.host)
     node_env["MULTIAI_REPO_DIR"] = root_dir
     node_env["MULTIAI_WORKSPACE_DIR"] = workspace_dir
     node_env["MULTIAI_SUPERVISED"] = "1"
+    ini_path = os.environ.get("MULTIAI_CONFIG_PATH") or os.path.join(root_dir, "config.ini")
+    if not os.path.exists(ini_path):
+        ini_path = os.path.join(root_dir, "src", "core", "config.ini")
+    node_env["MULTIAI_CONFIG_PATH"] = ini_path
+
     node_modules_path = os.path.join(root_dir, "node_modules")
     existing_node_path = node_env.get("NODE_PATH", "")
     node_env["NODE_PATH"] = f"{node_modules_path}:{existing_node_path}" if existing_node_path else node_modules_path
     existing_py_path = node_env.get("PYTHONPATH", "")
     node_env["PYTHONPATH"] = f"{root_dir}:{existing_py_path}" if existing_py_path else root_dir
 
-    log_info(f"Starting MultiAI on port {args.port} (workspace: {workspace_dir})...")
-    supervisor.spawn("Server", ["node", "--watch", server_script], color=GREEN, cwd=workspace_dir, env=node_env)
+    node_bin = find_executable("node") or "node"
+    log_info(f"Starting MultiAI on {display_host}:{args.port} (workspace: {workspace_dir})...")
+    supervisor.spawn("Server", [node_bin, "--watch", server_script], color=GREEN, cwd=workspace_dir, env=node_env)
 
     # 4. Wait for server to become ready
     ready = False
     for _ in range(40):
-        if is_port_in_use(args.port):
+        if is_port_in_use(args.port, host=probe_host):
             ready = True
             break
         time.sleep(0.2)
 
-    url = f"http://localhost:{args.port}"
+    url = f"http://{display_host}:{args.port}"
 
     if ready:
         time.sleep(0.4)
@@ -561,7 +620,7 @@ def main():
     # Start Interactive Server Console Thread
     console_thread = threading.Thread(
         target=run_console,
-        args=(supervisor, root_dir, workspace_dir, args.port),
+        args=(supervisor, root_dir, workspace_dir, args.port, args.host),
         daemon=True,
         name="ServerConsole"
     )

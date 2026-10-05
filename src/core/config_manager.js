@@ -166,10 +166,28 @@ function mergeWithDefaults(parsed) {
 }
 
 /**
+ * Resolves the canonical config.ini path, prioritizing:
+ * 1. MULTIAI_CONFIG_PATH environment variable (if set)
+ * 2. Repository root config.ini (if exists)
+ * 3. src/core/config.ini fallback
+ */
+function getDefaultConfigPath() {
+    if (process.env.MULTIAI_CONFIG_PATH && fs.existsSync(process.env.MULTIAI_CONFIG_PATH)) {
+        return process.env.MULTIAI_CONFIG_PATH;
+    }
+    const repoRoot = process.env.MULTIAI_REPO_DIR || path.resolve(__dirname, "../..");
+    const rootConfig = path.join(repoRoot, "config.ini");
+    if (fs.existsSync(rootConfig)) {
+        return rootConfig;
+    }
+    return path.join(__dirname, "config.ini");
+}
+
+/**
  * Loads and returns the effective config object from config.ini.
  */
 function loadConfig(filePath) {
-    const targetPath = filePath || path.join(__dirname, "config.ini");
+    const targetPath = filePath || getDefaultConfigPath();
     try {
         if (fs.existsSync(targetPath)) {
             const stat = fs.statSync(targetPath);
@@ -210,12 +228,21 @@ function deepMerge(target, source) {
  * Saves an updated config to config.ini.
  */
 function saveConfig(updates, filePath) {
-    const targetPath = filePath || path.join(__dirname, "config.ini");
+    const targetPath = filePath || getDefaultConfigPath();
     const current = loadConfig(targetPath);
     const merged = deepMerge(current, updates);
     const updated = mergeWithDefaults(merged);
     const serialized = serializeINI(updated);
     fs.writeFileSync(targetPath, serialized, "utf8");
+
+    // If writing to root config.ini, mirror to src/core/config.ini if present to keep them synchronized
+    const fallbackPath = path.join(__dirname, "config.ini");
+    if (targetPath !== fallbackPath && fs.existsSync(fallbackPath)) {
+        try {
+            fs.writeFileSync(fallbackPath, serialized, "utf8");
+        } catch (_) {}
+    }
+
     cachedConfig = updated;
     try {
         lastMtime = fs.statSync(targetPath).mtimeMs;

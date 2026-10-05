@@ -317,6 +317,30 @@ function resolveSafePath(inputPath, chatId) {
         return rel ? path.resolve(artifactsDir, rel) : artifactsDir;
     }
 
+    // Also support 'scratch' or 'scratch/...' and 'artifacts' or 'artifacts/...' shorthand
+    const normLower = raw.replace(/\\/g, "/").toLowerCase();
+    if (normLower === "scratch" || normLower.startsWith("scratch/") || normLower.startsWith("./scratch/")) {
+        let rel = raw.replace(/^\.\//, "");
+        if (rel.toLowerCase() === "scratch") rel = "";
+        else if (rel.toLowerCase().startsWith("scratch/")) rel = rel.slice(8);
+        const scratchDir = getChatScratchDir(chatId);
+        if (!fs.existsSync(scratchDir)) {
+            fs.mkdirSync(scratchDir, { recursive: true });
+        }
+        return rel ? path.resolve(scratchDir, rel) : scratchDir;
+    }
+
+    if (normLower === "artifacts" || normLower.startsWith("artifacts/") || normLower.startsWith("./artifacts/")) {
+        let rel = raw.replace(/^\.\//, "");
+        if (rel.toLowerCase() === "artifacts") rel = "";
+        else if (rel.toLowerCase().startsWith("artifacts/")) rel = rel.slice(10);
+        const artifactsDir = getChatArtifactsDir(chatId);
+        if (!fs.existsSync(artifactsDir)) {
+            fs.mkdirSync(artifactsDir, { recursive: true });
+        }
+        return rel ? path.resolve(artifactsDir, rel) : artifactsDir;
+    }
+
     let baseDir = process.cwd();
     if (chatId) {
         const wsContext = getChatWorkspace(chatId);
@@ -328,19 +352,40 @@ function resolveSafePath(inputPath, chatId) {
     return path.isAbsolute(raw) ? path.normalize(raw) : path.resolve(baseDir, raw);
 }
 
-function postJSON(port, reqPath, data, timeoutMs = 3000) {
+function postJSON(portOrUrl, reqPath, data, timeoutMs = 3000) {
     return new Promise((resolve, reject) => {
-        const body = JSON.stringify(data);
+        let hostname = "127.0.0.1";
+        let port = 8080;
+        let pth = reqPath;
+        let payload = data;
+        let timeout = timeoutMs;
+
+        if (typeof portOrUrl === "string" && (portOrUrl.startsWith("http://") || portOrUrl.startsWith("https://"))) {
+            try {
+                const u = new URL(portOrUrl);
+                hostname = u.hostname || "127.0.0.1";
+                port = parseInt(u.port, 10) || (u.protocol === "https:" ? 443 : 80);
+                pth = u.pathname + (u.search || "");
+                payload = reqPath; // 2nd argument was data
+                timeout = typeof data === "number" ? data : timeoutMs;
+            } catch (_) {
+                pth = portOrUrl;
+            }
+        } else {
+            port = portOrUrl;
+        }
+
+        const body = JSON.stringify(payload);
         const req = http.request({
-            hostname: "127.0.0.1",
+            hostname,
             port,
-            path: reqPath,
+            path: pth,
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
                 "Content-Length": Buffer.byteLength(body)
             },
-            timeout: timeoutMs
+            timeout
         }, (res) => {
             let respBody = "";
             res.on("data", chunk => { respBody += chunk; });

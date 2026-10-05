@@ -8,6 +8,7 @@ const path = require("path");
 const fs = require("fs");
 const { resolveProvider } = require("../providers");
 const { loadModelsConfig, getEnvKey, resolveSafePath, postJSON, getChatWorkspace, getChatScratchDir, getChatArtifactsDir } = require("../server/utils");
+const { getConfig } = require("./config_manager");
 const conversationsManager = require("./conversations_manager");
 const { handleFileRead } = require("../server/routes/files");
 const { 
@@ -79,7 +80,7 @@ const SERVER_BUILD_TOOLS = [
             parameters: {
                 type: "object",
                 properties: {
-                    DirectoryPath: { type: "string", description: "Directory path to list (use '.' for project root)" }
+                    DirectoryPath: { type: "string", description: "Directory path to list (use '.' for project root, or '$SCRATCH' / '$ARTIFACTS' for chat workspaces)" }
                 },
                 required: ["DirectoryPath"]
             }
@@ -140,6 +141,36 @@ const SERVER_BUILD_TOOLS = [
                 required: ["todos"]
             }
         }
+    },
+    {
+        type: "function",
+        function: {
+            name: "generate_image",
+            description: "Generate an image from a detailed visual text prompt. Automatically backgrounded after 15 seconds if slow so you can continue reasoning without blocking.",
+            parameters: {
+                type: "object",
+                properties: {
+                    prompt: {
+                        type: "string",
+                        description: "Detailed visual description of the image: scene, characters, setting, art style, lighting, camera angle, and colors."
+                    },
+                    aspect_ratio: {
+                        type: "string",
+                        enum: ["1:1", "16:9", "9:16", "4:3", "3:2"],
+                        description: "Aspect ratio of the generated image (default: '1:1')"
+                    },
+                    model: {
+                        type: "string",
+                        description: "Optional model/engine: 'flux' (default, high quality), 'turbo' (ultra-fast), or 'dall-e-3'"
+                    },
+                    background: {
+                        type: "boolean",
+                        description: "If true, starts image generation in the background and immediately returns a task ID so you can continue other work without waiting."
+                    }
+                },
+                required: ["prompt"]
+            }
+        }
     }
 ];
 
@@ -190,7 +221,7 @@ async function executeServerTool(name, args, { chatId, projectId, abortSignal })
     if (name === "run_task") {
         // Forward terminal execution to local terminal daemon (port 5000)
         try {
-            const res = await postJSON("http://127.0.0.1:5000/api/task/run", {
+            const res = await postJSON(5000, "/api/task/run", {
                 command: args.command,
                 task_name: args.task_name,
                 timer: args.timer || 5,
@@ -199,6 +230,16 @@ async function executeServerTool(name, args, { chatId, projectId, abortSignal })
             return res;
         } catch (err) {
             return { error: `Terminal task failed: ${err.message}` };
+        }
+    }
+    if (name === "generate_image") {
+        try {
+            const payload = { ...args, chatId };
+            const port = process.env.PORT ? parseInt(process.env.PORT, 10) : (getConfig().General?.Port || 8080);
+            const res = await postJSON(port, "/api/image/generate", payload, 25000);
+            return res;
+        } catch (err) {
+            return { error: `Image generation failed: ${err.message}` };
         }
     }
     if (name === "write_todos") {

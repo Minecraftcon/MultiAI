@@ -163,15 +163,19 @@ function createBuildProjectsManager(getBuildProjectsRoot, resolveHome) {
             `- Images Directory: ${imagesDir}`,
             `- BUILD MODE AGENTIC GUIDELINES:`,
             `  1. You are operating directly within the user's project directory (${rootPath}). Execute tasks, modify files, and run commands relative to this project root.`,
-            `  2. DUAL-TRACK EXECUTION:`,
+            `  2. SCRATCHPAD & ISOLATED PROTOTYPING ($SCRATCH):`,
+            `     - You have a dedicated, isolated scratchpad directory (${scratchDir}) for this conversation accessible via '$SCRATCH' or 'scratch/'.`,
+            `     - Whenever the user asks you to build, test, explore, or prototype something in scratch (e.g., 'do that in scratch dir', 'create a prototype in scratch'), or when writing one-off experiment scripts, you MUST write them into '$SCRATCH/<subfolder>/...' (e.g. '$SCRATCH/fashion-site/index.html'). NEVER overwrite existing project files (like client/index.html or project code) when requested to build in scratch!`,
+            `     - In tool calls (write_file, read_file, list_dir), paths like '$SCRATCH/...' or 'scratch/...' automatically resolve safely to this dedicated scratchpad directory.`,
+            `  3. DUAL-TRACK EXECUTION:`,
             `     - Track A (Easy Task / Quick Fix): Investigate (read_file, list_dir, grep_search), form a quick plan with write_todos, execute surgical edits immediately, verify with run_task, and summarize.`,
             `     - Track B (Building Plan / Complex Task): Investigate thoroughly, formulate a structured implementation plan specifying created files, components, and open questions / user preferences. Call write_todos (persisting $ARTIFACTS/Tasklist-{name}.md), and pause for user review/approval before major changes. Upon proceed, autonomously execute tasks step by step.`,
-            `  3. MODULAR ARCHITECTURE: Start modular. Do not create monolithic files. Separate concerns into dedicated single-purpose modules and components.`,
-            `  4. BUG FINDING RULES: Never guess a bug or apply blind fixes on assumptions. Track down every execution point: locate where the behavior is handled, read the code, and trace the logic internally until the root cause is found. Once found, explain what causes what, and apply the surgical fix.`,
-            `  5. SUBAGENT DELEGATION (task): Use 'task' to spawn isolated subagents for deep research, scanning large directories, or running tests without bloating your main conversation context.`,
-            `  6. SURGICAL CODE EDITS: Inspect files before editing. Use 'replace_file_content' or 'multi_replace_file_content' for surgical edits, and 'write_file' for new files.`,
-            `  7. VERIFICATION: Use 'run_task' to run tests, linters, or build commands to verify changes before concluding.`,
-            `  8. EXECUTION DISCIPLINE: Never stop after merely announcing an action intent. Always execute the necessary tool calls in the same turn.`
+            `  4. MODULAR ARCHITECTURE: Start modular. Do not create monolithic files. Separate concerns into dedicated single-purpose modules and components.`,
+            `  5. BUG FINDING RULES: Never guess a bug or apply blind fixes on assumptions. Track down every execution point: locate where the behavior is handled, read the code, and trace the logic internally until the root cause is found. Once found, explain what causes what, and apply the surgical fix.`,
+            `  6. SUBAGENT DELEGATION (task): Use 'task' to spawn isolated subagents for deep research, scanning large directories, or running tests without bloating your main conversation context.`,
+            `  7. SURGICAL CODE EDITS: Inspect files before editing. Use 'replace_file_content' or 'multi_replace_file_content' for surgical edits, and 'write_file' for new files.`,
+            `  8. VERIFICATION: Use 'run_task' to run tests, linters, or build commands to verify changes before concluding.`,
+            `  9. EXECUTION DISCIPLINE: Never stop after merely announcing an action intent. Always execute the necessary tool calls in the same turn.`
         ].join("\n");
 
         return {

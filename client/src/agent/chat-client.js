@@ -23,8 +23,9 @@ export async function callChatModel(messages, { model, tools, signal } = {}) {
     const providerFromSelect = (selectedOption && selectedOption.value === model) ? selectedOption.dataset.provider : null;
     const currentSession = (state.currentChatId && state.chatSessions[state.currentChatId]) ? state.chatSessions[state.currentChatId] : null;
 
-    const provider = providerFromSelect || currentSession?.provider || modelProviderMap[model] || modelProviderMap[effectiveModel] || (
-        (typeof model === "string" && (model.includes("free") || model.includes("dots") || model.startsWith("claude-") || model.startsWith("gpt-") || model.startsWith("deepseek-"))) ? "puter" : null
+    const mappedProvider = modelProviderMap[model] || modelProviderMap[effectiveModel];
+    const provider = providerFromSelect || currentSession?.provider || mappedProvider || (
+        (typeof model === "string" && (model.startsWith("claude-") || model.startsWith("gpt-") || model.startsWith("deepseek-"))) ? "puter" : null
     );
 
     const cleanedMessages = Array.isArray(messages) ? messages.map(sanitizeMessage).filter(Boolean) : [];

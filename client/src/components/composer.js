@@ -181,7 +181,10 @@ export async function send() {
         const modelSelect = document.getElementById("modelSelect");
         const session = state.chatSessions[targetChatId];
         const selectedModel = session?.model || (modelSelect ? modelSelect.value : "gemini-2.5-flash");
-        const isPuter = Boolean(session?.provider === "puter" || selectedModel.includes("free") || selectedModel.includes("dots"));
+        const selectedOption = modelSelect?.selectedOptions?.[0];
+        const providerFromSelect = (selectedOption && selectedOption.value === selectedModel) ? selectedOption.dataset.provider : null;
+        const resolvedProvider = session?.provider || providerFromSelect || (window.modelProviderMap && window.modelProviderMap[selectedModel]);
+        const isPuter = resolvedProvider === "puter" || (!resolvedProvider && (selectedModel.startsWith("claude-") || selectedModel.startsWith("gpt-")));
 
         if (state.appMode === "build" && state.currentProjectId && !isPuter) {
             await startServerAgent({
