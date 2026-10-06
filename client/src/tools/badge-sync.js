@@ -77,21 +77,74 @@ export function onToolComplete(name, args, badgeEl, data) {
                     queryEl.textContent = `${desc}${data.task_id ? ` (id: ${data.task_id})` : ""}`;
                 }
             }
-        } else if ((name === "ask_question" || name === "ask_questions") && data) {
-            const labelEl = badgeEl.querySelector(".search-label");
-            const queryEl = badgeEl.querySelector(".search-query");
-            if (data.status === "answered" && Array.isArray(data.answers)) {
-                if (labelEl) labelEl.textContent = "Answered";
-                if (queryEl) {
-                    const ansText = data.answers.map(a => `${a.question}: ${Array.isArray(a.answer) ? a.answer.join(", ") : a.answer}`).join(" • ");
-                    queryEl.textContent = ansText;
-                }
-            } else if (data.status === "skipped") {
-                if (labelEl) labelEl.textContent = "Skipped";
-                if (queryEl) queryEl.textContent = "Question skipped by user";
-            }
         }
     }
+
+    if ((name === "ask_question" || name === "ask_questions") && data) {
+        const labelEl = badgeEl.querySelector(".search-label");
+        const queryEl = badgeEl.querySelector(".search-query");
+        if (labelEl) labelEl.textContent = "Asked question";
+
+            if (queryEl && (!queryEl.textContent || queryEl.textContent.trim() === "")) {
+                const qList = Array.isArray(args.questions) ? args.questions : (args.question ? [args] : []);
+                const firstQ = qList[0]?.question || args.question || "clarifying question";
+                queryEl.textContent = qList.length > 1 ? `${firstQ} (+${qList.length - 1} more)` : firstQ;
+            }
+
+            let answerRowEl = badgeEl.querySelector(".badge-answer-subrow");
+            if (!answerRowEl) {
+                answerRowEl = document.createElement("div");
+                answerRowEl.className = "badge-answer-subrow";
+                const textContainer = labelEl ? (labelEl.parentElement || labelEl.parentNode) : badgeEl;
+                if (textContainer) {
+                    textContainer.appendChild(answerRowEl);
+                } else {
+                    badgeEl.appendChild(answerRowEl);
+                }
+            }
+            badgeEl.classList.add("has-multiline");
+
+            let answers = Array.isArray(data.answers) ? data.answers : null;
+            let status = data.status;
+
+            // Fallback for rehydrated messages stored as plain string formatted by formatToolResult
+            if (!answers && typeof data.stdout === "string" && data.stdout.includes("Answered by user:")) {
+                status = "answered";
+                const matches = [...data.stdout.matchAll(/→\s*(.+)/g)];
+                answers = matches.map(m => ({ answer: m[1].trim() }));
+            } else if (!status && typeof data.stdout === "string" && data.stdout.includes("skipped")) {
+                status = "skipped";
+            }
+
+            if (status === "answered" && Array.isArray(answers) && answers.length > 0) {
+                answerRowEl.classList.remove("is-skipped");
+                const ansText = answers.map(a => {
+                    let ans = Array.isArray(a.answer) ? a.answer.join(", ") : (a.answer || "");
+                    if (ans && !/^option\s+\d+/i.test(ans) && !/^\d+[\.\)]\s*/.test(ans)) {
+                        const qObj = (args.questions || []).find(q => q.question === a.question) || (args.question === a.question ? args : null);
+                        if (qObj && Array.isArray(qObj.options)) {
+                            const optIdx = qObj.options.indexOf(ans);
+                            if (optIdx >= 0) {
+                                ans = `Option ${optIdx + 1}: ${ans}`;
+                            }
+                        }
+                    }
+                    return ans;
+                }).filter(Boolean).join(" • ");
+
+                answerRowEl.innerHTML = `
+                    <span class="badge-answer-arrow" aria-hidden="true">&gt;</span>
+                    <span class="badge-answer-status">Answered</span>
+                    <span class="badge-answer-val">( ${escapeHTML(ansText || "Submitted")} )</span>
+                `;
+            } else if (status === "skipped" || status === "cancelled") {
+                answerRowEl.classList.add("is-skipped");
+                answerRowEl.innerHTML = `
+                    <span class="badge-answer-arrow" aria-hidden="true">&gt;</span>
+                    <span class="badge-answer-status">Skipped</span>
+                `;
+            }
+        }
 
 function setBadgeDiffStats(badgeEl, queryEl, statHtml) {
     if (!badgeEl || !queryEl) return;
@@ -309,6 +362,30 @@ function setBadgeDiffStats(badgeEl, queryEl, statHtml) {
                     </div>
                 </div>`;
                 resEl.innerHTML = checklistHtml;
+                return;
+            }
+
+            if ((name === "ask_question" || name === "ask_questions") && data) {
+                let answers = Array.isArray(data.answers) ? data.answers : null;
+                if (!answers && typeof data.stdout === "string" && data.stdout.includes("Answered by user:")) {
+                    const matches = [...data.stdout.matchAll(/•\s*(.+)\n\s*→\s*(.+)/g)];
+                    answers = matches.map(m => ({ question: m[1].trim(), answer: m[2].trim() }));
+                }
+                const isSkipped = data.status === "skipped" || (typeof data.stdout === "string" && data.stdout.includes("skipped"));
+                let html = `<div class="question-output-card" style="padding: 10px 14px; font-size: 13px;">`;
+                if (isSkipped) {
+                    html += `<div style="color: var(--text-tertiary); font-style: italic;">Questionnaire was skipped by the user.</div>`;
+                } else if (Array.isArray(answers) && answers.length > 0) {
+                    html += `<div style="font-weight: 600; margin-bottom: 6px; color: var(--text-primary);">User Response${answers.length > 1 ? "s" : ""}:</div>`;
+                    html += `<ul style="margin: 0; padding-left: 18px; color: var(--text-secondary);">`;
+                    answers.forEach(a => {
+                        const ansStr = Array.isArray(a.answer) ? a.answer.join(", ") : a.answer;
+                        html += `<li style="margin-bottom: 4px;"><strong>${escapeHTML(a.question || "Question")}:</strong> <span style="color: var(--accent-primary, #6366f1); font-weight: 500;">${escapeHTML(ansStr)}</span></li>`;
+                    });
+                    html += `</ul>`;
+                }
+                html += `</div>`;
+                resEl.innerHTML = html;
                 return;
             }
 

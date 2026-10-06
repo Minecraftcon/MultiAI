@@ -285,14 +285,30 @@ export function promptUserQuestions(payload) {
             // All questions reviewed / submitted
             const compiledAnswers = questions.map((q, idx) => {
                 const picked = Array.from(selections[idx]);
-                if (customActive[idx] && customValues[idx]?.trim()) {
-                    picked.push(customValues[idx].trim());
+                const customVal = (customActive[idx] && customValues[idx]?.trim()) ? customValues[idx].trim() : "";
+
+                const formattedList = picked.map(opt => {
+                    const optIdx = q.options.indexOf(opt);
+                    if (optIdx >= 0 && !/^option\s+\d+/i.test(opt) && !/^\d+[\.\)]\s*/.test(opt)) {
+                        return `Option ${optIdx + 1}: ${opt}`;
+                    }
+                    return opt;
+                });
+                if (customVal) {
+                    formattedList.push(customVal);
                 }
-                const answerStr = picked.length === 1 ? picked[0] : (picked.length > 1 ? picked : (customValues[idx]?.trim() || "No preference"));
+
+                const rawPicked = [...picked];
+                if (customVal) rawPicked.push(customVal);
+
+                const answerStr = formattedList.length === 1 
+                    ? formattedList[0] 
+                    : (formattedList.length > 1 ? formattedList.join(", ") : (customVal || "No preference"));
+
                 return {
                     question: q.question,
                     answer: answerStr,
-                    rawSelections: picked
+                    rawSelections: rawPicked
                 };
             });
 

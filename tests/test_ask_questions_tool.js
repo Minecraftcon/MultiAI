@@ -76,6 +76,106 @@ async function runTests() {
     });
     assert(skippedResult.includes("Questionnaire was skipped by the user."), "Must format skipped status");
 
+    // 5. Test onToolComplete answer subrow rendering
+    console.log("Test: onToolComplete renders answer subrow");
+    // Mock document and elements for testing badge-sync.js in Node
+    class SimpleMockEl {
+        constructor(tag) {
+            this.tagName = tag.toUpperCase();
+            this.children = [];
+            this.parentNode = null;
+            this._classList = new Set();
+            this._textContent = "";
+            this._innerHTML = "";
+        }
+        get parentElement() { return this.parentNode; }
+        get classList() {
+            return {
+                add: (...cls) => cls.forEach(c => this._classList.add(c)),
+                remove: (...cls) => cls.forEach(c => this._classList.delete(c)),
+                contains: (c) => this._classList.has(c)
+            };
+        }
+        get className() { return Array.from(this._classList).join(" "); }
+        set className(v) { this._classList.clear(); if (v) v.split(/\s+/).forEach(c => this._classList.add(c)); }
+        get textContent() { return this._textContent; }
+        set textContent(v) { this._textContent = String(v); }
+        get innerHTML() { return this._innerHTML; }
+        set innerHTML(v) { this._innerHTML = String(v); }
+        appendChild(child) {
+            child.parentNode = this;
+            this.children.push(child);
+            return child;
+        }
+        querySelector(selector) {
+            const match = (el) => {
+                if (selector.startsWith(".") && el.classList.contains(selector.slice(1))) return true;
+                if (selector.toUpperCase() === el.tagName) return true;
+                return false;
+            };
+            for (const c of this.children) {
+                if (match(c)) return c;
+                const found = c.querySelector(selector);
+                if (found) return found;
+            }
+            return null;
+        }
+    }
+    global.document = {
+        createElement: (tag) => new SimpleMockEl(tag)
+    };
+
+    const badgeSyncModule = await import("../client/src/tools/badge-sync.js");
+    const { onToolComplete } = badgeSyncModule;
+
+    const mockBadge = new SimpleMockEl("div");
+    mockBadge.className = "search-badge-item clickable-badge";
+    const textContainer = new SimpleMockEl("div");
+    const labelEl = new SimpleMockEl("span");
+    labelEl.className = "search-label";
+    labelEl.textContent = "Asked question";
+    const queryEl = new SimpleMockEl("span");
+    queryEl.className = "search-query";
+    queryEl.textContent = "Which framework?";
+    textContainer.appendChild(labelEl);
+    textContainer.appendChild(queryEl);
+    mockBadge.appendChild(textContainer);
+
+    // Call onToolComplete with answered data
+    onToolComplete("ask_question", { question: "Which framework?" }, mockBadge, {
+        status: "answered",
+        answers: [{ question: "Which framework?", answer: "Option 2: React" }]
+    });
+
+    assert.strictEqual(labelEl.textContent, "Asked question", "Label must remain 'Asked question'");
+    assert.strictEqual(queryEl.textContent, "Which framework?", "Query must remain original question");
+    const answerSubrow = mockBadge.querySelector(".badge-answer-subrow");
+    assert(answerSubrow, "Answer subrow must be added to badge");
+    assert(answerSubrow.innerHTML.includes("Answered"), "Subrow must include 'Answered'");
+    assert(answerSubrow.innerHTML.includes("( Option 2: React )"), "Subrow must include formatted answer");
+
+    // Call onToolComplete with skipped data
+    const mockBadgeSkipped = new SimpleMockEl("div");
+    mockBadgeSkipped.className = "search-badge-item clickable-badge";
+    const textContainer2 = new SimpleMockEl("div");
+    const labelEl2 = new SimpleMockEl("span");
+    labelEl2.className = "search-label";
+    labelEl2.textContent = "Asked question";
+    const queryEl2 = new SimpleMockEl("span");
+    queryEl2.className = "search-query";
+    queryEl2.textContent = "Should we continue?";
+    textContainer2.appendChild(labelEl2);
+    textContainer2.appendChild(queryEl2);
+    mockBadgeSkipped.appendChild(textContainer2);
+
+    onToolComplete("ask_question", { question: "Should we continue?" }, mockBadgeSkipped, {
+        status: "skipped"
+    });
+
+    const skippedSubrow = mockBadgeSkipped.querySelector(".badge-answer-subrow");
+    assert(skippedSubrow, "Skipped subrow must be added");
+    assert(skippedSubrow.innerHTML.includes("Skipped"), "Subrow must show 'Skipped'");
+
     console.log("✓ ALL ASK QUESTION TOOL TESTS PASSED!");
 }
 

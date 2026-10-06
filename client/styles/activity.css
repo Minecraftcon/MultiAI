@@ -134,6 +134,48 @@
     color: var(--text-primary);
 }
 
+/* Question Tool Answer Subrow */
+.badge-answer-subrow {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    margin-top: 3px;
+    font-size: 12px;
+    line-height: 1.4;
+    animation: fadeIn 0.25s ease-out;
+}
+
+.badge-answer-arrow {
+    color: var(--accent-primary, #6366f1);
+    font-weight: 600;
+    font-size: 11px;
+    user-select: none;
+    opacity: 0.9;
+}
+
+.badge-answer-status {
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 12px;
+}
+
+.badge-answer-val {
+    color: var(--text-secondary);
+    font-family: inherit;
+    word-break: break-word;
+    font-size: 12px;
+}
+
+.badge-answer-subrow.is-skipped .badge-answer-arrow {
+    color: var(--text-tertiary);
+}
+
+.badge-answer-subrow.is-skipped .badge-answer-status {
+    color: var(--text-tertiary);
+    font-style: italic;
+    font-weight: 500;
+}
+
 /* Intermediate Reasoning Traces inside Activity accordion */
 .activity-thought-item {
     padding: 3px 0 3px 38px;
