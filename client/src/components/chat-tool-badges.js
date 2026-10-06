@@ -16,6 +16,8 @@ export function getToolBadgeConfig(toolName, args = {}) {
     let icon = "terminal";
     let label = "Executed";
     let detail = "";
+    let detailHtml = null;
+    let diffStatsHtml = "";
     let isCommandTask = false;
 
     if (toolName === "web_search") {
@@ -114,7 +116,13 @@ export function getToolBadgeConfig(toolName, args = {}) {
         const isArtifact = (args.path || "").startsWith("$ARTIFACTS/") || (args.path || "").startsWith("${ARTIFACTS}/");
         icon = isArtifact ? "file-code" : "file-edit";
         label = isArtifact ? "Wrote artifact" : "Wrote file";
-        detail = args.path || "file";
+        const filePath = args.path || args.TargetFile || "file";
+        detail = filePath;
+        const contentStr = args.content || args.CodeContent || "";
+        if (contentStr) {
+            const lineCount = contentStr.split("\n").length;
+            diffStatsHtml = `<span class="badge-diff-stat add">+${lineCount}</span>`;
+        }
         isCommandTask = true;
     } else if (toolName === "grep_search") {
         icon = "search";
@@ -127,14 +135,39 @@ export function getToolBadgeConfig(toolName, args = {}) {
     } else if (toolName === "replace_file_content" || toolName === "search_and_replace") {
         icon = "edit-3";
         label = "Edited file";
-        const lineSpan = (args.start_line || args.end_line) ? ` (lines ${args.start_line || 1}-${args.end_line || "end"})` : "";
-        detail = `${args.path || "file"}${lineSpan}${args.description ? ` - ${args.description}` : ""}`;
+        const filePath = args.path || args.TargetFile || "file";
+        const targetStr = args.target_content || args.TargetContent || "";
+        const replStr = args.replacement_content || args.ReplacementContent || "";
+        detail = filePath;
+        if (targetStr || replStr) {
+            const dels = targetStr ? targetStr.split("\n").length : 0;
+            const adds = replStr ? replStr.split("\n").length : 0;
+            let statHtml = "";
+            if (adds > 0) statHtml += `<span class="badge-diff-stat add">+${adds}</span>`;
+            if (dels > 0) statHtml += `<span class="badge-diff-stat del">-${dels}</span>`;
+            diffStatsHtml = statHtml;
+        }
         isCommandTask = true;
     } else if (toolName === "multi_replace_file_content") {
         icon = "edit-3";
         label = "Multi-edited file";
-        const count = Array.isArray(args.replacement_chunks) ? ` (${args.replacement_chunks.length} chunks)` : "";
-        detail = `${args.path || "file"}${count}${args.description ? ` - ${args.description}` : ""}`;
+        const filePath = args.path || args.TargetFile || "file";
+        const chunks = Array.isArray(args.replacement_chunks) ? args.replacement_chunks : [];
+        detail = filePath;
+        let totalAdds = 0;
+        let totalDels = 0;
+        for (const c of chunks) {
+            const t = c.target_content || c.TargetContent || "";
+            const r = c.replacement_content || c.ReplacementContent || "";
+            if (t) totalDels += t.split("\n").length;
+            if (r) totalAdds += r.split("\n").length;
+        }
+        if (totalAdds > 0 || totalDels > 0) {
+            let statHtml = "";
+            if (totalAdds > 0) statHtml += `<span class="badge-diff-stat add">+${totalAdds}</span>`;
+            if (totalDels > 0) statHtml += `<span class="badge-diff-stat del">-${totalDels}</span>`;
+            diffStatsHtml = statHtml;
+        }
         isCommandTask = true;
     } else if (toolName === "run_python") {
         icon = "terminal";
@@ -230,6 +263,8 @@ export function getToolBadgeConfig(toolName, args = {}) {
         icon,
         label,
         detail,
+        detailHtml,
+        diffStatsHtml,
         compactDetail,
         isDetailMulti,
         detailLines,
@@ -266,6 +301,8 @@ export function addToolBadge(element, toolName, args) {
         icon,
         label,
         detail,
+        detailHtml,
+        diffStatsHtml,
         compactDetail,
         isDetailMulti,
         detailLines,
@@ -310,7 +347,8 @@ export function addToolBadge(element, toolName, args) {
         <div>
             <span class="search-label">${label}</span>
             ${codeIconHtml}
-            <span class="search-query ${detailLines.length > 1 ? 'is-multiline' : ''}" data-full="${escapeHTML(detail)}" data-compact="${escapeHTML(compactDetail)}">${escapeHTML(compactDetail)}</span>
+            <span class="search-query ${detailLines.length > 1 ? 'is-multiline' : ''}" data-full="${escapeHTML(detail)}" data-compact="${escapeHTML(compactDetail)}">${detailHtml || escapeHTML(compactDetail)}</span>
+            ${diffStatsHtml ? `<span class="badge-diff-stats">${diffStatsHtml}</span>` : ""}
             ${isArtifact ? `
             <span class="checkpoint-badge-actions">
                 <button type="button" class="checkpoint-view-btn artifact-open-btn" data-path="${escapeHTML(args.path)}" title="View artifact modal" aria-label="View artifact">

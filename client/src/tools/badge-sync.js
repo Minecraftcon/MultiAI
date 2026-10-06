@@ -79,11 +79,65 @@ export function onToolComplete(name, args, badgeEl, data) {
         }
     }
 
-    if ((name === "replace_file_content" || name === "multi_replace_file_content") && data) {
+function setBadgeDiffStats(badgeEl, queryEl, statHtml) {
+    if (!badgeEl || !queryEl) return;
+    let statsEl = badgeEl.querySelector(".badge-diff-stats");
+    if (!statsEl) {
+        if (!statHtml) return;
+        statsEl = document.createElement("span");
+        statsEl.className = "badge-diff-stats";
+        queryEl.insertAdjacentElement("afterend", statsEl);
+    }
+    statsEl.innerHTML = statHtml || "";
+    if (!statHtml && statsEl.parentNode) {
+        statsEl.remove();
+    }
+}
+
+    if ((name === "replace_file_content" || name === "multi_replace_file_content" || name === "search_and_replace") && data) {
         const queryEl = badgeEl.querySelector(".search-query");
         if (queryEl) {
-            const diffSign = (data.lines_diff !== undefined && data.lines_diff >= 0) ? `+${data.lines_diff}` : `${data.lines_diff || 0}`;
-            queryEl.textContent = `${data.path || "file"} (${diffSign} lines)`;
+            const pathStr = data.path || args.path || args.TargetFile || "file";
+            queryEl.textContent = pathStr;
+            let adds = data.lines_added;
+            let dels = data.lines_removed;
+            if ((adds === undefined || dels === undefined) && data.diff) {
+                const lines = data.diff.split("\n");
+                let a = 0;
+                let d = 0;
+                for (const line of lines) {
+                    if (line.startsWith("+") && !line.startsWith("+++")) a++;
+                    else if (line.startsWith("-") && !line.startsWith("---")) d++;
+                }
+                adds = a;
+                dels = d;
+            }
+            let statHtml = "";
+            if (adds !== undefined && adds > 0) {
+                statHtml += `<span class="badge-diff-stat add">+${adds}</span>`;
+            }
+            if (dels !== undefined && dels > 0) {
+                statHtml += `<span class="badge-diff-stat del">-${dels}</span>`;
+            }
+            if (!statHtml && data.lines_diff !== undefined) {
+                const sign = data.lines_diff >= 0 ? `+${data.lines_diff}` : `${data.lines_diff}`;
+                statHtml = `<span class="badge-diff-stat ${data.lines_diff >= 0 ? 'add' : 'del'}">${sign}</span>`;
+            }
+            setBadgeDiffStats(badgeEl, queryEl, statHtml);
+        }
+    }
+
+    if (name === "write_file" && data) {
+        const queryEl = badgeEl.querySelector(".search-query");
+        if (queryEl) {
+            const pathStr = data.path || args.path || args.TargetFile || "file";
+            queryEl.textContent = pathStr;
+            const lineCount = data.line_count || (args.content || args.CodeContent ? String(args.content || args.CodeContent).split("\n").length : 0);
+            if (lineCount > 0) {
+                setBadgeDiffStats(badgeEl, queryEl, `<span class="badge-diff-stat add">+${lineCount}</span>`);
+            } else {
+                setBadgeDiffStats(badgeEl, queryEl, "");
+            }
         }
     }
 
@@ -168,20 +222,32 @@ export function onToolComplete(name, args, badgeEl, data) {
 
             const collapseInner = badgeEl._collapseDiv.querySelector(".badge-collapse-inner") || badgeEl._collapseDiv;
 
-            if ((name === "replace_file_content" || name === "multi_replace_file_content" || name === "search_and_replace") && data.diff) {
+            if ((name === "replace_file_content" || name === "multi_replace_file_content" || name === "search_and_replace") && (data.diff || (args.target_content && args.replacement_content) || args.replacement_chunks)) {
                 const filePath = data.path || args.TargetFile || args.path || args.file_path || "";
-                const stats = {
-                    additions: data.lines_added,
-                    deletions: data.lines_removed
-                };
-                collapseInner.innerHTML = renderDiffCardHtml({
-                    diffStr: data.diff,
-                    filePath,
-                    stats
-                });
-                bindDiffViewerCards(collapseInner);
-                renderIcons(collapseInner);
-                return;
+                let diffStr = data.diff;
+                if (!diffStr) {
+                    if (args.target_content !== undefined && args.replacement_content !== undefined) {
+                        const targetLines = String(args.target_content).split("\n");
+                        const replLines = String(args.replacement_content).split("\n");
+                        diffStr = `--- a/${filePath || "file"}\n+++ b/${filePath || "file"}\n@@ -1,${targetLines.length} +1,${replLines.length} @@\n` +
+                            targetLines.map(l => `-${l}`).join("\n") + "\n" +
+                            replLines.map(l => `+${l}`).join("\n");
+                    }
+                }
+                if (diffStr) {
+                    const stats = {
+                        additions: data.lines_added,
+                        deletions: data.lines_removed
+                    };
+                    collapseInner.innerHTML = renderDiffCardHtml({
+                        diffStr,
+                        filePath,
+                        stats
+                    });
+                    bindDiffViewerCards(collapseInner);
+                    renderIcons(collapseInner);
+                    return;
+                }
             }
 
             if (name === "read_file" && !(data.type === "image" || (typeof data.mime === "string" && data.mime.startsWith("image/"))) && data.content !== undefined) {
@@ -200,11 +266,22 @@ export function onToolComplete(name, args, badgeEl, data) {
             if (name === "write_file" && (args.content || args.CodeContent || data.content)) {
                 const filePath = data.path || args.TargetFile || args.path || args.file_path || "";
                 const content = args.content || args.CodeContent || data.content || "";
-                collapseInner.innerHTML = renderCodeViewerCardHtml({
-                    code: content,
-                    filePath,
-                    startLine: 1
-                });
+                if (data.is_overwrite && data.diff) {
+                    collapseInner.innerHTML = renderDiffCardHtml({
+                        diffStr: data.diff,
+                        filePath,
+                        stats: {
+                            additions: data.lines_added,
+                            deletions: data.lines_removed
+                        }
+                    });
+                } else {
+                    collapseInner.innerHTML = renderCodeViewerCardHtml({
+                        code: content,
+                        filePath,
+                        startLine: 1
+                    });
+                }
                 bindDiffViewerCards(collapseInner);
                 renderIcons(collapseInner);
                 return;

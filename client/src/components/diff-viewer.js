@@ -154,11 +154,13 @@ export function renderDiffCardHtml({
         hunk.lines.forEach((l) => {
             const lineNumStr = l.displayLine !== null && l.displayLine !== undefined ? String(l.displayLine) : "";
             const rowClass = l.type === "add" ? "mv-row-add" : (l.type === "del" ? "mv-row-del" : "mv-row-ctx");
+            const signChar = l.sign === "+" ? "+" : (l.sign === "-" ? "-" : "&nbsp;");
 
             rowsHtml += `
                 <div class="mv-row ${rowClass}">
                     <div class="mv-gutter" aria-hidden="true">
                         <span class="mv-num">${escapeHTML(lineNumStr)}</span>
+                        <span class="mv-sign">${signChar}</span>
                     </div>
                     <div class="mv-code-line">${l.text ? escapeHTML(l.text) : "&nbsp;"}</div>
                 </div>

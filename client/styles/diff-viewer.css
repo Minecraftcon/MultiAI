@@ -79,19 +79,18 @@
 .mv-stat {
     font-size: 11px;
     font-weight: 600;
-    padding: 2px 6px;
-    border-radius: 4px;
-    background: var(--bg-primary);
+    padding: 0;
+    background: transparent;
 }
 
 .mv-stat.add {
-    color: var(--text-success, #73c991);
-    background: var(--bg-success-subtle, rgba(115, 201, 145, 0.1));
+    color: #3fb950;
+    background: transparent;
 }
 
 .mv-stat.del {
-    color: var(--text-danger, #f14c4c);
-    background: var(--bg-danger-subtle, rgba(241, 76, 76, 0.1));
+    color: #f85149;
+    background: transparent;
 }
 
 .mv-stat.neutral {
@@ -217,21 +216,30 @@
     box-sizing: border-box;
 }
 
-/* Gutter (Line Numbers) */
+/* Gutter (Line Numbers & Diff Signs) */
 .mv-gutter {
     display: flex;
     align-items: flex-start;
     justify-content: flex-end;
+    gap: 6px;
     user-select: none;
     flex-shrink: 0;
-    min-width: 48px;
-    padding: 0 12px 0 8px;
+    min-width: 56px;
+    padding: 0 10px 0 8px;
     color: var(--text-muted);
-    opacity: 0.7;
+    opacity: 0.75;
 }
 
 .mv-num {
     font-size: 12px;
+}
+
+.mv-sign {
+    font-size: 12px;
+    font-weight: 700;
+    width: 10px;
+    text-align: center;
+    opacity: 0.9;
 }
 
 /* Code Line */
@@ -260,38 +268,46 @@
 
 /* Context / Add / Del lines */
 .mv-row-add {
-    background: var(--bg-success-subtle, rgba(115, 201, 145, 0.08));
-    border-left: 2px solid var(--text-success, #73c991);
+    background: rgba(46, 160, 67, 0.16);
+    border-left: 3px solid #3fb950;
 }
 .mv-row-add .mv-code-line {
-    color: var(--text-success, #c7f7d4);
+    color: #e6edf3;
 }
 .mv-row-add .mv-gutter {
-    color: var(--text-success, #73c991);
+    color: #3fb950;
     opacity: 1;
-    padding-left: 6px; /* offset for border */
+    padding-left: 5px; /* offset for border */
+}
+.mv-row-add .mv-sign {
+    color: #3fb950;
+    font-weight: 700;
 }
 
 .mv-row-del {
-    background: var(--bg-danger-subtle, rgba(241, 76, 76, 0.08));
-    border-left: 2px solid var(--text-danger, #f14c4c);
+    background: rgba(248, 81, 73, 0.16);
+    border-left: 3px solid #f85149;
 }
 .mv-row-del .mv-code-line {
-    color: var(--text-danger, #ffb8b8);
+    color: #ff7b72;
     text-decoration: line-through;
-    opacity: 0.8;
+    opacity: 0.85;
 }
 .mv-row-del .mv-gutter {
-    color: var(--text-danger, #f14c4c);
+    color: #f85149;
     opacity: 1;
-    padding-left: 6px; /* offset for border */
+    padding-left: 5px; /* offset for border */
+}
+.mv-row-del .mv-sign {
+    color: #f85149;
+    font-weight: 700;
 }
 
 .mv-row-ctx {
-    border-left: 2px solid transparent;
+    border-left: 3px solid transparent;
 }
 .mv-row-ctx .mv-gutter {
-    padding-left: 6px;
+    padding-left: 5px;
 }
 
 .mv-empty {
@@ -299,6 +315,37 @@
     text-align: center;
     color: var(--text-muted);
     font-size: 13px;
+}
+
+/* ---------------------------------------------------------
+   4. Diff Stats Pills (Badge & Card)
+   --------------------------------------------------------- */
+.badge-diff-stat {
+    display: inline-flex;
+    align-items: center;
+    font-size: 11px;
+    font-weight: 600;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    padding: 0;
+    background: transparent;
+    border: none;
+    margin-left: 10px;
+    line-height: 1.3;
+    letter-spacing: -0.01em;
+    vertical-align: middle;
+    text-decoration: none !important;
+}
+
+.badge-diff-stat.add {
+    color: #3fb950;
+    background: transparent;
+    border: none;
+}
+
+.badge-diff-stat.del {
+    color: #f85149;
+    background: transparent;
+    border: none;
 }
 
 /* ---------------------------------------------------------

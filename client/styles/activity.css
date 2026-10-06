@@ -275,6 +275,52 @@
     font-weight: 600;
 }
 
+.badge-diff-stats {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: 10px;
+    vertical-align: middle;
+    text-decoration: none !important;
+}
+
+.badge-diff-stat {
+    display: inline-flex;
+    align-items: center;
+    font-size: 11px;
+    font-weight: 600;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    padding: 0;
+    background: transparent !important;
+    border: none !important;
+    margin-left: 10px;
+    line-height: 1.3;
+    letter-spacing: -0.01em;
+    vertical-align: middle;
+    text-decoration: none !important;
+}
+
+.badge-diff-stats .badge-diff-stat {
+    margin-left: 0;
+}
+
+.badge-diff-stat.add {
+    color: #3fb950 !important;
+    background: transparent !important;
+    border: none !important;
+}
+
+.badge-diff-stat.del {
+    color: #f85149 !important;
+    background: transparent !important;
+    border: none !important;
+}
+
+.search-badge-item.clickable-badge:hover .badge-diff-stats,
+.search-badge-item.clickable-badge:hover .badge-diff-stat {
+    text-decoration: none !important;
+}
+
 /* =========================================================
    THINKING / REASONING DISCLOSURE
    ========================================================= */
