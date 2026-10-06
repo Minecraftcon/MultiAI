@@ -99,7 +99,7 @@ async function routeRequest(req, res) {
         if (reqUrl.startsWith("/api/build/projects")) {
             return handleBuildProjectsRoute(req, res);
         }
-        if (reqUrl.startsWith("/api/build/agent")) {
+        if (reqUrl.startsWith("/api/build/agent") || reqUrl.startsWith("/api/agent/")) {
             return handleBuildAgentRoute(req, res);
         }
 

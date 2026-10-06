@@ -47,6 +47,9 @@ export function updateSendButtonState(active) {
 }
 
 export function stopChatGeneration(chatId) {
+    import("./chat-question-prompt.js").then(({ dismissQuestionPrompt }) => {
+        dismissQuestionPrompt("Generation stopped");
+    }).catch(() => {});
     if (state.appMode === "build") {
         stopServerAgent(chatId);
     }
@@ -186,12 +189,13 @@ export async function send() {
         const resolvedProvider = session?.provider || providerFromSelect || (window.modelProviderMap && window.modelProviderMap[selectedModel]);
         const isPuter = resolvedProvider === "puter" || (!resolvedProvider && (selectedModel.startsWith("claude-") || selectedModel.startsWith("gpt-")));
 
-        if (state.appMode === "build" && state.currentProjectId && !isPuter) {
+        if (state.appMode === "build" && !isPuter) {
             await startServerAgent({
-                projectId: state.currentProjectId,
+                projectId: state.currentProjectId || null,
                 chatId: targetChatId,
                 userText: promptText,
                 model: selectedModel,
+                provider: resolvedProvider || null,
                 currentAIMessage
             });
             return;

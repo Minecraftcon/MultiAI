@@ -85,6 +85,13 @@ export function extractText(response) {
 
 export function formatToolResult(data) {
     if (data && typeof data === "object") {
+        if (data.status === "answered" && Array.isArray(data.answers)) {
+            return `Answered by user:\n` + data.answers.map(a => `• ${a.question}\n  → ${Array.isArray(a.answer) ? a.answer.join(", ") : a.answer}`).join("\n");
+        }
+        if (data.status === "skipped") {
+            return `Questionnaire was skipped by the user.`;
+        }
+
         if (typeof data.output === "string" && !data.stdout && !data.stderr) {
             return data.output;
         }

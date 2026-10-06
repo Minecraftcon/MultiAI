@@ -119,7 +119,80 @@ export const subagentTaskTool = {
     }
 };
 
+export const askQuestionTool = {
+    name: "ask_question",
+    schema: {
+        type: "function",
+        function: {
+            name: "ask_question",
+            description: "Ask the user clarifying multiple-choice questions with an interactive questionnaire in the chat box.",
+            parameters: {
+                type: "object",
+                properties: {
+                    questions: {
+                        type: "array",
+                        description: "List of questions to ask the user.",
+                        items: {
+                            type: "object",
+                            properties: {
+                                question: {
+                                    type: "string",
+                                    description: "The question prompt or title."
+                                },
+                                options: {
+                                    type: "array",
+                                    items: { type: "string" },
+                                    description: "List of 2-5 selectable choices for the user."
+                                },
+                                is_multi_select: {
+                                    type: "boolean",
+                                    description: "Whether the user can select multiple options."
+                                },
+                                allow_custom: {
+                                    type: "boolean",
+                                    description: "Whether to include a 'Write yourself' input box (default: true)."
+                                }
+                            },
+                            required: ["question", "options"]
+                        }
+                    }
+                },
+                required: ["questions"]
+            }
+        }
+    },
+    handler: async (args, { genState }) => {
+        const { promptUserQuestions, dismissQuestionPrompt } = await import("../../components/chat-question-prompt.js");
+        const payload = args.questions || (args.question ? [args] : []);
+        if (genState?.abortController?.signal?.aborted) {
+            return { status: "cancelled", reason: "Generation stopped" };
+        }
+        const promise = promptUserQuestions(payload);
+        if (genState?.abortController?.signal) {
+            genState.abortController.signal.addEventListener("abort", () => {
+                dismissQuestionPrompt("Generation stopped");
+            }, { once: true });
+        }
+        return await promise;
+    }
+};
+
+export const askQuestionsAliasTool = {
+    name: "ask_questions",
+    schema: {
+        ...askQuestionTool.schema,
+        function: {
+            ...askQuestionTool.schema.function,
+            name: "ask_questions"
+        }
+    },
+    handler: askQuestionTool.handler
+};
+
 export const planningTools = [
     writeTodosTool,
-    subagentTaskTool
+    subagentTaskTool,
+    askQuestionTool,
+    askQuestionsAliasTool
 ];
+

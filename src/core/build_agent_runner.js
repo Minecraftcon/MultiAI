@@ -22,6 +22,8 @@ const {
 
 /** In-memory registry of active agent jobs: chatId -> JobInstance */
 const activeJobs = new Map();
+/** In-memory registry of pending human-in-the-loop questionnaire answers: chatId -> { resolve } */
+const pendingAnswers = new Map();
 
 /** Tool definitions exposed to the server-side build agent */
 const SERVER_BUILD_TOOLS = [
@@ -105,12 +107,12 @@ const SERVER_BUILD_TOOLS = [
         type: "function",
         function: {
             name: "run_task",
-            description: "Execute a terminal command or test in the project workspace.",
+            description: "Execute a terminal command or test in the project workspace. ALWAYS provide a concise 2-4 word task_name for command tagging in the UI (e.g. 'Run tests', 'Check git status').",
             parameters: {
                 type: "object",
                 properties: {
                     command: { type: "string", description: "Terminal command line to run" },
-                    task_name: { type: "string", description: "Short descriptive label for the task" },
+                    task_name: { type: "string", description: "Concise 2-4 word descriptive tag/name for the task (e.g. 'Run tests', 'Check git status'). Always supply this for command name tagging." },
                     timer: { type: "integer", description: "Seconds to wait before returning output (default 5)" }
                 },
                 required: ["command"]
@@ -171,6 +173,116 @@ const SERVER_BUILD_TOOLS = [
                 required: ["prompt"]
             }
         }
+    },
+    {
+        type: "function",
+        function: {
+            name: "web_search",
+            description: "Search the web for up-to-date information, documentation, news, or articles.",
+            parameters: {
+                type: "object",
+                properties: {
+                    query: { type: "string", description: "Search query string" }
+                },
+                required: ["query"]
+            }
+        }
+    },
+    {
+        type: "function",
+        function: {
+            name: "fetch_web_content",
+            description: "Fetch and extract text content from one or more web URLs.",
+            parameters: {
+                type: "object",
+                properties: {
+                    url: { type: "string", description: "Single URL to fetch" },
+                    urls: { type: "array", items: { type: "string" }, description: "List of URLs to fetch in parallel" }
+                }
+            }
+        }
+    },
+    {
+        type: "function",
+        function: {
+            name: "run_python",
+            description: "Execute a Python script or expression and return stdout/stderr.",
+            parameters: {
+                type: "object",
+                properties: {
+                    code: { type: "string", description: "Python code to execute" }
+                },
+                required: ["code"]
+            }
+        }
+    },
+    {
+        type: "function",
+        function: {
+            name: "schedule",
+            description: "Wait or sleep for a specified number of seconds before continuing.",
+            parameters: {
+                type: "object",
+                properties: {
+                    seconds: { type: "number", description: "Seconds to pause (max 30)" }
+                },
+                required: ["seconds"]
+            }
+        }
+    },
+    {
+        type: "function",
+        function: {
+            name: "ask_question",
+            description: "Ask the user clarifying multiple-choice or open-ended questions with an interactive questionnaire directly in the composer. Execution pauses until the user answers or skips.",
+            parameters: {
+                type: "object",
+                properties: {
+                    questions: {
+                        type: "array",
+                        description: "List of questions to ask the user.",
+                        items: {
+                            type: "object",
+                            properties: {
+                                question: { type: "string", description: "The question prompt or title" },
+                                options: { type: "array", items: { type: "string" }, description: "List of 2-5 selectable choices" },
+                                is_multi_select: { type: "boolean", description: "Whether multiple choices can be selected" },
+                                allow_custom: { type: "boolean", description: "Whether to allow custom write-in answers (default true)" }
+                            },
+                            required: ["question", "options"]
+                        }
+                    }
+                },
+                required: ["questions"]
+            }
+        }
+    },
+    {
+        type: "function",
+        function: {
+            name: "ask_questions",
+            description: "Alias for ask_question. Ask the user clarifying multiple-choice or open-ended questions with an interactive questionnaire directly in the composer. Execution pauses until the user answers or skips.",
+            parameters: {
+                type: "object",
+                properties: {
+                    questions: {
+                        type: "array",
+                        description: "List of questions to ask the user.",
+                        items: {
+                            type: "object",
+                            properties: {
+                                question: { type: "string", description: "The question prompt or title" },
+                                options: { type: "array", items: { type: "string" }, description: "List of 2-5 selectable choices" },
+                                is_multi_select: { type: "boolean", description: "Whether multiple choices can be selected" },
+                                allow_custom: { type: "boolean", description: "Whether to allow custom write-in answers (default true)" }
+                            },
+                            required: ["question", "options"]
+                        }
+                    }
+                },
+                required: ["questions"]
+            }
+        }
     }
 ];
 
@@ -199,7 +311,7 @@ function formatPlanMarkdown(title, todos = []) {
 /**
  * Executes a single tool call on the local server.
  */
-async function executeServerTool(name, args, { chatId, projectId, abortSignal }) {
+async function executeServerTool(name, args, { chatId, projectId, abortSignal, job, dispatchEvent }) {
     if (name === "read_file") {
         return await handleFileRead(args, chatId);
     }
@@ -242,6 +354,73 @@ async function executeServerTool(name, args, { chatId, projectId, abortSignal })
             return { error: `Image generation failed: ${err.message}` };
         }
     }
+    if (name === "web_search") {
+        try {
+            const { tinyfishSearch } = require("../server/routes/search");
+            return await tinyfishSearch(args);
+        } catch (err) {
+            return { error: `Web search failed: ${err.message}` };
+        }
+    }
+    if (name === "fetch_web_content" || name === "web_fetch") {
+        try {
+            const { tinyfishFetch } = require("../server/routes/search");
+            return await tinyfishFetch(args);
+        } catch (err) {
+            return { error: `Web fetch failed: ${err.message}` };
+        }
+    }
+    if (name === "run_python") {
+        try {
+            return await postJSON(5000, "/api/python/run", args, 35000);
+        } catch (err) {
+            return { error: `Python execution failed: ${err.message}` };
+        }
+    }
+    if (name === "schedule" || name === "sleep") {
+        const secs = Math.min(30, Math.max(1, parseFloat(args.seconds || args.time || 5) || 5));
+        await new Promise(r => setTimeout(r, secs * 1000));
+        return { status: "completed", elapsed_seconds: secs };
+    }
+    if (name === "ask_question" || name === "ask_questions") {
+        const rawQuestions = Array.isArray(args.questions)
+            ? args.questions
+            : (args.question ? [args] : []);
+        const questions = rawQuestions.map((q, idx) => ({
+            id: q.id || `q_${idx + 1}`,
+            question: q.question || "Please clarify:",
+            options: Array.isArray(q.options) ? q.options : [],
+            is_multi_select: Boolean(q.is_multi_select || q.isMultiSelect),
+            allow_custom: q.allow_custom !== false
+        }));
+
+        if (job) {
+            job.pendingQuestion = { questions, chatId };
+        }
+        if (job && job.emitter) {
+            job.emitter.emit("event", { type: "question_prompt", questions, chatId });
+        }
+
+        const answer = await new Promise((resolve) => {
+            pendingAnswers.set(chatId, { resolve });
+            if (abortSignal) {
+                if (abortSignal.aborted) {
+                    pendingAnswers.delete(chatId);
+                    resolve({ status: "cancelled", reason: "Generation stopped by user" });
+                    return;
+                }
+                abortSignal.addEventListener("abort", () => {
+                    pendingAnswers.delete(chatId);
+                    resolve({ status: "cancelled", reason: "Generation stopped by user" });
+                }, { once: true });
+            }
+        });
+
+        if (job) {
+            job.pendingQuestion = null;
+        }
+        return answer;
+    }
     if (name === "write_todos") {
         const rawTodos = Array.isArray(args.todos) ? args.todos : [];
         const normalized = rawTodos.map((t, idx) => ({
@@ -274,9 +453,9 @@ async function executeServerTool(name, args, { chatId, projectId, abortSignal })
 /**
  * Starts an autonomous detached agent job on the server.
  */
-function startAgentJob({ projectId, chatId, userText, model = "gemini-2.5-flash", provider = null }) {
-    if (!projectId || !chatId) {
-        throw new Error("Missing required parameters projectId or chatId");
+function startAgentJob({ projectId = null, chatId, userText, userContent = null, model = "gemini-2.5-flash", provider = null }) {
+    if (!chatId) {
+        throw new Error("Missing required parameter chatId");
     }
 
     if (activeJobs.has(chatId) && activeJobs.get(chatId).isRunning) {
@@ -296,8 +475,15 @@ function startAgentJob({ projectId, chatId, userText, model = "gemini-2.5-flash"
         lastUpdated: Date.now(),
         abortController,
         emitter,
+        events: [],
         todos: [],
         error: null
+    };
+
+    const dispatchEvent = (eventData) => {
+        job.events.push(eventData);
+        job.lastUpdated = Date.now();
+        emitter.emit("event", eventData);
     };
 
     activeJobs.set(chatId, job);
@@ -305,13 +491,25 @@ function startAgentJob({ projectId, chatId, userText, model = "gemini-2.5-flash"
     // Run detached async loop
     (async () => {
         try {
-            const ws = conversationsManager.ensureProjectChatWorkspace(projectId, chatId);
-            const savedChat = conversationsManager.getProjectChat(projectId, chatId);
+            const ws = projectId
+                ? conversationsManager.ensureProjectChatWorkspace(projectId, chatId)
+                : conversationsManager.ensureChatWorkspace(chatId);
+            const savedChat = projectId
+                ? conversationsManager.getProjectChat(projectId, chatId)
+                : conversationsManager.getChat(chatId);
             let sessionMessages = savedChat?.messages || [];
 
+            // Ensure system turn exists
+            if (sessionMessages.length === 0 || sessionMessages[0]?.role !== "system") {
+                const sysPrompt = ws.workspacePrompt || "You are MultiAI, an intelligent, helpful agent.";
+                const sysTurn = { role: "system", content: sysPrompt, timestamp: Date.now() };
+                sessionMessages.unshift(sysTurn);
+                conversationsManager.appendMessage(ws.messagesFile, sysTurn);
+            }
+
             // Add user turn if provided
-            if (userText) {
-                const userTurn = { role: "user", content: userText, timestamp: Date.now() };
+            if (userContent || userText) {
+                const userTurn = { role: "user", content: userContent || userText, timestamp: Date.now() };
                 sessionMessages.push(userTurn);
                 conversationsManager.appendMessage(ws.messagesFile, userTurn);
             }
@@ -345,7 +543,7 @@ function startAgentJob({ projectId, chatId, userText, model = "gemini-2.5-flash"
 
                 round++;
                 job.lastUpdated = Date.now();
-                emitter.emit("event", { type: "round_start", round, model });
+                dispatchEvent({ type: "round_start", round, model });
 
                 // Call LLM
                 let chatResult;
@@ -370,8 +568,8 @@ function startAgentJob({ projectId, chatId, userText, model = "gemini-2.5-flash"
                 sessionMessages.push(assistantMsg);
                 conversationsManager.appendMessage(ws.messagesFile, assistantMsg);
 
-                if (content) {
-                    emitter.emit("event", { type: "thought", content });
+                if (content && toolCalls.length > 0) {
+                    dispatchEvent({ type: "thought", content });
                 }
 
                 // If tool calls, execute them
@@ -387,14 +585,20 @@ function startAgentJob({ projectId, chatId, userText, model = "gemini-2.5-flash"
                                 : (call.function?.arguments || {});
                         } catch (_) {}
 
-                        emitter.emit("event", { type: "tool_start", name, args });
+                        dispatchEvent({ type: "tool_start", name, args, tool_call_id: call.id });
 
                         let result;
                         try {
-                            result = await executeServerTool(name, args, { chatId, projectId, abortSignal: abortController.signal });
+                            result = await executeServerTool(name, args, { 
+                                chatId, 
+                                projectId, 
+                                abortSignal: abortController.signal,
+                                job,
+                                dispatchEvent
+                            });
                             if (name === "write_todos" && result?.todos) {
                                 job.todos = result.todos;
-                                emitter.emit("event", { type: "todos_updated", todos: result.todos, artifactPath: result.artifact_path });
+                                dispatchEvent({ type: "todos_updated", todos: result.todos, artifactPath: result.artifact_path });
                             }
                         } catch (err) {
                             result = { error: err.message };
@@ -405,7 +609,7 @@ function startAgentJob({ projectId, chatId, userText, model = "gemini-2.5-flash"
                             hasRunVerification = true;
                         }
 
-                        emitter.emit("event", { type: "tool_complete", name, result });
+                        dispatchEvent({ type: "tool_complete", name, args, result, tool_call_id: call.id });
 
                         const toolTurn = {
                             role: "tool",
@@ -448,12 +652,12 @@ function startAgentJob({ projectId, chatId, userText, model = "gemini-2.5-flash"
                 }
 
                 // Concluding turn
-                emitter.emit("event", { type: "done", finalAnswer: content });
+                dispatchEvent({ type: "done", finalAnswer: content });
                 break;
             }
         } catch (err) {
             job.error = err.message;
-            emitter.emit("event", { type: "error", error: err.message });
+            dispatchEvent({ type: "error", error: err.message });
         } finally {
             job.isRunning = false;
             job.lastUpdated = Date.now();
@@ -468,14 +672,35 @@ function getAgentJob(chatId) {
 }
 
 function stopAgentJob(chatId) {
+    if (pendingAnswers.has(chatId)) {
+        const pending = pendingAnswers.get(chatId);
+        pendingAnswers.delete(chatId);
+        pending.resolve({ status: "cancelled", reason: "Generation stopped by user" });
+    }
     const job = activeJobs.get(chatId);
-    if (job && job.isRunning) {
-        job.abortController.abort();
-        job.isRunning = false;
-        job.emitter.emit("event", { type: "cancelled", message: "Generation stopped by user" });
-        return true;
+    if (job) {
+        job.pendingQuestion = null;
+        if (job.isRunning) {
+            job.abortController.abort();
+            job.isRunning = false;
+            job.lastUpdated = Date.now();
+            const cancelEv = { type: "cancelled", message: "Generation stopped by user" };
+            if (Array.isArray(job.events)) job.events.push(cancelEv);
+            job.emitter.emit("event", cancelEv);
+            return true;
+        }
     }
     return false;
+}
+
+function answerAgentQuestion(chatId, answerPayload) {
+    const pending = pendingAnswers.get(chatId);
+    if (!pending) {
+        return false;
+    }
+    pendingAnswers.delete(chatId);
+    pending.resolve(answerPayload);
+    return true;
 }
 
 function subscribeAgentJob(chatId, listener) {
@@ -492,5 +717,6 @@ module.exports = {
     getAgentJob,
     stopAgentJob,
     subscribeAgentJob,
+    answerAgentQuestion,
     activeJobs
 };

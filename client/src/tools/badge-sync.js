@@ -4,6 +4,7 @@
 import { renderIcons } from "../utils/icons.js";
 import { escapeHTML } from "../utils/dom.js";
 import { renderDiffCardHtml, renderCodeViewerCardHtml, bindDiffViewerCards } from "../components/diff-viewer.js";
+import { deriveCommandTag } from "../components/chat-tool-badges.js";
 
 /**
  * Initializes visual timers and indicators on tool badge start.
@@ -72,9 +73,22 @@ export function onToolComplete(name, args, badgeEl, data) {
                 const queryEl = badgeEl.querySelector(".search-query");
                 if (labelEl) labelEl.textContent = "Running in background";
                 if (queryEl) {
-                    const desc = args.task_name || data.task_id || args.command || "task";
+                    const desc = args.task_name || deriveCommandTag(args.command) || data.task_id || "task";
                     queryEl.textContent = `${desc}${data.task_id ? ` (id: ${data.task_id})` : ""}`;
                 }
+            }
+        } else if ((name === "ask_question" || name === "ask_questions") && data) {
+            const labelEl = badgeEl.querySelector(".search-label");
+            const queryEl = badgeEl.querySelector(".search-query");
+            if (data.status === "answered" && Array.isArray(data.answers)) {
+                if (labelEl) labelEl.textContent = "Answered";
+                if (queryEl) {
+                    const ansText = data.answers.map(a => `${a.question}: ${Array.isArray(a.answer) ? a.answer.join(", ") : a.answer}`).join(" • ");
+                    queryEl.textContent = ansText;
+                }
+            } else if (data.status === "skipped") {
+                if (labelEl) labelEl.textContent = "Skipped";
+                if (queryEl) queryEl.textContent = "Question skipped by user";
             }
         }
     }
@@ -86,18 +100,27 @@ function setBadgeDiffStats(badgeEl, queryEl, statHtml) {
         if (!statHtml) return;
         statsEl = document.createElement("span");
         statsEl.className = "badge-diff-stats";
-        queryEl.insertAdjacentElement("afterend", statsEl);
+        const countEl = badgeEl.querySelector(".badge-edit-count");
+        if (countEl) {
+            countEl.insertAdjacentElement("afterend", statsEl);
+        } else {
+            queryEl.insertAdjacentElement("afterend", statsEl);
+        }
     }
     statsEl.innerHTML = statHtml || "";
     if (!statHtml && statsEl.parentNode) {
         statsEl.remove();
+    } else if (statsEl) {
+        statsEl.classList.remove("stat-updated");
+        void statsEl.offsetWidth; // retrigger reflow
+        statsEl.classList.add("stat-updated");
     }
 }
 
     if ((name === "replace_file_content" || name === "multi_replace_file_content" || name === "search_and_replace") && data) {
         const queryEl = badgeEl.querySelector(".search-query");
         if (queryEl) {
-            const pathStr = data.path || args.path || args.TargetFile || "file";
+            const pathStr = data.path || args.path || args.TargetFile || args.file_path || "file";
             queryEl.textContent = pathStr;
             let adds = data.lines_added;
             let dels = data.lines_removed;
@@ -112,16 +135,85 @@ function setBadgeDiffStats(badgeEl, queryEl, statHtml) {
                 adds = a;
                 dels = d;
             }
+            if (adds === undefined || dels === undefined) {
+                if (args.target_content !== undefined || args.replacement_content !== undefined) {
+                    dels = args.target_content ? String(args.target_content).split("\n").length : 0;
+                    adds = args.replacement_content ? String(args.replacement_content).split("\n").length : 0;
+                } else if (Array.isArray(args.replacement_chunks)) {
+                    let totalA = 0;
+                    let totalD = 0;
+                    for (const c of args.replacement_chunks) {
+                        const t = c.target_content || c.TargetContent || "";
+                        const r = c.replacement_content || c.ReplacementContent || "";
+                        if (t) totalD += String(t).split("\n").length;
+                        if (r) totalA += String(r).split("\n").length;
+                    }
+                    adds = totalA;
+                    dels = totalD;
+                }
+            }
+
+            adds = adds || 0;
+            dels = dels || 0;
+
+            // Track continuous cumulative statistics
+            badgeEl._totalAdded = (badgeEl._totalAdded || 0) + adds;
+            badgeEl._totalRemoved = (badgeEl._totalRemoved || 0) + dels;
+            badgeEl._editSteps = badgeEl._editSteps || [];
+
+            // Compute description for this edit step
+            const stepNum = badgeEl._editSteps.length + 1;
+            let stepDesc = args.description || args.Description || args.instruction || args.Instruction || "";
+            if (!stepDesc) {
+                if (args.start_line !== undefined || args.StartLine !== undefined) {
+                    const start = args.start_line ?? args.StartLine;
+                    const end = args.end_line ?? args.EndLine ?? start;
+                    stepDesc = `Lines ${start}-${end}`;
+                } else {
+                    stepDesc = `Edit #${stepNum}`;
+                }
+            }
+
+            let diffStr = data.diff;
+            if (!diffStr) {
+                if (args.target_content !== undefined && args.replacement_content !== undefined) {
+                    const targetLines = String(args.target_content).split("\n");
+                    const replLines = String(args.replacement_content).split("\n");
+                    diffStr = `--- a/${pathStr}\n+++ b/${pathStr}\n@@ -1,${targetLines.length} +1,${replLines.length} @@\n` +
+                        targetLines.map(l => `-${l}`).join("\n") + "\n" +
+                        replLines.map(l => `+${l}`).join("\n");
+                }
+            }
+
+            badgeEl._editSteps.push({
+                step: stepNum,
+                toolName: name,
+                desc: stepDesc,
+                adds,
+                dels,
+                diff: diffStr
+            });
+
+            // Update edit count pill
+            let countEl = badgeEl.querySelector(".badge-edit-count");
+            if (!countEl) {
+                countEl = document.createElement("span");
+                countEl.className = "badge-edit-count";
+                queryEl.insertAdjacentElement("afterend", countEl);
+            }
+            const count = Math.max(badgeEl._editCount || 1, badgeEl._editSteps.length);
+            countEl.textContent = count === 1 ? `(1 edit)` : `(${count} edits)`;
+            countEl.classList.remove("count-updated");
+            void countEl.offsetWidth;
+            countEl.classList.add("count-updated");
+
+            // Update cumulative diff stats pill
             let statHtml = "";
-            if (adds !== undefined && adds > 0) {
-                statHtml += `<span class="badge-diff-stat add">+${adds}</span>`;
+            if (badgeEl._totalAdded > 0) {
+                statHtml += `<span class="badge-diff-stat add">+${badgeEl._totalAdded}</span>`;
             }
-            if (dels !== undefined && dels > 0) {
-                statHtml += `<span class="badge-diff-stat del">-${dels}</span>`;
-            }
-            if (!statHtml && data.lines_diff !== undefined) {
-                const sign = data.lines_diff >= 0 ? `+${data.lines_diff}` : `${data.lines_diff}`;
-                statHtml = `<span class="badge-diff-stat ${data.lines_diff >= 0 ? 'add' : 'del'}">${sign}</span>`;
+            if (badgeEl._totalRemoved > 0) {
+                statHtml += `<span class="badge-diff-stat del">-${badgeEl._totalRemoved}</span>`;
             }
             setBadgeDiffStats(badgeEl, queryEl, statHtml);
         }
@@ -222,28 +314,67 @@ function setBadgeDiffStats(badgeEl, queryEl, statHtml) {
 
             const collapseInner = badgeEl._collapseDiv.querySelector(".badge-collapse-inner") || badgeEl._collapseDiv;
 
-            if ((name === "replace_file_content" || name === "multi_replace_file_content" || name === "search_and_replace") && (data.diff || (args.target_content && args.replacement_content) || args.replacement_chunks)) {
+            if ((name === "replace_file_content" || name === "multi_replace_file_content" || name === "search_and_replace") && (data.diff || (args.target_content && args.replacement_content) || args.replacement_chunks || (badgeEl._editSteps && badgeEl._editSteps.length > 0))) {
                 const filePath = data.path || args.TargetFile || args.path || args.file_path || "";
-                let diffStr = data.diff;
-                if (!diffStr) {
-                    if (args.target_content !== undefined && args.replacement_content !== undefined) {
+                const steps = badgeEl._editSteps || [];
+                const totalAdds = badgeEl._totalAdded !== undefined ? badgeEl._totalAdded : (data.lines_added || 0);
+                const totalDels = badgeEl._totalRemoved !== undefined ? badgeEl._totalRemoved : (data.lines_removed || 0);
+
+                let combinedDiffStr = "";
+                if (steps.length > 0) {
+                    combinedDiffStr = steps.map(s => s.diff).filter(Boolean).join("\n");
+                }
+                if (!combinedDiffStr) {
+                    if (data.diff) {
+                        combinedDiffStr = data.diff;
+                    } else if (args.target_content !== undefined && args.replacement_content !== undefined) {
                         const targetLines = String(args.target_content).split("\n");
                         const replLines = String(args.replacement_content).split("\n");
-                        diffStr = `--- a/${filePath || "file"}\n+++ b/${filePath || "file"}\n@@ -1,${targetLines.length} +1,${replLines.length} @@\n` +
+                        combinedDiffStr = `--- a/${filePath || "file"}\n+++ b/${filePath || "file"}\n@@ -1,${targetLines.length} +1,${replLines.length} @@\n` +
                             targetLines.map(l => `-${l}`).join("\n") + "\n" +
                             replLines.map(l => `+${l}`).join("\n");
                     }
                 }
-                if (diffStr) {
-                    const stats = {
-                        additions: data.lines_added,
-                        deletions: data.lines_removed
-                    };
-                    collapseInner.innerHTML = renderDiffCardHtml({
-                        diffStr,
+
+                if (combinedDiffStr || steps.length > 0) {
+                    let summaryHtml = "";
+                    if (steps.length > 1) {
+                        summaryHtml = `
+                        <div class="file-edit-steps-summary">
+                            <div class="file-edit-steps-header">
+                                <span>Modified across ${steps.length} edits</span>
+                                <span class="file-edit-step-stats">
+                                    ${totalAdds > 0 ? `<span class="badge-diff-stat add">+${totalAdds}</span>` : ""}
+                                    ${totalDels > 0 ? `<span class="badge-diff-stat del">-${totalDels}</span>` : ""}
+                                </span>
+                            </div>
+                            <div class="file-edit-steps-timeline">
+                                ${steps.map(s => `
+                                    <div class="file-edit-step-item">
+                                        <div class="file-edit-step-left">
+                                            <span class="file-edit-step-num">#${s.step}</span>
+                                            <span class="file-edit-step-desc">${escapeHTML(s.desc || s.toolName)}</span>
+                                        </div>
+                                        <div class="file-edit-step-stats">
+                                            ${s.adds > 0 ? `<span class="badge-diff-stat add">+${s.adds}</span>` : ""}
+                                            ${s.dels > 0 ? `<span class="badge-diff-stat del">-${s.dels}</span>` : ""}
+                                        </div>
+                                    </div>
+                                `).join("")}
+                            </div>
+                        </div>`;
+                    }
+
+                    const diffCardHtml = combinedDiffStr ? renderDiffCardHtml({
+                        diffStr: combinedDiffStr,
                         filePath,
-                        stats
-                    });
+                        stats: {
+                            additions: totalAdds,
+                            deletions: totalDels
+                        }
+                    }) : "";
+
+                    collapseInner.innerHTML = summaryHtml + diffCardHtml;
                     bindDiffViewerCards(collapseInner);
                     renderIcons(collapseInner);
                     return;

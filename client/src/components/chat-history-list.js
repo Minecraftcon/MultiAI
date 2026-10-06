@@ -44,7 +44,10 @@ export function renderChatList(filterQuery = "") {
     const chatList = document.getElementById("chatList");
     if (!chatList) return;
 
-    let ids = Object.keys(state.chatSessions || {});
+    let ids = Object.keys(state.chatSessions || {}).filter(id => {
+        const s = state.chatSessions[id];
+        return s && !s.projectId && s.mode !== "build";
+    });
 
     // Clear the keyed-diff map if we had an empty state placeholder
     if (chatList.querySelector(".history-empty")) {
@@ -160,14 +163,14 @@ export function renderChatList(filterQuery = "") {
             item.addEventListener("click", (e) => {
                 if (didLongPress) { e.preventDefault(); e.stopPropagation(); didLongPress = false; return; }
                 if (e.target.closest(".chat-item-more-btn")) return;
-                if (id !== state.currentChatId) switchToChat(id);
+                switchToChat(id);
                 closePanel(true);
             });
 
             item.addEventListener("keydown", (e) => {
                 if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
-                    if (id !== state.currentChatId) switchToChat(id);
+                    switchToChat(id);
                     closePanel(true);
                 }
             });
@@ -237,21 +240,21 @@ export async function switchToChat(id) {
     } catch (_) {}
     let session = state.chatSessions[id];
 
-    // If session messages are not yet loaded in memory, fetch full session from backend
-    if (!session.messages || session.messages.length === 0) {
-        try {
-            const res = await fetch("/api/chats/" + encodeURIComponent(id));
-            if (res.ok) {
-                const data = await res.json();
-                if (data && data.session) {
+    // Fetch full session from backend if messages are not yet loaded or disk has more complete history
+    try {
+        const res = await fetch("/api/chats/" + encodeURIComponent(id));
+        if (res.ok) {
+            const data = await res.json();
+            if (data?.session?.messages && Array.isArray(data.session.messages)) {
+                if (!session.messages || data.session.messages.length >= session.messages.length) {
                     session = { ...session, ...data.session };
                     state.chatSessions[id] = session;
                     if (data.workspace) session.workspace = data.workspace;
                 }
             }
-        } catch (e) {
-            console.warn("[STORAGE] Error fetching full chat session:", e);
         }
+    } catch (e) {
+        console.warn("[STORAGE] Error fetching full chat session:", e);
     }
 
     const chat = document.getElementById("chat");
@@ -278,26 +281,30 @@ export async function switchToChat(id) {
 
     if (chat) {
         chat.innerHTML = "";
-        renderSessionMessages(session, chat);
+        try {
+            renderSessionMessages(session, chat);
 
-        chat.querySelectorAll(".user-msg-actions").forEach(el => el.remove());
+            chat.querySelectorAll(".user-msg-actions").forEach(el => el.remove());
 
-        chat.querySelectorAll(".message.user").forEach(msg => {
-            if (!msg.dataset.rawText) {
-                const textEl = msg.querySelector(".msg-bubble-text");
-                msg.dataset.rawText = textEl ? textEl.textContent.trim() : msg.textContent.trim();
-            }
-        });
+            chat.querySelectorAll(".message.user").forEach(msg => {
+                if (!msg.dataset.rawText) {
+                    const textEl = msg.querySelector(".msg-bubble-text");
+                    msg.dataset.rawText = textEl ? textEl.textContent.trim() : msg.textContent.trim();
+                }
+            });
 
-        bindInteractiveCodeBlocks(chat);
-        renderMermaidInElement(chat);
-        wrapTablesForScroll(chat);
-        renderIcons(chat);
-        renderMath(chat);
-        bindAIImageCards(chat, true);
-        wrapHugeThoughts(chat);
+            bindInteractiveCodeBlocks(chat);
+            renderMermaidInElement(chat);
+            wrapTablesForScroll(chat);
+            renderIcons(chat);
+            renderMath(chat);
+            bindAIImageCards(chat, true);
+            wrapHugeThoughts(chat);
 
-        chat.scrollTop = chat.scrollHeight;
+            chat.scrollTop = chat.scrollHeight;
+        } catch (err) {
+            console.error("[CHAT] Error rendering session messages:", err);
+        }
 
         // If session messages are missing or empty, reconstruct from DOM so context is never lost
         if ((!session.messages || !session.messages.some(m => m.role === "user")) && chat) {

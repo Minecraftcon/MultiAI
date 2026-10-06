@@ -16,7 +16,8 @@ import {
     showCheckpointModal,
     addCompactionBadge,
     addThoughtTrace,
-    wrapHugeThoughts
+    wrapHugeThoughts,
+    finalizeFileEditBadges
 } from "./chat-tool-badges.js";
 import { requestScrollToBottom, initScrollToBottom } from "./chat-scroll.js";
 import { openImageLightbox } from "./composer-attachments.js";
@@ -29,6 +30,7 @@ export {
     addCompactionBadge,
     addThoughtTrace,
     wrapHugeThoughts,
+    finalizeFileEditBadges,
     requestScrollToBottom,
     initScrollToBottom
 };
@@ -265,6 +267,7 @@ export function renderTurn(turn, session, compactionRef, isLastTurn) {
             activityWrapper.style.display = "none";
         }
 
+        finalizeFileEditBadges(aiDiv);
         fragment.appendChild(aiDiv);
     }
 
@@ -448,6 +451,7 @@ export function updateAIStream(element, fullText, isDone, startTime, hasTools) {
 
     if (isDone) {
         if (cursor) cursor.remove();
+        finalizeFileEditBadges(element);
 
         renderFollowupSuggestions(element, followups, isDone);
         renderPlanApprovalActions(element, answerText, isDone);
@@ -530,6 +534,7 @@ export function finalizeStopped(element, startTime, hasTools) {
     if (activityWrapper && activityWrapper.classList.contains("open") && !element.dataset.manuallyToggled) {
         activityWrapper.classList.remove("open");
     }
+    finalizeFileEditBadges(element);
 
     const targetContent = hasTools ? finalContent : (preContent || finalContent);
     if (targetContent) {
@@ -589,18 +594,25 @@ export function initChatDelegation() {
                 const textEl = cmdBox.querySelector(".command-cmd-text");
                 const labelEl = cmdToggle.querySelector(".cmd-toggle-label");
                 const linesEl = cmdToggle.querySelector(".cmd-toggle-lines");
+                const isShell = cmdBox.dataset.isShell === "true";
 
                 if (isExpanded) {
                     cmdBox.classList.remove("is-expanded");
                     cmdBox.classList.add("is-compact");
-                    if (textEl) textEl.textContent = cmdBox.dataset.compact || "";
+                    if (textEl) {
+                        const raw = cmdBox.dataset.compact || "";
+                        textEl.innerHTML = escapeHTML(raw);
+                    }
                     if (labelEl) labelEl.textContent = "Expand";
                     if (linesEl) linesEl.style.display = "";
                     cmdToggle.setAttribute("aria-expanded", "false");
                 } else {
                     cmdBox.classList.remove("is-compact");
                     cmdBox.classList.add("is-expanded");
-                    if (textEl) textEl.textContent = cmdBox.dataset.full || "";
+                    if (textEl) {
+                        const raw = cmdBox.dataset.full || "";
+                        textEl.innerHTML = escapeHTML(raw);
+                    }
                     if (labelEl) labelEl.textContent = "Collapse";
                     if (linesEl) linesEl.style.display = "none";
                     cmdToggle.setAttribute("aria-expanded", "true");

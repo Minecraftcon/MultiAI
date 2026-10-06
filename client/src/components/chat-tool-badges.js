@@ -8,6 +8,79 @@ import { parseMarkdown, bindInteractiveCodeBlocks, renderMermaidInElement, rende
 import { saveCurrentChatState } from "../services/storage.js";
 import { requestScrollToBottom } from "./chat-ui.js";
 
+
+/**
+ * Extracts a concise command name tag from a raw shell command line
+ * when the model did not supply an explicit task_name.
+ *
+ * @param {string} rawCmd
+ * @returns {string}
+ */
+export function deriveCommandTag(rawCmd) {
+    if (!rawCmd || typeof rawCmd !== "string") return "command";
+    let cmd = rawCmd.trim();
+    if (!cmd) return "command";
+
+    // Single simple short commands stay as-is (e.g. "ls -la", "pwd")
+    if (cmd.length <= 40 && !cmd.includes("&&") && !cmd.includes(";") && !cmd.includes("\n")) {
+        return cmd;
+    }
+
+    // 1. Remove leading directory navigation: cd <path> && or cd <path>;
+    cmd = cmd.replace(/^cd\s+[^&;\n]+\s*(?:&&|;)\s*/i, "");
+
+    // 2. Remove leading environment assignments: FOO=bar BAZ=1
+    cmd = cmd.replace(/^(?:[A-Za-z_][A-Za-z0-9_]*=[^&;\s]+\s+)+/, "");
+
+    // 3. Remove leading echo markers: echo "..." && or echo "...";
+    cmd = cmd.replace(/^echo\s+["'][^"']*["']\s*(?:&&|;)\s*/i, "");
+
+    // 4. If command has a loop or runner, extract the primary executable + arg
+    const loopMatch = cmd.match(/\b(?:timeout\s+\d+\s+)?(node|python3?|pytest|jest|vitest|cargo\s+test|npm\s+test)\s+([^\s;&>]+)/i);
+    if (loopMatch) {
+        const bin = loopMatch[1];
+        let target = loopMatch[2].replace(/["']/g, "").split("/").pop();
+        if (target.startsWith("$")) {
+            const listMatch = cmd.match(/\bfor\s+\w+\s+in\s+([^\s;&]+)/i);
+            if (listMatch) {
+                target = listMatch[1].replace(/["']/g, "").split("/").pop();
+            }
+        }
+        return `${bin} ${target}`;
+    }
+
+    // 5. Inspect substantive segments separated by && or ;
+    const segments = cmd.split(/\s*(?:&&|;|\n)\s*/).map(s => s.trim()).filter(Boolean);
+    const substantive = segments.find(s => !/^echo\b/i.test(s)) || segments[0] || cmd;
+
+    // 6. Inspect the first pipe command
+    const pipeCmd = substantive.split(/\s*\|\s*/)[0].trim();
+    const tokens = pipeCmd.split(/\s+/).filter(Boolean);
+
+    // 7. Standard CLI tooling (git, npm, npx, cargo, docker, pnpm, yarn, etc.)
+    if (tokens.length >= 2 && ["git", "npm", "npx", "pnpm", "yarn", "docker", "cargo", "go", "kubectl"].includes(tokens[0])) {
+        if (tokens[1] === "run" && tokens[2]) {
+            return `${tokens[0]} run ${tokens[2]}`;
+        }
+        const sub = tokens[1].replace(/^-+/, "");
+        return `${tokens[0]} ${sub}`;
+    }
+
+    // 8. Script runners (node, python, bash, sh)
+    if (tokens.length >= 2 && ["node", "python", "python3", "bash", "sh"].includes(tokens[0])) {
+        const file = tokens[1].split("/").pop();
+        return `${tokens[0]} ${file}`;
+    }
+
+    // 9. If clean enough, return
+    if (pipeCmd.length <= 40) {
+        return pipeCmd;
+    }
+
+    // 10. Truncate long commands cleanly
+    return pipeCmd.slice(0, 38) + "…";
+}
+
 /**
  * Resolves tool configuration, icon, label, and detail strings for a given tool execution.
  * Pure function to enable characterization testing and decoupled UI rendering.
@@ -36,7 +109,9 @@ export function getToolBadgeConfig(toolName, args = {}) {
         icon = "play";
         label = "Ran command";
         const taskName = args.task_name || args.name;
-        detail = taskName || args.command || "task command";
+        const cmdStr = args.command || args.CommandLine || args.cmd;
+        const derivedTag = (!taskName && cmdStr) ? deriveCommandTag(cmdStr) : "";
+        detail = taskName || derivedTag || cmdStr || "task command";
         isCommandTask = true;
     } else if (toolName === "manage_tasks" || toolName === "manage_task") {
         const action = (args.action || args.subcommand || "").toLowerCase();
@@ -200,10 +275,17 @@ export function getToolBadgeConfig(toolName, args = {}) {
         label = `Subagent [${subType}]`;
         detail = args.instruction || "subagent task";
         isCommandTask = true;
+    } else if (toolName === "ask_question" || toolName === "ask_questions") {
+        icon = "help-circle";
+        label = "Asked question";
+        const qList = Array.isArray(args.questions) ? args.questions : (args.question ? [args] : []);
+        const firstQ = qList[0]?.question || args.question || "clarifying question";
+        detail = qList.length > 1 ? `${firstQ} (+${qList.length - 1} more)` : firstQ;
+        isCommandTask = true;
     }
 
     const isTimer = toolName === "sleep" || toolName === "idle" || toolName === "schedule";
-    const isCommand = toolName === "run_task" || toolName === "run_command";
+    const isCommand = toolName === "run_task" || toolName === "run_command" || Boolean(args && (args.command || args.CommandLine || args.cmd));
     const hasRing = isTimer || isCommand;
 
     const detailLines = String(detail || "").split("\n");
@@ -211,9 +293,6 @@ export function getToolBadgeConfig(toolName, args = {}) {
     const compactDetail = isDetailMulti
         ? detailLines.slice(0, 3).join("\n") + "\n…"
         : detail;
-
-    const isRunTaskWithTitle = (toolName === "run_task" || toolName === "run_command") && (args.task_name || args.name);
-    const isArtifact = toolName === "write_file" && ((args.path || "").startsWith("$ARTIFACTS/") || (args.path || "").startsWith("${ARTIFACTS}/"));
 
     let displayCmd = "";
     if (toolName === "write_todos") {
@@ -226,6 +305,12 @@ export function getToolBadgeConfig(toolName, args = {}) {
         displayCmd = `PLAN (${completed}/${todos.length} completed):\n${items}`;
     } else if (toolName === "task") {
         displayCmd = `SUBAGENT [${args.subagent_type || "general-purpose"}]:\n${args.instruction || ""}`;
+    } else if (toolName === "ask_question" || toolName === "ask_questions") {
+        const qList = Array.isArray(args.questions) ? args.questions : (args.question ? [args] : []);
+        displayCmd = qList.map((q, idx) => {
+            const opts = (Array.isArray(q.options) ? q.options : []).map((o, oi) => `  ${oi + 1}. ${o}`).join("\n");
+            return `QUESTION ${idx + 1}: ${q.question || ""}\n${opts}`;
+        }).join("\n\n") || "Questionnaire";
     } else if (toolName === "write_file") {
         displayCmd = `Write to ${args.path || "file"}`;
     } else if (toolName === "replace_file_content" || toolName === "search_and_replace") {
@@ -250,8 +335,11 @@ export function getToolBadgeConfig(toolName, args = {}) {
         const taskInfo = (args.task || args.task_id) ? ` (hooked on ${args.task || args.task_id}, wake: ${args.wake_on || "exit"})` : "";
         displayCmd = `Schedule timer: ${duration}s${taskInfo}${args.reason ? ` - ${args.reason}` : ""}${args.end_response ? `\nEnd response: ${args.end_response}` : ""}`;
     } else {
-        displayCmd = args.command || args.input_string || (Array.isArray(args.urls) ? args.urls.join("\n") : args.url) || (args.task_id ? `Task: ${args.task_id}` : "Task execution");
+        displayCmd = args.command || args.CommandLine || args.cmd || args.input_string || (Array.isArray(args.urls) ? args.urls.join("\n") : args.url) || (args.task_id ? `Task: ${args.task_id}` : "Task execution");
     }
+
+    const isRunTaskWithTitle = (toolName === "run_task" || toolName === "run_command") && (args.task_name || args.name || (displayCmd && displayCmd !== detail ? detail : false));
+    const isArtifact = toolName === "write_file" && ((args.path || "").startsWith("$ARTIFACTS/") || (args.path || "").startsWith("${ARTIFACTS}/"));
 
     const cmdLines = String(displayCmd || "").split("\n");
     const isCmdMulti = cmdLines.length > 3;
@@ -307,6 +395,7 @@ export function addToolBadge(element, toolName, args) {
         isDetailMulti,
         detailLines,
         isCommandTask,
+        isCommand,
         hasRing,
         isArtifact,
         isRunTaskWithTitle,
@@ -320,8 +409,51 @@ export function addToolBadge(element, toolName, args) {
         ? `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-code preview-icon" aria-hidden="true" style="display:inline-block; vertical-align:-2px; margin: 0 4px; opacity:0.8;"><path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/></svg>` 
         : ``;
 
+    const isFileEditTool = (toolName === "replace_file_content" || toolName === "multi_replace_file_content" || toolName === "search_and_replace");
+    const editFilePath = isFileEditTool ? (args.path || args.TargetFile || args.target_file || args.file_path || "") : "";
+
+    if (isFileEditTool && editFilePath && searchContainer) {
+        let existingEditBadge = null;
+        const editBadges = searchContainer.querySelectorAll(".search-badge-item.file-edit-badge");
+        for (const b of editBadges) {
+            if (b.dataset.editFile === editFilePath) {
+                existingEditBadge = b;
+                break;
+            }
+        }
+        if (existingEditBadge) {
+            existingEditBadge._editCount = (existingEditBadge._editCount || 1) + 1;
+            existingEditBadge.classList.add("is-editing");
+            const labelEl = existingEditBadge.querySelector(".search-label");
+            if (labelEl) labelEl.textContent = "Editing";
+
+            let countEl = existingEditBadge.querySelector(".badge-edit-count");
+            if (!countEl) {
+                countEl = document.createElement("span");
+                countEl.className = "badge-edit-count";
+                const queryEl = existingEditBadge.querySelector(".search-query");
+                if (queryEl) queryEl.insertAdjacentElement("afterend", countEl);
+            }
+            countEl.textContent = `(${existingEditBadge._editCount} edits)`;
+            countEl.classList.remove("count-updated");
+            void countEl.offsetWidth;
+            countEl.classList.add("count-updated");
+
+            if (chat) chat.scrollTop = chat.scrollHeight;
+            return existingEditBadge;
+        }
+    }
+
     const item = document.createElement("div");
     item.className = "search-badge-item" + (hasRing ? " timer-badge" : "") + (isCommandTask ? " clickable-badge" : "") + (isDetailMulti ? " has-multiline" : "");
+    if (isFileEditTool && editFilePath) {
+        item.classList.add("file-edit-badge", "is-editing");
+        item.dataset.editFile = editFilePath;
+        item._editCount = 1;
+        item._totalAdded = 0;
+        item._totalRemoved = 0;
+        item._editSteps = [];
+    }
     if (isCommandTask) {
         item.setAttribute("role", "button");
         item.setAttribute("tabindex", "0");
@@ -345,9 +477,10 @@ export function addToolBadge(element, toolName, args) {
             <i data-lucide="${icon}" aria-hidden="true"></i>
         </div>
         <div>
-            <span class="search-label">${label}</span>
+            <span class="search-label">${isFileEditTool ? "Editing" : label}</span>
             ${codeIconHtml}
             <span class="search-query ${detailLines.length > 1 ? 'is-multiline' : ''}" data-full="${escapeHTML(detail)}" data-compact="${escapeHTML(compactDetail)}">${detailHtml || escapeHTML(compactDetail)}</span>
+            ${isFileEditTool ? `<span class="badge-edit-count">(1 edit)</span>` : ''}
             ${diffStatsHtml ? `<span class="badge-diff-stats">${diffStatsHtml}</span>` : ""}
             ${isArtifact ? `
             <span class="checkpoint-badge-actions">
@@ -866,3 +999,20 @@ export function wrapHugeThoughts(root) {
         }
     });
 }
+
+/**
+ * Finalizes file edit badges in a container (transitions from active 'Editing' to 'Edited file' / 'Multi-edited file').
+ */
+export function finalizeFileEditBadges(container) {
+    if (!container) return;
+    const badges = container.querySelectorAll(".search-badge-item.file-edit-badge.is-editing");
+    badges.forEach(badge => {
+        badge.classList.remove("is-editing");
+        const labelEl = badge.querySelector(".search-label");
+        if (labelEl) {
+            const count = badge._editCount || (badge._editSteps ? badge._editSteps.length : 1);
+            labelEl.textContent = count > 1 ? "Multi-edited file" : "Edited file";
+        }
+    });
+}
+

@@ -66,6 +66,7 @@
     --warning: #f59e0b;
     --error: #ef4444;
 
+
     color-scheme: dark;
 }
 
@@ -117,6 +118,7 @@
     --success: #22c55e;
     --warning: #f59e0b;
     --error: #ef4444;
+
 
     color-scheme: dark;
 }
@@ -170,6 +172,7 @@
     --warning: #d97706;
     --error: #dc2626;
 
+
     color-scheme: light;
 }
 
@@ -222,6 +225,7 @@
         --success: #16a34a;
         --warning: #d97706;
         --error: #dc2626;
+
 
         color-scheme: light;
     }

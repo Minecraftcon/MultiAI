@@ -26,7 +26,7 @@ export const tools = getAllToolSchemas();
  * Returns strictly isolated on-chat tool schemas for DeepSearch chats.
  */
 export function getDeepSearchOnChatTools() {
-    const allowed = ["run_task", "manage_tasks", "web_search", "schedule", "list_dir", "read_file", "write_file", "replace_file_content", "multi_replace_file_content", "grep_search", "write_todos", "task"];
+    const allowed = ["run_task", "manage_tasks", "web_search", "schedule", "list_dir", "read_file", "write_file", "replace_file_content", "multi_replace_file_content", "grep_search", "write_todos", "task", "ask_question", "ask_questions"];
     return allowed.map(name => getTool(name)?.schema).filter(Boolean);
 }
 

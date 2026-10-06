@@ -199,7 +199,7 @@ function ensureChatWorkspace(chatId, dateStr) {
         `- STORAGE & WORKSPACE GUIDELINES:`,
         `  1. You have a dedicated scratch directory (${scratchDir}) accessible via '$SCRATCH/<filename>' for temporary test scripts, scratch notes, working logs, or one-off benchmarks.`,
         `  2. You have a dedicated artifacts directory (${artifactsDir}) accessible via '$ARTIFACTS/<filename>' for persistent milestone archives, architecture briefs, and state snapshots.`,
-        `  3. In run_task, you can directly reference '$SCRATCH' or '$ARTIFACTS' (or '$SCRATCH_DIR', '$ARTIFACTS_DIR') in terminal commands.`,
+        `  3. In run_task, you can directly reference '$SCRATCH' or '$ARTIFACTS' (or '$SCRATCH_DIR', '$ARTIFACTS_DIR') in terminal commands. Always provide a concise 2-4 word 'task_name' (e.g. 'Run tests') for UI command tagging.`,
         `  4. Regular relative paths resolve normally against the project workspace.`
     ].join("\n");
 
