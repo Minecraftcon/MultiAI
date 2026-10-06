@@ -9,6 +9,7 @@ const { handleChat, handleAgentStream } = require("./routes/chat");
 const { handleConversationsRoute } = require("./routes/conversations");
 const { handleBuildProjectsRoute, handleValidateDirRoute } = require("./routes/build_projects");
 const { handleBuildAgentRoute } = require("./routes/build_agent");
+const { handleMcpRoute } = require("./routes/mcp");
 const { sendJSON } = require("./utils");
 
 async function routeRequest(req, res) {
@@ -101,6 +102,11 @@ async function routeRequest(req, res) {
         }
         if (reqUrl.startsWith("/api/build/agent") || reqUrl.startsWith("/api/agent/")) {
             return handleBuildAgentRoute(req, res);
+        }
+
+        // MCP (Model Context Protocol) Endpoints
+        if (reqUrl.startsWith("/api/mcp")) {
+            return handleMcpRoute(req, res);
         }
 
         // Static assets

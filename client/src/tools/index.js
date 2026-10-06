@@ -9,6 +9,7 @@ import { webTools } from "./web/index.js";
 import { mediaTools } from "./media/index.js";
 import { filesystemTools } from "./filesystem/index.js";
 import { planningTools } from "./planning/index.js";
+import { McpActiveTools } from "./mcp/index.js";
 
 // Register terminal, web, media, filesystem, and planning tools
 terminalTools.forEach(registerTool);
@@ -21,6 +22,45 @@ planningTools.forEach(registerTool);
  * Array of all tool schemas provided to LLM chat requests.
  */
 export const tools = getAllToolSchemas();
+
+/**
+ * Synchronizes the exported tools array in-place when dynamic tools (like MCP) update.
+ */
+export function syncToolsArray() {
+    tools.length = 0;
+    tools.push(...getActiveToolSchemas());
+    return tools;
+}
+
+/**
+ * Returns dynamic tool schemas filtering out tools disabled by configuration.
+ */
+function getActiveToolSchemas() {
+    const toolsConfig = state.config?.Tools || {};
+    return getAllToolSchemas().filter(schema => {
+        const name = schema?.function?.name || "";
+        if (toolsConfig.EnableTerminal === false && (name === "run_task" || name === "manage_tasks" || name === "schedule")) return false;
+        if (toolsConfig.EnableWebSearch === false && name === "web_search") return false;
+        if (toolsConfig.EnableImageGeneration === false && (name === "generate_image" || name === "get_image_status")) return false;
+        if (toolsConfig.EnableFilesystem === false && (name === "list_dir" || name === "read_file" || name === "write_file" || name === "replace_file_content" || name === "multi_replace_file_content" || name === "grep_search")) return false;
+        if (toolsConfig.EnableMcp === false && name.startsWith("mcp_")) return false;
+        return true;
+    });
+}
+
+// Keep exported tools array synchronized whenever active MCP tools update
+McpActiveTools.onChange(() => {
+    syncToolsArray();
+});
+
+// Initial background sync for active MCP tools in browser environment
+if (typeof window !== "undefined") {
+    queueMicrotask(() => {
+        McpActiveTools.refresh().catch(err => {
+            console.warn("[MCP] Initial tools refresh failed:", err.message);
+        });
+    });
+}
 
 /**
  * Returns strictly isolated on-chat tool schemas for DeepSearch chats.
@@ -70,6 +110,12 @@ export async function executeTool(name, args, badgeEl, genState) {
         throw new Error("Unknown tool: " + name);
     }
 
+    // Check if MCP tools are disabled in config.ini
+    const isMcpTool = name.startsWith("mcp_") || tool.isMcp;
+    if (toolsConfig.EnableMcp === false && isMcpTool) {
+        throw new Error("MCP tools are disabled in config.ini");
+    }
+
     onToolStart(name, args, badgeEl);
 
     let data;
@@ -88,8 +134,10 @@ export {
     registerTool,
     getTool,
     getAllToolSchemas,
+    getActiveToolSchemas,
     hasTool,
     onToolStart,
     onToolComplete,
-    onToolError
+    onToolError,
+    McpActiveTools
 };

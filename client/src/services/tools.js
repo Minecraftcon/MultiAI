@@ -7,5 +7,6 @@ export {
     registerTool,
     getTool,
     getAllToolSchemas,
-    hasTool
+    hasTool,
+    McpActiveTools
 } from "../tools/index.js";

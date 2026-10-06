@@ -491,6 +491,86 @@
                                 <span class="settings-slider"></span>
                             </label>
                         </div>
+
+                        <div class="settings-row">
+                            <div class="settings-item-info">
+                                <span class="settings-item-title">Model Context Protocol (MCP)</span>
+                                <span class="settings-item-desc">Enable external tool integration servers using Anthropic MCP specification</span>
+                            </div>
+                            <label class="settings-switch">
+                                <input type="checkbox" id="cfgEnableMcp" checked>
+                                <span class="settings-slider"></span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- MCP TOOL SERVERS CARD -->
+                    <div class="settings-card" id="cfgMcpCard">
+                        <div class="settings-card-header-row">
+                            <div class="settings-card-header-info">
+                                <span class="settings-card-title">Model Context Protocol Servers</span>
+                                <span class="settings-item-desc">Connect external MCP servers (stdio subprocesses or SSE endpoints) to expand agent tool capabilities</span>
+                            </div>
+                            <div class="mcp-card-actions">
+                                <button type="button" id="btnRefreshMcpServers" class="settings-action-btn secondary btn-sm" title="Refresh servers and discovered tools">
+                                    <i data-lucide="refresh-cw"></i>
+                                    <span>Sync</span>
+                                </button>
+                                <button type="button" id="btnToggleAddMcpServer" class="settings-action-btn secondary btn-sm">
+                                    <i data-lucide="plus"></i>
+                                    <span>Add Server</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Add Server Form (Expandable) -->
+                        <div id="mcpAddServerContainer" class="mcp-add-server-form" style="display: none;">
+                            <div class="mcp-form-header">
+                                <span class="mcp-form-title">Configure New MCP Server</span>
+                            </div>
+                            <div class="mcp-form-grid">
+                                <div class="mcp-form-field">
+                                    <label for="mcpNewServerId">Server Identifier</label>
+                                    <input type="text" id="mcpNewServerId" class="settings-input" placeholder="e.g. filesystem, github, postgres" autocomplete="off">
+                                </div>
+                                <div class="mcp-form-field">
+                                    <label for="mcpNewTransport">Transport</label>
+                                    <select id="mcpNewTransport" class="settings-select">
+                                        <option value="stdio">stdio (Subprocess command)</option>
+                                        <option value="sse">sse (Remote Server-Sent Events URL)</option>
+                                    </select>
+                                </div>
+                                <div class="mcp-form-field" id="mcpCommandField">
+                                    <label for="mcpNewCommand">Command</label>
+                                    <input type="text" id="mcpNewCommand" class="settings-input" placeholder="e.g. npx, python3, uvx" autocomplete="off">
+                                </div>
+                                <div class="mcp-form-field" id="mcpArgsField">
+                                    <label for="mcpNewArgs">Arguments (space-separated)</label>
+                                    <input type="text" id="mcpNewArgs" class="settings-input" placeholder="e.g. -y @modelcontextprotocol/server-filesystem /path" autocomplete="off">
+                                </div>
+                                <div class="mcp-form-field" id="mcpUrlField" style="display: none;">
+                                    <label for="mcpNewUrl">SSE URL</label>
+                                    <input type="url" id="mcpNewUrl" class="settings-input" placeholder="e.g. http://localhost:8000/sse" autocomplete="off">
+                                </div>
+                            </div>
+                            <div class="mcp-form-actions">
+                                <button type="button" id="btnCancelAddMcpServer" class="settings-action-btn secondary btn-sm">
+                                    <span>Cancel</span>
+                                </button>
+                                <button type="button" id="btnSaveMcpServer" class="settings-action-btn btn-sm">
+                                    <i data-lucide="check"></i>
+                                    <span>Connect Server</span>
+                                </button>
+                            </div>
+                            <div id="mcpAddError" class="mcp-form-error" style="display: none;"></div>
+                        </div>
+
+                        <!-- Live Servers List -->
+                        <div id="mcpServersList" class="mcp-servers-list">
+                            <div class="mcp-loading-state">
+                                <span>Loading configured MCP servers...</span>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="settings-card">

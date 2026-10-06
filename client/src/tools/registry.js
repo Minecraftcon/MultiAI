@@ -44,3 +44,10 @@ export function getAllToolSchemas() {
 export function hasTool(name) {
     return toolRegistry.has(name);
 }
+
+/**
+ * Unregisters a tool definition by name.
+ */
+export function unregisterTool(name) {
+    return toolRegistry.delete(name);
+}

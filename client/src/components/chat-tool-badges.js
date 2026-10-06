@@ -7,6 +7,7 @@ import { state } from "../state.js";
 import { parseMarkdown, bindInteractiveCodeBlocks, renderMermaidInElement, renderMath } from "./renderer.js";
 import { saveCurrentChatState } from "../services/storage.js";
 import { requestScrollToBottom } from "./chat-ui.js";
+import { getTool } from "../tools/registry.js";
 
 
 /**
@@ -281,6 +282,16 @@ export function getToolBadgeConfig(toolName, args = {}) {
         const qList = Array.isArray(args.questions) ? args.questions : (args.question ? [args] : []);
         const firstQ = qList[0]?.question || args.question || "clarifying question";
         detail = qList.length > 1 ? `${firstQ} (+${qList.length - 1} more)` : firstQ;
+        isCommandTask = true;
+    } else if (toolName.startsWith("mcp_")) {
+        icon = "plug";
+        const registered = getTool ? getTool(toolName) : null;
+        const serverName = registered?.serverId || toolName.slice(4).split("_")[0] || "tool";
+        const mcpToolName = registered?.originalName || (toolName.slice(4).split("_").slice(1).join("_") || toolName);
+        label = `MCP [${serverName}]`;
+        const argKeys = Object.keys(args || {});
+        const argSummary = argKeys.length > 0 ? ` (${argKeys.slice(0, 3).join(", ")})` : "";
+        detail = `${mcpToolName}${argSummary}`;
         isCommandTask = true;
     }
 

@@ -29,6 +29,7 @@ const DEFAULT_CONFIG = {
         EnableWebSearch: true,
         EnableImageGeneration: true,
         EnableFileOperations: true,
+        EnableMcp: true,
         DefaultTaskCooldown: 2,
         MaxFileSizeKB: 1024
     },

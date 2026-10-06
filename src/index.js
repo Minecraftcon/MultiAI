@@ -3,6 +3,7 @@ const fs = require("fs");
 const { getConfig } = require("./core/config_manager");
 const { initSupervisor } = require("./server/supervisor");
 const { routeRequest } = require("./server/router");
+const { mcpManager } = require("./core/mcp_manager");
 
 const { initConsole } = require("./server/console");
 
@@ -17,6 +18,11 @@ if (process.env.MULTIAI_WORKSPACE_DIR && fs.existsSync(process.env.MULTIAI_WORKS
 
 // Start Python task server child process and setup termination handlers
 initSupervisor();
+
+// Initialize configured Model Context Protocol (MCP) servers
+mcpManager.init().catch(err => {
+    console.warn("[MCP] Initialization error:", err.message);
+});
 
 const appConfig = getConfig();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : (appConfig.General?.Port || 8080);

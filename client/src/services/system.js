@@ -8,8 +8,16 @@ import {
     FOLLOWUP_SYSTEM_PROMPT 
 } from "../config.js";
 import { state, setActiveSystemPrompt } from "../state.js";
+import { McpActiveTools } from "../tools/mcp/index.js";
 
 let cachedSystemInfo = null;
+
+// Rebuild system prompt whenever active MCP tools change
+if (typeof window !== "undefined") {
+    McpActiveTools.onChange(() => {
+        rebuildActiveSystemPrompt();
+    });
+}
 
 export function getActivePersonaPrompt() {
     if (state.activePersonaPrompt && state.activePersonaPrompt.trim()) {
@@ -34,6 +42,20 @@ export function buildFullSystemPrompt(workspace = null, personaOverride = null) 
         persona,
         CORE_TOOLS_PROMPT
     ];
+
+    if (state.config?.Tools?.EnableMcp !== false) {
+        const mcpTools = McpActiveTools.getActiveTools();
+        if (mcpTools && mcpTools.length > 0) {
+            let mcpPrompt = `[EXTERNAL MODEL CONTEXT PROTOCOL (MCP) TOOLS]:\n`;
+            mcpPrompt += `You have access to the following active external MCP tools registered from connected Model Context Protocol servers:\n`;
+            for (const t of mcpTools) {
+                const desc = t.schema?.function?.description || t.description || "External MCP tool execution";
+                mcpPrompt += `- ${t.name}: ${desc}\n`;
+            }
+            mcpPrompt += `\nWhen the user asks you to perform tasks matching these capabilities or inquires about your available tools, invoke or reference these MCP tools directly by their registered names.`;
+            sections.push(mcpPrompt.trim());
+        }
+    }
 
     if (cachedSystemInfo) {
         let envPrompt = `[HOST SYSTEM ENVIRONMENT]\n`;

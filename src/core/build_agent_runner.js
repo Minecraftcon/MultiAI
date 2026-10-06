@@ -9,6 +9,7 @@ const fs = require("fs");
 const { resolveProvider } = require("../providers");
 const { loadModelsConfig, getEnvKey, resolveSafePath, postJSON, getChatWorkspace, getChatScratchDir, getChatArtifactsDir } = require("../server/utils");
 const { getConfig } = require("./config_manager");
+const { mcpManager } = require("./mcp_manager");
 const conversationsManager = require("./conversations_manager");
 const { handleFileRead } = require("../server/routes/files");
 const { 
@@ -312,6 +313,13 @@ function formatPlanMarkdown(title, todos = []) {
  * Executes a single tool call on the local server.
  */
 async function executeServerTool(name, args, { chatId, projectId, abortSignal, job, dispatchEvent }) {
+    if (name.startsWith("mcp_") || mcpManager.activeTools.has(name)) {
+        try {
+            return await mcpManager.callTool(name, args);
+        } catch (err) {
+            return { error: `MCP tool execution failed: ${err.message}` };
+        }
+    }
     if (name === "read_file") {
         return await handleFileRead(args, chatId);
     }
@@ -545,15 +553,16 @@ function startAgentJob({ projectId = null, chatId, userText, userContent = null,
                 job.lastUpdated = Date.now();
                 dispatchEvent({ type: "round_start", round, model });
 
-                // Call LLM
+                // Call LLM with base build tools + dynamic active MCP tools
                 let chatResult;
                 try {
+                    const activeTools = [...SERVER_BUILD_TOOLS, ...mcpManager.getActiveToolSchemas()];
                     chatResult = await providerHandler.handleChat({
                         model,
                         apiKey,
                         providerConfig,
                         messages: sessionMessages,
-                        tools: SERVER_BUILD_TOOLS
+                        tools: activeTools
                     });
                 } catch (err) {
                     if (abortController.signal.aborted) throw err;

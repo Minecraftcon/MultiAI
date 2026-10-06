@@ -1511,3 +1511,316 @@
     background: var(--hover);
     color: var(--text-primary);
 }
+
+/* =========================================================
+   MCP (MODEL CONTEXT PROTOCOL) SETTINGS STYLES
+   Adhering to MultiAI Surface, Border, and Text Hierarchy
+   ========================================================= */
+
+.settings-card-header-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.settings-card-header-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
+}
+
+.mcp-card-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.btn-sm {
+    height: 32px !important;
+    min-height: 32px !important;
+    padding: 0 12px !important;
+    font-size: 12.5px !important;
+    border-radius: 8px !important;
+}
+
+.btn-sm svg,
+.btn-sm i {
+    width: 14px !important;
+    height: 14px !important;
+}
+
+/* Settings Input Field Component */
+.settings-input {
+    height: 38px;
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    color: var(--text-primary);
+    font-size: 13.5px;
+    padding: 0 12px;
+    outline: none;
+    font-family: inherit;
+    box-sizing: border-box;
+    width: 100%;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.settings-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent-subtle);
+}
+
+.settings-input::placeholder {
+    color: var(--text-tertiary);
+}
+
+/* Expandable Add Server Form */
+.mcp-add-server-form {
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    margin-top: 4px;
+    margin-bottom: 8px;
+}
+
+.mcp-form-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.mcp-form-title {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.mcp-form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 12px;
+}
+
+.mcp-form-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.mcp-form-field label {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.mcp-form-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 4px;
+}
+
+.mcp-form-error {
+    font-size: 12px;
+    color: #ef4444;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    padding: 8px 12px;
+    border-radius: 7px;
+}
+
+/* Servers List & Items */
+.mcp-servers-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 4px;
+}
+
+.mcp-loading-state,
+.mcp-empty-state {
+    padding: 24px 16px;
+    text-align: center;
+    color: var(--text-tertiary);
+    font-size: 13px;
+    background: var(--surface);
+    border: 1px dashed var(--border);
+    border-radius: 10px;
+}
+
+.mcp-server-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 11px;
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.mcp-server-item:hover {
+    border-color: var(--border-strong);
+    background: var(--surface-2);
+}
+
+.mcp-server-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.mcp-server-title-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    flex-wrap: wrap;
+}
+
+.mcp-server-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+/* Status Pill Color Hierarchy */
+.mcp-status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 2px 8px;
+    border-radius: 9999px;
+    line-height: 1.4;
+}
+
+.mcp-status-pill.connected {
+    background: rgba(16, 185, 129, 0.12);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.25);
+}
+
+.mcp-status-pill.starting {
+    background: rgba(245, 158, 11, 0.12);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.25);
+}
+
+.mcp-status-pill.disabled {
+    background: rgba(156, 163, 175, 0.08);
+    color: var(--text-tertiary);
+    border: 1px solid var(--border-subtle);
+}
+
+.mcp-status-pill.error {
+    background: rgba(239, 68, 68, 0.12);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
+.mcp-server-transport {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 12px;
+    color: var(--text-secondary);
+    background: var(--bg);
+    border: 1px solid var(--border-subtle);
+    padding: 3px 8px;
+    border-radius: 6px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
+}
+
+.mcp-server-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.mcp-icon-btn {
+    width: 30px;
+    height: 30px;
+    border-radius: 7px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.12s ease;
+}
+
+.mcp-icon-btn:hover {
+    background: var(--hover-2);
+    color: var(--text-primary);
+    border-color: var(--border-strong);
+}
+
+.mcp-icon-btn.danger:hover {
+    background: rgba(239, 68, 68, 0.16);
+    color: #ef4444;
+    border-color: rgba(239, 68, 68, 0.3);
+}
+
+.mcp-icon-btn svg,
+.mcp-icon-btn i {
+    width: 14px;
+    height: 14px;
+}
+
+/* Tools badges inside server item */
+.mcp-tools-container {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    padding-top: 4px;
+    border-top: 1px solid var(--border-subtle);
+}
+
+.mcp-tools-label {
+    font-size: 11.5px;
+    font-weight: 500;
+    color: var(--text-tertiary);
+    margin-right: 4px;
+}
+
+.mcp-tool-pill {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 11px;
+    color: var(--text-secondary);
+    background: var(--surface-3);
+    border: 1px solid var(--border-subtle);
+    padding: 2px 7px;
+    border-radius: 5px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.mcp-server-err-msg {
+    font-size: 12px;
+    color: #f87171;
+    background: rgba(239, 68, 68, 0.08);
+    border-left: 3px solid #ef4444;
+    padding: 6px 10px;
+    border-radius: 0 6px 6px 0;
+}
+

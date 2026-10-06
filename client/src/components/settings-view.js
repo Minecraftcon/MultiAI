@@ -3,7 +3,7 @@
    Multiple sub-screens, instant auto-save, theme-aligned
    ========================================================= */
 import { state } from "../state.js";
-import { renderIcons, isMobileDevice } from "../utils/dom.js";
+import { renderIcons, isMobileDevice, escapeHTML } from "../utils/dom.js";
 import { closePanel } from "./gestures.js";
 import { saveStoredChats } from "../services/storage.js";
 import { updateModelPickerDisplay } from "./model-picker.js";
@@ -13,6 +13,7 @@ import { SYSTEM_PROMPT_PRESETS, CHATS_STORAGE_KEY, ACTIVE_CHAT_KEY } from "../co
 import { rebuildActiveSystemPrompt } from "../services/system.js";
 import { renderChatList } from "./side-panel.js";
 import { setStartPageMode } from "./chatbox.js";
+import { McpActiveTools } from "../tools/mcp/index.js";
 
 let activeSubScreen = "general";
 let saveTimeout = null;
@@ -175,6 +176,12 @@ export function populateSettingsValues() {
 
     const toolImg = document.getElementById("cfgEnableImageGeneration");
     if (toolImg) toolImg.checked = tools.EnableImageGeneration !== false;
+
+    const toolMcp = document.getElementById("cfgEnableMcp");
+    if (toolMcp) toolMcp.checked = tools.EnableMcp !== false;
+
+    // Load MCP servers list
+    renderMcpServersList();
 
     const maxToolRounds = document.getElementById("cfgMaxToolRounds");
     const maxToolRoundsVal = document.getElementById("cfgMaxToolRoundsVal");
@@ -541,6 +548,15 @@ export function initSettingsView() {
         });
     }
 
+    const toolMcp = document.getElementById("cfgEnableMcp");
+    if (toolMcp) {
+        toolMcp.addEventListener("change", (e) => {
+            saveSetting("Tools", "EnableMcp", e.target.checked);
+        });
+    }
+
+    initMcpSettingsControls();
+
     const maxToolRounds = document.getElementById("cfgMaxToolRounds");
     const maxToolRoundsVal = document.getElementById("cfgMaxToolRoundsVal");
     if (maxToolRounds && maxToolRoundsVal) {
@@ -808,3 +824,303 @@ if (typeof window !== "undefined" && window.matchMedia) {
         });
     } catch (e) {}
 }
+
+/**
+ * Fetches and renders live MCP servers list in the Settings UI
+ */
+export async function renderMcpServersList() {
+    const listEl = document.getElementById("mcpServersList");
+    if (!listEl) return;
+
+    try {
+        const res = await fetch("/api/mcp/servers");
+        if (!res.ok) {
+            listEl.innerHTML = `<div class="mcp-empty-state">Unable to load MCP servers (${res.status})</div>`;
+            return;
+        }
+        const data = await res.json();
+        const servers = data.servers || [];
+
+        if (servers.length === 0) {
+            listEl.innerHTML = `
+                <div class="mcp-empty-state">
+                    <span>No external MCP servers configured. Click <strong>+ Add Server</strong> above to connect tools.</span>
+                </div>
+            `;
+            return;
+        }
+
+        listEl.innerHTML = "";
+        servers.forEach(srv => {
+            const item = document.createElement("div");
+            item.className = "mcp-server-item";
+
+            const statusClass = srv.status === "connected" ? "connected" 
+                : (srv.status === "starting" ? "starting" 
+                : (srv.status === "disabled" ? "disabled" : "error"));
+            const statusLabel = srv.status ? srv.status.toUpperCase() : "UNKNOWN";
+
+            let transportStr = "";
+            if (srv.url) {
+                transportStr = `sse: ${srv.url}`;
+            } else if (srv.command) {
+                transportStr = `stdio: ${srv.command} ${(srv.args || []).join(" ")}`.trim();
+            } else {
+                transportStr = "stdio";
+            }
+
+            const toolsList = srv.tools || [];
+            let toolsHtml = "";
+            if (toolsList.length > 0) {
+                const pills = toolsList.map(t => `<span class="mcp-tool-pill" title="${escapeHTML(t.description || '')}"><i data-lucide="wrench"></i>${escapeHTML(t.name)}</span>`).join("");
+                toolsHtml = `
+                    <div class="mcp-tools-container">
+                        <span class="mcp-tools-label">${toolsList.length} Tool${toolsList.length > 1 ? 's' : ''}:</span>
+                        ${pills}
+                    </div>
+                `;
+            } else if (srv.status === "connected") {
+                toolsHtml = `
+                    <div class="mcp-tools-container">
+                        <span class="mcp-tools-label">0 tools exposed</span>
+                    </div>
+                `;
+            }
+
+            const errorHtml = srv.error ? `<div class="mcp-server-err-msg">${escapeHTML(srv.error)}</div>` : "";
+
+            item.innerHTML = `
+                <div class="mcp-server-top">
+                    <div class="mcp-server-title-group">
+                        <span class="mcp-server-name">${escapeHTML(srv.id)}</span>
+                        <span class="mcp-status-pill ${statusClass}">${statusLabel}</span>
+                    </div>
+                    <div class="mcp-server-actions">
+                        <label class="settings-switch" title="${srv.enabled ? 'Disable' : 'Enable'} server">
+                            <input type="checkbox" class="mcp-server-toggle" data-id="${escapeHTML(srv.id)}" ${srv.enabled ? 'checked' : ''}>
+                            <span class="settings-slider"></span>
+                        </label>
+                        <button type="button" class="mcp-icon-btn mcp-restart-btn" data-id="${escapeHTML(srv.id)}" title="Restart server">
+                            <i data-lucide="rotate-cw"></i>
+                        </button>
+                        <button type="button" class="mcp-icon-btn danger mcp-delete-btn" data-id="${escapeHTML(srv.id)}" title="Delete server">
+                            <i data-lucide="trash-2"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="mcp-server-transport" title="${escapeHTML(transportStr)}">${escapeHTML(transportStr)}</div>
+                ${errorHtml}
+                ${toolsHtml}
+            `;
+
+            listEl.appendChild(item);
+        });
+
+        renderIcons(listEl);
+
+        // Bind item actions
+        listEl.querySelectorAll(".mcp-server-toggle").forEach(chk => {
+            chk.addEventListener("change", async (e) => {
+                const srvId = e.target.dataset.id;
+                try {
+                    await fetch(`/api/mcp/servers/${encodeURIComponent(srvId)}/toggle`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ enabled: e.target.checked })
+                    });
+                    await McpActiveTools.refresh();
+                    renderMcpServersList();
+                } catch (err) {
+                    console.error("MCP toggle error:", err);
+                }
+            });
+        });
+
+        listEl.querySelectorAll(".mcp-restart-btn").forEach(btn => {
+            btn.addEventListener("click", async () => {
+                const srvId = btn.dataset.id;
+                btn.disabled = true;
+                btn.style.opacity = "0.5";
+                try {
+                    await fetch(`/api/mcp/servers/${encodeURIComponent(srvId)}/restart`, {
+                        method: "POST"
+                    });
+                    await McpActiveTools.refresh();
+                    renderMcpServersList();
+                } catch (err) {
+                    console.error("MCP restart error:", err);
+                }
+            });
+        });
+
+        listEl.querySelectorAll(".mcp-delete-btn").forEach(btn => {
+            btn.addEventListener("click", async () => {
+                const srvId = btn.dataset.id;
+                if (!confirm(`Are you sure you want to remove MCP server '${srvId}'?`)) return;
+                try {
+                    await fetch(`/api/mcp/servers/${encodeURIComponent(srvId)}`, {
+                        method: "DELETE"
+                    });
+                    await McpActiveTools.refresh();
+                    renderMcpServersList();
+                } catch (err) {
+                    console.error("MCP delete error:", err);
+                }
+            });
+        });
+
+    } catch (err) {
+        listEl.innerHTML = `<div class="mcp-empty-state">Failed to load MCP servers: ${escapeHTML(err.message)}</div>`;
+    }
+}
+
+/**
+ * Initializes listeners for MCP server form and sync actions in Settings
+ */
+export function initMcpSettingsControls() {
+    const btnToggleAdd = document.getElementById("btnToggleAddMcpServer");
+    const containerAdd = document.getElementById("mcpAddServerContainer");
+    const btnCancelAdd = document.getElementById("btnCancelAddMcpServer");
+    const btnSave = document.getElementById("btnSaveMcpServer");
+    const btnRefresh = document.getElementById("btnRefreshMcpServers");
+    const transportSelect = document.getElementById("mcpNewTransport");
+    const commandField = document.getElementById("mcpCommandField");
+    const argsField = document.getElementById("mcpArgsField");
+    const urlField = document.getElementById("mcpUrlField");
+    const errEl = document.getElementById("mcpAddError");
+
+    if (transportSelect) {
+        transportSelect.addEventListener("change", (e) => {
+            const isSse = e.target.value === "sse";
+            if (commandField) commandField.style.display = isSse ? "none" : "flex";
+            if (argsField) argsField.style.display = isSse ? "none" : "flex";
+            if (urlField) urlField.style.display = isSse ? "flex" : "none";
+        });
+    }
+
+    if (btnToggleAdd && containerAdd) {
+        btnToggleAdd.addEventListener("click", () => {
+            const isHidden = containerAdd.style.display === "none";
+            containerAdd.style.display = isHidden ? "flex" : "none";
+            if (errEl) errEl.style.display = "none";
+            if (isHidden) {
+                renderIcons(containerAdd);
+                const idInput = document.getElementById("mcpNewServerId");
+                if (idInput) idInput.focus();
+            }
+        });
+    }
+
+    if (btnCancelAdd && containerAdd) {
+        btnCancelAdd.addEventListener("click", () => {
+            containerAdd.style.display = "none";
+            if (errEl) errEl.style.display = "none";
+        });
+    }
+
+    if (btnRefresh) {
+        btnRefresh.addEventListener("click", async () => {
+            btnRefresh.disabled = true;
+            btnRefresh.style.opacity = "0.5";
+            try {
+                await McpActiveTools.refresh();
+                await renderMcpServersList();
+            } finally {
+                btnRefresh.disabled = false;
+                btnRefresh.style.opacity = "1";
+            }
+        });
+    }
+
+    if (btnSave) {
+        btnSave.addEventListener("click", async () => {
+            const idInput = document.getElementById("mcpNewServerId");
+            const transportInput = document.getElementById("mcpNewTransport");
+            const commandInput = document.getElementById("mcpNewCommand");
+            const argsInput = document.getElementById("mcpNewArgs");
+            const urlInput = document.getElementById("mcpNewUrl");
+
+            const id = (idInput?.value || "").trim();
+            const transport = transportInput?.value || "stdio";
+            const command = (commandInput?.value || "").trim();
+            const rawArgs = (argsInput?.value || "").trim();
+            const url = (urlInput?.value || "").trim();
+
+            if (!id) {
+                showError("Server identifier is required.");
+                return;
+            }
+
+            if (transport === "sse" && !url) {
+                showError("SSE URL is required for SSE transport.");
+                return;
+            }
+
+            if (transport === "stdio" && !command) {
+                showError("Command executable is required for stdio transport.");
+                return;
+            }
+
+            let parsedArgs = [];
+            if (rawArgs) {
+                try {
+                    if (rawArgs.startsWith("[") && rawArgs.endsWith("]")) {
+                        parsedArgs = JSON.parse(rawArgs);
+                    } else {
+                        parsedArgs = rawArgs.split(/\s+/).filter(Boolean);
+                    }
+                } catch (_) {
+                    parsedArgs = rawArgs.split(/\s+/).filter(Boolean);
+                }
+            }
+
+            btnSave.disabled = true;
+            btnSave.style.opacity = "0.6";
+            if (errEl) errEl.style.display = "none";
+
+            try {
+                const res = await fetch("/api/mcp/servers", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        id,
+                        transport,
+                        command: transport === "stdio" ? command : undefined,
+                        args: transport === "stdio" ? parsedArgs : undefined,
+                        url: transport === "sse" ? url : undefined,
+                        enabled: true
+                    })
+                });
+
+                const result = await res.json();
+                if (!res.ok || result.error) {
+                    showError(result.error || "Failed to add server");
+                    return;
+                }
+
+                // Reset inputs and close form
+                if (idInput) idInput.value = "";
+                if (commandInput) commandInput.value = "";
+                if (argsInput) argsInput.value = "";
+                if (urlInput) urlInput.value = "";
+                if (containerAdd) containerAdd.style.display = "none";
+
+                await McpActiveTools.refresh();
+                await renderMcpServersList();
+            } catch (err) {
+                showError(err.message || "Failed to save server");
+            } finally {
+                btnSave.disabled = false;
+                btnSave.style.opacity = "1";
+            }
+
+            function showError(msg) {
+                if (errEl) {
+                    errEl.textContent = msg;
+                    errEl.style.display = "block";
+                }
+            }
+        });
+    }
+}
+

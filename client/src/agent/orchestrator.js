@@ -2,7 +2,7 @@ import { MAX_TOOL_ROUNDS, MAX_TOOLS_PER_ROUND } from "../config.js";
 import { state } from "../state/index.js";
 import { logEvent } from "../utils/logger.js";
 import { extractText, formatToolResult, extractChatTitleAndContent } from "../utils/dom.js";
-import { tools, executeTool, onToolStart, onToolComplete, onToolError, hasTool } from "../tools/index.js";
+import { tools, getActiveToolSchemas, executeTool, onToolStart, onToolComplete, onToolError, hasTool, McpActiveTools } from "../tools/index.js";
 import { addToolBadge, addThoughtTrace, updateAIStream, finalizeStopped } from "../components/chat-ui.js";
 import { saveStoredChats } from "../services/storage.js";
 import { renderChatList } from "../components/side-panel.js";
@@ -93,6 +93,13 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
 
     logEvent("REQUEST_START", { chatId, model: selectedModel, userText, isFirstUserTurn });
 
+    // Ensure active MCP tools are synchronized before the first model call if not yet loaded
+    if (McpActiveTools.lastSynced === null && state.config?.Tools?.EnableMcp !== false) {
+        try {
+            await McpActiveTools.refresh();
+        } catch (_) {}
+    }
+
     const configuredRounds = state.config?.Agent?.MaxToolRounds;
     const maxRounds = (configuredRounds === 0 || configuredRounds === "0" || configuredRounds === "unlimited" || configuredRounds === undefined)
         ? Infinity
@@ -135,6 +142,8 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
                 activityLabel.textContent = `${stageStatus}... (${sec}s)`;
             }
 
+            const activeTools = getActiveToolSchemas();
+
             let response;
             try {
                 if (genState.abortRequested) {
@@ -144,7 +153,7 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
                 const workingMessages = compileWorkingMessages(session);
                 response = await callChatModel(workingMessages, {
                     model: selectedModel,
-                    tools: tools,
+                    tools: activeTools,
                     signal: genState?.abortController?.signal
                 });
             } catch (err) {
@@ -168,7 +177,7 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
                             const workingMessagesRetry = compileWorkingMessages(session);
                             response = await callChatModel(workingMessagesRetry, {
                                 model: selectedModel,
-                                tools: tools,
+                                tools: activeTools,
                                 signal: genState?.abortController?.signal
                             });
                         } catch (retryErr) {

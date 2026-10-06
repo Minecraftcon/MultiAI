@@ -22,6 +22,7 @@ import { setStartPageMode } from "./components/chatbox.js";
 import { initUiScale } from "./components/ui-scale.js";
 import { initAuroraTheme } from "./components/aurora-theme.js";
 import { initModeSwitcher } from "./components/mode-switcher.js";
+import { McpActiveTools } from "./tools/mcp/index.js";
 
 async function initChatSessions() {
     loadStoredChats();
@@ -100,6 +101,9 @@ async function bootstrap() {
     initSettingsView();
 
     await initConfig();
+    if (state.config?.Tools?.EnableMcp !== false) {
+        await McpActiveTools.refresh().catch(() => {});
+    }
     initSystemEnvironment();
     await initChatSessions();
 }
