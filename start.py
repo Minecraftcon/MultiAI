@@ -145,14 +145,15 @@ def check_setup():
         log_error("npm is not installed or not in PATH.")
         sys.exit(1)
 
-    # 4. Check Node dependencies (yaml, @langchain/langgraph, @langchain/core)
+    # 4. Check Node dependencies (yaml, @langchain/langgraph, @langchain/core, @modelcontextprotocol/sdk)
     root_dir = os.path.dirname(os.path.abspath(__file__))
     node_modules_dir = os.path.join(root_dir, "node_modules")
 
     required_node_pkgs = [
         ("yaml", os.path.join(node_modules_dir, "yaml")),
         ("@langchain/langgraph", os.path.join(node_modules_dir, "@langchain", "langgraph")),
-        ("@langchain/core", os.path.join(node_modules_dir, "@langchain", "core"))
+        ("@langchain/core", os.path.join(node_modules_dir, "@langchain", "core")),
+        ("@modelcontextprotocol/sdk", os.path.join(node_modules_dir, "@modelcontextprotocol", "sdk"))
     ]
 
     missing_pkgs = [name for name, path in required_node_pkgs if not os.path.exists(path)]
@@ -165,7 +166,7 @@ def check_setup():
             sys.exit(1)
         log_success("Node dependencies installed successfully.")
     else:
-        log_success("Node dependencies verified (yaml, @langchain/langgraph, @langchain/core present).")
+        log_success("Node dependencies verified (yaml, @langchain/langgraph, @langchain/core, @modelcontextprotocol/sdk present).")
 
     # 5. Check Python dependencies (flask for task server)
     try:
