@@ -330,41 +330,6 @@ function setBadgeDiffStats(badgeEl, queryEl, statHtml) {
     if (badgeEl._collapseDiv && data) {
         const resEl = badgeEl._collapseDiv.querySelector(".command-output-res");
         if (resEl) {
-            if (name === "write_todos") {
-                const todos = data.todos || args.todos || [];
-                const total = todos.length || 1;
-                const completed = todos.filter(t => t.status === "completed").length;
-                const pct = Math.round((completed / total) * 100);
-                let checklistHtml = `
-                <div class="todo-checklist-card">
-                    <div class="todo-progress-header">
-                        <span class="todo-progress-title">Plan Progress (${completed}/${total} completed)</span>
-                        <span class="todo-progress-pct">${pct}%</span>
-                    </div>
-                    <div class="todo-progress-bar-track">
-                        <div class="todo-progress-bar-fill" style="width: ${pct}%"></div>
-                    </div>
-                    <div class="todo-items-list">
-                        ${todos.map(t => {
-                            const isDone = t.status === "completed";
-                            const isProg = t.status === "in_progress";
-                            const iconSvg = isDone 
-                                ? `<span class="todo-check-icon">✓</span>` 
-                                : (isProg 
-                                    ? `<span class="todo-spinner"></span>` 
-                                    : `<span class="todo-circle-icon">○</span>`);
-                            const statusClass = isDone ? "todo-done" : (isProg ? "todo-active" : "todo-pending");
-                            return `<div class="todo-row ${statusClass}">
-                                <span class="todo-status-icon">${iconSvg}</span>
-                                <span class="todo-content">${escapeHTML(t.content)}</span>
-                            </div>`;
-                        }).join("")}
-                    </div>
-                </div>`;
-                resEl.innerHTML = checklistHtml;
-                return;
-            }
-
             if ((name === "ask_question" || name === "ask_questions") && data) {
                 let answers = Array.isArray(data.answers) ? data.answers : null;
                 if (!answers && typeof data.stdout === "string" && data.stdout.includes("Answered by user:")) {

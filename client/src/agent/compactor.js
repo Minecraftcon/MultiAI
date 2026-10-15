@@ -254,11 +254,47 @@ export function compileWorkingMessages(session) {
     }
 
     const rawRecentTurns = msgs.slice(startIndex);
-    const safeRecentTurns = rawRecentTurns.map(sanitizeWorkingTurn);
+    const sanitizedTurns = [];
+    let pendingToolIds = new Set();
+
+    for (let i = 0; i < rawRecentTurns.length; i++) {
+        const turn = sanitizeWorkingTurn(rawRecentTurns[i]);
+        if (!turn) continue;
+
+        // Skip legacy synthetic system notice user turns
+        if (turn.role === "user" && typeof turn.content === "string" && turn.content.startsWith("[System Notice]:")) {
+            continue;
+        }
+
+        if (turn.role === "tool") {
+            const callId = turn.tool_call_id;
+            if (callId && pendingToolIds.has(callId)) {
+                pendingToolIds.delete(callId);
+                sanitizedTurns.push(turn);
+            } else {
+                // Orphaned tool message inside recent turns: convert to safe user context note
+                const toolName = turn.name || "action";
+                const contentStr = typeof turn.content === "string" ? turn.content : JSON.stringify(turn.content);
+                sanitizedTurns.push({
+                    role: "user",
+                    content: `[Previous Action Output (${toolName})]:\n${contentStr}`
+                });
+            }
+            continue;
+        }
+
+        if (turn.role === "assistant") {
+            pendingToolIds = new Set((turn.tool_calls || []).map(tc => tc.id).filter(Boolean));
+            sanitizedTurns.push(turn);
+            continue;
+        }
+
+        sanitizedTurns.push(turn);
+    }
 
     return bridgeUserMsg
-        ? [systemMsg, briefingMsg, bridgeUserMsg, ...safeRecentTurns]
-        : [systemMsg, briefingMsg, ...safeRecentTurns];
+        ? [systemMsg, briefingMsg, bridgeUserMsg, ...sanitizedTurns]
+        : [systemMsg, briefingMsg, ...sanitizedTurns];
 }
 
 export const compileWorkingContext = compileWorkingMessages;
@@ -319,10 +355,13 @@ export async function compactSessionContext({ session, currentAIMessage, selecte
     const workingBefore = compileWorkingMessages(session);
     const tokensBefore = estimateMessagesTokens(workingBefore);
 
-    // Identify user indices in session.messages
+    // Identify real user indices in session.messages (ignoring legacy synthetic system notices)
     const userIndices = [];
     for (let i = 1; i < msgs.length; i++) {
-        if (msgs[i].role === "user") userIndices.push(i);
+        const m = msgs[i];
+        if (m.role === "user" && !(typeof m.content === "string" && m.content.startsWith("[System Notice]:"))) {
+            userIndices.push(i);
+        }
     }
 
     let sliceEndIdx = 1;

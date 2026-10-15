@@ -40,7 +40,8 @@ const CRITICAL_SVG_FALLBACKS = {
     "bot": `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-bot"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg>`,
     "chevron-down": `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-down"><path d="m6 9 6 6 6-6"/></svg>`,
     "message-square": `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-message-square"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`,
-    "hammer": `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-hammer"><path d="m15 12-8.373 8.373a1 1 0 1 1-3-3L12 9"/><path d="m18 15 4-4"/><path d="m21.5 11.5-1.914-1.914A2 2 0 0 1 19 8.172V7l-2.26-2.26a6 6 0 0 0-4.242-1.758H12l-2 2 4 4 2-2v.5a2 2 0 0 1-.586 1.414L13.5 10.5"/></svg>`
+    "hammer": `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-hammer"><path d="m15 12-8.373 8.373a1 1 0 1 1-3-3L12 9"/><path d="m18 15 4-4"/><path d="m21.5 11.5-1.914-1.914A2 2 0 0 1 19 8.172V7l-2.26-2.26a6 6 0 0 0-4.242-1.758H12l-2 2 4 4 2-2v.5a2 2 0 0 1-.586 1.414L13.5 10.5"/></svg>`,
+    "loader-2": `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-loader-2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>`
 };
 
 let observerActive = false;
@@ -57,6 +58,9 @@ function applyFallbacks(container) {
             template.innerHTML = CRITICAL_SVG_FALLBACKS[iconName].trim();
             const svg = template.content.firstChild;
             if (svg) {
+                if (el.className) {
+                    svg.setAttribute("class", `${svg.getAttribute("class") || ""} ${el.className}`.trim());
+                }
                 el.replaceWith(svg);
             }
         }
@@ -71,6 +75,10 @@ export function renderIcons(root) {
     try {
         if (typeof window !== "undefined" && window.lucide && typeof window.lucide.createIcons === "function") {
             window.lucide.createIcons(root ? { root } : undefined);
+            // Crucial: remove data-lucide from rendered SVGs so lucide and MutationObserver do not thrash/replace them continuously
+            const scope = root || document;
+            const renderedSvgs = scope.querySelectorAll("svg[data-lucide]");
+            renderedSvgs.forEach(svg => svg.removeAttribute("data-lucide"));
         } else {
             applyFallbacks(root);
         }
@@ -102,19 +110,25 @@ export function initIconObserver() {
     if (observerActive || typeof MutationObserver === "undefined") return;
 
     try {
+        const hasUnrenderedIcons = (node) => {
+            if (!node || node.nodeType !== 1) return false;
+            // Ignore SVGs so rendered icons don't trigger recursive loops
+            if (node.tagName === "svg" || node.tagName === "SVG") return false;
+            // Skip streaming chat messages to avoid thrashing CPU during token generation
+            if (node.closest && (node.closest("#chat") || node.closest(".message"))) return false;
+            if (node.matches && node.matches("i[data-lucide], [data-lucide]:not(svg)")) return true;
+            if (node.querySelector && node.querySelector("i[data-lucide], [data-lucide]:not(svg)")) return true;
+            return false;
+        };
+
         observer = new MutationObserver(mutations => {
             let hasNewIcons = false;
             for (let i = 0; i < mutations.length; i++) {
                 const added = mutations[i].addedNodes;
                 for (let j = 0; j < added.length; j++) {
-                    const node = added[j];
-                    if (node && node.nodeType === 1) { // ELEMENT_NODE
-                        // Skip streaming chat messages to avoid thrashing CPU during token generation
-                        if (node.closest && (node.closest("#chat") || node.closest(".message"))) continue;
-                        if ((node.matches && node.matches("i[data-lucide], [data-lucide]")) || (node.querySelector && node.querySelector("i[data-lucide], [data-lucide]"))) {
-                            hasNewIcons = true;
-                            break;
-                        }
+                    if (hasUnrenderedIcons(added[j])) {
+                        hasNewIcons = true;
+                        break;
                     }
                 }
                 if (hasNewIcons) break;

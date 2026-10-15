@@ -69,6 +69,9 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
         ];
     }
 
+    // Clean up any historical synthetic system notices so they never pollute session turns
+    session.messages = session.messages.filter(m => !(m && m.role === "user" && typeof m.content === "string" && m.content.startsWith("[System Notice]:")));
+
     session.messages.push({ role: "user", content: userContent });
     state.messages = session.messages;
     saveStoredChats();
@@ -88,7 +91,7 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
     let hasRunVerification = false;
     let verificationNudgeCount = 0;
     let invalidToolRetries = 0;
-    let lastInvalidToolNotice = null;
+    let transientCorrectionNotice = null;
     const fileReadCounts = new Map();
 
     logEvent("REQUEST_START", { chatId, model: selectedModel, userText, isFirstUserTurn });
@@ -151,6 +154,9 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
                     return;
                 }
                 const workingMessages = compileWorkingMessages(session);
+                if (transientCorrectionNotice) {
+                    workingMessages.push(transientCorrectionNotice);
+                }
                 response = await callChatModel(workingMessages, {
                     model: selectedModel,
                     tools: activeTools,
@@ -175,6 +181,9 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
                         try {
                             stageStatus = `Synthesizing (round ${round + 1})`;
                             const workingMessagesRetry = compileWorkingMessages(session);
+                            if (transientCorrectionNotice) {
+                                workingMessagesRetry.push(transientCorrectionNotice);
+                            }
                             response = await callChatModel(workingMessagesRetry, {
                                 model: selectedModel,
                                 tools: activeTools,
@@ -243,16 +252,8 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
             });
 
             if (toolCalls.length === 0) {
-                if (lastInvalidToolNotice) {
-                    const idx = session.messages.lastIndexOf(lastInvalidToolNotice);
-                    if (idx !== -1) {
-                        session.messages.splice(idx, 1);
-                    }
-                    lastInvalidToolNotice = null;
-                    invalidToolRetries = 0;
-                    state.messages = session.messages;
-                    saveStoredChats();
-                }
+                transientCorrectionNotice = null;
+                invalidToolRetries = 0;
 
                 let finalDisplay = roundText.trim();
 
@@ -422,42 +423,24 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
                 // Remove the corrupted assistant turn from context so it never pollutes conversation history
                 if (session.messages.length > 0 && session.messages[session.messages.length - 1] === assistantMessage) {
                     session.messages.pop();
-                }
-
-                // Clean up previous temporary system notice if present
-                if (lastInvalidToolNotice) {
-                    const idx = session.messages.lastIndexOf(lastInvalidToolNotice);
-                    if (idx !== -1) {
-                        session.messages.splice(idx, 1);
-                    }
+                    state.messages = session.messages;
+                    saveStoredChats();
                 }
 
                 const availableToolsList = tools.map(t => t.function?.name).filter(Boolean).join(", ");
-                const correctionMsg = {
+                transientCorrectionNotice = {
                     role: "user",
                     content: `[System Notice]: Tool "${unknownNames}" is not recognized or cannot be run. Available tools: ${availableToolsList}. Please retry using a valid tool from the list with its expected parameters, or reply directly if no tool is required.`
                 };
-                session.messages.push(correctionMsg);
-                lastInvalidToolNotice = correctionMsg;
-                state.messages = session.messages;
-                saveStoredChats();
 
                 stageStatus = `Retrying tool call (${invalidToolRetries}/3)`;
                 continue;
             }
 
             // All tool calls are valid (or 3 retries were exhausted); clean up any temporary correction notice
-            if (lastInvalidToolNotice) {
-                const idx = session.messages.lastIndexOf(lastInvalidToolNotice);
-                if (idx !== -1) {
-                    session.messages.splice(idx, 1);
-                }
-                lastInvalidToolNotice = null;
-                if (invalidCalls.length === 0) {
-                    invalidToolRetries = 0;
-                }
-                state.messages = session.messages;
-                saveStoredChats();
+            transientCorrectionNotice = null;
+            if (invalidCalls.length === 0) {
+                invalidToolRetries = 0;
             }
 
             hasRunTools = true;
@@ -603,13 +586,7 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
         updateAIStream(currentAIMessage, "*(Max reasoning rounds reached)*", true, overallStartTime, true);
     } finally {
         clearInterval(statusTimer);
-        if (lastInvalidToolNotice) {
-            const idx = session.messages.lastIndexOf(lastInvalidToolNotice);
-            if (idx !== -1) {
-                session.messages.splice(idx, 1);
-            }
-            lastInvalidToolNotice = null;
-        }
+        transientCorrectionNotice = null;
         if (isFirstUserTurn && session.messages[0]?.role === "system") {
             session.messages[0].content = state.activeSystemPrompt;
         }

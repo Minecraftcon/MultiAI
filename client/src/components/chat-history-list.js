@@ -18,6 +18,7 @@ import { bindInteractiveCodeBlocks, renderMermaidInElement, renderMath, bindAIIm
 import { updateSendButtonState, stopChatGeneration } from "./composer.js";
 import { updateModelPickerDisplay } from "./model-picker.js";
 import { setStartPageMode } from "./chatbox.js";
+import { syncPlanDock } from "./chat-plan-dock.js";
 import { wrapHugeThoughts, renderSessionMessages } from "./chat-ui.js";
 import { 
     renderProjectList, 
@@ -388,6 +389,7 @@ export async function switchToChat(id) {
     }
 
     saveStoredChats();
+    syncPlanDock(id);
     renderChatList();
 }
 

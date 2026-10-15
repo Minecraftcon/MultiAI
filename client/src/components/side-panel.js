@@ -9,6 +9,7 @@ import { hideMobileActions } from "./context-menu.js";
 import { updateSendButtonState } from "./composer.js";
 import { openSettings } from "./settings-view.js";
 import { setStartPageMode } from "./chatbox.js";
+import { dismissPlanDock } from "./chat-plan-dock.js";
 
 // Extracted Sub-Components & Services
 import { 
@@ -140,6 +141,7 @@ export function startFreshChat() {
         saveCurrentChatState();
     }
     state.currentChatId = null;
+    dismissPlanDock();
     setDeepSearchActive(false);
     saveStoredChats();
     const chat = document.getElementById("chat");

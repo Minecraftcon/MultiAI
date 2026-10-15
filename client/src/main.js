@@ -16,6 +16,7 @@ import { initBottomSheet } from "./components/bottom-sheet.js";
 import { initErrorRecovery } from "./components/error-recovery.js";
 import { initModelPicker } from "./components/model-picker.js";
 import { initSettingsView, applyTheme } from "./components/settings-view.js";
+import { initPlanDock } from "./components/chat-plan-dock.js";
 
 import { renderIcons } from "./utils/dom.js";
 import { setStartPageMode } from "./components/chatbox.js";
@@ -99,6 +100,7 @@ async function bootstrap() {
     initErrorRecovery();
     initModelPicker();
     initSettingsView();
+    initPlanDock();
 
     await initConfig();
     if (state.config?.Tools?.EnableMcp !== false) {

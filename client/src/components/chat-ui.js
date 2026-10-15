@@ -286,8 +286,8 @@ export function renderSessionMessages(session, chat) {
     const messages = Array.isArray(session.messages) ? session.messages : [];
     if (messages.length === 0) return;
 
-    // Filter out system prompt messages from visible dialogue
-    const nonSystem = messages.filter(m => m && m.role !== "system");
+    // Filter out system prompt messages and synthetic system notices from visible dialogue
+    const nonSystem = messages.filter(m => m && m.role !== "system" && !(m.role === "user" && typeof m.content === "string" && m.content.startsWith("[System Notice]:")));
     if (nonSystem.length === 0) return;
 
     // Group into turns: each turn starts with a user message, followed by all corresponding AI turns (assistant + tool)

@@ -1,0 +1,395 @@
+/* =========================================================
+   INTERACTIVE PLAN DOCK COMPONENT (CHATBOX DOCK)
+   FLOATING MINIMALIST DESIGN (DARK GRADIENT)
+   Minimal header: Task {percentage}                2/7
+   Lucide icons, monochrome done check, no 01/02 numbers.
+   ========================================================= */
+
+.plan-dock-card {
+    display: flex;
+    flex-direction: column;
+    width: min(900px, 100%);
+    margin: 0 auto 8px auto;
+    padding: 10px 14px 12px 14px;
+    box-sizing: border-box;
+    background: linear-gradient(180deg, rgba(22, 22, 26, 0.94) 0%, rgba(13, 13, 16, 0.98) 100%) !important;
+    backdrop-filter: blur(24px) saturate(190%);
+    -webkit-backdrop-filter: blur(24px) saturate(190%);
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border-radius: 14px !important;
+    box-shadow: 0 10px 36px rgba(0, 0, 0, 0.45) !important;
+    position: relative;
+    user-select: none;
+    z-index: 52;
+    pointer-events: auto !important;
+    overflow: hidden;
+    animation: planFloatingFadeIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.plan-dock-card.is-collapsed {
+    padding: 4px 12px;
+    border-radius: 12px !important;
+}
+
+@keyframes planFloatingFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.plan-dock-card.closing {
+    animation: planFloatingFadeOut 0.16s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes planFloatingFadeOut {
+    from {
+        opacity: 1;
+        transform: translateY(0);
+    }
+    to {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+}
+
+/* ── Collapsed Bar ────────────────────────────────────────── */
+.plan-dock-collapsed-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 3px 2px;
+    cursor: pointer;
+    background: transparent;
+    border: none;
+    min-height: 28px;
+    box-sizing: border-box;
+    outline: none;
+    transition: opacity 0.15s ease;
+}
+
+.plan-dock-collapsed-bar:hover {
+    opacity: 0.92;
+}
+
+.plan-dock-collapsed-left {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    min-width: 0;
+    flex: 1;
+}
+
+.plan-dock-collapsed-label {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.35;
+    letter-spacing: -0.01em;
+}
+
+.plan-dock-collapsed-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.plan-dock-progress-pill {
+    font-size: 12px;
+    font-family: 'JetBrains Mono', var(--font-mono, monospace);
+    font-weight: 500;
+    color: var(--text-secondary);
+    background: transparent;
+    border: none;
+    padding: 0;
+    letter-spacing: 0.02em;
+}
+
+.plan-dock-expand-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    color: var(--text-tertiary);
+    transition: color 0.15s ease, transform 0.15s ease;
+}
+
+.plan-dock-expand-icon svg,
+.plan-dock-expand-icon i {
+    width: 13px;
+    height: 13px;
+}
+
+.plan-dock-collapsed-bar:hover .plan-dock-expand-icon {
+    color: var(--text-primary);
+    transform: translateY(-1px);
+}
+
+/* ── Expanded View (Minimal Header, No Separator Line) ────── */
+.plan-dock-expanded-view {
+    display: flex;
+    flex-direction: column;
+    padding: 2px 2px 4px 2px;
+    gap: 8px;
+    background: transparent;
+}
+
+.plan-dock-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    cursor: pointer;
+    user-select: none;
+    outline: none;
+    padding: 2px 0 2px 0;
+    border-bottom: none !important;
+}
+
+.plan-dock-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+
+.plan-dock-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+    letter-spacing: -0.01em;
+}
+
+.plan-dock-pct-pill {
+    font-size: 12px;
+    font-family: 'JetBrains Mono', var(--font-mono, monospace);
+    font-weight: 500;
+    color: var(--text-tertiary);
+    background: transparent;
+    padding: 0;
+    border: none;
+}
+
+.plan-dock-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.plan-dock-toggle-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    background: transparent;
+    border: none;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    padding: 0;
+    transition: color 0.15s ease, transform 0.15s ease;
+}
+
+.plan-dock-toggle-btn:hover {
+    color: var(--text-primary);
+    transform: translateY(1px);
+}
+
+.plan-dock-toggle-btn svg,
+.plan-dock-toggle-btn i {
+    width: 13px;
+    height: 13px;
+}
+
+/* ── Tasks List (Direct Lucide Icons, No Numbers) ─────────── */
+.plan-dock-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 200px;
+    overflow-y: auto;
+    padding: 2px 0;
+    margin: 0;
+}
+
+.plan-dock-list::-webkit-scrollbar {
+    width: 3px;
+}
+
+.plan-dock-list::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.plan-dock-list::-webkit-scrollbar-thumb {
+    background: var(--scrollbar);
+    border-radius: 3px;
+}
+
+.plan-dock-item {
+    display: flex;
+    align-items: baseline;
+    gap: 9px;
+    padding: 2px 0;
+    font-size: 13px;
+    line-height: 1.45;
+    transition: color 0.15s ease, opacity 0.15s ease;
+}
+
+.plan-dock-item-status {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    margin-top: 1px;
+}
+
+/* Lucide check: monochrome, NOT bright green */
+.plan-lucide-check {
+    width: 13px;
+    height: 13px;
+    color: var(--text-tertiary);
+    stroke-width: 2.2;
+}
+
+/* Lucide spinner: monoline spinning loader */
+.plan-lucide-spin,
+svg.plan-lucide-spin,
+.plan-dock-card svg.lucide-loader-2,
+.plan-dock-spinner {
+    width: 13px !important;
+    height: 13px !important;
+    color: var(--text-primary);
+    stroke-width: 2.2;
+    display: inline-block !important;
+    transform-origin: center center !important;
+    transform-box: fill-box !important;
+    animation: planLucideSpin 0.75s linear infinite !important;
+}
+
+@keyframes planLucideSpin {
+    0% {
+        transform: rotate(0deg);
+    }
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+/* Lucide circle: clean subtle pending circle */
+.plan-lucide-circle {
+    width: 11px;
+    height: 11px;
+    color: var(--text-tertiary);
+    opacity: 0.45;
+    stroke-width: 1.8;
+}
+
+.plan-dock-item-content {
+    flex: 1;
+    word-break: break-word;
+}
+
+.plan-dock-item.is-completed {
+    color: var(--text-tertiary);
+    opacity: 0.45;
+}
+
+.plan-dock-item.is-completed .plan-dock-item-content {
+    text-decoration: line-through;
+}
+
+.plan-dock-item.is-in-progress {
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.plan-dock-item.is-pending {
+    color: var(--text-secondary);
+    opacity: 0.75;
+}
+
+
+/* =========================================================
+   PREVIOUS BOXED CARD DESIGN (PRESERVED / COMMENTED OUT)
+   =========================================================
+.plan-dock-card.is-boxed-mode {
+    display: flex;
+    flex-direction: column;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    border-radius: 16px 16px 0 0;
+    margin: -4px -4px 8px -4px;
+    position: relative;
+    user-select: none;
+    z-index: 6;
+    overflow: hidden;
+    animation: planDockSlideDown 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.plan-dock-card.is-boxed-mode .plan-dock-collapsed-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 8px 14px;
+    cursor: pointer;
+    background: transparent;
+    transition: background 0.15s ease;
+    min-height: 38px;
+    box-sizing: border-box;
+    outline: none;
+}
+
+.plan-dock-card.is-boxed-mode .plan-dock-collapsed-bar:hover {
+    background: var(--hover);
+}
+
+.plan-dock-card.is-boxed-mode .plan-dock-progress-pill {
+    font-size: 11px;
+    font-family: 'JetBrains Mono', var(--font-mono, monospace);
+    font-weight: 600;
+    color: var(--text-secondary);
+    background: var(--surface-2);
+    border: 1px solid var(--border-subtle);
+    padding: 2px 7px;
+    border-radius: 9999px;
+    letter-spacing: 0.02em;
+}
+
+.plan-dock-card.is-boxed-mode .plan-dock-expanded-view {
+    display: flex;
+    flex-direction: column;
+    padding: 11px 14px 12px 14px;
+    gap: 8px;
+}
+
+.plan-dock-card.is-boxed-mode .plan-dock-progress-track {
+    width: 100%;
+    height: 3px;
+    background: var(--surface-3);
+    border-radius: 3px;
+    overflow: hidden;
+    margin: 2px 0 3px 0;
+}
+
+.plan-dock-card.is-boxed-mode .plan-dock-progress-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 3px;
+    transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+========================================================= */

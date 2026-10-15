@@ -126,5 +126,15 @@
         transition-duration: 0.01ms !important;
         scroll-behavior: auto !important;
     }
+
+    .plan-lucide-spin,
+    svg.plan-lucide-spin,
+    .plan-dock-card svg.lucide-loader-2,
+    .plan-dock-spinner,
+    .chat-item-spinner,
+    .todo-spinner {
+        animation-duration: 0.75s !important;
+        animation-iteration-count: infinite !important;
+    }
 }
 
