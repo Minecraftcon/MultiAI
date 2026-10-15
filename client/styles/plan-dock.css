@@ -12,12 +12,12 @@
     margin: 0 auto 8px auto;
     padding: 10px 14px 12px 14px;
     box-sizing: border-box;
-    background: linear-gradient(180deg, rgba(22, 22, 26, 0.94) 0%, rgba(13, 13, 16, 0.98) 100%) !important;
-    backdrop-filter: blur(24px) saturate(190%);
-    -webkit-backdrop-filter: blur(24px) saturate(190%);
-    border: 1px solid rgba(255, 255, 255, 0.08) !important;
-    border-radius: 14px !important;
-    box-shadow: 0 10px 36px rgba(0, 0, 0, 0.45) !important;
+    background: var(--input-bg) !important;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--border) !important;
+    border-radius: 16px !important;
+    box-shadow: 0 4px 20px var(--shadow) !important;
     position: relative;
     user-select: none;
     z-index: 52;
@@ -28,8 +28,8 @@
 }
 
 .plan-dock-card.is-collapsed {
-    padding: 4px 12px;
-    border-radius: 12px !important;
+    padding: 5px 14px;
+    border-radius: 16px !important;
 }
 
 @keyframes planFloatingFadeIn {
