@@ -20,6 +20,22 @@ const OPENCODE_SENTINEL_TOOLS = [
     { type: "function", function: { name: "write", description: "Writes file to disk", parameters: { type: "object", properties: { filePath: { type: "string" }, content: { type: "string" } }, required: ["filePath", "content"] } } }
 ];
 
+const OPENCODE_SENTINEL_TOOLS_FLAT = OPENCODE_SENTINEL_TOOLS.map(t => ({
+    type: "function",
+    name: t.function.name,
+    description: t.function.description,
+    parameters: t.function.parameters
+}));
+
+/**
+ * OpenCode Zen uses the OpenAI Responses protocol (/v1/responses) for specific model families
+ * (such as muse-spark, gpt-5/6, grok), while traditional models use /v1/chat/completions.
+ */
+function isResponsesProtocolModel(model) {
+    const clean = (model || "").toLowerCase().replace(/^(opencode|opencode[-_]?zen):/i, "").trim();
+    return clean.includes("muse-") || clean.startsWith("gpt-5") || clean.startsWith("gpt-6") || clean.startsWith("grok");
+}
+
 let lastTimestamp = 0;
 let counter = 0;
 
@@ -46,6 +62,90 @@ function generateOpenCodeId(descending, timestamp = Date.now()) {
     return hexPrefix + randomSuffix;
 }
 
+/**
+ * Maps OpenCode's sentinel tool names and arguments back into MultiAI's native tools.
+ */
+function mapOpenCodeSentinelToolCall(tc) {
+    if (!tc || !tc.function) return tc;
+    const name = tc.function.name;
+    let args = {};
+    try {
+        args = typeof tc.function.arguments === "string" ? JSON.parse(tc.function.arguments || "{}") : (tc.function.arguments || {});
+    } catch (_) {
+        args = {};
+    }
+
+    if (name === "todowrite") {
+        return {
+            ...tc,
+            function: {
+                name: "write_todos",
+                arguments: JSON.stringify(args)
+            }
+        };
+    }
+    if (name === "bash") {
+        return {
+            ...tc,
+            function: {
+                name: "run_task",
+                arguments: JSON.stringify({
+                    command: args.command || "",
+                    task_name: args.task_name || "Run shell command"
+                })
+            }
+        };
+    }
+    if (name === "read") {
+        return {
+            ...tc,
+            function: {
+                name: "read_file",
+                arguments: JSON.stringify({
+                    path: args.filePath || args.path || ""
+                })
+            }
+        };
+    }
+    if (name === "write") {
+        return {
+            ...tc,
+            function: {
+                name: "write_file",
+                arguments: JSON.stringify({
+                    path: args.filePath || args.path || "",
+                    content: args.content || ""
+                })
+            }
+        };
+    }
+    if (name === "edit") {
+        return {
+            ...tc,
+            function: {
+                name: "replace_file_content",
+                arguments: JSON.stringify({
+                    path: args.filePath || args.path || "",
+                    target_content: args.oldString || args.target_content || "",
+                    replacement_content: args.newString || args.replacement_content || ""
+                })
+            }
+        };
+    }
+    if (name === "websearch") {
+        return {
+            ...tc,
+            function: {
+                name: "web_search",
+                arguments: JSON.stringify({
+                    query: args.query || ""
+                })
+            }
+        };
+    }
+    return tc;
+}
+
 class OpenCodeProvider extends BaseProvider {
     static id = "opencode";
     static displayName = "OpenCode Zen";
@@ -59,6 +159,10 @@ class OpenCodeProvider extends BaseProvider {
     getEndpoint(config = {}, model, apiKey) {
         const baseUrl = config.base_url || config.endpoint || "https://opencode.ai/zen/v1";
         const clean = baseUrl.replace(/\/+$/, "");
+        const cleanModel = (model || "").replace(/^(opencode|opencode-zen):/i, "") || config.model;
+        if (isResponsesProtocolModel(cleanModel)) {
+            return clean.endsWith("/responses") ? clean : `${clean}/responses`;
+        }
         return clean.endsWith("/chat/completions") ? clean : `${clean}/chat/completions`;
     }
 
@@ -88,10 +192,78 @@ class OpenCodeProvider extends BaseProvider {
 
         // Strip any provider prefixes (e.g. "opencode:mimo-v2.6-flash-free" -> "mimo-v2.6-flash-free")
         const cleanModel = (model || "").replace(/^(opencode|opencode-zen):/i, "") || config.model;
+        const normalized = this.normalizeMessages(msgsToNormalize, supportsTools, supportsVision);
+        const useResponses = isResponsesProtocolModel(cleanModel);
 
+        if (useResponses) {
+            // Transform messages into OpenAI Responses API input format
+            const input = [];
+            for (const msg of normalized) {
+                if (!msg) continue;
+                if (msg.role === "tool") {
+                    input.push({
+                        type: "function_call_output",
+                        call_id: msg.tool_call_id || "call_unknown",
+                        output: typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content)
+                    });
+                } else if (msg.role === "assistant" && Array.isArray(msg.tool_calls) && msg.tool_calls.length > 0) {
+                    if (msg.content) {
+                        input.push({
+                            role: "assistant",
+                            content: typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content)
+                        });
+                    }
+                    for (const tc of msg.tool_calls) {
+                        input.push({
+                            type: "function_call",
+                            call_id: tc.id || ("call_" + generateOpenCodeId(false)),
+                            name: tc.function?.name || tc.name || "",
+                            arguments: typeof tc.function?.arguments === "string" ? tc.function.arguments : JSON.stringify(tc.function?.arguments || {})
+                        });
+                    }
+                } else {
+                    input.push({
+                        role: msg.role === "system" ? "system" : (msg.role === "assistant" ? "assistant" : "user"),
+                        content: typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content)
+                    });
+                }
+            }
+
+            const effectiveTools = OPENCODE_SENTINEL_TOOLS_FLAT.map(t => ({ ...t }));
+            if (Array.isArray(tools) && tools.length > 0) {
+                for (const userTool of tools) {
+                    const name = userTool?.function?.name || userTool?.name;
+                    if (!name) continue;
+                    if (!effectiveTools.some(t => t.name === name)) {
+                        effectiveTools.push({
+                            type: "function",
+                            name,
+                            description: userTool?.function?.description || userTool?.description || "",
+                            parameters: userTool?.function?.parameters || userTool?.parameters || { type: "object", properties: {} }
+                        });
+                    }
+                }
+            }
+
+            const payload = {
+                model: cleanModel,
+                input,
+                tools: effectiveTools,
+                tool_choice: (Array.isArray(tools) && tools.length > 0) ? (tool_choice || "auto") : "auto",
+                stream: true
+            };
+
+            if (config.default_max_tokens) {
+                payload.max_tokens = config.default_max_tokens;
+            }
+
+            return payload;
+        }
+
+        // Standard OpenAI Chat Completions payload
         const payload = {
             model: cleanModel,
-            messages: this.normalizeMessages(msgsToNormalize, supportsTools, supportsVision),
+            messages: normalized,
             stream: true // OpenCode free tier strictly requires stream: true
         };
 
@@ -143,6 +315,7 @@ class OpenCodeProvider extends BaseProvider {
 
         // Enforce stream flag
         const streamPayload = { ...payload, stream: true };
+        const isResponses = Boolean(endpoint.endsWith("/responses") || streamPayload.input);
 
         try {
             const res = await fetch(endpoint, {
@@ -215,36 +388,96 @@ class OpenCodeProvider extends BaseProvider {
 
                     try {
                         const parsed = JSON.parse(jsonStr);
-                        if (parsed.id) lastId = parsed.id;
-                        if (parsed.model) modelName = parsed.model;
 
-                        const choice = parsed.choices?.[0];
-                        if (choice) {
-                            if (choice.finish_reason) {
-                                finishReason = choice.finish_reason;
-                                if (finishReason === "stop" || finishReason === "length" || finishReason === "tool_calls") {
-                                    isDone = true;
-                                }
-                            }
-                            const delta = choice.delta || choice.message;
-                            if (delta) {
-                                if (delta.content) fullContent += delta.content;
-                                if (delta.reasoning_content) fullReasoning += delta.reasoning_content;
-                                else if (delta.reasoning) fullReasoning += delta.reasoning;
+                        if (isResponses) {
+                            // --- OpenAI Responses API Stream Format ---
+                            if (parsed.response?.id) lastId = parsed.response.id;
+                            if (parsed.response?.model) modelName = parsed.response.model;
 
-                                if (Array.isArray(delta.tool_calls)) {
-                                    for (const tc of delta.tool_calls) {
-                                        const idx = tc.index ?? fullToolCalls.length;
-                                        if (!fullToolCalls[idx]) {
-                                            fullToolCalls[idx] = {
-                                                id: tc.id || "",
-                                                type: "function",
-                                                function: { name: "", arguments: "" }
-                                            };
+                            const evtType = parsed.type;
+                            if (evtType === "response.output_text.delta" && typeof parsed.delta === "string") {
+                                fullContent += parsed.delta;
+                            } else if (evtType === "response.reasoning_text.delta" && typeof parsed.delta === "string") {
+                                fullReasoning += parsed.delta;
+                            } else if (evtType === "response.output_item.added") {
+                                if (parsed.item?.type === "function_call") {
+                                    const callId = parsed.item.call_id || parsed.item.id;
+                                    fullToolCalls.push({
+                                        id: callId,
+                                        type: "function",
+                                        function: {
+                                            name: parsed.item.name || "",
+                                            arguments: parsed.item.arguments || ""
                                         }
-                                        if (tc.id) fullToolCalls[idx].id = tc.id;
-                                        if (tc.function?.name) fullToolCalls[idx].function.name += tc.function.name;
-                                        if (tc.function?.arguments) fullToolCalls[idx].function.arguments += tc.function.arguments;
+                                    });
+                                }
+                            } else if (evtType === "response.function_call_arguments.delta") {
+                                const itemId = parsed.item_id;
+                                const target = fullToolCalls.find(tc => tc.id === itemId) || fullToolCalls[fullToolCalls.length - 1];
+                                if (target && parsed.delta) {
+                                    target.function.arguments += parsed.delta;
+                                }
+                            } else if (evtType === "response.function_call_arguments.done") {
+                                const itemId = parsed.item_id;
+                                const target = fullToolCalls.find(tc => tc.id === itemId) || fullToolCalls[fullToolCalls.length - 1];
+                                if (target && parsed.arguments) {
+                                    target.function.arguments = parsed.arguments;
+                                }
+                            } else if (evtType === "response.output_item.done") {
+                                if (parsed.item?.type === "function_call") {
+                                    const callId = parsed.item.call_id || parsed.item.id;
+                                    let target = fullToolCalls.find(tc => tc.id === callId);
+                                    if (!target) {
+                                        target = { id: callId, type: "function", function: { name: "", arguments: "" } };
+                                        fullToolCalls.push(target);
+                                    }
+                                    if (parsed.item.name) target.function.name = parsed.item.name;
+                                    if (parsed.item.arguments) target.function.arguments = parsed.item.arguments;
+                                } else if (parsed.item?.type === "message" && Array.isArray(parsed.item.content)) {
+                                    for (const part of parsed.item.content) {
+                                        if (part.type === "output_text" && part.text && !fullContent) {
+                                            fullContent += part.text;
+                                        }
+                                    }
+                                }
+                            } else if (evtType === "response.completed") {
+                                finishReason = fullToolCalls.length > 0 ? "tool_calls" : "stop";
+                                isDone = true;
+                                break;
+                            }
+                        } else {
+                            // --- Standard OpenAI Chat Completions Stream Format ---
+                            if (parsed.id) lastId = parsed.id;
+                            if (parsed.model) modelName = parsed.model;
+
+                            const choice = parsed.choices?.[0];
+                            if (choice) {
+                                if (choice.finish_reason) {
+                                    finishReason = choice.finish_reason;
+                                    if (finishReason === "stop" || finishReason === "length" || finishReason === "tool_calls") {
+                                        isDone = true;
+                                    }
+                                }
+                                const delta = choice.delta || choice.message;
+                                if (delta) {
+                                    if (delta.content) fullContent += delta.content;
+                                    if (delta.reasoning_content) fullReasoning += delta.reasoning_content;
+                                    else if (delta.reasoning) fullReasoning += delta.reasoning;
+
+                                    if (Array.isArray(delta.tool_calls)) {
+                                        for (const tc of delta.tool_calls) {
+                                            const idx = tc.index ?? fullToolCalls.length;
+                                            if (!fullToolCalls[idx]) {
+                                                fullToolCalls[idx] = {
+                                                    id: tc.id || "",
+                                                    type: "function",
+                                                    function: { name: "", arguments: "" }
+                                                };
+                                            }
+                                            if (tc.id) fullToolCalls[idx].id = tc.id;
+                                            if (tc.function?.name) fullToolCalls[idx].function.name += tc.function.name;
+                                            if (tc.function?.arguments) fullToolCalls[idx].function.arguments += tc.function.arguments;
+                                        }
                                     }
                                 }
                             }
@@ -261,6 +494,10 @@ class OpenCodeProvider extends BaseProvider {
             }
 
             const elapsedSec = ((Date.now() - startTime) / 1000).toFixed(1);
+            const mappedToolCalls = fullToolCalls
+                .filter(Boolean)
+                .map(mapOpenCodeSentinelToolCall);
+
             const assembledData = {
                 id: lastId,
                 model: modelName,
@@ -271,7 +508,7 @@ class OpenCodeProvider extends BaseProvider {
                         role: "assistant",
                         content: fullContent,
                         reasoning_content: fullReasoning,
-                        ...(fullToolCalls.length > 0 ? { tool_calls: fullToolCalls.filter(Boolean) } : {})
+                        ...(mappedToolCalls.length > 0 ? { tool_calls: mappedToolCalls } : {})
                     },
                     finish_reason: finishReason
                 }],

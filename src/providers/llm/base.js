@@ -93,7 +93,86 @@ class BaseProvider {
                 if (norm) result.push(norm);
             }
         }
-        return result;
+        return this.sanitizeMessageSequence(result, supportsTools);
+    }
+
+    /**
+     * Enforces strict OpenAI/Anthropic chat completion sequence invariants:
+     * 1. Every 'tool' message must be preceded by an 'assistant' message whose 'tool_calls'
+     *    contains its matching tool_call_id. Any orphaned 'tool' message is converted to
+     *    a safe contextual user note so upstream APIs never throw 400 invalid_request_error.
+     * 2. Any 'assistant' message that declared 'tool_calls' must have all declared call IDs
+     *    answered before a subsequent non-tool turn. Unanswered calls are filled with synthetic
+     *    acknowledgement tool turns.
+     */
+    sanitizeMessageSequence(messages, supportsTools = true) {
+        if (!Array.isArray(messages) || messages.length === 0) return [];
+        const validated = [];
+        let expectedToolCallIds = new Set();
+
+        for (let i = 0; i < messages.length; i++) {
+            const m = messages[i];
+            if (!m) continue;
+
+            if (m.role === "tool") {
+                if (!supportsTools) {
+                    validated.push(m);
+                    continue;
+                }
+                const callId = m.tool_call_id;
+                if (callId && expectedToolCallIds.has(callId)) {
+                    expectedToolCallIds.delete(callId);
+                    validated.push(m);
+                } else {
+                    // Orphaned tool message: convert to a safe user context note so upstream API doesn't 400
+                    const toolName = m.name || "action";
+                    const contentStr = typeof m.content === "string" ? m.content : JSON.stringify(m.content);
+                    validated.push({
+                        role: "user",
+                        content: `[Previous Action Output (${toolName})]:\n${contentStr}`
+                    });
+                }
+                continue;
+            }
+
+            // If preceding assistant had unanswered tool calls, fill synthetic responses
+            if (expectedToolCallIds.size > 0 && supportsTools) {
+                for (const missingId of expectedToolCallIds) {
+                    validated.push({
+                        role: "tool",
+                        tool_call_id: missingId,
+                        content: JSON.stringify({ status: "acknowledged", note: "Auto-acknowledged prior tool call" })
+                    });
+                }
+                expectedToolCallIds.clear();
+            }
+
+            if (m.role === "assistant") {
+                expectedToolCallIds = new Set(
+                    (m.tool_calls || [])
+                        .map(tc => tc.id)
+                        .filter(Boolean)
+                );
+                validated.push(m);
+                continue;
+            }
+
+            // User or System turn
+            validated.push(m);
+        }
+
+        // Fill any lingering unanswered tool calls at the end of the array
+        if (expectedToolCallIds.size > 0 && supportsTools) {
+            for (const missingId of expectedToolCallIds) {
+                validated.push({
+                    role: "tool",
+                    tool_call_id: missingId,
+                    content: JSON.stringify({ status: "acknowledged", note: "Auto-acknowledged prior tool call" })
+                });
+            }
+        }
+
+        return validated;
     }
 
     normalizeMessage(msg, supportsTools = true, supportsVision = true) {
