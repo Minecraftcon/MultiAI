@@ -64,6 +64,7 @@ replace_file_content / write_file                  Over Chatbox Composer
       - *Planning Bar*: `← 📋 Planning ({completed}/{total})                                  {pct}%`
   - **Single & Batch Actions**: Hover actions per file (view unified diff, reject individual file); bar actions for batch reject all and accept all.
   - **Mobile Compact Mode**: Single-line nowrap bar (`white-space: nowrap !important;`), responsive title shortening (`0 Changes` vs `0 Files With Changes`), compact padding (`6px` empty states, `4px` rows), and directory truncation on mobile screens (`<= 600px`).
+  - **Hero Filename Focus & Smart Shortening**: Filename is rendered as the primary bright hero (`#f8fafc`), with smart middle-truncation preserving extensions (`Tasklist-crea…and.md`) and strict single-line `white-space: nowrap !important;` prevents wrapping on long filenames. Directory paths are rendered as subtle secondary context (`#64748b`) and automatically hidden/truncated on mobile to prioritize the actual file.
   - **Mobile Back Navigation & UI Persistence**: Views remain open while interacting with composer/chat, closing explicitly via `←` back arrow or toggling the tab icon.
   - **Fluid Enter, Exit & Switch Animations**:
     - *Open*: Top panel slides in with subtle spring ease (`dockBoxEnter`), header and back arrow glide into place, and rows stagger cleanly.

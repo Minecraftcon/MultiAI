@@ -665,12 +665,13 @@ svg.plan-lucide-spin,
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
-    padding: 6px 10px;
+    gap: 8px;
+    padding: 5px 8px;
     border-radius: 6px;
     background: transparent;
     cursor: pointer;
     transition: background 0.15s ease;
+    min-width: 0;
 }
 
 .dock-change-row:hover {
@@ -680,11 +681,13 @@ svg.plan-lucide-spin,
 .dock-change-left {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 7px;
     min-width: 0;
     flex: 1;
     font-family: 'JetBrains Mono', var(--font-mono, monospace);
-    font-size: 13px;
+    font-size: 12.5px;
+    overflow: hidden;
+    white-space: nowrap !important;
 }
 
 .dock-change-status-dot {
@@ -711,31 +714,52 @@ svg.plan-lucide-spin,
 .dock-diff-pill.add {
     color: #10b981;
     font-weight: 500;
+    font-size: 11.5px;
+    flex-shrink: 0;
 }
 
 .dock-diff-pill.del {
     color: #ef4444;
     font-weight: 500;
+    font-size: 11.5px;
+    flex-shrink: 0;
 }
 
 .dock-file-name {
-    color: var(--text-primary, #e2e8f0);
-    font-weight: 500;
+    color: var(--text-primary, #f8fafc);
+    font-weight: 600;
+    white-space: nowrap !important;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+    flex-shrink: 1;
+    letter-spacing: -0.01em;
 }
 
 .dock-file-dir {
     color: var(--text-tertiary, #64748b);
-    font-size: 12px;
-    white-space: nowrap;
+    font-size: 11.5px;
+    font-weight: 400;
+    white-space: nowrap !important;
     overflow: hidden;
     text-overflow: ellipsis;
+    min-width: 0;
+    flex-shrink: 2;
+    opacity: 0.85;
+}
+
+.dock-file-dir::before {
+    content: "•";
+    margin-right: 5px;
+    opacity: 0.4;
 }
 
 .dock-change-actions {
     display: flex;
     align-items: center;
     gap: 4px;
-    opacity: 0.6;
+    flex-shrink: 0;
+    opacity: 0.7;
     transition: opacity 0.15s ease;
 }
 
@@ -972,6 +996,23 @@ svg.plan-lucide-spin,
         padding: 4px 6px !important;
         gap: 6px !important;
         font-size: 11.5px !important;
+    }
+
+    .dock-change-left {
+        gap: 5px !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        min-width: 0 !important;
+    }
+
+    .dock-file-name {
+        font-size: 11.5px !important;
+        font-weight: 500 !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        min-width: 0 !important;
+        flex-shrink: 1 !important;
     }
 
     .dock-file-dir {

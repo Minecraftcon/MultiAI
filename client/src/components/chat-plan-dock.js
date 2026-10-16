@@ -169,6 +169,58 @@ function transitionToTab(newTab) {
 }
 
 /**
+ * Shortens a file path while keeping primary focus and clarity on the actual filename.
+ * - Prioritizes the filename and file extension (.js, .md, etc.)
+ * - Subtly displays the shortened directory if space allows
+ * - Performs smart middle-truncation on very long filenames
+ */
+function formatFileDisplay(rawPath, maxFileNameLen = 28) {
+    if (!rawPath) return { fullFileName: "", displayFileName: "", shortDir: "", fullPath: "" };
+    const clean = String(rawPath).replace(/\\/g, "/");
+    const slashIdx = clean.lastIndexOf("/");
+    const fullFileName = slashIdx !== -1 ? clean.slice(slashIdx + 1) : clean;
+    const rawDir = slashIdx !== -1 ? clean.slice(0, slashIdx) : "";
+
+    // Shorten directory to first/…/last if deep
+    let shortDir = "";
+    if (rawDir) {
+        const segs = rawDir.split("/").filter(Boolean);
+        if (segs.length > 2) {
+            shortDir = `${segs[0]}/…/${segs[segs.length - 1]}`;
+        } else {
+            shortDir = rawDir;
+        }
+    }
+
+    // Smart filename shortening with extension preservation
+    let displayFileName = fullFileName;
+    if (fullFileName.length > maxFileNameLen) {
+        const lastDot = fullFileName.lastIndexOf(".");
+        if (lastDot > 1 && lastDot >= fullFileName.length - 7) {
+            const ext = fullFileName.slice(lastDot);
+            const base = fullFileName.slice(0, lastDot);
+            const budget = maxFileNameLen - ext.length - 1; // 1 char for '…'
+            if (budget >= 6) {
+                const head = Math.ceil(budget * 0.58);
+                const tail = Math.floor(budget * 0.42);
+                displayFileName = `${base.slice(0, head)}…${base.slice(-tail)}${ext}`;
+            } else {
+                displayFileName = `${fullFileName.slice(0, maxFileNameLen - 1)}…`;
+            }
+        } else {
+            displayFileName = `${fullFileName.slice(0, maxFileNameLen - 1)}…`;
+        }
+    }
+
+    return {
+        fullFileName,
+        displayFileName,
+        shortDir,
+        fullPath: clean
+    };
+}
+
+/**
  * Renders the integrated dock.
  */
 function renderDock(transitionMeta = {}) {
@@ -210,20 +262,19 @@ function renderDock(transitionMeta = {}) {
                 <div class="dock-changes-box">
                     <div class="dock-changes-list" role="list">
                         ${hasUnaccepted ? unacceptedChanges.map(f => {
-                            const cleanPath = f.displayPath || f.path;
-                            const slashIdx = cleanPath.lastIndexOf("/");
-                            const fileName = slashIdx !== -1 ? cleanPath.slice(slashIdx + 1) : cleanPath;
-                            const dirPath = cleanPath;
+                            const rawPath = f.displayPath || f.path;
+                            const { fullFileName, displayFileName, shortDir, fullPath } = formatFileDisplay(rawPath, 28);
+                            const rowTooltip = f.workspace ? `${f.workspace}/${fullPath}` : fullPath;
                             return `
                                 <div class="dock-change-row" role="listitem" data-path="${escapeHTML(f.path)}" data-workspace="${escapeHTML(f.workspace || '')}">
-                                    <div class="dock-change-left" title="${escapeHTML(f.workspace ? `${f.workspace}/${f.path}` : f.path)}">
+                                    <div class="dock-change-left" title="${escapeHTML(rowTooltip)}">
                                         <span class="dock-change-status-dot ${f.isNew ? 'is-new' : 'is-modified'}">
                                             <i data-lucide="${f.isNew ? 'plus-circle' : 'circle-dot'}"></i>
                                         </span>
                                         <span class="dock-diff-pill add">+${f.additions}</span>
                                         <span class="dock-diff-pill del">-${f.deletions}</span>
-                                        <span class="dock-file-name">${escapeHTML(fileName)}</span>
-                                        <span class="dock-file-dir">${escapeHTML(dirPath)}</span>
+                                        <span class="dock-file-name" title="${escapeHTML(fullFileName)}">${escapeHTML(displayFileName)}</span>
+                                        ${shortDir ? `<span class="dock-file-dir" title="${escapeHTML(fullPath)}">${escapeHTML(shortDir)}</span>` : ""}
                                     </div>
                                     <div class="dock-change-actions">
                                         <button type="button" class="dock-row-action-btn dock-view-diff-btn" title="View Diff" data-path="${escapeHTML(f.path)}" data-workspace="${escapeHTML(f.workspace || '')}">
