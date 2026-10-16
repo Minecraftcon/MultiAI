@@ -10,6 +10,7 @@ const { handleConversationsRoute } = require("./routes/conversations");
 const { handleBuildProjectsRoute, handleValidateDirRoute } = require("./routes/build_projects");
 const { handleBuildAgentRoute } = require("./routes/build_agent");
 const { handleMcpRoute } = require("./routes/mcp");
+const { handleHistoryRoute } = require("./routes/history");
 const { sendJSON } = require("./utils");
 
 async function routeRequest(req, res) {
@@ -63,6 +64,11 @@ async function routeRequest(req, res) {
         // Filesystem routes
         if (req.method === "POST" && (reqUrl.startsWith("/api/file/") || reqUrl === "/api/code/grep")) {
             return handleFilesRoute(req, res);
+        }
+
+        // History & Unaccepted Changes
+        if (reqUrl.startsWith("/api/history/")) {
+            return handleHistoryRoute(req, res);
         }
 
         // Tasks & Python direct execution

@@ -1,6 +1,51 @@
 const fs = require("fs");
 const path = require("path");
 const { execFile, execSync } = require("child_process");
+const shadowGit = require("../../core/shadow_git_manager");
+
+function getWorkspaceForFile(targetPath, chatId) {
+    let ws = null;
+    if (chatId) {
+        try {
+            const { getChatWorkspace } = require("../../server/utils");
+            const wsContext = getChatWorkspace(chatId);
+            if (wsContext && wsContext.project && wsContext.project.rootPath) {
+                ws = wsContext.project.rootPath;
+            }
+        } catch (_) {}
+    }
+    const resolvedTarget = path.resolve(targetPath);
+
+    // 1. If chat is bound to a specific project and target is inside it:
+    if (ws) {
+        const resolvedWs = path.resolve(ws);
+        const rel = path.relative(resolvedWs, resolvedTarget);
+        if (!rel.startsWith("..") && !path.isAbsolute(rel)) {
+            return {
+                workspaceRoot: resolvedWs,
+                relativePath: rel
+            };
+        }
+    }
+
+    // 2. If target is inside server's process.cwd():
+    const cwdWs = path.resolve(process.cwd());
+    const cwdRel = path.relative(cwdWs, resolvedTarget);
+    if (!cwdRel.startsWith("..") && !path.isAbsolute(cwdRel)) {
+        return {
+            workspaceRoot: cwdWs,
+            relativePath: cwdRel
+        };
+    }
+
+    // 3. Target is outside cwdWs (e.g. /tmp/turbo-beacon or user-specified folder):
+    const extWs = shadowGit.findWorkspaceRoot(resolvedTarget);
+    const extRel = path.relative(extWs, resolvedTarget);
+    return {
+        workspaceRoot: extWs,
+        relativePath: extRel
+    };
+}
 
 let rgBinaryPath = null;
 try {
@@ -452,7 +497,22 @@ async function handleReplaceFileContent(args, chatId, { resolveSafePath }) {
     }
 
     const finalContent = hasCRLF ? newContent.replace(/\n/g, "\r\n") : newContent;
+    const wsInfo = getWorkspaceForFile(targetPath, chatId);
+    if (wsInfo.relativePath) {
+        try { shadowGit.recordPreEditBaseline(wsInfo.workspaceRoot, wsInfo.relativePath); } catch (_) {}
+    }
+
     await fs.promises.writeFile(targetPath, finalContent, "utf-8");
+
+    if (wsInfo.relativePath) {
+        try {
+            shadowGit.recordPostEditCommit(wsInfo.workspaceRoot, wsInfo.relativePath, {
+                chatId,
+                tool: "replace_file_content",
+                instruction: args.instruction || args.description || "Replaced file content"
+            });
+        } catch (_) {}
+    }
 
     const oldLinesCount = content.split("\n").length;
     const newLinesCount = newContent.split("\n").length;
@@ -616,7 +676,22 @@ async function handleMultiReplaceFileContent(args, chatId, { resolveSafePath }) 
     }
 
     const finalContent = hasCRLF ? currentContent.replace(/\n/g, "\r\n") : currentContent;
+    const wsInfo = getWorkspaceForFile(targetPath, chatId);
+    if (wsInfo.relativePath) {
+        try { shadowGit.recordPreEditBaseline(wsInfo.workspaceRoot, wsInfo.relativePath); } catch (_) {}
+    }
+
     await fs.promises.writeFile(targetPath, finalContent, "utf-8");
+
+    if (wsInfo.relativePath) {
+        try {
+            shadowGit.recordPostEditCommit(wsInfo.workspaceRoot, wsInfo.relativePath, {
+                chatId,
+                tool: "multi_replace_file_content",
+                instruction: args.instruction || args.description || `Applied ${chunks.length} chunks`
+            });
+        } catch (_) {}
+    }
 
     const oldLinesCount = originalContent.replace(/\r\n/g, "\n").split("\n").length;
     const newLinesCount = currentContent.split("\n").length;
@@ -662,7 +737,22 @@ async function handleWriteFile(args, chatId, { resolveSafePath }) {
     }
 
     const contentStr = String(args.content);
+    const wsInfo = getWorkspaceForFile(targetPath, chatId);
+    if (wsInfo.relativePath && isOverwrite) {
+        try { shadowGit.recordPreEditBaseline(wsInfo.workspaceRoot, wsInfo.relativePath); } catch (_) {}
+    }
+
     await fs.promises.writeFile(targetPath, contentStr, "utf-8");
+
+    if (wsInfo.relativePath) {
+        try {
+            shadowGit.recordPostEditCommit(wsInfo.workspaceRoot, wsInfo.relativePath, {
+                chatId,
+                tool: "write_file",
+                instruction: isOverwrite ? "Overwrote file" : "Created new file"
+            });
+        } catch (_) {}
+    }
 
     const lineCount = contentStr.split("\n").length;
     const byteCount = Buffer.byteLength(contentStr, "utf-8");

@@ -1,66 +1,101 @@
 /* =========================================================
-   PLAN DOCK COMPONENT (CHATBOX DOCK)
+   DUAL DOCK COMPONENT (CHATBOX DOCK)
    Mounts over composer in #chatboxDock.
-   Shows full plan progress list, smoothly collapses to
-   the active/first task with the spinning loader.
+   - Bottom Toolbar:
+       - File icon (unaccepted changes count)
+       - Task-list icon (pending tasks count; hidden if none)
+       - Accept Changes button (only when active changes exist)
+   - Expandable Windows:
+       - Changes Window (workspace relative paths, +lines -lines, view diff, revert)
+       - Task Window (checklist)
+       - Mobile-style Back button (←) to return/collapse
+   - Backed by Shadow Git Engine
    ========================================================= */
 
 import { state } from "../state/index.js";
 import { escapeHTML } from "../utils/dom.js";
 import { renderIcons } from "../utils/icons.js";
+import { renderDiffCardHtml, bindDiffViewerCards } from "./diff-viewer.js";
 
 let activeTodos = null;
-let autoCollapseTimer = null;
+let unacceptedChanges = [];
+let activeTab = null; // null (collapsed toolbar), "changes", or "tasks"
 let autoDismissTimer = null;
-let isExpanded = false;
 let userManuallyToggled = false;
 
 /**
- * Initializes the plan dock listeners and checks initial state.
+ * Initializes the dock listeners and fetches initial state.
  */
 export function initPlanDock() {
     document.addEventListener("todosUpdated", (e) => {
         const { chatId, todos } = e.detail || {};
         if (!chatId || chatId === state.currentChatId) {
-            renderPlanDock(todos, { autoCollapse: true });
+            activeTodos = Array.isArray(todos) ? todos : null;
+            syncDockState();
         }
     });
 
-    if (state.currentChatId && state.chatSessions?.[state.currentChatId]?.todos) {
-        syncPlanDock(state.currentChatId);
+    document.addEventListener("changesUpdated", () => {
+        fetchUnacceptedChanges().then(() => syncDockState());
+    });
+
+    // Check changes on initial load and chat switch
+    fetchUnacceptedChanges().then(() => {
+        if (state.currentChatId && state.chatSessions?.[state.currentChatId]?.todos) {
+            activeTodos = state.chatSessions[state.currentChatId].todos;
+        }
+        syncDockState();
+    });
+}/**
+ * Synchronizes dock state with the active chat session.
+ */
+export function syncPlanDock(chatId = state.currentChatId) {
+    if (!chatId || !state.chatSessions?.[chatId]) {
+        activeTodos = null;
+    } else {
+        activeTodos = state.chatSessions[chatId].todos || null;
+    }
+
+    fetchUnacceptedChanges().then(() => {
+        syncDockState();
+    });
+}
+
+/**
+ * Fetches unaccepted changes from the Shadow Git endpoint.
+ */
+async function fetchUnacceptedChanges() {
+    try {
+        const chatId = state.currentChatId || "";
+        const res = await fetch(`/api/history/changes?chatId=${encodeURIComponent(chatId)}`);
+        if (res.ok) {
+            const data = await res.json();
+            unacceptedChanges = Array.isArray(data.files) ? data.files : [];
+        }
+    } catch (_) {
+        unacceptedChanges = [];
     }
 }
 
 /**
- * Synchronizes the plan dock with the given chat session.
- *
- * @param {string} [chatId]
+ * Evaluates active tasks and unaccepted changes, rendering or dismissing dock.
  */
-export function syncPlanDock(chatId = state.currentChatId) {
-    if (!chatId || !state.chatSessions?.[chatId]) {
-        dismissPlanDock();
-        return;
-    }
-    const todos = state.chatSessions[chatId].todos;
-    if (Array.isArray(todos) && todos.length > 0) {
-        const allDone = todos.every(t => t.status === "completed");
-        if (allDone) {
-            dismissPlanDock();
-        } else {
-            renderPlanDock(todos, { autoCollapse: false, startCollapsed: true });
-        }
-    } else {
-        dismissPlanDock();
-    }
+function syncDockState() {
+    renderDock();
 }
+
+let isTransitioning = false;
 
 /**
  * Dismisses and removes the plan dock card from the DOM.
  */
 export function dismissPlanDock() {
-    clearTimers();
-    activeTodos = null;
-    isExpanded = false;
+    if (autoDismissTimer) {
+        clearTimeout(autoDismissTimer);
+        autoDismissTimer = null;
+    }
+    isTransitioning = false;
+    activeTab = null;
     userManuallyToggled = false;
     const card = document.getElementById("planDockCard");
     if (card) {
@@ -71,40 +106,76 @@ export function dismissPlanDock() {
     }
 }
 
-function clearTimers() {
-    if (autoCollapseTimer) {
-        clearTimeout(autoCollapseTimer);
-        autoCollapseTimer = null;
-    }
-    if (autoDismissTimer) {
-        clearTimeout(autoDismissTimer);
-        autoDismissTimer = null;
-    }
-}
-
 /**
- * Renders or updates the plan dock card.
- *
- * @param {Array<Object>} todos
- * @param {Object} [options]
- * @param {boolean} [options.autoCollapse=false]
- * @param {boolean} [options.startCollapsed=false]
+ * Transitions smoothly between tabs, back to toolbar, or between windows.
  */
-export function renderPlanDock(todos, options = {}) {
-    clearTimers();
-
-    if (!Array.isArray(todos) || todos.length === 0) {
-        dismissPlanDock();
+function transitionToTab(newTab) {
+    if (isTransitioning) return;
+    const card = document.getElementById("planDockCard");
+    if (!card) {
+        activeTab = newTab;
+        renderDock();
         return;
     }
 
-    activeTodos = todos;
+    const currentWindowView = card.querySelector(".dock-window-view");
+    const currentToolbar = card.querySelector(".dock-bottom-toolbar");
+
+    // Case 1: Back from expanded window to floating toolbar
+    if (activeTab !== null && newTab === null && currentWindowView) {
+        isTransitioning = true;
+        currentWindowView.classList.add("is-closing");
+        setTimeout(() => {
+            activeTab = null;
+            renderDock({ entering: "toolbar" });
+            isTransitioning = false;
+        }, 150);
+        return;
+    }
+
+    // Case 2: Opening from floating toolbar to window
+    if (activeTab === null && newTab !== null && currentToolbar) {
+        isTransitioning = true;
+        currentToolbar.classList.add("is-closing");
+        setTimeout(() => {
+            activeTab = newTab;
+            renderDock({ entering: "window" });
+            isTransitioning = false;
+        }, 100);
+        return;
+    }
+
+    // Case 3: Switching between open windows (e.g. changes <-> tasks)
+    if (activeTab !== null && newTab !== null && activeTab !== newTab && currentWindowView) {
+        isTransitioning = true;
+        currentWindowView.classList.add("is-switching-out");
+        setTimeout(() => {
+            activeTab = newTab;
+            renderDock({ entering: "window-switch" });
+            isTransitioning = false;
+        }, 110);
+        return;
+    }
+
+    // Case 4: Toggle off currently active tab
+    if (activeTab !== null && newTab === activeTab && currentWindowView) {
+        transitionToTab(null);
+        return;
+    }
+
+    // Fallback
+    activeTab = newTab;
+    renderDock();
+}
+
+/**
+ * Renders the integrated dock.
+ */
+function renderDock(transitionMeta = {}) {
     const dock = document.getElementById("chatboxDock");
     if (!dock || !dock.parentNode) return;
 
     let card = document.getElementById("planDockCard");
-    const isNewCard = !card;
-
     if (!card) {
         card = document.createElement("div");
         card.id = "planDockCard";
@@ -117,198 +188,327 @@ export function renderPlanDock(todos, options = {}) {
         }
     }
 
-    const total = todos.length;
-    const completed = todos.filter(t => t.status === "completed").length;
-    const pct = Math.round((completed / total) * 100);
-    const allDone = total > 0 && completed === total;
+    const totalTasks = Array.isArray(activeTodos) ? activeTodos.length : 0;
+    const completedTasks = totalTasks > 0 ? activeTodos.filter(t => t.status === "completed").length : 0;
+    const hasTodos = totalTasks > 0;
+    const hasActiveTasks = totalTasks > 0 && completedTasks < totalTasks;
+    const pct = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
-    // Active task to highlight in collapsed header
-    const activeTask = todos.find(t => t.status === "in_progress") || 
-                       todos.find(t => t.status === "pending") || 
-                       todos[0];
+    const isWindowOpen = activeTab !== null;
+    card.classList.toggle("is-collapsed", !isWindowOpen);
+    card.classList.toggle("is-expanded", isWindowOpen);
 
-    if (options.startCollapsed) {
-        isExpanded = false;
-    } else if (isNewCard || (!userManuallyToggled && options.autoCollapse)) {
-        isExpanded = true;
-    }
+    const windowAnimClass = transitionMeta.entering === 'window' ? 'is-entering' : (transitionMeta.entering === 'window-switch' ? 'is-switching-in' : '');
 
-    updateCardDOM(card, { todos, total, completed, pct, allDone, activeTask });
-
-    if (allDone) {
-        autoDismissTimer = setTimeout(() => {
-            dismissPlanDock();
-        }, 3800);
-    } else if (isExpanded && options.autoCollapse && !userManuallyToggled) {
-        autoCollapseTimer = setTimeout(() => {
-            if (!userManuallyToggled && isExpanded) {
-                isExpanded = false;
-                const c = document.getElementById("planDockCard");
-                if (c && activeTodos) {
-                    updateCardDOM(c, { todos: activeTodos, total, completed, pct, allDone, activeTask });
-                }
-            }
-        }, 3200);
-    }
-}
-
-/**
- * Updates DOM structure for either expanded or collapsed state.
- */
-function updateCardDOM(card, { todos, total, completed, pct, allDone, activeTask }) {
-    card.classList.toggle("is-collapsed", !isExpanded);
-    card.classList.toggle("is-expanded", isExpanded);
-
-    if (!isExpanded) {
-        // Floating Collapsed View: Minimal typography & Lucide spinner over dark gradient
-        const statusIcon = allDone
-            ? `<i data-lucide="check" class="plan-lucide-check" aria-label="Completed"></i>`
-            : `<i data-lucide="loader-2" class="plan-lucide-spin" aria-label="In progress"></i>`;
-
-        const taskText = allDone
-            ? `All tasks completed (${completed}/${total})`
-            : (activeTask ? activeTask.content : "Task");
-
-        card.innerHTML = `
-            <div class="plan-dock-collapsed-bar" role="button" tabindex="0" aria-expanded="false" title="Click to view full plan">
-                <div class="plan-dock-collapsed-left">
-                    <span class="plan-dock-item-status">${statusIcon}</span>
-                    <span class="plan-dock-collapsed-label">${escapeHTML(taskText)}</span>
-                </div>
-                <div class="plan-dock-collapsed-right">
-                    <span class="plan-dock-progress-pill">${completed}/${total}</span>
-                    <span class="plan-dock-expand-icon" aria-hidden="true">
-                        <i data-lucide="chevron-up"></i>
-                    </span>
-                </div>
-            </div>
-        `;
-
-        const bar = card.querySelector(".plan-dock-collapsed-bar");
-        if (bar) {
-            const toggleOpen = (e) => {
-                e.preventDefault();
-                userManuallyToggled = true;
-                clearTimers();
-                isExpanded = true;
-                updateCardDOM(card, { todos, total, completed, pct, allDone, activeTask });
-            };
-            bar.addEventListener("click", toggleOpen);
-            bar.addEventListener("keydown", (e) => {
-                if (e.key === "Enter" || e.key === " ") toggleOpen(e);
-            });
-        }
-    } else {
-        // Floating Expanded View: Minimal header 'Task {percentage} 2/7' and clean Lucide list
-        card.innerHTML = `
-            <div class="plan-dock-expanded-view">
-                <div class="plan-dock-header" role="button" tabindex="0" aria-expanded="true" title="Click to collapse plan">
-                    <div class="plan-dock-title-wrap">
-                        <span class="plan-dock-title">Task</span>
-                        <span class="plan-dock-pct-pill">${pct}%</span>
+    // ── 1. Window HTML (when activeTab is open) ─────────────────
+    let windowHtml = "";
+    if (activeTab === "changes") {
+        const hasUnaccepted = unacceptedChanges.length > 0;
+        windowHtml = `
+            <div class="dock-window-view ${windowAnimClass}">
+                <!-- Top: The Changes Box (HAS BG) -->
+                <div class="dock-changes-box">
+                    <div class="dock-changes-list" role="list">
+                        ${hasUnaccepted ? unacceptedChanges.map(f => {
+                            const cleanPath = f.displayPath || f.path;
+                            const slashIdx = cleanPath.lastIndexOf("/");
+                            const fileName = slashIdx !== -1 ? cleanPath.slice(slashIdx + 1) : cleanPath;
+                            const dirPath = cleanPath;
+                            return `
+                                <div class="dock-change-row" role="listitem" data-path="${escapeHTML(f.path)}" data-workspace="${escapeHTML(f.workspace || '')}">
+                                    <div class="dock-change-left" title="${escapeHTML(f.workspace ? `${f.workspace}/${f.path}` : f.path)}">
+                                        <span class="dock-change-status-dot ${f.isNew ? 'is-new' : 'is-modified'}">
+                                            <i data-lucide="${f.isNew ? 'plus-circle' : 'circle-dot'}"></i>
+                                        </span>
+                                        <span class="dock-diff-pill add">+${f.additions}</span>
+                                        <span class="dock-diff-pill del">-${f.deletions}</span>
+                                        <span class="dock-file-name">${escapeHTML(fileName)}</span>
+                                        <span class="dock-file-dir">${escapeHTML(dirPath)}</span>
+                                    </div>
+                                    <div class="dock-change-actions">
+                                        <button type="button" class="dock-row-action-btn dock-view-diff-btn" title="View Diff" data-path="${escapeHTML(f.path)}" data-workspace="${escapeHTML(f.workspace || '')}">
+                                            <i data-lucide="eye"></i>
+                                        </button>
+                                        <button type="button" class="dock-row-action-btn dock-revert-file-btn" title="Reject File" data-path="${escapeHTML(f.path)}" data-workspace="${escapeHTML(f.workspace || '')}">
+                                            <i data-lucide="rotate-ccw"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            `;
+                        }).join("") : `
+                            <div class="dock-empty-changes">
+                                <span>No files with changes</span>
+                            </div>
+                        `}
                     </div>
-                    <div class="plan-dock-header-actions">
-                        <span class="plan-dock-progress-pill">${completed}/${total}</span>
-                        <button type="button" class="plan-dock-toggle-btn" aria-label="Collapse plan" title="Collapse plan">
+                </div>
+
+                <!-- Bottom: The Bar (NO BG) -->
+                <div class="dock-window-header dock-changes-bar">
+                    <div class="dock-window-header-left">
+                        <button type="button" class="dock-back-btn" title="Back" aria-label="Back">
+                            <i data-lucide="arrow-left"></i>
+                        </button>
+                        <i data-lucide="file-text" class="dock-bar-file-icon"></i>
+                        <span class="dock-window-title"><span class="dock-title-count">${unacceptedChanges.length}</span> <span class="dock-title-full">${unacceptedChanges.length === 1 ? 'File' : 'Files'} With Changes</span><span class="dock-title-short">${unacceptedChanges.length === 1 ? 'Change' : 'Changes'}</span></span>
+                    </div>
+                    <div class="dock-window-header-right">
+                        <button type="button" class="dock-reject-all-btn" title="Reject all unaccepted changes" ${!hasUnaccepted ? "disabled" : ""}>
+                            <span>Reject all</span>
+                        </button>
+                        <button type="button" class="dock-accept-all-btn" title="Accept all changes" ${!hasUnaccepted ? "disabled" : ""}>
+                            <span>Accept all</span>
                             <i data-lucide="chevron-down"></i>
                         </button>
                     </div>
                 </div>
-
-                <div class="plan-dock-list" role="list">
-                    ${todos.map(t => {
-                        const isDone = t.status === "completed";
-                        const isProg = t.status === "in_progress";
-                        const iconHtml = isDone
-                            ? `<i data-lucide="check" class="plan-lucide-check" aria-hidden="true"></i>`
-                            : (isProg
-                                ? `<i data-lucide="loader-2" class="plan-lucide-spin" aria-hidden="true"></i>`
-                                : `<i data-lucide="circle" class="plan-lucide-circle" aria-hidden="true"></i>`);
-                        const itemClass = isDone ? "is-completed" : (isProg ? "is-in-progress" : "is-pending");
-                        return `
-                            <div class="plan-dock-item ${itemClass}" role="listitem">
-                                <span class="plan-dock-item-status">${iconHtml}</span>
-                                <span class="plan-dock-item-content">${escapeHTML(t.content)}</span>
+            </div>
+        `;
+    } else if (activeTab === "tasks") {
+        windowHtml = `
+            <div class="dock-window-view ${windowAnimClass}">
+                <!-- Top: The Tasks Box (HAS BG) -->
+                <div class="dock-tasks-box">
+                    <div class="plan-dock-list" role="list">
+                        ${hasTodos ? activeTodos.map(t => {
+                            const isDone = t.status === "completed";
+                            const isProg = t.status === "in_progress";
+                            const iconHtml = isDone
+                                ? `<i data-lucide="check" class="plan-lucide-check" aria-hidden="true"></i>`
+                                : (isProg
+                                    ? `<i data-lucide="loader-2" class="plan-lucide-spin" aria-hidden="true"></i>`
+                                    : `<i data-lucide="circle" class="plan-lucide-circle" aria-hidden="true"></i>`);
+                            const itemClass = isDone ? "is-completed" : (isProg ? "is-in-progress" : "is-pending");
+                            return `
+                                <div class="plan-dock-item ${itemClass}" role="listitem">
+                                    <span class="plan-dock-item-status">${iconHtml}</span>
+                                    <span class="plan-dock-item-content">${escapeHTML(t.content)}</span>
+                                </div>
+                            `;
+                        }).join("") : `
+                            <div class="dock-empty-changes">
+                                <span>No active tasks</span>
                             </div>
-                        `;
-                    }).join("")}
+                        `}
+                    </div>
+                </div>
+
+                <!-- Bottom: The Bar (NO BG) -->
+                <div class="dock-window-header dock-tasks-bar">
+                    <div class="dock-window-header-left">
+                        <button type="button" class="dock-back-btn" title="Back" aria-label="Back">
+                            <i data-lucide="arrow-left"></i>
+                        </button>
+                        <i data-lucide="list-todo" class="dock-bar-task-icon"></i>
+                        <span class="dock-window-title"><span class="dock-title-full">Planning (${completedTasks}/${totalTasks})</span><span class="dock-title-short">Plan (${completedTasks}/${totalTasks})</span></span>
+                    </div>
+                    <div class="dock-window-header-right">
+                        <span class="plan-dock-pct-pill">${pct}%</span>
+                    </div>
                 </div>
             </div>
         `;
+    }
 
-        const toggleClose = (e) => {
+    // ── 2. Bottom Toolbar HTML (When closed, compact floating icons) ─────
+    const hasChanges = unacceptedChanges.length > 0;
+    const toolbarAnimClass = transitionMeta.entering === 'toolbar' ? 'is-entering' : '';
+
+    const toolbarHtml = `
+        <div class="dock-bottom-toolbar ${toolbarAnimClass}">
+            <div class="dock-toolbar-left">
+                <!-- File Icon for changes -->
+                <button type="button" class="dock-tab-btn ${activeTab === 'changes' ? 'is-active' : ''} ${hasChanges ? 'has-changes' : ''}" data-tab="changes" title="Unaccepted Changes">
+                    <i data-lucide="file-text"></i>
+                    ${hasChanges ? `<span class="dock-tab-badge">${unacceptedChanges.length}</span>` : ""}
+                </button>
+
+                <!-- Task-list icon (show if tasks exist, keep it simple without 5/7 badge) -->
+                ${hasTodos ? `
+                    <button type="button" class="dock-tab-btn ${activeTab === 'tasks' ? 'is-active' : ''}" data-tab="tasks" title="Active Plan">
+                        <i data-lucide="list-todo"></i>
+                    </button>
+                ` : ""}
+            </div>
+
+            <div class="dock-toolbar-right">
+                <!-- Accept Changes Button (ONLY appears when active changes exist AND window is closed) -->
+                ${hasChanges ? `
+                    <button type="button" class="dock-accept-btn" title="Accept all changes and update ledger">
+                        <i data-lucide="check"></i>
+                        <span>Accept Changes</span>
+                    </button>
+                ` : ""}
+            </div>
+        </div>
+    `;
+
+    // When an option is opened, show the window view (which has the bar at the bottom); otherwise show floating icons
+    card.innerHTML = isWindowOpen ? windowHtml : toolbarHtml;
+
+    // ── 3. Wire Event Listeners ────────────────────────────────
+    // Back button
+    const backBtn = card.querySelector(".dock-back-btn");
+    if (backBtn) {
+        backBtn.addEventListener("click", (e) => {
             e.preventDefault();
             e.stopPropagation();
             userManuallyToggled = true;
-            clearTimers();
-            isExpanded = false;
-            updateCardDOM(card, { todos, total, completed, pct, allDone, activeTask });
-        };
-
-        const header = card.querySelector(".plan-dock-header");
-        const btn = card.querySelector(".plan-dock-toggle-btn");
-        if (header) {
-            header.addEventListener("click", toggleClose);
-            header.addEventListener("keydown", (e) => {
-                if (e.key === "Enter" || e.key === " ") toggleClose(e);
-            });
-        }
-        if (btn) {
-            btn.addEventListener("click", toggleClose);
-        }
+            transitionToTab(null);
+        });
     }
+
+    // Tab buttons
+    card.querySelectorAll(".dock-tab-btn").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            userManuallyToggled = true;
+            const tab = btn.getAttribute("data-tab");
+            if (activeTab === tab) {
+                transitionToTab(null);
+            } else {
+                transitionToTab(tab);
+            }
+        });
+    });
+
+    // Accept All / Accept Button
+    card.querySelectorAll(".dock-accept-btn, .dock-accept-all-btn").forEach(btn => {
+        btn.addEventListener("click", async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            btn.disabled = true;
+            try {
+                const res = await fetch("/api/history/accept", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ chatId: state.currentChatId || "" })
+                });
+                if (res.ok) {
+                    await fetchUnacceptedChanges();
+                    if (activeTab === "changes") {
+                        transitionToTab(null);
+                    } else {
+                        syncDockState();
+                    }
+                }
+            } catch (err) {
+                console.error("[Dock] Accept failed:", err);
+            } finally {
+                btn.disabled = false;
+            }
+        });
+    });
+
+    // Reject All Button
+    card.querySelectorAll(".dock-revert-all-btn, .dock-reject-all-btn").forEach(btn => {
+        btn.addEventListener("click", async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (!confirm("Are you sure you want to reject all unaccepted file changes?")) return;
+            try {
+                const res = await fetch("/api/history/revert", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ chatId: state.currentChatId || "" })
+                });
+                if (res.ok) {
+                    await fetchUnacceptedChanges();
+                    syncDockState();
+                }
+            } catch (err) {
+                console.error("[Dock] Reject all failed:", err);
+            }
+        });
+    });
+
+    // Row Revert File Button
+    card.querySelectorAll(".dock-revert-file-btn").forEach(btn => {
+        btn.addEventListener("click", async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const filePath = btn.getAttribute("data-path");
+            const workspace = btn.getAttribute("data-workspace") || "";
+            if (!filePath) return;
+            if (!confirm(`Revert unaccepted changes in ${filePath}?`)) return;
+            try {
+                const res = await fetch("/api/history/revert", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ chatId: state.currentChatId || "", path: filePath, workspace })
+                });
+                if (res.ok) {
+                    await fetchUnacceptedChanges();
+                    syncDockState();
+                }
+            } catch (err) {
+                console.error("[Dock] Revert file failed:", err);
+            }
+        });
+    });
+
+    // Row View Diff Button
+    card.querySelectorAll(".dock-view-diff-btn, .dock-change-left").forEach(el => {
+        el.addEventListener("click", async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const filePath = el.getAttribute("data-path") || el.closest(".dock-change-row")?.getAttribute("data-path");
+            const workspace = el.getAttribute("data-workspace") || el.closest(".dock-change-row")?.getAttribute("data-workspace") || "";
+            if (!filePath) return;
+            openDiffModal(filePath, workspace);
+        });
+    });
 
     renderIcons(card);
 }
 
-/* =========================================================
-   PREVIOUS BOXED CARD DOM BUILDER (PRESERVED / COMMENTED OUT)
-   =========================================================
-function updateCardDOMBoxed(card, { todos, total, completed, pct, allDone, activeTask }) {
-    card.classList.toggle("is-collapsed", !isExpanded);
-    card.classList.toggle("is-expanded", isExpanded);
+/**
+ * Opens a modal viewing the unified diff for a given file.
+ */
+async function openDiffModal(filePath, workspace = "") {
+    try {
+        let diffUrl = `/api/history/diff?chatId=${encodeURIComponent(state.currentChatId || "")}&path=${encodeURIComponent(filePath)}`;
+        if (workspace) {
+            diffUrl += `&workspace=${encodeURIComponent(workspace)}`;
+        }
+        const res = await fetch(diffUrl);
+        if (!res.ok) return;
+        const data = await res.json();
+        const diffText = data.diff || "";
 
-    if (!isExpanded) {
-        const statusIcon = allDone
-            ? `<span class="plan-dock-check-icon" aria-label="Completed">✓</span>`
-            : `<span class="plan-dock-spinner" aria-label="In progress"></span>`;
-        const taskText = allDone
-            ? `All tasks completed (${completed}/${total})`
-            : (activeTask ? activeTask.content : "Task plan");
+        let overlay = document.getElementById("dockDiffOverlay");
+        if (!overlay) {
+            overlay = document.createElement("div");
+            overlay.id = "dockDiffOverlay";
+            overlay.className = "dock-diff-overlay modal-backdrop";
+            document.body.appendChild(overlay);
+        }
 
-        card.innerHTML = `
-            <div class="plan-dock-collapsed-bar" role="button" tabindex="0" aria-expanded="false" title="Click to view full plan">
-                <div class="plan-dock-collapsed-left">
-                    <span class="plan-dock-item-status">${statusIcon}</span>
-                    <span class="plan-dock-collapsed-label">${escapeHTML(taskText)}</span>
+        overlay.innerHTML = `
+            <div class="dock-diff-modal modal-card">
+                <div class="dock-diff-modal-header">
+                    <span class="dock-diff-modal-title">Diff: ${escapeHTML(filePath)}</span>
+                    <button type="button" class="dock-diff-close-btn" aria-label="Close">
+                        <i data-lucide="x"></i>
+                    </button>
                 </div>
-                <div class="plan-dock-collapsed-right">
-                    <span class="plan-dock-progress-pill">${completed}/${total}</span>
-                    <span class="plan-dock-expand-icon" aria-hidden="true">
-                        <i data-lucide="chevron-up"></i>
-                    </span>
+                <div class="dock-diff-modal-body">
+                    ${renderDiffCardHtml({ diffStr: diffText, filePath })}
                 </div>
             </div>
         `;
-    } else {
-        card.innerHTML = `
-            <div class="plan-dock-expanded-view">
-                <div class="plan-dock-header" role="button" tabindex="0" aria-expanded="true" title="Click to collapse plan">
-                    <div class="plan-dock-title-wrap">
-                        <div class="plan-dock-icon-badge"><i data-lucide="list-todo"></i></div>
-                        <span class="plan-dock-title">Implementation Plan</span>
-                    </div>
-                    <div class="plan-dock-header-actions">
-                        <span class="plan-dock-pct-pill">${completed}/${total} (${pct}%)</span>
-                        <button type="button" class="plan-dock-toggle-btn"><i data-lucide="chevron-down"></i></button>
-                    </div>
-                </div>
-                <div class="plan-dock-progress-track">
-                    <div class="plan-dock-progress-fill" style="width: ${pct}%;"></div>
-                </div>
-                <div class="plan-dock-list">...</div>
-            </div>
-        `;
+
+        const closeBtn = overlay.querySelector(".dock-diff-close-btn");
+        const closeModal = () => { overlay.remove(); };
+        if (closeBtn) closeBtn.addEventListener("click", closeModal);
+        overlay.addEventListener("click", (e) => {
+            if (e.target === overlay) closeModal();
+        });
+
+        bindDiffViewerCards(overlay);
+        renderIcons(overlay);
+    } catch (err) {
+        console.error("[Dock] Open diff modal error:", err);
     }
 }
-========================================================= */

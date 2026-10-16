@@ -8,28 +8,26 @@
 .plan-dock-card {
     display: flex;
     flex-direction: column;
-    width: min(900px, 100%);
-    margin: 0 auto 8px auto;
-    padding: 10px 14px 12px 14px;
     box-sizing: border-box;
-    background: var(--input-bg) !important;
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid var(--border) !important;
-    border-radius: 16px !important;
-    box-shadow: 0 4px 20px var(--shadow) !important;
     position: relative;
     user-select: none;
     z-index: 52;
     pointer-events: auto !important;
     overflow: hidden;
-    animation: planFloatingFadeIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
     transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.plan-dock-card.is-collapsed {
-    padding: 5px 14px;
-    border-radius: 16px !important;
+.plan-dock-card.is-collapsed,
+.plan-dock-card.is-expanded {
+    width: min(900px, 100%);
+    margin: 0 auto 4px auto !important;
+    padding: 0 4px !important;
+    background: transparent !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
 }
 
 @keyframes planFloatingFadeIn {
@@ -319,6 +317,729 @@ svg.plan-lucide-spin,
 .plan-dock-item.is-pending {
     color: var(--text-secondary);
     opacity: 0.75;
+}
+
+/* ── Window & Toolbar Enter/Exit Keyframe Animations ──────── */
+@keyframes dockBoxEnter {
+    0% {
+        opacity: 0;
+        transform: translateY(12px) scale(0.985);
+    }
+    60% {
+        opacity: 0.96;
+        transform: translateY(-1px) scale(1.002);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+@keyframes dockBoxExit {
+    0% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+    100% {
+        opacity: 0;
+        transform: translateY(10px) scale(0.98);
+    }
+}
+
+@keyframes dockBarEnter {
+    0% {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes dockBarExit {
+    0% {
+        opacity: 1;
+        transform: translateY(0);
+    }
+    100% {
+        opacity: 0;
+        transform: translateY(4px);
+    }
+}
+
+@keyframes dockBackBtnSlide {
+    0% {
+        opacity: 0;
+        transform: translateX(-8px) scale(0.9);
+    }
+    60% {
+        transform: translateX(1px) scale(1.02);
+    }
+    100% {
+        opacity: 1;
+        transform: translateX(0) scale(1);
+    }
+}
+
+@keyframes dockToolbarEnter {
+    0% {
+        opacity: 0;
+        transform: translateY(6px) scale(0.98);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+@keyframes dockToolbarExit {
+    0% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+    100% {
+        opacity: 0;
+        transform: translateY(-4px) scale(0.98);
+    }
+}
+
+@keyframes dockBoxSwitchExit {
+    0% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    100% {
+        opacity: 0;
+        transform: scale(0.975);
+    }
+}
+
+@keyframes dockBoxSwitchEnter {
+    0% {
+        opacity: 0;
+        transform: scale(0.975) translateY(4px);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+@keyframes dockRowEnter {
+    0% {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ── Dual-Dock Bottom Toolbar ──────────────────────────────── */
+.dock-bottom-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 30px;
+    padding: 2px 0;
+    will-change: transform, opacity;
+}
+
+.dock-bottom-toolbar.is-entering {
+    animation: dockToolbarEnter 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.dock-bottom-toolbar.is-closing {
+    animation: dockToolbarExit 0.11s cubic-bezier(0.4, 0, 0.2, 1) forwards !important;
+}
+
+.dock-toolbar-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    flex: 1;
+}
+
+.dock-toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.dock-tab-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 6px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+    user-select: none;
+    outline: none;
+}
+
+.dock-tab-btn i,
+.dock-tab-btn svg {
+    width: 15px;
+    height: 15px;
+    stroke-width: 2;
+}
+
+.dock-tab-btn:hover {
+    color: var(--text-primary);
+    background: var(--hover, rgba(255, 255, 255, 0.08));
+    transform: translateY(-1px);
+}
+
+.dock-tab-btn:active {
+    transform: translateY(0.5px) scale(0.95);
+}
+
+.dock-tab-btn.is-active {
+    color: var(--text-primary);
+    background: var(--hover, rgba(255, 255, 255, 0.12));
+    border-color: var(--border);
+}
+
+.dock-tab-btn.has-changes {
+    color: var(--text-primary);
+}
+
+.dock-tab-badge {
+    font-family: 'JetBrains Mono', var(--font-mono, monospace);
+    font-size: 11px;
+    font-weight: 600;
+    padding: 1px 5px;
+    border-radius: 9999px;
+    background: var(--surface-2, rgba(255, 255, 255, 0.08));
+    color: var(--text-secondary);
+    letter-spacing: -0.01em;
+}
+
+.dock-tab-btn.is-active .dock-tab-badge {
+    color: var(--text-primary);
+}
+
+.dock-accept-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 9px;
+    background: var(--accent, #3b82f6);
+    color: #ffffff;
+    border: none;
+    border-radius: 6px;
+    font-size: 11.5px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+    user-select: none;
+    outline: none;
+}
+
+.dock-accept-btn i,
+.dock-accept-btn svg {
+    width: 12px;
+    height: 12px;
+    stroke-width: 2.2;
+}
+
+.dock-accept-btn:hover {
+    opacity: 0.92;
+    transform: translateY(-0.5px);
+}
+
+.dock-accept-btn:active {
+    transform: translateY(0);
+}
+
+/* ── Expandable Window View & Header ──────────────────────── */
+.dock-window-view {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 0;
+    width: 100%;
+    will-change: transform, opacity;
+}
+
+/* ── Changes Box & Tasks Box (Top, HAS BG) ────────────────── */
+.dock-changes-box,
+.dock-tasks-box {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    background: #18181b !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border-radius: 8px !important;
+    padding: 4px 6px !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45) !important;
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    margin-bottom: 4px;
+    will-change: transform, opacity;
+    animation: dockBoxEnter 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.dock-window-view .dock-window-header {
+    animation: dockBarEnter 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.dock-window-view .dock-back-btn {
+    animation: dockBackBtnSlide 0.24s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Staggered rows entrance */
+.dock-window-view.is-entering .dock-change-row,
+.dock-window-view.is-entering .plan-dock-item {
+    animation: dockRowEnter 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.dock-window-view.is-entering .dock-change-row:nth-child(1),
+.dock-window-view.is-entering .plan-dock-item:nth-child(1) { animation-delay: 0.02s; }
+.dock-window-view.is-entering .dock-change-row:nth-child(2),
+.dock-window-view.is-entering .plan-dock-item:nth-child(2) { animation-delay: 0.04s; }
+.dock-window-view.is-entering .dock-change-row:nth-child(3),
+.dock-window-view.is-entering .plan-dock-item:nth-child(3) { animation-delay: 0.06s; }
+.dock-window-view.is-entering .dock-change-row:nth-child(4),
+.dock-window-view.is-entering .plan-dock-item:nth-child(4) { animation-delay: 0.08s; }
+.dock-window-view.is-entering .dock-change-row:nth-child(5),
+.dock-window-view.is-entering .plan-dock-item:nth-child(5) { animation-delay: 0.10s; }
+.dock-window-view.is-entering .dock-change-row:nth-child(n+6),
+.dock-window-view.is-entering .plan-dock-item:nth-child(n+6) { animation-delay: 0.12s; }
+
+.dock-window-view.is-entering .dock-empty-changes {
+    animation: dockRowEnter 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Window Exit (Back Button or Toggle clicked) */
+.dock-window-view.is-closing .dock-changes-box,
+.dock-window-view.is-closing .dock-tasks-box {
+    animation: dockBoxExit 0.16s cubic-bezier(0.4, 0, 0.2, 1) forwards !important;
+}
+
+.dock-window-view.is-closing .dock-window-header {
+    animation: dockBarExit 0.14s cubic-bezier(0.4, 0, 0.2, 1) forwards !important;
+}
+
+/* Switching between Windows */
+.dock-window-view.is-switching-out .dock-changes-box,
+.dock-window-view.is-switching-out .dock-tasks-box {
+    animation: dockBoxSwitchExit 0.11s cubic-bezier(0.4, 0, 0.2, 1) forwards !important;
+}
+
+.dock-window-view.is-switching-in .dock-changes-box,
+.dock-window-view.is-switching-in .dock-tasks-box {
+    animation: dockBoxSwitchEnter 0.18s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+}
+
+.dock-changes-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: 220px;
+    overflow-y: auto;
+    padding: 0;
+}
+
+.dock-changes-list::-webkit-scrollbar {
+    width: 3px;
+}
+
+.dock-changes-list::-webkit-scrollbar-thumb {
+    background: var(--scrollbar, rgba(255, 255, 255, 0.15));
+    border-radius: 3px;
+}
+
+.dock-change-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    background: transparent;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.dock-change-row:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.dock-change-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    flex: 1;
+    font-family: 'JetBrains Mono', var(--font-mono, monospace);
+    font-size: 13px;
+}
+
+.dock-change-status-dot {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    color: #f59e0b; /* Amber dot from screenshot */
+    flex-shrink: 0;
+}
+
+.dock-change-status-dot.is-new {
+    color: #10b981;
+}
+
+.dock-change-status-dot i,
+.dock-change-status-dot svg {
+    width: 13px;
+    height: 13px;
+    stroke-width: 2.2;
+}
+
+.dock-diff-pill.add {
+    color: #10b981;
+    font-weight: 500;
+}
+
+.dock-diff-pill.del {
+    color: #ef4444;
+    font-weight: 500;
+}
+
+.dock-file-name {
+    color: var(--text-primary, #e2e8f0);
+    font-weight: 500;
+}
+
+.dock-file-dir {
+    color: var(--text-tertiary, #64748b);
+    font-size: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.dock-change-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    opacity: 0.6;
+    transition: opacity 0.15s ease;
+}
+
+.dock-change-row:hover .dock-change-actions {
+    opacity: 1;
+}
+
+.dock-row-action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border: none;
+    background: transparent;
+    border-radius: 4px;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    padding: 0;
+    transition: all 0.15s ease;
+}
+
+.dock-row-action-btn:hover {
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.dock-row-action-btn i,
+.dock-row-action-btn svg {
+    width: 13px;
+    height: 13px;
+}
+
+.dock-empty-changes {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 6px;
+    color: var(--text-tertiary);
+    font-size: 12.5px;
+    user-select: none;
+    letter-spacing: -0.01em;
+}
+
+/* ── Changes Bar (Bottom, NO BG) ──────────────────────────── */
+.dock-changes-bar,
+.dock-tasks-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 2px 2px;
+    background: transparent !important;
+    border: none !important;
+    flex-wrap: nowrap !important;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.dock-window-header-left {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    flex-shrink: 1;
+    overflow: hidden;
+}
+
+.dock-window-header-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+.dock-back-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border: none;
+    background: transparent;
+    border-radius: 4px;
+    color: var(--text-secondary, #94a3b8);
+    cursor: pointer;
+    padding: 0;
+    transition: all 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+    outline: none;
+    flex-shrink: 0;
+}
+
+.dock-back-btn:hover {
+    color: var(--text-primary, #ffffff);
+    background: rgba(255, 255, 255, 0.08);
+    transform: translateX(-2px);
+}
+
+.dock-back-btn:active {
+    transform: translateX(-3.5px) scale(0.92);
+}
+
+.dock-back-btn i,
+.dock-back-btn svg {
+    width: 14px;
+    height: 14px;
+    stroke-width: 2.2;
+}
+
+.dock-bar-file-icon,
+.dock-bar-task-icon {
+    width: 15px;
+    height: 15px;
+    color: var(--text-secondary, #94a3b8);
+    flex-shrink: 0;
+}
+
+.dock-window-title {
+    font-size: 13px;
+    font-family: 'JetBrains Mono', var(--font-mono, monospace);
+    font-weight: 500;
+    color: var(--text-secondary, #cbd5e1);
+    letter-spacing: -0.01em;
+    white-space: nowrap !important;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.dock-title-short {
+    display: none;
+}
+
+.dock-title-full {
+    display: inline;
+}
+
+.dock-reject-all-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary, #94a3b8);
+    font-family: inherit;
+    font-size: 12.5px;
+    font-weight: 500;
+    cursor: pointer;
+    padding: 3px 6px;
+    border-radius: 4px;
+    transition: color 0.15s ease, background 0.15s ease;
+    outline: none;
+    white-space: nowrap !important;
+    flex-shrink: 0;
+}
+
+.dock-reject-all-btn:hover:not(:disabled) {
+    color: var(--text-primary, #ffffff);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.dock-reject-all-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+.dock-accept-all-btn {
+    background: #0284c7; /* Blue accent pill */
+    color: #ffffff;
+    border: none;
+    border-radius: 6px;
+    padding: 3px 9px;
+    font-family: inherit;
+    font-size: 12.5px;
+    font-weight: 500;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    transition: background 0.15s ease;
+    outline: none;
+    white-space: nowrap !important;
+    flex-shrink: 0;
+}
+
+.dock-accept-all-btn:hover:not(:disabled) {
+    background: #0369a1;
+}
+
+.dock-accept-all-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+.dock-accept-all-btn i,
+.dock-accept-all-btn svg {
+    width: 13px;
+    height: 13px;
+    stroke-width: 2.2;
+}
+
+.plan-dock-pct-pill {
+    font-size: 11.5px;
+    font-family: 'JetBrains Mono', var(--font-mono, monospace);
+    font-weight: 500;
+    color: var(--text-secondary, #94a3b8);
+    background: rgba(255, 255, 255, 0.07);
+    padding: 2px 7px;
+    border-radius: 4px;
+    letter-spacing: -0.01em;
+    white-space: nowrap !important;
+    flex-shrink: 0;
+}
+
+/* ── Mobile Responsive Compact Mode ───────────────────────── */
+@media (max-width: 600px) {
+    .dock-title-full {
+        display: none !important;
+    }
+    .dock-title-short {
+        display: inline !important;
+    }
+
+    .dock-changes-box,
+    .dock-tasks-box {
+        padding: 3px 6px !important;
+        margin-bottom: 3px !important;
+        border-radius: 6px !important;
+    }
+
+    .dock-empty-changes {
+        padding: 6px 4px !important;
+        font-size: 11.5px !important;
+    }
+
+    .dock-change-row {
+        padding: 4px 6px !important;
+        gap: 6px !important;
+        font-size: 11.5px !important;
+    }
+
+    .dock-file-dir {
+        display: none !important;
+    }
+
+    .dock-changes-bar,
+    .dock-tasks-bar {
+        gap: 6px !important;
+        padding: 1px 0 !important;
+    }
+
+    .dock-window-header-left {
+        gap: 4px !important;
+    }
+
+    .dock-window-header-right {
+        gap: 4px !important;
+    }
+
+    .dock-window-title {
+        font-size: 11.5px !important;
+    }
+
+    .dock-back-btn {
+        width: 18px !important;
+        height: 18px !important;
+    }
+
+    .dock-back-btn i,
+    .dock-back-btn svg {
+        width: 12px !important;
+        height: 12px !important;
+    }
+
+    .dock-bar-file-icon,
+    .dock-bar-task-icon {
+        width: 13px !important;
+        height: 13px !important;
+    }
+
+    .dock-reject-all-btn {
+        font-size: 11px !important;
+        padding: 2px 4px !important;
+    }
+
+    .dock-accept-all-btn {
+        font-size: 11px !important;
+        padding: 2px 7px !important;
+        border-radius: 5px !important;
+        gap: 2px !important;
+    }
+
+    .dock-accept-all-btn i,
+    .dock-accept-all-btn svg {
+        width: 11px !important;
+        height: 11px !important;
+    }
+
+    .plan-dock-pct-pill {
+        font-size: 10.5px !important;
+        padding: 1px 5px !important;
+    }
+
+    .plan-dock-item {
+        font-size: 11.5px !important;
+        gap: 6px !important;
+    }
 }
 
 

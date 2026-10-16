@@ -4,6 +4,75 @@ This living roadmap tracks active development priorities, architectural specific
 
 ---
 
+## 1. Active Priority: Shadow Git Engine & Dual-Dock Toolbar (File Modifications & Review)
+
+### The Problem
+When the model edits workspace files across multi-step tasks:
+1. The user has no immediate visibility into which files were changed, how many lines were added/deleted, or whether changes are pending review.
+2. Traditional DB/JSONL solutions for tracking file history lead to data bloat, disk thrashing, fragile custom diff parsers, and risks of corruption.
+3. Users need a persistent, zero-overhead ledger that allows inspecting diffs, reverting individual or all changes, and accepting modifications without interfering with their own Git repository.
+
+### Architecture: Isolated Shadow Git Engine
+Instead of custom DBs or JSON files, MultiAI uses an isolated **Shadow Git Store** located at `~/.MultiAI/shadow_git/<projectHash>/`:
+- **Complete Isolation**: Operates using `--git-dir=~/.MultiAI/shadow_git/<projectHash> --work-tree=<workspaceRoot>`.
+- **Zero Impact on User's Project Git**: The user's `.git/` folder, staging area, commit logs, branches, and remotes are untouched.
+- **Universal**: Works seamlessly even in projects that do not use Git.
+- **Deduplicated & Compressed**: Git natively uses zlib and packfiles, handling 10,000+ edit snapshots in a fraction of disk space.
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│                        Shadow Git Lifecycle                            │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │
+           ┌────────────────────────┴────────────────────────┐
+           ▼                                                 ▼
+[Model Tool: File Modification]                    [Dual-Dock Toolbar UI]
+replace_file_content / write_file                  Over Chatbox Composer
+           │                                                 │
+1. Capture Pre-Edit Baseline                       1. File Icon (Unaccepted changes badge)
+2. Apply changes to disk file                      2. Tasklist Icon (Active plan, hidden if none)
+3. Shadow commit with metadata                     3. [Accept Changes] Button (When active)
+4. Dispatch SSE/CustomEvent: `changesUpdated` ───► 4. Mobile-Style Back Button (←) to Collapse
+                                                   5. Revert / View Diff per file
+```
+
+### Components & Endpoints
+- **Core Manager**: [`src/core/shadow_git_manager.js`](file:///home/shado/Documents/Web-projects/MultiAI/src/core/shadow_git_manager.js)
+  - `ensureShadowRepo(workspaceRoot, projectId)`: Auto-initializes shadow git and sets initial `accepted-checkpoint`.
+  - `recordPreEditBaseline(workspaceRoot, projectId, relPath)`: Records pristine state before first edit.
+  - `recordPostEditCommit(workspaceRoot, projectId, relPath, meta)`: Commits changes silently with commit message: `chat:<chatId> | tool:<tool> | <instruction>`.
+  - `getUnacceptedChanges(workspaceRoot, projectId)`: Compares `accepted-checkpoint` to working tree via `git diff --numstat`.
+  - `acceptChanges(workspaceRoot, projectId)`: Moves `accepted-checkpoint` tag to current HEAD.
+  - `revertFile(workspaceRoot, projectId, relPath)`: Restores file from `accepted-checkpoint` with 100% byte fidelity (or unlinks if newly created).
+  - `revertAll(workspaceRoot, projectId)`: Reverts all unaccepted files.
+  - `getUnifiedDiff(workspaceRoot, projectId, relPath)`: Returns unified diff against `accepted-checkpoint`.
+  - `getFileHistoryTimeline(workspaceRoot, projectId)`: Date/time grouped modification log.
+- **REST Endpoints**: [`src/server/routes/history.js`](file:///home/shado/Documents/Web-projects/MultiAI/src/server/routes/history.js) (`/api/history/*`)
+  - `GET /api/history/changes`
+  - `POST /api/history/accept`
+  - `POST /api/history/revert`
+  - `GET /api/history/diff`
+  - `GET /api/history/timeline`
+- **Dual-Dock Frontend**: [`client/src/components/chat-plan-dock.js`](file:///home/shado/Documents/Web-projects/MultiAI/client/src/components/chat-plan-dock.js) & [`client/styles/plan-dock.css`](file:///home/shado/Documents/Web-projects/MultiAI/client/styles/plan-dock.css)
+  - **Zero-Background Floating Icons (Idle)**: Clean, transparent icons floating directly over the composer (`[📄]` file changes, `[📋]` active plan).
+  - **Stacked Layout on Open**:
+    - **Top (Has BG)**:
+      - *Changes View*: Sleek dark container (`#18181b`, rounded border) displaying each modified file with status icon `[⊡]`, diff stats (`+32 -59`), basename (`chat-plan-dock.js`), and relative directory path (`client/src/components/chat-plan-dock.js`).
+      - *Planning View*: Sleek dark container (`#18181b`, rounded border) displaying the active checklist (`[✓]`, `[◌]`, `[spinner]`).
+    - **Bottom (No BG / Transparent)**: The navigation bar sitting flush above composer:
+      - *Changes Bar*: `← 📄 {N} Files With Changes                                Reject all [Accept all ⌵]`
+      - *Planning Bar*: `← 📋 Planning ({completed}/{total})                                  {pct}%`
+  - **Single & Batch Actions**: Hover actions per file (view unified diff, reject individual file); bar actions for batch reject all and accept all.
+  - **Mobile Compact Mode**: Single-line nowrap bar (`white-space: nowrap !important;`), responsive title shortening (`0 Changes` vs `0 Files With Changes`), compact padding (`6px` empty states, `4px` rows), and directory truncation on mobile screens (`<= 600px`).
+  - **Mobile Back Navigation & UI Persistence**: Views remain open while interacting with composer/chat, closing explicitly via `←` back arrow or toggling the tab icon.
+  - **Fluid Enter, Exit & Switch Animations**:
+    - *Open*: Top panel slides in with subtle spring ease (`dockBoxEnter`), header and back arrow glide into place, and rows stagger cleanly.
+    - *Back / Exit*: Panel smoothly slides down and fades out (`dockBoxExit`), followed by the floating no-background toolbar gliding into place (`dockToolbarEnter`).
+    - *Cross-Switch*: Smooth scale and dissolve transition when switching directly between Changes and Planning.
+    - *Tactile Micro-Interactions*: Hover and active compression on the back button (`translateX(-2px)`, `scale(0.92)`) and toolbar tabs.
+
+---
+
 ## 1. Active Priority 1: Agent Execution Isolation & Sandboxing
 
 ### The Problem
