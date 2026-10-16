@@ -309,7 +309,6 @@ function renderDock(transitionMeta = {}) {
                         </button>
                         <button type="button" class="dock-accept-all-btn" title="Accept all changes" ${!hasUnaccepted ? "disabled" : ""}>
                             <span>Accept all</span>
-                            <i data-lucide="chevron-down"></i>
                         </button>
                     </div>
                 </div>
@@ -383,11 +382,13 @@ function renderDock(transitionMeta = {}) {
             </div>
 
             <div class="dock-toolbar-right">
-                <!-- Accept Changes Button (ONLY appears when active changes exist AND window is closed) -->
+                <!-- Action Buttons (appears when active changes exist AND window is closed) -->
                 ${hasChanges ? `
-                    <button type="button" class="dock-accept-btn" title="Accept all changes and update ledger">
-                        <i data-lucide="check"></i>
-                        <span>Accept Changes</span>
+                    <button type="button" class="dock-reject-all-btn" title="Reject all unaccepted changes">
+                        <span>Reject all</span>
+                    </button>
+                    <button type="button" class="dock-accept-all-btn" title="Accept all changes">
+                        <span>Accept all</span>
                     </button>
                 ` : ""}
             </div>

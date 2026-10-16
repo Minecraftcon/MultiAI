@@ -60,7 +60,7 @@ replace_file_content / write_file                  Over Chatbox Composer
       - *Changes View*: Sleek dark container (`#18181b`, rounded border) displaying each modified file with status icon `[⊡]`, diff stats (`+32 -59`), basename (`chat-plan-dock.js`), and relative directory path (`client/src/components/chat-plan-dock.js`).
       - *Planning View*: Sleek dark container (`#18181b`, rounded border) displaying the active checklist (`[✓]`, `[◌]`, `[spinner]`).
     - **Bottom (No BG / Transparent)**: The navigation bar sitting flush above composer:
-      - *Changes Bar*: `← 📄 {N} Files With Changes                                Reject all [Accept all ⌵]`
+      - *Changes Bar*: `← 📄 {N} Files With Changes                                Reject all [Accept all]`
       - *Planning Bar*: `← 📋 Planning ({completed}/{total})                                  {pct}%`
   - **Single & Batch Actions**: Hover actions per file (view unified diff, reject individual file); bar actions for batch reject all and accept all.
   - **Mobile Compact Mode**: Single-line nowrap bar (`white-space: nowrap !important;`), responsive title shortening (`0 Changes` vs `0 Files With Changes`), compact padding (`6px` empty states, `4px` rows), and directory truncation on mobile screens (`<= 600px`).
