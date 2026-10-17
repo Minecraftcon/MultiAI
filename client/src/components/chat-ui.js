@@ -390,6 +390,168 @@ export function renderSessionMessages(session, chat) {
     }
 }
 
+const activeStreamers = new WeakMap();
+
+class StreamBatchRenderer {
+    constructor(element, finalContent, cursor) {
+        this.element = element;
+        this.finalContent = finalContent;
+        this.cursor = cursor;
+        this.queue = [];
+        this.lastRawLength = 0;
+        this.isDone = false;
+        this.isStopped = false;
+        this.timer = null;
+        this.resolvePromise = null;
+        this.promise = new Promise(resolve => {
+            this.resolvePromise = resolve;
+        });
+
+        this.container = document.createElement("div");
+        this.container.className = "stream-text-container";
+        this.finalContent.innerHTML = "";
+        this.finalContent.appendChild(this.container);
+        if (this.cursor) {
+            this.finalContent.appendChild(this.cursor);
+        }
+        this.inCodeBlock = false;
+        this.codeEl = null;
+    }
+
+    append(newText) {
+        if (!newText || this.isStopped) return;
+        const delta = newText.slice(this.lastRawLength);
+        this.lastRawLength = newText.length;
+        if (!delta) return;
+
+        // Tokenize words and whitespace
+        const tokens = delta.match(/\S+\s*|\s+/g) || [delta];
+        this.queue.push(...tokens);
+        this.scheduleTick();
+    }
+
+    markDone(onFinish) {
+        this.isDone = true;
+        this.onFinish = onFinish;
+        this.scheduleTick();
+        return this.promise;
+    }
+
+    stop() {
+        this.isStopped = true;
+        if (this.timer) {
+            clearTimeout(this.timer);
+            this.timer = null;
+        }
+        if (this.resolvePromise) {
+            this.resolvePromise();
+        }
+    }
+
+    scheduleTick() {
+        if (this.timer || this.isStopped) return;
+
+        const remaining = this.queue.length;
+        if (remaining === 0) {
+            if (this.isDone) {
+                this.finalize();
+            }
+            return;
+        }
+
+        // Adaptive speed for high volume streams (never lags behind large payloads)
+        let batchCount = 1;
+        let delayMs = 24;
+
+        if (remaining > 120) {
+            batchCount = Math.min(32, Math.ceil(remaining / 4));
+            delayMs = 8;
+        } else if (remaining > 60) {
+            batchCount = 14;
+            delayMs = 12;
+        } else if (remaining > 30) {
+            batchCount = 7;
+            delayMs = 16;
+        } else if (remaining > 10) {
+            batchCount = 3;
+            delayMs = 20;
+        } else if (remaining > 3) {
+            batchCount = 2;
+            delayMs = 22;
+        }
+
+        this.timer = setTimeout(() => {
+            this.timer = null;
+            this.tick(batchCount);
+        }, delayMs);
+    }
+
+    tick(batchCount) {
+        if (this.isStopped) return;
+        const count = Math.min(batchCount, this.queue.length);
+        if (count > 0) {
+            const batchTokens = this.queue.splice(0, count);
+            const batchStr = batchTokens.join("");
+            this.renderBatch(batchStr);
+            const chat = document.getElementById("chat");
+            if (chat) requestScrollToBottom(chat, false);
+        }
+        this.scheduleTick();
+    }
+
+    renderBatch(str) {
+        const parts = str.split(/(```[a-z0-9_-]*|\n)/gi);
+        for (const part of parts) {
+            if (!part) continue;
+
+            if (part.startsWith("```")) {
+                if (!this.inCodeBlock) {
+                    this.inCodeBlock = true;
+                    const pre = document.createElement("pre");
+                    pre.className = "stream-code-block";
+                    const code = document.createElement("code");
+                    pre.appendChild(code);
+                    this.container.appendChild(pre);
+                    this.codeEl = code;
+                } else {
+                    this.inCodeBlock = false;
+                    this.codeEl = null;
+                }
+                continue;
+            }
+
+            if (part === "\n") {
+                if (this.inCodeBlock && this.codeEl) {
+                    this.codeEl.appendChild(document.createTextNode("\n"));
+                } else {
+                    this.container.appendChild(document.createElement("br"));
+                }
+                continue;
+            }
+
+            const span = document.createElement("span");
+            span.className = "stream-fade-batch";
+            span.textContent = part;
+
+            if (this.inCodeBlock && this.codeEl) {
+                this.codeEl.appendChild(span);
+            } else {
+                this.container.appendChild(span);
+            }
+        }
+    }
+
+    finalize() {
+        if (this.isStopped) return;
+        if (this.onFinish) {
+            this.onFinish();
+        }
+        if (this.resolvePromise) {
+            this.resolvePromise();
+        }
+    }
+}
+
 export function updateAIStream(element, fullText, isDone, startTime, hasTools) {
     const chat = document.getElementById("chat");
     const activityWrapper = element.querySelector(".activity-wrapper");
@@ -398,7 +560,7 @@ export function updateAIStream(element, fullText, isDone, startTime, hasTools) {
     const finalContent = element.querySelector(".final-content");
     const cursor = element.querySelector(".blinking-cursor");
 
-    const answerText = fullText;
+    const answerText = fullText || "";
     element.dataset.rawText = answerText;
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
 
@@ -411,79 +573,98 @@ export function updateAIStream(element, fullText, isDone, startTime, hasTools) {
         activityLabel.textContent = `Working... (${elapsed}s)`;
     }
 
-    let followups = [];
-    if (answerText.trim()) {
-        const { thoughtHtml, content, followups: extractedFollowups } = extractThoughtAndContent(answerText);
-        followups = extractedFollowups || [];
-        element.dataset.rawText = content ? content.trim() : answerText;
-        const sanitizedThought = thoughtHtml || "";
-        const sanitizedRest = content ? parseMarkdown(content) : "";
-
-        // Check if there are any activity badges (tools, compaction checkpoints, etc.)
-        const searchContainer = element.querySelector(".search-items-container");
-        const hasActivity = hasTools || Boolean(searchContainer && searchContainer.children.length > 0) || (activityWrapper && activityWrapper.style.display === "block");
-
-        if (sanitizedThought) {
-            preSearchContent.innerHTML = sanitizedThought;
-            wrapTablesForScroll(preSearchContent);
-            if (isDone) renderIcons(preSearchContent);
-        } else {
-            preSearchContent.innerHTML = "";
+    if (!answerText.trim()) {
+        if (isDone) {
+            if (cursor) cursor.remove();
+            finalizeFileEditBadges(element);
+            if (hasTools) {
+                finalContent.innerHTML = "<em>(Command execution completed without trailing commentary)</em>";
+            } else {
+                finalContent.innerHTML = "<em>(The model returned an empty response)</em>";
+            }
+            requestScrollToBottom(chat, true);
         }
+        return Promise.resolve();
+    }
 
-        if (sanitizedRest) {
-            finalContent.innerHTML = sanitizedRest;
-            wrapTablesForScroll(finalContent);
-            if (isDone) {
+    const { thoughtHtml, content, followups: extractedFollowups } = extractThoughtAndContent(answerText);
+    const followups = extractedFollowups || [];
+    element.dataset.rawText = content ? content.trim() : answerText;
+    const sanitizedThought = thoughtHtml || "";
+    const sanitizedRest = content ? parseMarkdown(content) : "";
+
+    if (sanitizedThought) {
+        preSearchContent.innerHTML = sanitizedThought;
+        wrapTablesForScroll(preSearchContent);
+        if (isDone) renderIcons(preSearchContent);
+    } else {
+        preSearchContent.innerHTML = "";
+    }
+
+    if (!content || !content.trim()) {
+        if (isDone) {
+            if (cursor) cursor.remove();
+            finalizeFileEditBadges(element);
+            renderFollowupSuggestions(element, followups, isDone);
+            renderPlanApprovalActions(element, answerText, isDone);
+            requestScrollToBottom(chat, true);
+        }
+        return Promise.resolve();
+    }
+
+    let streamer = activeStreamers.get(element);
+    if (!streamer) {
+        streamer = new StreamBatchRenderer(element, finalContent, cursor);
+        activeStreamers.set(element, streamer);
+    }
+
+    streamer.append(content);
+
+    if (isDone) {
+        return streamer.markDone(() => {
+            activeStreamers.delete(element);
+            if (sanitizedRest) {
+                finalContent.innerHTML = sanitizedRest;
+                wrapTablesForScroll(finalContent);
                 renderIcons(finalContent);
                 bindAIImageCards(finalContent);
             }
-        } else {
-            finalContent.innerHTML = "";
-        }
-    } else if (isDone) {
-        if (hasTools) {
-            finalContent.innerHTML = "<em>(Command execution completed without trailing commentary)</em>";
-        } else {
-            finalContent.innerHTML = "<em>(The model returned an empty response)</em>";
-        }
-    }
+            if (cursor) cursor.remove();
+            finalizeFileEditBadges(element);
 
-    if (isDone) {
-        if (cursor) cursor.remove();
-        finalizeFileEditBadges(element);
+            renderFollowupSuggestions(element, followups, true);
+            renderPlanApprovalActions(element, answerText, true);
 
-        renderFollowupSuggestions(element, followups, isDone);
-        renderPlanApprovalActions(element, answerText, isDone);
+            // Clean up any empty thought boxes and finalize duration
+            element.querySelectorAll(".thought-box").forEach(tb => {
+                const contentEl = tb.querySelector(".thought-content");
+                const textInside = contentEl ? (contentEl.textContent || "").trim() : (tb.textContent || "").trim();
+                if (!textInside) {
+                    tb.remove();
+                    return;
+                }
+                const lbl = tb.querySelector(".thought-label");
+                if (lbl && (lbl.textContent.includes("{}") || lbl.textContent.includes("a few seconds"))) {
+                    lbl.textContent = `Thought for ${elapsed} seconds`;
+                }
+            });
 
-        // Clean up any empty thought boxes and finalize duration
-        element.querySelectorAll(".thought-box").forEach(tb => {
-            const contentEl = tb.querySelector(".thought-content");
-            const textInside = contentEl ? (contentEl.textContent || "").trim() : (tb.textContent || "").trim();
-            if (!textInside) {
-                tb.remove();
-                return;
-            }
-            const lbl = tb.querySelector(".thought-label");
-            if (lbl && (lbl.textContent.includes("{}") || lbl.textContent.includes("a few seconds"))) {
-                lbl.textContent = `Thought for ${elapsed} seconds`;
-            }
+            wrapHugeThoughts(element);
+
+            element.querySelectorAll("a").forEach(link => {
+                link.target = "_blank";
+                link.rel = "noopener noreferrer";
+            });
+
+            bindInteractiveCodeBlocks(element);
+            renderMermaidInElement(element);
+            renderMath(element);
+            bindAIImageCards(element);
+            requestScrollToBottom(chat, true);
         });
-
-        wrapHugeThoughts(element);
-
-        element.querySelectorAll("a").forEach(link => {
-            link.target = "_blank";
-            link.rel = "noopener noreferrer";
-        });
-
-        bindInteractiveCodeBlocks(element);
-        renderMermaidInElement(element);
-        renderMath(element);
-        bindAIImageCards(element);
-        requestScrollToBottom(chat, true);
     } else {
         requestScrollToBottom(chat, false);
+        return Promise.resolve();
     }
 }
 
@@ -520,6 +701,13 @@ export function renderFollowupSuggestions(element, followups, isDone) {
 export function finalizeStopped(element, startTime, hasTools) {
     const chat = document.getElementById("chat");
     logEvent("GENERATION_STOPPED_BY_USER", { elapsed: ((Date.now() - startTime) / 1000).toFixed(1) });
+
+    const streamer = activeStreamers.get(element);
+    if (streamer) {
+        streamer.stop();
+        activeStreamers.delete(element);
+    }
+
     const cursor = element.querySelector(".blinking-cursor");
     if (cursor) cursor.remove();
 

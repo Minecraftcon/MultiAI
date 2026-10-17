@@ -12,7 +12,7 @@ import { sanitizeMessage, cleanErrorMessage } from "./sanitizer.js";
  * @param {Array<Object>} options.tools
  * @returns {Promise<Object>}
  */
-export async function callChatModel(messages, { model, tools, signal } = {}) {
+export async function callChatModel(messages, { model, tools, signal, onChunk } = {}) {
     let effectiveModel = model;
     if (effectiveModel === "dots-3-note-preview:free") {
         effectiveModel = "dots-studio/dots-3-note-preview:free";
@@ -37,7 +37,30 @@ export async function callChatModel(messages, { model, tools, signal } = {}) {
             throw err;
         }
         try {
-            const puterRes = await puter.ai.chat(cleanedMessages, { model: effectiveModel, tools });
+            const shouldStream = Boolean(onChunk && (!tools || tools.length === 0));
+            const puterRes = await puter.ai.chat(cleanedMessages, {
+                model: effectiveModel,
+                tools,
+                stream: shouldStream
+            });
+
+            if (shouldStream && puterRes && typeof puterRes[Symbol.asyncIterator] === "function") {
+                let accumulated = "";
+                for await (const part of puterRes) {
+                    const textChunk = part?.text || (typeof part === "string" ? part : "");
+                    if (textChunk) {
+                        accumulated += textChunk;
+                        if (onChunk) onChunk(textChunk, accumulated);
+                    }
+                }
+                return {
+                    message: {
+                        role: "assistant",
+                        content: accumulated
+                    }
+                };
+            }
+
             if (!puterRes || puterRes.error) {
                 const cleanErr = cleanErrorMessage(puterRes?.error || "Puter model returned no response");
                 const err = new Error(cleanErr);
@@ -55,6 +78,8 @@ export async function callChatModel(messages, { model, tools, signal } = {}) {
 
     const activeSignal = signal || (state.currentChatId && state.activeGenerations[state.currentChatId]?.abortController?.signal);
 
+    const shouldStream = Boolean(onChunk && (!tools || tools.length === 0));
+
     let res;
     try {
         res = await fetch("/api/chat", {
@@ -64,7 +89,8 @@ export async function callChatModel(messages, { model, tools, signal } = {}) {
                 model,
                 provider,
                 messages: cleanedMessages,
-                tools
+                tools,
+                stream: shouldStream
             }),
             signal: activeSignal
         });
@@ -88,6 +114,44 @@ export async function callChatModel(messages, { model, tools, signal } = {}) {
         err.statusCode = res.status;
         err.rawError = rawErr;
         throw err;
+    }
+
+    const contentType = res.headers.get("content-type") || "";
+    if (contentType.includes("text/event-stream") && res.body) {
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder("utf-8");
+        let accumulated = "";
+        let buffer = "";
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split("\n");
+            buffer = lines.pop();
+
+            for (const line of lines) {
+                const trimmed = line.trim();
+                if (!trimmed || !trimmed.startsWith("data:")) continue;
+                const dataStr = trimmed.replace(/^data:\s*/, "");
+                if (dataStr === "[DONE]") break;
+                try {
+                    const parsed = JSON.parse(dataStr);
+                    const delta = parsed.delta || parsed.content || (parsed.choices?.[0]?.delta?.content) || "";
+                    if (delta) {
+                        accumulated += delta;
+                        if (onChunk) onChunk(delta, accumulated);
+                    }
+                } catch (_) {}
+            }
+        }
+
+        return {
+            message: {
+                role: "assistant",
+                content: accumulated
+            }
+        };
     }
 
     const data = await res.json().catch(() => null);

@@ -160,7 +160,12 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
                 response = await callChatModel(workingMessages, {
                     model: selectedModel,
                     tools: activeTools,
-                    signal: genState?.abortController?.signal
+                    signal: genState?.abortController?.signal,
+                    onChunk: (chunk, accumulated) => {
+                        if (currentAIMessage && !genState.abortRequested) {
+                            updateAIStream(currentAIMessage, accumulated, false, overallStartTime, hasRunTools);
+                        }
+                    }
                 });
             } catch (err) {
                 if (genState.abortRequested || err.name === "AbortError" || err.message === "Generation stopped by user") {
@@ -187,7 +192,12 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
                             response = await callChatModel(workingMessagesRetry, {
                                 model: selectedModel,
                                 tools: activeTools,
-                                signal: genState?.abortController?.signal
+                                signal: genState?.abortController?.signal,
+                                onChunk: (chunk, accumulated) => {
+                                    if (currentAIMessage && !genState.abortRequested) {
+                                        updateAIStream(currentAIMessage, accumulated, false, overallStartTime, hasRunTools);
+                                    }
+                                }
                             });
                         } catch (retryErr) {
                             logEvent("CHAT_CALL_RETRY_ERROR", { round, model: selectedModel, error: String(retryErr && retryErr.message || retryErr) });
@@ -397,7 +407,7 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
                     finalTextLength: finalDisplay.length,
                     elapsedSeconds: ((Date.now() - overallStartTime) / 1000).toFixed(1)
                 });
-                updateAIStream(currentAIMessage, finalDisplay, true, overallStartTime, hasRunTools);
+                await updateAIStream(currentAIMessage, finalDisplay, true, overallStartTime, hasRunTools);
                 session.updatedAt = Date.now();
                 state.messages = session.messages;
                 saveStoredChats();
