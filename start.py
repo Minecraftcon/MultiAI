@@ -363,6 +363,14 @@ class ProcessSupervisor:
             kill_process_on_port(8080)
         kill_process_on_port(5000)
 
+        # Clean up Unix domain socket if present
+        sock_path = os.path.expanduser("~/.MultiAI/task_server.sock")
+        if os.path.exists(sock_path):
+            try:
+                os.unlink(sock_path)
+            except Exception:
+                pass
+
         print(f"{GREEN}[MultiAI] All servers stopped cleanly. Goodbye!{RESET}\n", flush=True)
 
 def run_console(supervisor, root_dir, workspace_dir, port, host="0.0.0.0"):
@@ -404,8 +412,9 @@ def run_console(supervisor, root_dir, workspace_dir, port, host="0.0.0.0"):
         print(f"  {BOLD}Web URL:{RESET}      {CYAN}http://{display_host}:{port}{RESET}")
         print(f"  {BOLD}Uptime:{RESET}       {uptime_str}")
         print(f"  {BOLD}Git Branch:{RESET}   {YELLOW}{branch}{RESET} ({commit})")
-        print(f"  {BOLD}Workspace:{RESET}    {workspace_dir}")
-        print(f"  {BOLD}Ports:{RESET}        Web: {port} (active: {is_port_in_use(port, host=probe_host)}), Task Server: 5000 (active: {is_port_in_use(5000, host='127.0.0.1')})")
+        sock_exists = os.path.exists(os.path.expanduser("~/.MultiAI/task_server.sock"))
+        ipc_desc = f"Unix Socket (active: {sock_exists})" if sock_exists or sys.platform != "win32" else f"TCP 5000 (active: {is_port_in_use(5000, host='127.0.0.1')})"
+        print(f"  {BOLD}Ports/IPC:{RESET}    Web: {port} (active: {is_port_in_use(port, host=probe_host)}), Task IPC: {ipc_desc}")
         print(f"  {BOLD}Processes:{RESET}")
         for name, proc in list(supervisor.processes):
             p_status = "Alive" if proc.poll() is None else f"Exited ({proc.returncode})"
@@ -529,6 +538,9 @@ def main():
     parser.add_argument("--port", type=int, default=configured_port, help=f"Web server port (default: {configured_port})")
     parser.add_argument("--host", type=str, default=configured_host, help=f"Web server host (default: {configured_host})")
     parser.add_argument("--workspace", type=str, default=None, help="Target workspace directory (default: current directory)")
+    parser.add_argument("--ipc", choices=["socket", "tcp"], default=None, help="IPC transport type between Node.js and Python task server ('socket' for Unix domain socket, 'tcp' for TCP port 5000)")
+    parser.add_argument("--socket", action="store_true", help="Force Unix domain socket IPC")
+    parser.add_argument("--tcp", action="store_true", help="Force TCP IPC on port 5000")
     args = parser.parse_args()
 
     probe_host = "127.0.0.1" if args.host in ("0.0.0.0", "", "::") else args.host
@@ -539,6 +551,17 @@ def main():
     os.makedirs(workspace_dir, exist_ok=True)
     os.chdir(root_dir)
 
+    # Resolve IPC transport mode (CLI flag > env var > default: unix socket on POSIX, tcp on Windows)
+    ipc_mode = None
+    if args.ipc:
+        ipc_mode = args.ipc
+    elif args.socket:
+        ipc_mode = "socket"
+    elif args.tcp:
+        ipc_mode = "tcp"
+    elif os.environ.get("MULTIAI_IPC"):
+        ipc_mode = os.environ.get("MULTIAI_IPC").strip().lower()
+
     # 1. Run Pre-Flight Setup Check
     check_setup()
 
@@ -546,7 +569,11 @@ def main():
         sys.exit(0)
 
     # 2. Check for port conflicts and clean up stale instances
-    for p in (args.port, 5000):
+    ports_to_check = [args.port]
+    if ipc_mode == "tcp" or (not ipc_mode and sys.platform == "win32"):
+        ports_to_check.append(5000)
+
+    for p in ports_to_check:
         target_probe = probe_host if p == args.port else "127.0.0.1"
         if is_port_in_use(p, host=target_probe):
             log_warn(f"Port {p} is in use by a stale process. Releasing port...")
@@ -568,7 +595,7 @@ def main():
         signal.signal(signal.SIGHUP, handle_signal)
     atexit.register(supervisor.stop_all)
 
-    # 3. Start Node.js Web Server (which also supervises the Python task server on port 5000)
+    # 3. Start Node.js Web Server (which also supervises the Python task server)
     server_script = os.path.join(root_dir, "src", "index.js")
     node_env = os.environ.copy()
     node_env["PORT"] = str(args.port)
@@ -576,6 +603,8 @@ def main():
     node_env["MULTIAI_REPO_DIR"] = root_dir
     node_env["MULTIAI_WORKSPACE_DIR"] = workspace_dir
     node_env["MULTIAI_SUPERVISED"] = "1"
+    if ipc_mode:
+        node_env["MULTIAI_IPC"] = ipc_mode
     ini_path = os.environ.get("MULTIAI_CONFIG_PATH") or os.path.join(root_dir, "config.ini")
     if not os.path.exists(ini_path):
         ini_path = os.path.join(root_dir, "src", "core", "config.ini")

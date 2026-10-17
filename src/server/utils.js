@@ -5,6 +5,7 @@ const http = require("http");
 const YAML = require("yaml");
 const { getConfig, saveConfig } = require("../core/config_manager");
 const conversationsManager = require("../core/conversations_manager");
+const { getTaskServerTarget } = require("../core/sandbox_manager");
 
 function getEnvKey(keyName) {
     if (!keyName) return null;
@@ -359,8 +360,24 @@ function postJSON(portOrUrl, reqPath, data, timeoutMs = 3000) {
         let pth = reqPath;
         let payload = data;
         let timeout = timeoutMs;
+        let socketPath = null;
 
-        if (typeof portOrUrl === "string" && (portOrUrl.startsWith("http://") || portOrUrl.startsWith("https://"))) {
+        if (portOrUrl === 5000 || portOrUrl === "5000" || portOrUrl === "task_server") {
+            const target = getTaskServerTarget();
+            if (target.socketPath) {
+                socketPath = target.socketPath;
+            } else {
+                hostname = target.hostname || "127.0.0.1";
+                port = target.port || 5000;
+            }
+        } else if (typeof portOrUrl === "object" && portOrUrl !== null) {
+            if (portOrUrl.socketPath) {
+                socketPath = portOrUrl.socketPath;
+            } else {
+                hostname = portOrUrl.hostname || hostname;
+                port = portOrUrl.port || port;
+            }
+        } else if (typeof portOrUrl === "string" && (portOrUrl.startsWith("http://") || portOrUrl.startsWith("https://"))) {
             try {
                 const u = new URL(portOrUrl);
                 hostname = u.hostname || "127.0.0.1";
@@ -376,9 +393,7 @@ function postJSON(portOrUrl, reqPath, data, timeoutMs = 3000) {
         }
 
         const body = JSON.stringify(payload);
-        const req = http.request({
-            hostname,
-            port,
+        const reqOptions = {
             path: pth,
             method: "POST",
             headers: {
@@ -386,7 +401,16 @@ function postJSON(portOrUrl, reqPath, data, timeoutMs = 3000) {
                 "Content-Length": Buffer.byteLength(body)
             },
             timeout
-        }, (res) => {
+        };
+
+        if (socketPath) {
+            reqOptions.socketPath = socketPath;
+        } else {
+            reqOptions.hostname = hostname;
+            reqOptions.port = port;
+        }
+
+        const req = http.request(reqOptions, (res) => {
             let respBody = "";
             res.on("data", chunk => { respBody += chunk; });
             res.on("end", () => {

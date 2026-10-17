@@ -240,6 +240,9 @@ async function handleSandboxSelect(req, res) {
             currentConfig.active_profile = profileId;
         }
         currentConfig.enabled = Boolean(enabled);
+        if (data.ipc_type === "socket" || data.ipc_type === "tcp") {
+            currentConfig.ipc_type = data.ipc_type;
+        }
 
         saveSandboxConfig(currentConfig);
 

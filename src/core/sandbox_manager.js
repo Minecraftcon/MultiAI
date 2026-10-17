@@ -8,6 +8,7 @@ const { execSync } = require("child_process");
 const DEFAULT_SANDBOX_CONFIG = {
     enabled: false,
     active_profile: "bwrap", // "bwrap" | "proot" | "docker"
+    ipc_type: process.platform === "win32" ? "tcp" : "socket", // "socket" (default Unix sox) | "tcp"
     profiles: {
         bwrap: {
             id: "bwrap",
@@ -16,7 +17,7 @@ const DEFAULT_SANDBOX_CONFIG = {
             description: "Unprivileged user namespaces with read-only root and workspace binding.",
             icon: "shield",
             mode: "daemon",
-            startup: 'bwrap --ro-bind / / {SHIELD_MOUNTS} --bind {PROJECT_PATH} {PROJECT_PATH} --bind {DATA_DIR} {DATA_DIR} --tmpfs /tmp --proc /proc --dev /dev -- python3 {TASK_SERVER_SCRIPT} --port {TASK_PORT}',
+            startup: 'bwrap --ro-bind / / {SHIELD_MOUNTS} --bind {PROJECT_PATH} {PROJECT_PATH} --bind {DATA_DIR} {DATA_DIR} --tmpfs /tmp --proc /proc --dev /dev -- python3 {TASK_SERVER_SCRIPT} {IPC_ARGS}',
             detect_cmd: "command -v bwrap"
         },
         proot: {
@@ -26,7 +27,7 @@ const DEFAULT_SANDBOX_CONFIG = {
             description: "Syscall emulation sandbox for non-root containers and Termux environments.",
             icon: "smartphone",
             mode: "daemon",
-            startup: 'pd sh debian-sandbox --bind {PROJECT_PATH}:/workspace --bind {DATA_DIR}:/data -- python3 /workspace/task_server.py --port {TASK_PORT}',
+            startup: 'pd sh debian-sandbox --bind {PROJECT_PATH}:/workspace --bind {DATA_DIR}:/data -- python3 /workspace/task_server.py {IPC_ARGS}',
             detect_cmd: '(command -v pd || command -v proot-distro) && (pd login debian-sandbox -- true 2>/dev/null || proot-distro login debian-sandbox -- true 2>/dev/null || [ -d "${PREFIX:-/data/data/com.termux/files/usr}/var/lib/proot-distro/installed-rootfs/debian-sandbox" ])'
         },
         docker: {
@@ -49,7 +50,7 @@ const DIRECT_PROFILE = {
     description: "Executes directly on host operating system without any sandbox container boundaries.",
     icon: "terminal",
     mode: "direct",
-    startup: 'python3 {TASK_SERVER_SCRIPT} --port {TASK_PORT}',
+    startup: 'python3 {TASK_SERVER_SCRIPT} {IPC_ARGS}',
     detect_cmd: "true"
 };
 
@@ -97,6 +98,13 @@ function loadSandboxConfig() {
                 }
             }
 
+            // Migrate legacy templates to use {IPC_ARGS}
+            for (const p of Object.values(profiles)) {
+                if (p.startup && p.id !== "docker" && p.startup.includes("--port {TASK_PORT}")) {
+                    p.startup = p.startup.replace("--port {TASK_PORT}", "{IPC_ARGS}");
+                }
+            }
+
             let active = parsed.active_profile;
             if (!active || active === "auto" || !profiles[active]) {
                 active = detectPlatformDefault();
@@ -107,9 +115,30 @@ function loadSandboxConfig() {
                 isEnabled = false;
             }
 
+            // IPC Type Resolution: CLI args override env var, which overrides config, defaulting to Unix socket on POSIX
+            let ipcType = parsed.ipc_type;
+            const argv = process.argv || [];
+            if (argv.includes("--tcp") || process.env.MULTIAI_IPC === "tcp") {
+                ipcType = "tcp";
+            } else if (argv.includes("--socket") || argv.includes("--unix") || process.env.MULTIAI_IPC === "socket" || process.env.MULTIAI_IPC === "unix") {
+                ipcType = "socket";
+            } else {
+                for (let i = 0; i < argv.length - 1; i++) {
+                    if (argv[i] === "--ipc") {
+                        ipcType = argv[i + 1] === "tcp" ? "tcp" : "socket";
+                        break;
+                    }
+                }
+            }
+
+            if (!ipcType) {
+                ipcType = process.platform === "win32" ? "tcp" : "socket";
+            }
+
             const cfg = {
                 enabled: isEnabled,
                 active_profile: active,
+                ipc_type: ipcType,
                 profiles
             };
             return cfg;
@@ -117,11 +146,21 @@ function loadSandboxConfig() {
     } catch (e) {
         console.warn(`[SANDBOX] Failed to load ${configPath}, using defaults:`, e.message);
     }
+
+    let defaultIpc = DEFAULT_SANDBOX_CONFIG.ipc_type;
+    const argv = process.argv || [];
+    if (argv.includes("--tcp") || process.env.MULTIAI_IPC === "tcp") {
+        defaultIpc = "tcp";
+    } else if (argv.includes("--socket") || argv.includes("--unix") || process.env.MULTIAI_IPC === "socket" || process.env.MULTIAI_IPC === "unix") {
+        defaultIpc = "socket";
+    }
+
     const defaultCfg = {
         enabled: (process.env.MULTIAI_SANDBOX === "0" || (process.argv && process.argv.includes("--no-sandbox")))
             ? false
             : DEFAULT_SANDBOX_CONFIG.enabled,
         active_profile: detectPlatformDefault(),
+        ipc_type: defaultIpc,
         profiles: { ...DEFAULT_SANDBOX_CONFIG.profiles }
     };
     saveSandboxConfig(defaultCfg);
@@ -297,15 +336,85 @@ function getProfilesWithStatus() {
         enabled: Boolean(config.enabled),
         active_profile: config.active_profile,
         resolved_profile: resolvedId,
+        ipc_type: config.ipc_type,
         profiles: profilesList
     };
 }
 
-function resolveCommandTemplate(template, vars) {
+function getTaskServerSocketPath() {
+    return path.join(getStorageDir(), "task_server.sock");
+}
+
+function getTaskServerIpcType(config) {
+    // 1. Check CLI flags passed to process (e.g. --ipc socket|tcp, --socket, --tcp)
+    const args = process.argv || [];
+    for (let i = 0; i < args.length; i++) {
+        const arg = args[i];
+        if (arg === "--ipc" && args[i + 1]) {
+            const val = args[i + 1].trim().toLowerCase();
+            if (val === "socket" || val === "tcp") return val;
+        } else if (arg.startsWith("--ipc=")) {
+            const val = arg.split("=")[1].trim().toLowerCase();
+            if (val === "socket" || val === "tcp") return val;
+        } else if (arg === "--socket") {
+            return "socket";
+        } else if (arg === "--tcp") {
+            return "tcp";
+        }
+    }
+
+    // 2. Check environment variable override
+    if (process.env.MULTIAI_IPC) {
+        const envVal = process.env.MULTIAI_IPC.trim().toLowerCase();
+        if (envVal === "socket" || envVal === "tcp") return envVal;
+    }
+
+    // 3. User config in ~/.MultiAI/vm_conf.json
+    const cfg = config || loadSandboxConfig();
+    if (cfg && (cfg.ipc_type === "socket" || cfg.ipc_type === "tcp")) {
+        return cfg.ipc_type;
+    }
+
+    // 4. Default: Unix domain socket on POSIX, TCP on Windows
+    return process.platform === "win32" ? "tcp" : "socket";
+}
+
+function getTaskServerTarget(config) {
+    const ipcType = getTaskServerIpcType(config);
+    if (ipcType === "socket" && process.platform !== "win32") {
+        return { socketPath: getTaskServerSocketPath() };
+    }
+    const port = parseInt(process.env.TASK_PORT || 5000, 10);
+    return { hostname: "127.0.0.1", port };
+}
+
+function resolveCommandTemplate(template, vars = {}) {
     let result = template;
-    for (const [key, val] of Object.entries(vars)) {
+    const ipcType = vars.IPC_TYPE || getTaskServerIpcType();
+    const taskPort = vars.TASK_PORT || process.env.TASK_PORT || 5000;
+    const socketPath = vars.TASK_SOCKET || getTaskServerSocketPath();
+
+    let ipcArgs = `--port ${taskPort}`;
+    if (ipcType === "socket" && process.platform !== "win32") {
+        // In PRoot container, {DATA_DIR} is mounted to /data
+        if (vars.IS_PROOT || template.includes("pd sh")) {
+            ipcArgs = `--socket /data/task_server.sock`;
+        } else {
+            ipcArgs = `--socket ${socketPath}`;
+        }
+    }
+
+    const allVars = {
+        IPC_ARGS: ipcArgs,
+        TASK_SOCKET: socketPath,
+        TASK_PORT: taskPort,
+        ...vars
+    };
+
+    for (const [key, val] of Object.entries(allVars)) {
         result = result.split(`{${key}}`).join(String(val || ""));
     }
+
     return result;
 }
 
@@ -349,6 +458,9 @@ module.exports = {
     verifyProfileEnvironment,
     resolveCommandTemplate,
     getSandboxShieldArgs,
+    getTaskServerSocketPath,
+    getTaskServerIpcType,
+    getTaskServerTarget,
     getStorageDir,
     DIRECT_PROFILE
 };

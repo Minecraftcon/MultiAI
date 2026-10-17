@@ -3,6 +3,7 @@ const fs = require("fs");
 const path = require("path");
 const { sendJSON, postJSON, getChatWorkspace, getChatScratchDir, getChatArtifactsDir } = require("../utils");
 const conversationsManager = require("../../core/conversations_manager");
+const { getTaskServerTarget } = require("../../core/sandbox_manager");
 const { imageGenTasks } = require("./media");
 
 async function handleTaskRoute(req, res) {
@@ -106,9 +107,9 @@ async function handleTaskRoute(req, res) {
             headers["content-length"] = Buffer.byteLength(reqBody);
         }
 
+        const target = getTaskServerTarget();
         const options = {
-            hostname: "127.0.0.1",
-            port: 5000,
+            ...target,
             path: req.url,
             method: req.method,
             headers

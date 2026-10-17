@@ -41,6 +41,10 @@ except ImportError:
 if HAS_FLASK:
     app = Flask(__name__)
 
+    @app.route("/health", methods=["GET"])
+    def health_endpoint():
+        return jsonify({"status": "ok", "engine": "flask"})
+
     @app.route("/api/task/run", methods=["POST"])
     def run_task_endpoint():
         data = request.json or {}
@@ -187,6 +191,9 @@ class FallbackHandler(BaseHTTPRequestHandler):
             status = 404 if "error" in out else 200
             return self._send_json(status, out)
 
+        if path == "/health":
+            return self._send_json(200, {"status": "ok", "engine": "fallback"})
+
         if path == "/api/task/list":
             return self._send_json(200, manager.list_tasks())
 
@@ -280,6 +287,7 @@ def main():
     parser = argparse.ArgumentParser(description="MultiAI Task & Execution Server")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT, help=f"Server port (default: {DEFAULT_PORT})")
     parser.add_argument("--host", type=str, default=DEFAULT_HOST, help=f"Server host (default: {DEFAULT_HOST})")
+    parser.add_argument("--socket", type=str, default="", help="Unix domain socket path to bind to (overrides --port/--host)")
     args = parser.parse_args()
 
     platform_name = "Windows" if sys.platform == "win32" else "POSIX (Linux/macOS)"
@@ -287,16 +295,60 @@ def main():
 
     print(f"[TASK SERVER] MultiAI Task Server Engine v2.0", flush=True)
     print(f"[TASK SERVER] Platform: {platform_name} | Engine: {server_mode}", flush=True)
-    print(f"[TASK SERVER] Listening on http://{args.host}:{args.port}", flush=True)
 
-    if HAS_FLASK:
-        app.run(host=args.host, port=args.port, debug=False, threaded=True)
+    if args.socket:
+        sock_path = os.path.abspath(args.socket)
+        sock_dir = os.path.dirname(sock_path)
+        if sock_dir:
+            os.makedirs(sock_dir, exist_ok=True)
+        if os.path.exists(sock_path):
+            try:
+                os.unlink(sock_path)
+            except OSError:
+                pass
+
+        print(f"[TASK SERVER] Listening on unix://{sock_path}", flush=True)
+
+        if HAS_FLASK:
+            try:
+                import werkzeug.serving
+                werkzeug.serving.run_simple(
+                    hostname="unix://" + sock_path,
+                    port=0,
+                    application=app,
+                    threaded=True
+                )
+            finally:
+                if os.path.exists(sock_path):
+                    try:
+                        os.unlink(sock_path)
+                    except OSError:
+                        pass
+        else:
+            import socketserver
+            class UnixThreadingHTTPServer(socketserver.ThreadingUnixStreamServer):
+                pass
+            httpd = UnixThreadingHTTPServer(sock_path, FallbackHandler)
+            try:
+                httpd.serve_forever()
+            except KeyboardInterrupt:
+                httpd.server_close()
+            finally:
+                if os.path.exists(sock_path):
+                    try:
+                        os.unlink(sock_path)
+                    except OSError:
+                        pass
     else:
-        httpd = ThreadingHTTPServer((args.host, args.port), FallbackHandler)
-        try:
-            httpd.serve_forever()
-        except KeyboardInterrupt:
-            httpd.server_close()
+        print(f"[TASK SERVER] Listening on http://{args.host}:{args.port}", flush=True)
+        if HAS_FLASK:
+            app.run(host=args.host, port=args.port, debug=False, threaded=True)
+        else:
+            httpd = ThreadingHTTPServer((args.host, args.port), FallbackHandler)
+            try:
+                httpd.serve_forever()
+            except KeyboardInterrupt:
+                httpd.server_close()
 
 
 if __name__ == "__main__":

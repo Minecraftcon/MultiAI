@@ -7,6 +7,8 @@ const {
     verifyProfileEnvironment,
     resolveCommandTemplate,
     getSandboxShieldArgs,
+    getTaskServerSocketPath,
+    getTaskServerIpcType,
     getStorageDir,
     DIRECT_PROFILE
 } = require("../core/sandbox_manager");
@@ -40,9 +42,16 @@ function killProcessTree(proc, signal = "SIGTERM") {
 }
 
 /**
- * Checks if the target task port is held by an orphaned or stale process and frees it.
+ * Checks if the target task port or socket is held by an orphaned or stale process and frees it.
  */
 function freePort(port) {
+    try {
+        const sockPath = getTaskServerSocketPath();
+        if (fs.existsSync(sockPath)) {
+            fs.unlinkSync(sockPath);
+        }
+    } catch (_) {}
+
     const p = String(port || 5000);
     if (process.platform === "win32") {
         try {
@@ -116,6 +125,8 @@ function startPythonTaskServer() {
     const resolvedId = getResolvedProfileId(config);
     activeSandboxProfileId = resolvedId;
     const profile = (config.profiles && config.profiles[resolvedId]) || DIRECT_PROFILE;
+    const ipcType = getTaskServerIpcType(config);
+    const socketPath = getTaskServerSocketPath();
 
     // Fail immediately if sandboxing is enabled but container or binary is missing
     if (config.enabled && profile.mode !== "direct") {
@@ -141,7 +152,7 @@ function startPythonTaskServer() {
         }
     }
 
-    console.log(`[SANDBOX] Launching task server with profile '${resolvedId}' (${profile.name || "Default"})`);
+    console.log(`[SANDBOX] Launching task server with profile '${resolvedId}' (${profile.name || "Default"}), IPC: ${ipcType}`);
 
     const pyEnv = {
         ...process.env,
@@ -152,7 +163,14 @@ function startPythonTaskServer() {
 
     try {
         if (profile.mode === "direct" || !config.enabled) {
-            pythonProcess = spawn(pythonCmd, [taskScript], {
+            const taskArgs = [taskScript];
+            if (ipcType === "socket" && process.platform !== "win32") {
+                taskArgs.push("--socket", socketPath);
+            } else {
+                taskArgs.push("--port", String(taskPort));
+            }
+
+            pythonProcess = spawn(pythonCmd, taskArgs, {
                 cwd: process.cwd(),
                 env: pyEnv,
                 detached: process.platform !== "win32",
@@ -164,6 +182,8 @@ function startPythonTaskServer() {
                 PROJECT_PATH: process.cwd(),
                 DATA_DIR: dataDir,
                 TASK_PORT: taskPort,
+                TASK_SOCKET: socketPath,
+                IPC_TYPE: ipcType,
                 TASK_SERVER_SCRIPT: taskScript,
                 SHIELD_MOUNTS: shieldMounts
             });
@@ -228,6 +248,10 @@ function cleanupAndExit(exitCode = 0) {
     }
     const taskPort = process.env.TASK_PORT || 5000;
     freePort(taskPort);
+    try {
+        const sock = getTaskServerSocketPath();
+        if (fs.existsSync(sock)) fs.unlinkSync(sock);
+    } catch (_) {}
     process.exit(exitCode);
 }
 
