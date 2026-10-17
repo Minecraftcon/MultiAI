@@ -2,7 +2,8 @@
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
-    "vendor": "node scripts/vendor_download.js"
+    "vendor": "node scripts/vendor_download.js",
+    "setup:sandbox": "python3 scripts/setup_sandbox.py"
   },
   "dependencies": {
     "@langchain/core": "^1.2.11",
