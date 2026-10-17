@@ -272,17 +272,11 @@
 .blinking-cursor {
     display: inline-block;
     width: 7px;
-    height: 15px;
-    background-color: var(--accent, #6366f1);
-    vertical-align: -1px;
-    margin-left: 3px;
-    border-radius: 1px;
-    animation: cursorBlink 0.85s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-
-@keyframes cursorBlink {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0; }
+    height: 16px;
+    background-color: var(--text-primary);
+    vertical-align: middle;
+    margin-left: 4px;
+    animation: blink 1s step-end infinite;
 }
 
 /* =========================================================
