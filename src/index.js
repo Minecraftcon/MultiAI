@@ -6,6 +6,7 @@ const { routeRequest } = require("./server/router");
 const { mcpManager } = require("./core/mcp_manager");
 
 const { initConsole } = require("./server/console");
+const { ensureVendorFiles } = require("../scripts/vendor_download");
 
 // If MULTIAI_WORKSPACE_DIR is set, anchor runtime process.cwd() to it
 if (process.env.MULTIAI_WORKSPACE_DIR && fs.existsSync(process.env.MULTIAI_WORKSPACE_DIR)) {
@@ -16,22 +17,37 @@ if (process.env.MULTIAI_WORKSPACE_DIR && fs.existsSync(process.env.MULTIAI_WORKS
     }
 }
 
-// Start Python task server child process and setup termination handlers
-initSupervisor();
+async function startServer() {
+    // 1. Ensure frontend vendor libraries (marked, highlight, katex, lucide, etc.) are present
+    try {
+        await ensureVendorFiles();
+    } catch (err) {
+        console.warn("[VENDOR] Check error:", err.message);
+    }
 
-// Initialize configured Model Context Protocol (MCP) servers
-mcpManager.init().catch(err => {
-    console.warn("[MCP] Initialization error:", err.message);
+    // 2. Start Python task server child process and setup termination handlers
+    initSupervisor();
+
+    // 3. Initialize configured Model Context Protocol (MCP) servers
+    mcpManager.init().catch(err => {
+        console.warn("[MCP] Initialization error:", err.message);
+    });
+
+    const appConfig = getConfig();
+    const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : (appConfig.General?.Port || 8080);
+    const HOST = process.env.HOST || appConfig.General?.Host || "0.0.0.0";
+
+    const server = http.createServer(routeRequest);
+
+    server.listen(PORT, HOST, () => {
+        const hostDisplay = HOST === "0.0.0.0" ? "localhost" : HOST;
+        console.log(`Node Server running at http://${hostDisplay}:${PORT}`);
+        initConsole({ port: PORT, host: hostDisplay });
+    });
+}
+
+startServer().catch(err => {
+    console.error("[FATAL] Server startup failed:", err);
+    process.exit(1);
 });
 
-const appConfig = getConfig();
-const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : (appConfig.General?.Port || 8080);
-const HOST = process.env.HOST || appConfig.General?.Host || "0.0.0.0";
-
-const server = http.createServer(routeRequest);
-
-server.listen(PORT, HOST, () => {
-    const hostDisplay = HOST === "0.0.0.0" ? "localhost" : HOST;
-    console.log(`Node Server running at http://${hostDisplay}:${PORT}`);
-    initConsole({ port: PORT, host: hostDisplay });
-});

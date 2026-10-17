@@ -12,12 +12,12 @@ function downloadFile(url, destPath) {
             if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
                 // Follow redirect
                 file.close();
-                fs.unlinkSync(destPath);
+                try { fs.unlinkSync(destPath); } catch (_) {}
                 return downloadFile(res.headers.location, destPath).then(resolve).catch(reject);
             }
             if (res.statusCode !== 200) {
                 file.close();
-                fs.unlinkSync(destPath);
+                try { fs.unlinkSync(destPath); } catch (_) {}
                 return reject(new Error(`Failed to download ${url}: HTTP ${res.statusCode}`));
             }
             res.pipe(file);
@@ -32,9 +32,7 @@ function downloadFile(url, destPath) {
     });
 }
 
-async function main() {
-    console.log("=== Vendoring Frontend Libraries for Offline Support ===");
-
+function getVendorList() {
     const downloads = [
         // Marked
         { url: "https://cdn.jsdelivr.net/npm/marked@15.0.7/marked.min.js", dest: "marked/marked.min.js" },
@@ -79,6 +77,7 @@ async function main() {
         "KaTeX_Size4-Regular",
         "KaTeX_Typewriter-Regular"
     ];
+
     for (const name of fontNames) {
         downloads.push({
             url: `https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/fonts/${name}.woff2`,
@@ -94,24 +93,80 @@ async function main() {
         });
     }
 
-    let successCount = 0;
-    for (const item of downloads) {
+    return downloads;
+}
+
+/**
+ * Checks for missing vendor assets and downloads them if not present.
+ * @param {Object} options
+ * @param {boolean} [options.force=false] Force re-download even if files exist
+ * @param {boolean} [options.quiet=false] Suppress console logs
+ * @returns {Promise<{success: boolean, downloaded: number, total: number}>}
+ */
+async function ensureVendorFiles({ force = false, quiet = false } = {}) {
+    const list = getVendorList();
+    const missing = [];
+
+    for (const item of list) {
         const fullDest = path.join(VENDOR_ROOT, item.dest);
-        try {
-            process.stdout.write(`Downloading ${item.dest}... `);
-            await downloadFile(item.url, fullDest);
-            const stat = fs.statSync(fullDest);
-            console.log(`OK (${(stat.size / 1024).toFixed(1)} KB)`);
-            successCount++;
-        } catch (err) {
-            console.error(`FAILED: ${err.message}`);
+        if (force || !fs.existsSync(fullDest)) {
+            missing.push(item);
+        } else {
+            try {
+                const stat = fs.statSync(fullDest);
+                if (stat.size === 0) missing.push(item);
+            } catch (_) {
+                missing.push(item);
+            }
         }
     }
 
-    console.log(`\nDownloaded ${successCount} / ${downloads.length} vendor files.`);
+    if (missing.length === 0) {
+        return { success: true, downloaded: 0, total: list.length };
+    }
+
+    if (!quiet) {
+        console.log(`[VENDOR] Missing ${missing.length} vendor asset(s). Downloading offline frontend libraries...`);
+    }
+
+    let successCount = 0;
+    for (const item of missing) {
+        const fullDest = path.join(VENDOR_ROOT, item.dest);
+        try {
+            if (!quiet) process.stdout.write(`[VENDOR] Downloading ${item.dest}... `);
+            await downloadFile(item.url, fullDest);
+            const stat = fs.statSync(fullDest);
+            if (!quiet) console.log(`OK (${(stat.size / 1024).toFixed(1)} KB)`);
+            successCount++;
+        } catch (err) {
+            if (!quiet) console.error(`FAILED: ${err.message}`);
+        }
+    }
+
+    if (!quiet && successCount > 0) {
+        console.log(`[VENDOR] ✓ Downloaded ${successCount}/${missing.length} vendor files.`);
+    }
+
+    return {
+        success: successCount === missing.length,
+        downloaded: successCount,
+        total: list.length
+    };
 }
 
-main().catch(err => {
-    console.error("Vendoring error:", err);
-    process.exit(1);
-});
+// Standalone execution via CLI (e.g., `npm run vendor` or `node scripts/vendor_download.js`)
+if (require.main === module) {
+    console.log("=== Vendoring Frontend Libraries for Offline Support ===");
+    ensureVendorFiles({ force: true }).then((res) => {
+        console.log(`\nCompleted: ${res.downloaded} / ${res.total} vendor files.`);
+    }).catch(err => {
+        console.error("Vendoring error:", err);
+        process.exit(1);
+    });
+}
+
+module.exports = {
+    ensureVendorFiles,
+    getVendorList,
+    VENDOR_ROOT
+};
