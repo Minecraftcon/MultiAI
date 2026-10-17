@@ -4,6 +4,7 @@ const { spawn, execSync } = require("child_process");
 const {
     loadSandboxConfig,
     getResolvedProfileId,
+    verifyProfileEnvironment,
     resolveCommandTemplate,
     getStorageDir,
     DIRECT_PROFILE
@@ -114,6 +115,30 @@ function startPythonTaskServer() {
     const resolvedId = getResolvedProfileId(config);
     activeSandboxProfileId = resolvedId;
     const profile = (config.profiles && config.profiles[resolvedId]) || DIRECT_PROFILE;
+
+    // Fail immediately if sandboxing is enabled but container or binary is missing
+    if (config.enabled && profile.mode !== "direct") {
+        const check = verifyProfileEnvironment(profile);
+        if (!check.ok) {
+            console.error("\n" + "=".repeat(64));
+            console.error(`[SANDBOX ERROR] Startup aborted: Sandbox '${profile.id}' (${profile.name}) is not usable.`);
+            console.error(`  • Detail: ${check.reason}`);
+            if (check.help) {
+                console.error(`  • Solution: ${check.help}`);
+            }
+            console.error("\n[ACTION REQUIRED]");
+            console.error("  Sandboxing is currently ENABLED, but the container or binary is missing.");
+            console.error("  MultiAI startup will NOT continue in a broken container state.");
+            console.error("  To start MultiAI, either set up the container or disable sandboxing manually:");
+            console.error("    1. Disable sandboxing: edit ~/.MultiAI/vm_conf.json and set \"enabled\": false");
+            console.error("    2. Or start once without sandboxing: MULTIAI_SANDBOX=0 node src/index.js");
+            console.error("=".repeat(64) + "\n");
+
+            isStarting = false;
+            cleanupAndExit(1);
+            return;
+        }
+    }
 
     console.log(`[SANDBOX] Launching task server with profile '${resolvedId}' (${profile.name || "Default"})`);
 

@@ -26,8 +26,8 @@ const DEFAULT_SANDBOX_CONFIG = {
             description: "Syscall emulation sandbox for non-root containers and Termux environments.",
             icon: "smartphone",
             mode: "daemon",
-            startup: 'pd sh debian --bind {PROJECT_PATH}:/workspace --bind {DATA_DIR}:/data -- python3 /workspace/task_server.py --port {TASK_PORT}',
-            detect_cmd: "command -v pd || command -v proot-distro"
+            startup: 'pd sh debian-sandbox --bind {PROJECT_PATH}:/workspace --bind {DATA_DIR}:/data -- python3 /workspace/task_server.py --port {TASK_PORT}',
+            detect_cmd: '(command -v pd || command -v proot-distro) && (pd login debian-sandbox -- true 2>/dev/null || proot-distro login debian-sandbox -- true 2>/dev/null || [ -d "${PREFIX:-/data/data/com.termux/files/usr}/var/lib/proot-distro/installed-rootfs/debian-sandbox" ])'
         },
         docker: {
             id: "docker",
@@ -81,8 +81,11 @@ function loadSandboxConfig() {
             delete profiles.auto;
             delete profiles.direct;
 
-            if (profiles.proot && profiles.proot.startup && profiles.proot.startup.includes("/workspace/task_server/server.py")) {
-                profiles.proot.startup = profiles.proot.startup.replace("/workspace/task_server/server.py", "/workspace/task_server.py");
+            if (profiles.proot) {
+                if (profiles.proot.startup && (profiles.proot.startup.includes("/workspace/task_server/server.py") || profiles.proot.startup.includes("pd sh debian "))) {
+                    profiles.proot.startup = 'pd sh debian-sandbox --bind {PROJECT_PATH}:/workspace --bind {DATA_DIR}:/data -- python3 /workspace/task_server.py --port {TASK_PORT}';
+                }
+                profiles.proot.detect_cmd = DEFAULT_SANDBOX_CONFIG.profiles.proot.detect_cmd;
             }
 
             let active = parsed.active_profile;
@@ -90,8 +93,13 @@ function loadSandboxConfig() {
                 active = detectPlatformDefault();
             }
 
+            let isEnabled = parsed.enabled !== undefined ? Boolean(parsed.enabled) : DEFAULT_SANDBOX_CONFIG.enabled;
+            if (process.env.MULTIAI_SANDBOX === "0" || (process.argv && process.argv.includes("--no-sandbox"))) {
+                isEnabled = false;
+            }
+
             const cfg = {
-                enabled: parsed.enabled !== undefined ? parsed.enabled : DEFAULT_SANDBOX_CONFIG.enabled,
+                enabled: isEnabled,
                 active_profile: active,
                 profiles
             };
@@ -101,7 +109,9 @@ function loadSandboxConfig() {
         console.warn(`[SANDBOX] Failed to load ${configPath}, using defaults:`, e.message);
     }
     const defaultCfg = {
-        enabled: DEFAULT_SANDBOX_CONFIG.enabled,
+        enabled: (process.env.MULTIAI_SANDBOX === "0" || (process.argv && process.argv.includes("--no-sandbox")))
+            ? false
+            : DEFAULT_SANDBOX_CONFIG.enabled,
         active_profile: detectPlatformDefault(),
         profiles: { ...DEFAULT_SANDBOX_CONFIG.profiles }
     };
@@ -137,6 +147,91 @@ function hasBinary(bin) {
     } catch (_) {
         return false;
     }
+}
+
+/**
+ * Validates whether the given profile's binary AND container environment are truly installed and usable.
+ * @param {Object} profile 
+ * @returns {{ ok: boolean, reason?: string, help?: string }}
+ */
+function verifyProfileEnvironment(profile) {
+    if (!profile || profile.mode === "direct" || profile.id === "direct") {
+        return { ok: true };
+    }
+
+    if (profile.id === "proot") {
+        const hasPd = hasBinary("pd") || hasBinary("proot-distro");
+        if (!hasPd) {
+            return {
+                ok: false,
+                reason: "PRoot Distro package ('proot-distro' or 'pd') is not installed in Termux.",
+                help: "Run: pkg install proot-distro"
+            };
+        }
+
+        // Check if debian-sandbox container directory or instance actually exists
+        const pdCmd = hasBinary("pd") ? "pd" : "proot-distro";
+        const prefixDir = process.env.PREFIX || "/data/data/com.termux/files/usr";
+        const rootfsDir = path.join(prefixDir, "var/lib/proot-distro/installed-rootfs/debian-sandbox");
+
+        let containerExists = false;
+        try {
+            if (fs.existsSync(rootfsDir)) {
+                containerExists = true;
+            }
+        } catch (_) {}
+
+        if (!containerExists) {
+            try {
+                execSync(`${pdCmd} login debian-sandbox -- true`, { stdio: "ignore", timeout: 2500, shell: "/bin/sh" });
+                containerExists = true;
+            } catch (_) {}
+        }
+
+        if (!containerExists) {
+            return {
+                ok: false,
+                reason: "PRoot container 'debian-sandbox' does not exist or is not installed.",
+                help: "Create the container in Termux by running:\n    pd install debian --name debian-sandbox"
+            };
+        }
+
+        return { ok: true };
+    }
+
+    if (profile.id === "bwrap") {
+        if (!hasBinary("bwrap")) {
+            return {
+                ok: false,
+                reason: "Bubblewrap ('bwrap') binary is not installed on this system.",
+                help: "Install bubblewrap using your Linux package manager (e.g. sudo apt install bubblewrap)."
+            };
+        }
+        return { ok: true };
+    }
+
+    if (profile.id === "docker") {
+        const hasDocker = hasBinary("docker") || hasBinary("podman");
+        if (!hasDocker) {
+            return {
+                ok: false,
+                reason: "Docker/Podman binary is not installed or available on PATH.",
+                help: "Ensure Docker or Podman is installed and running."
+            };
+        }
+        return { ok: true };
+    }
+
+    // Generic command fallback
+    if (profile.detect_cmd && !isCommandAvailable(profile.detect_cmd)) {
+        return {
+            ok: false,
+            reason: `Prerequisite command check failed for profile '${profile.id}'.`,
+            help: `Ensure '${profile.detect_cmd}' succeeds.`
+        };
+    }
+
+    return { ok: true };
 }
 
 function detectPlatformDefault() {
@@ -178,10 +273,12 @@ function getProfilesWithStatus() {
     const profilesList = Object.values(config.profiles)
         .filter(p => p.id !== "auto" && p.id !== "direct")
         .map(profile => {
-            const isInstalled = isCommandAvailable(profile.detect_cmd);
+            const check = verifyProfileEnvironment(profile);
             return {
                 ...profile,
-                isInstalled,
+                isInstalled: check.ok,
+                missingReason: check.reason || null,
+                missingHelp: check.help || null,
                 isActive: profile.id === config.active_profile,
                 isResolvedActive: profile.id === resolvedId
             };
@@ -208,6 +305,7 @@ module.exports = {
     saveSandboxConfig,
     getProfilesWithStatus,
     getResolvedProfileId,
+    verifyProfileEnvironment,
     resolveCommandTemplate,
     getStorageDir,
     DIRECT_PROFILE
