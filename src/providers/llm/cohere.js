@@ -65,12 +65,18 @@ class CohereProvider extends BaseProvider {
                     content: typeof m.content === "string" ? m.content : JSON.stringify(m.content)
                 };
             } else if (m.role === "assistant") {
+                const hasToolCalls = Array.isArray(m.tool_calls) && m.tool_calls.length > 0;
                 cleanMsg = {
-                    role: "assistant",
-                    content: typeof m.content === "string" ? m.content : (m.content === null ? null : "")
+                    role: "assistant"
                 };
-                if (Array.isArray(m.tool_calls) && m.tool_calls.length > 0) {
+                if (hasToolCalls) {
                     cleanMsg.tool_calls = this.cleanCohereToolCalls(m.tool_calls);
+                    // Cohere API quirk: Messages with non-empty 'tool_calls' cannot contain content items of type 'text'.
+                    // Cohere v2 strictly validates this and throws HTTP 400.
+                    // When tool_calls is present, content MUST be empty [] (or omitted).
+                    cleanMsg.content = [];
+                } else {
+                    cleanMsg.content = typeof m.content === "string" ? m.content : (m.content === null ? null : "");
                 }
             } else {
                 cleanMsg = {
