@@ -26,7 +26,7 @@ const DEFAULT_SANDBOX_CONFIG = {
             description: "Syscall emulation sandbox for non-root containers and Termux environments.",
             icon: "smartphone",
             mode: "daemon",
-            startup: 'pd sh debian --bind {PROJECT_PATH}:/workspace --bind {DATA_DIR}:/data -- python3 /workspace/task_server/server.py --port {TASK_PORT}',
+            startup: 'pd sh debian --bind {PROJECT_PATH}:/workspace --bind {DATA_DIR}:/data -- python3 /workspace/task_server.py --port {TASK_PORT}',
             detect_cmd: "command -v pd || command -v proot-distro"
         },
         docker: {
@@ -80,6 +80,10 @@ function loadSandboxConfig() {
             };
             delete profiles.auto;
             delete profiles.direct;
+
+            if (profiles.proot && profiles.proot.startup && profiles.proot.startup.includes("/workspace/task_server/server.py")) {
+                profiles.proot.startup = profiles.proot.startup.replace("/workspace/task_server/server.py", "/workspace/task_server.py");
+            }
 
             let active = parsed.active_profile;
             if (!active || active === "auto" || !profiles[active]) {
