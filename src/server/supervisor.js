@@ -6,6 +6,7 @@ const {
     getResolvedProfileId,
     verifyProfileEnvironment,
     resolveCommandTemplate,
+    getSandboxShieldArgs,
     getStorageDir,
     DIRECT_PROFILE
 } = require("../core/sandbox_manager");
@@ -158,11 +159,13 @@ function startPythonTaskServer() {
                 stdio: ["pipe", "pipe", "pipe"]
             });
         } else {
+            const shieldMounts = getSandboxShieldArgs();
             const fullCmd = resolveCommandTemplate(profile.startup, {
                 PROJECT_PATH: process.cwd(),
                 DATA_DIR: dataDir,
                 TASK_PORT: taskPort,
-                TASK_SERVER_SCRIPT: taskScript
+                TASK_SERVER_SCRIPT: taskScript,
+                SHIELD_MOUNTS: shieldMounts
             });
 
             console.log(`[SANDBOX EXEC] ${fullCmd}`);

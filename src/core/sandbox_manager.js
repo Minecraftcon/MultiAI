@@ -16,7 +16,7 @@ const DEFAULT_SANDBOX_CONFIG = {
             description: "Unprivileged user namespaces with read-only root and workspace binding.",
             icon: "shield",
             mode: "daemon",
-            startup: 'bwrap --ro-bind / / --bind {PROJECT_PATH} {PROJECT_PATH} --bind {DATA_DIR} {DATA_DIR} --tmpfs /tmp --proc /proc --dev /dev -- python3 {TASK_SERVER_SCRIPT} --port {TASK_PORT}',
+            startup: 'bwrap --ro-bind / / {SHIELD_MOUNTS} --bind {PROJECT_PATH} {PROJECT_PATH} --bind {DATA_DIR} {DATA_DIR} --tmpfs /tmp --proc /proc --dev /dev -- python3 {TASK_SERVER_SCRIPT} --port {TASK_PORT}',
             detect_cmd: "command -v bwrap"
         },
         proot: {
@@ -86,6 +86,15 @@ function loadSandboxConfig() {
                     profiles.proot.startup = 'pd sh debian-sandbox --bind {PROJECT_PATH}:/workspace --bind {DATA_DIR}:/data -- python3 /workspace/task_server.py --port {TASK_PORT}';
                 }
                 profiles.proot.detect_cmd = DEFAULT_SANDBOX_CONFIG.profiles.proot.detect_cmd;
+            }
+
+            if (profiles.bwrap && profiles.bwrap.startup) {
+                if (!profiles.bwrap.startup.includes("{SHIELD_MOUNTS}")) {
+                    profiles.bwrap.startup = profiles.bwrap.startup.replace(
+                        "--ro-bind / /",
+                        "--ro-bind / / {SHIELD_MOUNTS}"
+                    );
+                }
             }
 
             let active = parsed.active_profile;
@@ -300,6 +309,38 @@ function resolveCommandTemplate(template, vars) {
     return result;
 }
 
+/**
+ * Discovers existing sensitive host directories (SSH, GPG, AWS/cloud tokens, GitHub CLI auth)
+ * and generates --tmpfs mount arguments for Bubblewrap so the sandbox
+ * cannot read or exfiltrate private user keys.
+ * @returns {string} Space-separated --tmpfs mount arguments
+ */
+function getSandboxShieldArgs() {
+    const home = os.homedir();
+    const sensitiveDirs = [
+        ".ssh",
+        ".gnupg",
+        ".aws",
+        ".config/gh",
+        ".config/gcloud",
+        ".azure",
+        ".kube",
+        ".docker"
+    ];
+
+    const mounts = [];
+    for (const rel of sensitiveDirs) {
+        const full = path.join(home, rel);
+        try {
+            if (fs.existsSync(full) && fs.statSync(full).isDirectory()) {
+                mounts.push(`--tmpfs ${full}`);
+            }
+        } catch (_) {}
+    }
+
+    return mounts.join(" ");
+}
+
 module.exports = {
     loadSandboxConfig,
     saveSandboxConfig,
@@ -307,6 +348,7 @@ module.exports = {
     getResolvedProfileId,
     verifyProfileEnvironment,
     resolveCommandTemplate,
+    getSandboxShieldArgs,
     getStorageDir,
     DIRECT_PROFILE
 };
