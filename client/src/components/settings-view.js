@@ -22,18 +22,33 @@ let pendingConfigUpdates = {};
 export function openSettings(targetCategory = "general") {
     const appShell = document.getElementById("appShell");
     const settingsScreen = document.getElementById("settingsScreen");
-    if (!appShell || !settingsScreen) return;
-
-    if (isMobileDevice()) {
-        closePanel();
+    if (!appShell || !settingsScreen) {
+        console.error("[SETTINGS] appShell or settingsScreen element missing:", { appShell, settingsScreen });
+        return;
     }
 
-    populateSettingsValues();
+    // Always close side panel when navigating to settings
+    try {
+        closePanel();
+    } catch (e) {
+        console.warn("[SETTINGS] Error closing panel:", e);
+    }
+
+    try {
+        populateSettingsValues();
+    } catch (err) {
+        console.error("[SETTINGS] Error populating settings:", err);
+    }
+
     appShell.classList.add("in-settings");
     settingsScreen.setAttribute("aria-hidden", "false");
 
-    switchSubScreen(targetCategory);
-    renderIcons(settingsScreen);
+    try {
+        switchSubScreen(targetCategory);
+        renderIcons(settingsScreen);
+    } catch (err) {
+        console.error("[SETTINGS] Error switching subscreen:", err);
+    }
 
     // Scroll to top of content
     const content = settingsScreen.querySelector(".settings-content");
@@ -182,6 +197,9 @@ export function populateSettingsValues() {
 
     // Load MCP servers list
     renderMcpServersList();
+
+    // Load Sandbox & VM Isolation profiles
+    renderSandboxProfiles();
 
     const maxToolRounds = document.getElementById("cfgMaxToolRounds");
     const maxToolRoundsVal = document.getElementById("cfgMaxToolRoundsVal");
@@ -390,7 +408,21 @@ export function initSettingsView() {
 
     // Back to Chat
     if (settingsBackBtn) {
-        settingsBackBtn.addEventListener("click", closeSettings);
+        let lastBack = 0;
+        const triggerClose = (e) => {
+            const now = Date.now();
+            if (now - lastBack < 350) return;
+            lastBack = now;
+            if (e) {
+                e.stopPropagation();
+                if (e.cancelable && e.type === "touchend") {
+                    e.preventDefault();
+                }
+            }
+            closeSettings();
+        };
+        settingsBackBtn.addEventListener("click", triggerClose);
+        settingsBackBtn.addEventListener("touchend", triggerClose, { passive: false });
     }
 
     // Tab Navigation
@@ -556,6 +588,7 @@ export function initSettingsView() {
     }
 
     initMcpSettingsControls();
+    initSandboxSettingsControls();
 
     const maxToolRounds = document.getElementById("cfgMaxToolRounds");
     const maxToolRoundsVal = document.getElementById("cfgMaxToolRoundsVal");
@@ -1123,4 +1156,124 @@ export function initMcpSettingsControls() {
         });
     }
 }
+
+/**
+ * Renders the selectable Sandbox & VM Isolation profile cards dynamically from /api/sandbox/profiles
+ */
+export async function renderSandboxProfiles() {
+    const gridEl = document.getElementById("sandboxProfilesGrid");
+    const toggleEl = document.getElementById("cfgEnableSandbox");
+    const statusTextEl = document.getElementById("sandboxStatusText");
+    if (!gridEl) return;
+
+    try {
+        const res = await fetch("/api/sandbox/profiles");
+        if (!res.ok) throw new Error("Failed to load profiles");
+        const data = await res.json();
+
+        const isEnabled = data.enabled !== false;
+        if (toggleEl) {
+            toggleEl.checked = isEnabled;
+        }
+
+        gridEl.classList.toggle("disabled", !isEnabled);
+        gridEl.innerHTML = "";
+
+        const profiles = data.profiles || [];
+        profiles.forEach(p => {
+            const card = document.createElement("div");
+            card.className = `sandbox-profile-card ${p.isActive ? "active" : ""}`;
+            card.dataset.profileId = p.id;
+            card.setAttribute("role", "button");
+            card.setAttribute("tabindex", isEnabled ? "0" : "-1");
+            card.setAttribute("aria-pressed", p.isActive ? "true" : "false");
+
+            const iconName = p.icon || "box";
+            const statusClass = p.isInstalled ? "installed" : "missing";
+            const statusText = p.isInstalled ? "Installed" : "Not detected";
+
+            card.innerHTML = `
+                <div class="sandbox-card-header">
+                    <div class="sandbox-card-title-wrap">
+                        <i data-lucide="${escapeHTML(iconName)}" class="sandbox-card-icon"></i>
+                        <span class="sandbox-card-title">${escapeHTML(p.name)}</span>
+                    </div>
+                    ${p.badge ? `<span class="sandbox-card-badge">${escapeHTML(p.badge)}</span>` : ""}
+                </div>
+                <div class="sandbox-card-desc">${escapeHTML(p.description || "")}</div>
+                <div class="sandbox-card-footer">
+                    <div class="sandbox-status-indicator">
+                        <span class="sandbox-status-dot ${statusClass}"></span>
+                        <span>${statusText}</span>
+                    </div>
+                    <i data-lucide="check" class="sandbox-card-check"></i>
+                </div>
+            `;
+
+            const onSelect = async () => {
+                if (toggleEl && !toggleEl.checked) return;
+                await selectSandboxProfile(p.id, true);
+            };
+
+            card.addEventListener("click", onSelect);
+            card.addEventListener("keydown", (e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    onSelect();
+                }
+            });
+
+            gridEl.appendChild(card);
+        });
+
+        if (statusTextEl) {
+            if (!isEnabled) {
+                statusTextEl.textContent = "Sandboxing disabled · Tasks execute directly on host";
+            } else {
+                const activeProfile = profiles.find(p => p.isActive);
+                const activeName = activeProfile ? activeProfile.name : (data.active_profile || "Bubblewrap");
+                statusTextEl.textContent = `Active Sandbox: ${activeName}`;
+            }
+        }
+
+        renderIcons(gridEl);
+    } catch (err) {
+        gridEl.innerHTML = `<div class="mcp-empty-state">Failed to load sandbox environments: ${escapeHTML(err.message)}</div>`;
+    }
+}
+
+async function selectSandboxProfile(profileId, enabled) {
+    try {
+        const res = await fetch("/api/sandbox/select", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ profile_id: profileId, enabled })
+        });
+        if (res.ok) {
+            await renderSandboxProfiles();
+        }
+    } catch (err) {
+        console.error("Failed to select sandbox profile:", err);
+    }
+}
+
+export function initSandboxSettingsControls() {
+    const toggleEl = document.getElementById("cfgEnableSandbox");
+    if (toggleEl) {
+        toggleEl.addEventListener("change", async (e) => {
+            const isChecked = e.target.checked;
+            try {
+                await fetch("/api/sandbox/select", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ enabled: isChecked })
+                });
+                await renderSandboxProfiles();
+            } catch (err) {
+                console.error("Failed to toggle sandbox:", err);
+            }
+        });
+    }
+}
+
 

@@ -505,6 +505,29 @@
                         </div>
                     </div>
 
+                    <!-- SANDBOX & ISOLATION -->
+                    <div class="settings-card" id="cfgSandboxCard">
+                        <div class="settings-row" style="padding: 0 0 10px 0; border-bottom: 1px solid var(--border);">
+                            <div class="settings-item-info">
+                                <span class="settings-item-title">Sandbox Environment</span>
+                                <span class="settings-item-desc">Confines bash command execution to an isolated container. When disabled, tasks run directly on the host.</span>
+                            </div>
+                            <label class="settings-switch">
+                                <input type="checkbox" id="cfgEnableSandbox" checked>
+                                <span class="settings-slider"></span>
+                            </label>
+                        </div>
+
+                        <!-- Dynamic Sandbox Profiles Grid -->
+                        <div id="sandboxProfilesGrid" class="sandbox-profiles-grid">
+                            <div class="sandbox-loading-state">Loading environments…</div>
+                        </div>
+
+                        <div id="sandboxStatusLine" class="sandbox-status-line">
+                            <span id="sandboxStatusText">Active: Bubblewrap</span>
+                        </div>
+                    </div>
+
                     <!-- MCP TOOL SERVERS CARD -->
                     <div class="settings-card" id="cfgMcpCard">
                         <div class="settings-card-header-row">

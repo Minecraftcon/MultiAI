@@ -1,5 +1,15 @@
 const { handleStatic } = require("./routes/static");
-const { handleSystemInfo, handleConfig, handleModels, handleKoboldBaseUrl, handleKoboldProbe, handleLocalSession, handleLocalProbe } = require("./routes/config");
+const {
+    handleSystemInfo,
+    handleConfig,
+    handleModels,
+    handleKoboldBaseUrl,
+    handleKoboldProbe,
+    handleLocalSession,
+    handleLocalProbe,
+    handleSandboxProfiles,
+    handleSandboxSelect
+} = require("./routes/config");
 const { handleMedia, handleImageGenerate, handleImageStatus } = require("./routes/media");
 const { handleFilesRoute } = require("./routes/files");
 const { handleTaskRoute } = require("./routes/tasks");
@@ -48,6 +58,14 @@ async function routeRequest(req, res) {
         }
         if (req.method === "POST" && reqUrl === "/api/local/probe") {
             return handleLocalProbe(req, res);
+        }
+
+        // Sandbox / VM isolation routes
+        if ((req.method === "GET" || req.method === "HEAD") && reqUrl === "/api/sandbox/profiles") {
+            return handleSandboxProfiles(req, res);
+        }
+        if (req.method === "POST" && reqUrl === "/api/sandbox/select") {
+            return handleSandboxSelect(req, res);
         }
 
         // Media & Image Generation

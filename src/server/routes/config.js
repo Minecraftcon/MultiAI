@@ -208,6 +208,53 @@ async function handleLocalProbe(req, res) {
     }
 }
 
+const {
+    getProfilesWithStatus,
+    loadSandboxConfig,
+    saveSandboxConfig
+} = require("../../core/sandbox_manager");
+const { restartPythonTaskServer } = require("../supervisor");
+
+async function handleSandboxProfiles(req, res) {
+    if (req.method === "HEAD") {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        return res.end();
+    }
+    return sendJSON(res, 200, getProfilesWithStatus());
+}
+
+async function handleSandboxSelect(req, res) {
+    if (req.method !== "POST") {
+        res.writeHead(405);
+        return res.end();
+    }
+    try {
+        let body = "";
+        for await (const chunk of req) body += chunk;
+        const data = JSON.parse(body || "{}");
+        const profileId = data.profile_id;
+        const enabled = data.enabled !== undefined ? data.enabled : true;
+
+        const currentConfig = loadSandboxConfig();
+        if (profileId && currentConfig.profiles[profileId]) {
+            currentConfig.active_profile = profileId;
+        }
+        currentConfig.enabled = Boolean(enabled);
+
+        saveSandboxConfig(currentConfig);
+
+        // Restart task server daemon with the new sandbox profile
+        restartPythonTaskServer();
+
+        return sendJSON(res, 200, {
+            success: true,
+            status: getProfilesWithStatus()
+        });
+    } catch (err) {
+        return sendJSON(res, 500, { error: err.message });
+    }
+}
+
 // Alias for backward compat
 const handleKoboldProbe = handleLocalProbe;
 
@@ -219,6 +266,8 @@ module.exports = {
     handleKoboldProbe,
     handleLocalSession,
     handleLocalProbe,
+    handleSandboxProfiles,
+    handleSandboxSelect,
     getKoboldBaseUrl,
     setKoboldBaseUrl,
     getLocalSession,

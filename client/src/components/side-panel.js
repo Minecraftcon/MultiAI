@@ -376,11 +376,24 @@ export function initSidePanel() {
 
     // Settings Screen
     if (panelSettingsBtn) {
-        panelSettingsBtn.addEventListener("click", () => {
+        let lastSettingsOpen = 0;
+        const triggerOpenSettings = (e) => {
+            const now = Date.now();
+            if (now - lastSettingsOpen < 350) return;
+            lastSettingsOpen = now;
+            if (e) {
+                e.stopPropagation();
+                if (e.cancelable && e.type === "touchend") {
+                    e.preventDefault();
+                }
+            }
             hideChatItemMenu();
             hideProjectMenu();
             openSettings("general");
-        });
+        };
+
+        panelSettingsBtn.addEventListener("click", triggerOpenSettings);
+        panelSettingsBtn.addEventListener("touchend", triggerOpenSettings, { passive: false });
     }
 
     // Model select listener
