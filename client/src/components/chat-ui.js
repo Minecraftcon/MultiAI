@@ -612,7 +612,64 @@ export function updateAIStream(element, fullText, isDone, startTime, hasTools) {
         return Promise.resolve();
     }
 
+    const isStreamingEnabled = Boolean(state.config?.Agent?.StreamReasoning || state.config?.Agent?.StreamResponse);
     let streamer = activeStreamers.get(element);
+
+    if (!isStreamingEnabled || (!streamer && isDone)) {
+        if (streamer) {
+            streamer.stop();
+            activeStreamers.delete(element);
+        }
+        if (sanitizedRest) {
+            finalContent.innerHTML = sanitizedRest;
+            wrapTablesForScroll(finalContent);
+            if (isDone) {
+                renderIcons(finalContent);
+                bindAIImageCards(finalContent);
+            }
+        } else {
+            finalContent.innerHTML = "";
+        }
+
+        if (isDone) {
+            if (cursor) cursor.remove();
+            finalizeFileEditBadges(element);
+
+            renderFollowupSuggestions(element, followups, true);
+            renderPlanApprovalActions(element, answerText, true);
+
+            // Clean up any empty thought boxes and finalize duration
+            element.querySelectorAll(".thought-box").forEach(tb => {
+                const contentEl = tb.querySelector(".thought-content");
+                const textInside = contentEl ? (contentEl.textContent || "").trim() : (tb.textContent || "").trim();
+                if (!textInside) {
+                    tb.remove();
+                    return;
+                }
+                const lbl = tb.querySelector(".thought-label");
+                if (lbl && (lbl.textContent.includes("{}") || lbl.textContent.includes("a few seconds"))) {
+                    lbl.textContent = `Thought for ${elapsed} seconds`;
+                }
+            });
+
+            wrapHugeThoughts(element);
+
+            element.querySelectorAll("a").forEach(link => {
+                link.target = "_blank";
+                link.rel = "noopener noreferrer";
+            });
+
+            bindInteractiveCodeBlocks(element);
+            renderMermaidInElement(element);
+            renderMath(element);
+            bindAIImageCards(element);
+            requestScrollToBottom(chat, true);
+        } else {
+            requestScrollToBottom(chat, false);
+        }
+        return Promise.resolve();
+    }
+
     if (!streamer) {
         streamer = new StreamBatchRenderer(element, finalContent, cursor);
         activeStreamers.set(element, streamer);

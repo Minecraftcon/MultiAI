@@ -161,7 +161,7 @@ export function populateSettingsValues() {
     if (tempVal) tempVal.textContent = parseFloat(storedTemp).toFixed(2);
 
     const streamReasoning = document.getElementById("cfgStreamReasoning");
-    if (streamReasoning) streamReasoning.checked = agent.StreamReasoning !== false;
+    if (streamReasoning) streamReasoning.checked = Boolean(agent.StreamReasoning);
 
     const turnTimeout = document.getElementById("cfgTurnTimeout");
     if (turnTimeout) turnTimeout.value = String(agent.TurnTimeoutSeconds || 120);
@@ -765,7 +765,7 @@ export function initSettingsView() {
                         MaxToolRounds: 0,
                         MaxToolsPerRound: 10,
                         AutoScroll: true,
-                        StreamReasoning: true,
+                        StreamReasoning: false,
                         TurnTimeoutSeconds: 120
                     },
                     Tools: {

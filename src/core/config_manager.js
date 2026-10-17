@@ -21,7 +21,7 @@ const DEFAULT_CONFIG = {
         MaxToolRounds: 0,
         MaxToolsPerRound: 10,
         AutoScroll: true,
-        StreamReasoning: true,
+        StreamReasoning: false,
         TurnTimeoutSeconds: 120
     },
     Tools: {

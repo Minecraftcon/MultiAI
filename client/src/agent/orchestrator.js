@@ -157,15 +157,16 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
                 if (transientCorrectionNotice) {
                     workingMessages.push(transientCorrectionNotice);
                 }
+                const isStreamingEnabled = Boolean(state.config?.Agent?.StreamReasoning || state.config?.Agent?.StreamResponse);
                 response = await callChatModel(workingMessages, {
                     model: selectedModel,
                     tools: activeTools,
                     signal: genState?.abortController?.signal,
-                    onChunk: (chunk, accumulated) => {
+                    onChunk: isStreamingEnabled ? (chunk, accumulated) => {
                         if (currentAIMessage && !genState.abortRequested) {
                             updateAIStream(currentAIMessage, accumulated, false, overallStartTime, hasRunTools);
                         }
-                    }
+                    } : undefined
                 });
             } catch (err) {
                 if (genState.abortRequested || err.name === "AbortError" || err.message === "Generation stopped by user") {
@@ -189,15 +190,16 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
                             if (transientCorrectionNotice) {
                                 workingMessagesRetry.push(transientCorrectionNotice);
                             }
+                            const isStreamingEnabledRetry = Boolean(state.config?.Agent?.StreamReasoning || state.config?.Agent?.StreamResponse);
                             response = await callChatModel(workingMessagesRetry, {
                                 model: selectedModel,
                                 tools: activeTools,
                                 signal: genState?.abortController?.signal,
-                                onChunk: (chunk, accumulated) => {
+                                onChunk: isStreamingEnabledRetry ? (chunk, accumulated) => {
                                     if (currentAIMessage && !genState.abortRequested) {
                                         updateAIStream(currentAIMessage, accumulated, false, overallStartTime, hasRunTools);
                                     }
-                                }
+                                } : undefined
                             });
                         } catch (retryErr) {
                             logEvent("CHAT_CALL_RETRY_ERROR", { round, model: selectedModel, error: String(retryErr && retryErr.message || retryErr) });
