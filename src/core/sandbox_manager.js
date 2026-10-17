@@ -6,7 +6,7 @@ const os = require("os");
 const { execSync } = require("child_process");
 
 const DEFAULT_SANDBOX_CONFIG = {
-    enabled: true,
+    enabled: false,
     active_profile: "bwrap", // "bwrap" | "proot" | "docker"
     profiles: {
         bwrap: {

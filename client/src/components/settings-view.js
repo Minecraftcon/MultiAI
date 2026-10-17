@@ -1171,7 +1171,7 @@ export async function renderSandboxProfiles() {
         if (!res.ok) throw new Error("Failed to load profiles");
         const data = await res.json();
 
-        const isEnabled = data.enabled !== false;
+        const isEnabled = Boolean(data.enabled);
         if (toggleEl) {
             toggleEl.checked = isEnabled;
         }
