@@ -3,7 +3,11 @@
   "scripts": {
     "start": "node src/index.js",
     "vendor": "node scripts/vendor_download.js",
-    "setup:sandbox": "python3 scripts/setup_sandbox.py"
+    "setup:sandbox": "python3 scripts/setup_sandbox.py",
+    "build:daemon": "cd task_server_go && go build -o ../bin/task_daemon .",
+    "build:daemon:android": "cd task_server_go && CGO_ENABLED=0 GOOS=android GOARCH=arm64 go build -ldflags=\"-s -w\" -o ../bin/task_daemon_android_arm64 .",
+    "build:daemon:windows": "cd task_server_go && GOOS=windows GOARCH=amd64 go build -o ../bin/task_daemon.exe .",
+    "test:daemon": "node tests/test_go_daemon.js"
   },
   "dependencies": {
     "@langchain/core": "^1.2.11",

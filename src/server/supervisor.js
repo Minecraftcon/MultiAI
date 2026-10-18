@@ -79,6 +79,71 @@ function freePort(port) {
     }
 }
 
+/**
+ * Resolves the configured task daemon engine ('go' or 'python').
+ * Precedence:
+ * 1. CLI flags: --task-daemon=go|python, --daemon=go|python, --go-daemon, --python-daemon
+ * 2. Environment variable: MULTIAI_TASK_DAEMON=go|python|golang
+ * 3. Sandbox config (~/.MultiAI/vm_conf.json) task_daemon property
+ * 4. User configuration file (config.ini) [Agent] TaskDaemon = go|python
+ * 5. Default: "python"
+ */
+function getTaskDaemonEngine() {
+    const argv = process.argv || [];
+    for (let i = 0; i < argv.length; i++) {
+        const arg = argv[i];
+        if (arg === "--task-daemon" && argv[i + 1]) {
+            const val = argv[i + 1].trim().toLowerCase();
+            return val === "golang" ? "go" : val;
+        }
+        if (arg.startsWith("--task-daemon=")) {
+            const val = arg.split("=")[1].trim().toLowerCase();
+            return val === "golang" ? "go" : val;
+        }
+        if (arg === "--daemon" && argv[i + 1]) {
+            const val = argv[i + 1].trim().toLowerCase();
+            return val === "golang" ? "go" : val;
+        }
+        if (arg.startsWith("--daemon=")) {
+            const val = arg.split("=")[1].trim().toLowerCase();
+            return val === "golang" ? "go" : val;
+        }
+        if (arg === "--go-daemon" || arg === "--go") {
+            return "go";
+        }
+        if (arg === "--python-daemon" || arg === "--python") {
+            return "python";
+        }
+    }
+
+    if (process.env.MULTIAI_TASK_DAEMON) {
+        const envVal = process.env.MULTIAI_TASK_DAEMON.trim().toLowerCase();
+        if (envVal === "golang") return "go";
+        return envVal;
+    }
+
+    try {
+        const sbConfig = loadSandboxConfig();
+        if (sbConfig && sbConfig.task_daemon) {
+            const val = String(sbConfig.task_daemon).trim().toLowerCase();
+            if (val === "golang") return "go";
+            if (val === "go" || val === "python") return val;
+        }
+    } catch (_) {}
+
+    try {
+        const { getConfig } = require("../core/config_manager");
+        const cfg = getConfig();
+        if (cfg && cfg.Agent && cfg.Agent.TaskDaemon) {
+            const cfgVal = String(cfg.Agent.TaskDaemon).trim().toLowerCase();
+            if (cfgVal === "golang") return "go";
+            return cfgVal;
+        }
+    } catch (_) {}
+
+    return "python";
+}
+
 function restartPythonTaskServer() {
     if (respawnTimer) {
         clearTimeout(respawnTimer);
@@ -86,7 +151,7 @@ function restartPythonTaskServer() {
     }
 
     if (pythonProcess && !pythonProcess.killed) {
-        console.log(`[PROCESS] Terminating running task_server (PID: ${pythonProcess.pid}) for sandbox reload...`);
+        console.log(`[PROCESS] Terminating running task daemon (PID: ${pythonProcess.pid}) for restart...`);
         pythonProcess.removeAllListeners("close");
         killProcessTree(pythonProcess, "SIGTERM");
         pythonProcess = null;
@@ -113,8 +178,8 @@ function startPythonTaskServer() {
     // Ensure port is not blocked before spawning
     freePort(taskPort);
 
-    const pythonCmd = process.platform === "win32" ? "python" : "python3";
     const repoRoot = path.join(__dirname, "../..");
+    const pythonCmd = process.platform === "win32" ? "python" : "python3";
     const taskScript = (process.platform === "win32" && fs.existsSync(path.join(repoRoot, "task_server_windows.py")))
         ? path.join(repoRoot, "task_server_windows.py")
         : path.join(repoRoot, "task_server.py");
@@ -127,6 +192,21 @@ function startPythonTaskServer() {
     const profile = (config.profiles && config.profiles[resolvedId]) || DIRECT_PROFILE;
     const ipcType = getTaskServerIpcType(config);
     const socketPath = getTaskServerSocketPath();
+
+    // Determine task daemon engine (go or python)
+    let engine = getTaskDaemonEngine();
+    const goBinaryName = process.platform === "win32" ? "task_daemon.exe" : "task_daemon";
+    const goBinaryPath = path.join(repoRoot, "bin", goBinaryName);
+
+    if (engine === "go") {
+        if (!fs.existsSync(goBinaryPath)) {
+            console.warn(`[TASK DAEMON WARNING] Go daemon binary not found at ${goBinaryPath}.`);
+            console.warn(`[TASK DAEMON WARNING] Run 'npm run build:daemon' to compile it. Falling back to Python task server.`);
+            engine = "python";
+        }
+    }
+
+    const daemonLabel = engine === "go" ? "Go task daemon" : "Python task server";
 
     // Fail immediately if sandboxing is enabled but container or binary is missing
     if (config.enabled && profile.mode !== "direct") {
@@ -152,7 +232,7 @@ function startPythonTaskServer() {
         }
     }
 
-    console.log(`[SANDBOX] Launching task server with profile '${resolvedId}' (${profile.name || "Default"}), IPC: ${ipcType}`);
+    console.log(`[SANDBOX] Launching ${daemonLabel} with profile '${resolvedId}' (${profile.name || "Default"}), IPC: ${ipcType}`);
 
     const pyEnv = {
         ...process.env,
@@ -163,28 +243,51 @@ function startPythonTaskServer() {
 
     try {
         if (profile.mode === "direct" || !config.enabled) {
-            const taskArgs = [taskScript];
-            if (ipcType === "socket" && process.platform !== "win32") {
-                taskArgs.push("--socket", socketPath);
-            } else {
-                taskArgs.push("--port", String(taskPort));
-            }
+            if (engine === "go") {
+                const daemonArgs = [];
+                if (ipcType === "socket" && process.platform !== "win32") {
+                    daemonArgs.push("--socket", socketPath);
+                } else {
+                    daemonArgs.push("--port", String(taskPort));
+                }
 
-            pythonProcess = spawn(pythonCmd, taskArgs, {
-                cwd: process.cwd(),
-                env: pyEnv,
-                detached: process.platform !== "win32",
-                stdio: ["pipe", "pipe", "pipe"]
-            });
+                pythonProcess = spawn(goBinaryPath, daemonArgs, {
+                    cwd: process.cwd(),
+                    env: pyEnv,
+                    detached: process.platform !== "win32",
+                    stdio: ["pipe", "pipe", "pipe"]
+                });
+            } else {
+                const taskArgs = [taskScript];
+                if (ipcType === "socket" && process.platform !== "win32") {
+                    taskArgs.push("--socket", socketPath);
+                } else {
+                    taskArgs.push("--port", String(taskPort));
+                }
+
+                pythonProcess = spawn(pythonCmd, taskArgs, {
+                    cwd: process.cwd(),
+                    env: pyEnv,
+                    detached: process.platform !== "win32",
+                    stdio: ["pipe", "pipe", "pipe"]
+                });
+            }
         } else {
             const shieldMounts = getSandboxShieldArgs();
-            const fullCmd = resolveCommandTemplate(profile.startup, {
+            let startupTemplate = profile.startup;
+            if (engine === "go") {
+                startupTemplate = startupTemplate
+                    .replace(/python3?\s+\{TASK_SERVER_SCRIPT\}/g, goBinaryPath)
+                    .replace(/python3?\s+\/workspace\/task_server\.py/g, "/workspace/bin/task_daemon");
+            }
+
+            const fullCmd = resolveCommandTemplate(startupTemplate, {
                 PROJECT_PATH: process.cwd(),
                 DATA_DIR: dataDir,
                 TASK_PORT: taskPort,
                 TASK_SOCKET: socketPath,
                 IPC_TYPE: ipcType,
-                TASK_SERVER_SCRIPT: taskScript,
+                TASK_SERVER_SCRIPT: engine === "go" ? goBinaryPath : taskScript,
                 SHIELD_MOUNTS: shieldMounts
             });
 
@@ -198,26 +301,27 @@ function startPythonTaskServer() {
             });
         }
     } catch (err) {
-        console.error(`[PROCESS ERROR] Failed to spawn task server: ${err.message}`);
+        console.error(`[PROCESS ERROR] Failed to spawn task daemon: ${err.message}`);
         isStarting = false;
         return;
     }
 
     isStarting = false;
-    console.log(`[PROCESS] Started task server with PID: ${pythonProcess.pid} (workspace: ${process.cwd()})`);
+    console.log(`[PROCESS] Started ${daemonLabel} with PID: ${pythonProcess.pid} (engine: ${engine}, workspace: ${process.cwd()})`);
 
+    const logPrefix = engine === "go" ? "GO DAEMON" : "PYTHON";
     pythonProcess.stdout.on("data", (data) => {
         const text = data.toString().trim();
-        if (text) console.log(`[PYTHON STDOUT] ${text}`);
+        if (text) console.log(`[${logPrefix} STDOUT] ${text}`);
     });
 
     pythonProcess.stderr.on("data", (data) => {
         const text = data.toString().trim();
-        if (text) console.error(`[PYTHON STDERR] ${text}`);
+        if (text) console.error(`[${logPrefix} STDERR] ${text}`);
     });
 
     pythonProcess.on("close", (code) => {
-        console.log(`[PROCESS] task server exited with code ${code}`);
+        console.log(`[PROCESS] ${daemonLabel} exited with code ${code}`);
         pythonProcess = null;
         if (!isShuttingDown) {
             if (respawnTimer) clearTimeout(respawnTimer);
@@ -230,7 +334,7 @@ function startPythonTaskServer() {
     });
 
     pythonProcess.on("error", (err) => {
-        console.error(`[PROCESS ERROR] Task server error: ${err.message}`);
+        console.error(`[PROCESS ERROR] Task daemon error: ${err.message}`);
     });
 }
 
@@ -241,7 +345,7 @@ function cleanupAndExit(exitCode = 0) {
         respawnTimer = null;
     }
     if (pythonProcess && !pythonProcess.killed) {
-        console.log(`[PROCESS] Terminating task server (PID: ${pythonProcess.pid})...`);
+        console.log(`[PROCESS] Terminating task daemon (PID: ${pythonProcess.pid})...`);
         pythonProcess.removeAllListeners("close");
         killProcessTree(pythonProcess, "SIGTERM");
         pythonProcess = null;
@@ -278,6 +382,9 @@ module.exports = {
     initSupervisor,
     startPythonTaskServer,
     restartPythonTaskServer,
+    startTaskServer: startPythonTaskServer,
+    restartTaskServer: restartPythonTaskServer,
+    getTaskDaemonEngine,
     getActiveSandboxProfileId: () => activeSandboxProfileId,
     cleanupAndExit
 };

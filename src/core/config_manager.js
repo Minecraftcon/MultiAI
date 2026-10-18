@@ -22,7 +22,8 @@ const DEFAULT_CONFIG = {
         MaxToolsPerRound: 10,
         AutoScroll: true,
         StreamReasoning: false,
-        TurnTimeoutSeconds: 120
+        TurnTimeoutSeconds: 120,
+        TaskDaemon: "python"
     },
     Tools: {
         EnableTerminal: true,

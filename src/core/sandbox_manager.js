@@ -9,6 +9,7 @@ const DEFAULT_SANDBOX_CONFIG = {
     enabled: false,
     active_profile: "bwrap", // "bwrap" | "proot" | "docker"
     ipc_type: process.platform === "win32" ? "tcp" : "socket", // "socket" (default Unix sox) | "tcp"
+    task_daemon: "python", // "python" | "go"
     profiles: {
         bwrap: {
             id: "bwrap",
@@ -135,10 +136,12 @@ function loadSandboxConfig() {
                 ipcType = process.platform === "win32" ? "tcp" : "socket";
             }
 
+            const taskDaemon = parsed.task_daemon || DEFAULT_SANDBOX_CONFIG.task_daemon;
             const cfg = {
                 enabled: isEnabled,
                 active_profile: active,
                 ipc_type: ipcType,
+                task_daemon: taskDaemon,
                 profiles
             };
             return cfg;
@@ -161,6 +164,7 @@ function loadSandboxConfig() {
             : DEFAULT_SANDBOX_CONFIG.enabled,
         active_profile: detectPlatformDefault(),
         ipc_type: defaultIpc,
+        task_daemon: DEFAULT_SANDBOX_CONFIG.task_daemon,
         profiles: { ...DEFAULT_SANDBOX_CONFIG.profiles }
     };
     saveSandboxConfig(defaultCfg);

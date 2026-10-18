@@ -541,6 +541,7 @@ def main():
     parser.add_argument("--ipc", choices=["socket", "tcp"], default=None, help="IPC transport type between Node.js and Python task server ('socket' for Unix domain socket, 'tcp' for TCP port 5000)")
     parser.add_argument("--socket", action="store_true", help="Force Unix domain socket IPC")
     parser.add_argument("--tcp", action="store_true", help="Force TCP IPC on port 5000")
+    parser.add_argument("--task-daemon", choices=["python", "go"], default=None, help="Task server daemon engine ('python' or 'go')")
     args = parser.parse_args()
 
     probe_host = "127.0.0.1" if args.host in ("0.0.0.0", "", "::") else args.host
@@ -605,6 +606,8 @@ def main():
     node_env["MULTIAI_SUPERVISED"] = "1"
     if ipc_mode:
         node_env["MULTIAI_IPC"] = ipc_mode
+    if args.task_daemon:
+        node_env["MULTIAI_TASK_DAEMON"] = args.task_daemon
     ini_path = os.environ.get("MULTIAI_CONFIG_PATH") or os.path.join(root_dir, "config.ini")
     if not os.path.exists(ini_path):
         ini_path = os.path.join(root_dir, "src", "core", "config.ini")

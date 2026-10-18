@@ -19,6 +19,8 @@ NEXT.md
 *.apk
 *.jar
 *.so
+bin/task_daemon*
+*.sock
 
 # Test Output Artifacts
 tests/*.png
