@@ -193,7 +193,14 @@ function startPythonTaskServer() {
 
     // Determine task daemon engine (go or python)
     let engine = getTaskDaemonEngine();
-    const goBinaryName = process.platform === "win32" ? "task_daemon.exe" : "task_daemon";
+    let goBinaryName = process.platform === "win32" ? "task_daemon.exe" : "task_daemon";
+    if (process.platform !== "win32" && process.arch === "arm64") {
+        if (fs.existsSync(path.join(repoRoot, "bin", "task_daemon_arm64"))) {
+            goBinaryName = "task_daemon_arm64";
+        } else if (fs.existsSync(path.join(repoRoot, "bin", "task_daemon_android_arm64"))) {
+            goBinaryName = "task_daemon_android_arm64";
+        }
+    }
     const goBinaryPath = path.join(repoRoot, "bin", goBinaryName);
 
     if (engine === "go") {

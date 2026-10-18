@@ -12,7 +12,6 @@ import (
 	"runtime"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 )
 
@@ -268,14 +267,14 @@ func (m *TaskManager) SendInput(taskID, inputString, inputType, combination stri
 
 	if combo == "ctrl+c" || combo == "ctrl-c" {
 		if item.Cmd != nil && item.Cmd.Process != nil {
-			_ = killProcessGroup(item.Cmd.Process.Pid, syscall.SIGINT)
+			_ = sendInterrupt(item.Cmd.Process.Pid)
 		}
 		return map[string]interface{}{"status": "signal_sent", "task_id": taskID, "signal": "SIGINT"}, nil
 	}
 
 	if combo == "ctrl+z" || combo == "ctrl-z" {
 		if item.Cmd != nil && item.Cmd.Process != nil {
-			_ = killProcessGroup(item.Cmd.Process.Pid, syscall.SIGTSTP)
+			_ = sendStop(item.Cmd.Process.Pid)
 		}
 		return map[string]interface{}{"status": "signal_sent", "task_id": taskID, "signal": "SIGTSTP"}, nil
 	}
@@ -319,13 +318,13 @@ func (m *TaskManager) KillTask(taskID string) (map[string]interface{}, error) {
 	}
 
 	if item.Cmd != nil && item.Cmd.Process != nil && item.running {
-		_ = killProcessGroup(item.Cmd.Process.Pid, syscall.SIGTERM)
+		_ = terminateProcess(item.Cmd.Process.Pid)
 		go func() {
 			time.Sleep(250 * time.Millisecond)
 			item.mu.Lock()
 			defer item.mu.Unlock()
 			if item.running && item.Cmd != nil && item.Cmd.Process != nil {
-				_ = killProcessGroup(item.Cmd.Process.Pid, syscall.SIGKILL)
+				_ = killProcess(item.Cmd.Process.Pid)
 			}
 		}()
 	}

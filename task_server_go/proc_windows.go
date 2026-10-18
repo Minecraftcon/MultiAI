@@ -12,7 +12,19 @@ func setProcessGroup(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: syscall.CREATE_NEW_PROCESS_GROUP}
 }
 
-func killProcessGroup(pid int, sig syscall.Signal) error {
+func sendInterrupt(pid int) error {
+	return killProcess(pid)
+}
+
+func sendStop(pid int) error {
+	return killProcess(pid)
+}
+
+func terminateProcess(pid int) error {
+	return killProcess(pid)
+}
+
+func killProcess(pid int) error {
 	killCmd := exec.Command("taskkill", "/PID", strconv.Itoa(pid), "/T", "/F")
 	return killCmd.Run()
 }
