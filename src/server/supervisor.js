@@ -180,9 +180,7 @@ function startPythonTaskServer() {
 
     const repoRoot = path.join(__dirname, "../..");
     const pythonCmd = process.platform === "win32" ? "python" : "python3";
-    const taskScript = (process.platform === "win32" && fs.existsSync(path.join(repoRoot, "task_server_windows.py")))
-        ? path.join(repoRoot, "task_server_windows.py")
-        : path.join(repoRoot, "task_server.py");
+    const taskScript = path.join(repoRoot, "task_server.py");
 
     const dataDir = getStorageDir();
 

@@ -269,7 +269,7 @@ export function getToolBadgeConfig(toolName, args = {}) {
         const inProg = todos.find(t => t.status === "in_progress");
         const inProgText = inProg ? ` • In progress: ${inProg.content}` : (todos.length > 0 && completed === todos.length ? " • All completed" : "");
         detail = `${completed}/${todos.length} completed${inProgText}`;
-        isCommandTask = false;
+        isCommandTask = true;
     } else if (toolName === "task") {
         icon = "bot";
         const subType = args.subagent_type || "general-purpose";

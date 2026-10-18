@@ -90,6 +90,7 @@ async function bootstrap() {
     renderIcons();
     initUiScale();
     initAuroraTheme();
+    initSettingsView();
     initComposer();
     initGestures();
     initSidePanel();
@@ -99,7 +100,6 @@ async function bootstrap() {
     initBottomSheet();
     initErrorRecovery();
     initModelPicker();
-    initSettingsView();
     initPlanDock();
 
     await initConfig();

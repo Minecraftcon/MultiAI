@@ -14,6 +14,9 @@ import { rebuildActiveSystemPrompt } from "../services/system.js";
 import { renderChatList } from "./side-panel.js";
 import { setStartPageMode } from "./chatbox.js";
 import { McpActiveTools } from "../tools/mcp/index.js";
+import { mountSettingsScreen } from "./settings-template.js";
+
+export { mountSettingsScreen } from "./settings-template.js";
 
 let activeSubScreen = "general";
 let saveTimeout = null;
@@ -21,7 +24,7 @@ let pendingConfigUpdates = {};
 
 export function openSettings(targetCategory = "general") {
     const appShell = document.getElementById("appShell");
-    const settingsScreen = document.getElementById("settingsScreen");
+    let settingsScreen = document.getElementById("settingsScreen") || mountSettingsScreen();
     if (!appShell || !settingsScreen) {
         console.error("[SETTINGS] appShell or settingsScreen element missing:", { appShell, settingsScreen });
         return;
@@ -402,9 +405,10 @@ export async function saveSetting(section, key, value) {
  * Binds all interactive controls on the Settings Screen
  */
 export function initSettingsView() {
-    const settingsScreen = document.getElementById("settingsScreen");
-    const settingsBackBtn = document.getElementById("settingsBackBtn");
+    let settingsScreen = document.getElementById("settingsScreen") || mountSettingsScreen();
     if (!settingsScreen) return;
+    renderIcons(settingsScreen);
+    const settingsBackBtn = document.getElementById("settingsBackBtn");
 
     // Back to Chat
     if (settingsBackBtn) {

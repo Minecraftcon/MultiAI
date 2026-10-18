@@ -1,0 +1,187 @@
+/* =========================================================
+   ERROR RECOVERY POPUP (SLIDE IN FROM RIGHT OVER CHATBOX)
+   ========================================================= */
+.error-recovery-popup {
+    position: fixed;
+    bottom: 86px;
+    right: 24px;
+    z-index: 9999;
+    width: min(380px, calc(100vw - 32px));
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.8), 0 4px 16px var(--scrim);
+    padding: 16px 18px;
+    display: flex;
+    flex-direction: column;
+    transform: translate3d(140%, 0, 0);
+    opacity: 0;
+    pointer-events: none;
+    transition: transform 0.32s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.22s ease;
+    user-select: none;
+}
+
+.error-recovery-popup.active {
+    transform: translate3d(0, 0, 0);
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.recovery-popup-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.recovery-popup-title-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.recovery-alert-icon {
+    width: 17px;
+    height: 17px;
+    color: var(--text-secondary);
+    flex-shrink: 0;
+}
+
+.recovery-popup-title {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--text-primary);
+    letter-spacing: -0.01em;
+}
+
+.recovery-close-btn {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: transparent;
+    border: none;
+    color: #777;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    transition: background 0.15s, color 0.15s;
+}
+
+.recovery-close-btn:hover {
+    background: var(--surface-3);
+    color: var(--text-primary);
+}
+
+.recovery-close-btn svg {
+    width: 15px;
+    height: 15px;
+}
+
+.recovery-popup-body {
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.45;
+    margin: 8px 0 16px;
+}
+
+.recovery-popup-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.recovery-btn {
+    font-family: inherit;
+    border-radius: 10px;
+    padding: 7px 16px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.15s ease, transform 0.12s ease, color 0.15s ease;
+}
+
+.recovery-btn-cancel {
+    background: var(--surface-3);
+    color: #bbb;
+    border: 1px solid var(--border);
+    font-weight: 500;
+}
+
+.recovery-btn-cancel:hover {
+    background: var(--surface-3);
+    color: #fff;
+}
+
+.recovery-btn-continue {
+    background: var(--accent);
+    color: #ffffff;
+    border: none;
+    font-weight: 600;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+.recovery-btn-continue:hover {
+    background: #ececec;
+    transform: translateY(-1px);
+}
+
+.recovery-btn-continue:active {
+    transform: scale(0.97);
+}
+
+@media (max-width: 600px) {
+    .error-recovery-popup {
+        bottom: 78px;
+        right: 12px;
+        left: 12px;
+        width: auto;
+        max-width: calc(100vw - 24px);
+    }
+}
+
+/* Intercepted in-chat error card (minimal monochrome) */
+.ai-error-notice {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 12px 14px;
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    margin-top: 6px;
+}
+
+.ai-error-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text-primary);
+    letter-spacing: -0.01em;
+}
+
+.ai-error-badge svg {
+    width: 15px;
+    height: 15px;
+    color: var(--text-secondary);
+}
+
+.ai-error-text {
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .error-recovery-popup {
+        transition: opacity 0.15s ease !important;
+        transform: none !important;
+    }
+    .error-recovery-popup:not(.active) {
+        display: none !important;
+    }
+}
+

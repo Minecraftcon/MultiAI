@@ -5,10 +5,11 @@ const path = require("path");
 async function runTests() {
     console.log("=== Testing MCP Settings UI Integration & Color Hierarchy ===");
 
-    // 1. Verify index.html contains MCP controls and card in subScreen_tools
-    console.log("Test: index.html markup for MCP controls");
+    // 1. Verify index.html / settings-template.js contains MCP controls and card in subScreen_tools
+    console.log("Test: markup for MCP controls");
     const htmlPath = path.join(__dirname, "../client/index.html");
-    const html = fs.readFileSync(htmlPath, "utf8");
+    const templatePath = path.join(__dirname, "../client/src/components/settings-template.js");
+    const html = fs.readFileSync(htmlPath, "utf8") + (fs.existsSync(templatePath) ? fs.readFileSync(templatePath, "utf8") : "");
 
     assert(html.includes('id="cfgEnableMcp"'), "index.html must contain cfgEnableMcp checkbox");
     assert(html.includes('id="cfgMcpCard"'), "index.html must contain cfgMcpCard");
