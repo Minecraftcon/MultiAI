@@ -7,7 +7,7 @@
 import { state } from "../state.js";
 import { renderIcons } from "../utils/icons.js";
 import { logEvent } from "../utils/logger.js";
-import { createAIMessageShell } from "./chat-ui.js";
+import { createAIMessageShell, requestScrollToBottom } from "./chat-ui.js";
 import { updateSendButtonState } from "./composer.js";
 import { runAgent } from "../services/agent.js";
 import { saveStoredChats } from "../services/storage.js";
@@ -361,7 +361,7 @@ export async function continueFromFailedPoint() {
 
         if (state.currentChatId === targetChatId) {
             updateSendButtonState(false);
-            chat.scrollTop = chat.scrollHeight;
+            requestScrollToBottom(chat);
         }
 
         saveStoredChats();

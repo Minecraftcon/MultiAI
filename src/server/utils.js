@@ -36,7 +36,9 @@ function getEnvKey(keyName) {
 
 function loadModelsConfig() {
     try {
-        const yamlPath = path.join(__dirname, "../..", "models.yaml");
+        const userYamlPath = path.join(os.homedir(), ".MultiAI", "models.yaml");
+        const repoYamlPath = path.join(__dirname, "../..", "models.yaml");
+        const yamlPath = fs.existsSync(userYamlPath) ? userYamlPath : repoYamlPath;
         if (fs.existsSync(yamlPath)) {
             const fileContent = fs.readFileSync(yamlPath, "utf8");
             return YAML.parse(fileContent) || { providers: {} };

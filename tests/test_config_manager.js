@@ -101,4 +101,24 @@ console.log("Test: getDefaultConfigPath resolution");
     }
 }
 
+// 5. Test TaskServer and TaskDaemon alias synchronization
+console.log("Test: TaskServer and TaskDaemon aliases in [Agent]");
+{
+    const { mergeWithDefaults } = require("../src/core/config_manager");
+    
+    // Default check
+    assert.strictEqual(DEFAULT_CONFIG.Agent.TaskServer, "python");
+    assert.strictEqual(DEFAULT_CONFIG.Agent.TaskDaemon, "python");
+
+    // Setting TaskServer = "go" should sync TaskDaemon
+    const synced1 = mergeWithDefaults({ Agent: { TaskServer: "go" } });
+    assert.strictEqual(synced1.Agent.TaskServer, "go");
+    assert.strictEqual(synced1.Agent.TaskDaemon, "go");
+
+    // Setting TaskDaemon = "go" should sync TaskServer
+    const synced2 = mergeWithDefaults({ Agent: { TaskDaemon: "go" } });
+    assert.strictEqual(synced2.Agent.TaskServer, "go");
+    assert.strictEqual(synced2.Agent.TaskDaemon, "go");
+}
+
 console.log("✓ ALL CONFIG MANAGER SAFETY NET TESTS PASSED CLEANLY!");

@@ -1234,6 +1234,30 @@
     pointer-events: auto;
 }
 
+.chat-scroll-btn.has-unread::after {
+    content: '';
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent, #6366f1);
+    box-shadow: 0 0 8px var(--accent, #6366f1);
+    animation: unreadPulse 2s infinite ease-in-out;
+}
+
+@keyframes unreadPulse {
+    0%, 100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+    50% {
+        transform: scale(1.35);
+        opacity: 0.65;
+    }
+}
+
 .chat-scroll-btn:hover {
     background: var(--surface-2);
     border-color: var(--border-strong);

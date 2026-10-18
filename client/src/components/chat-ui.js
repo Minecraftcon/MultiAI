@@ -19,7 +19,13 @@ import {
     wrapHugeThoughts,
     finalizeFileEditBadges
 } from "./chat-tool-badges.js";
-import { requestScrollToBottom, initScrollToBottom } from "./chat-scroll.js";
+import { 
+    requestScrollToBottom, 
+    initScrollToBottom,
+    forceReengageAutoScroll,
+    detachUserScroll,
+    reengageUserScroll
+} from "./chat-scroll.js";
 import { openImageLightbox } from "./composer-attachments.js";
 import { renderPlanApprovalActions, handlePlanApprovalClick } from "./plan-hitl.js";
 
@@ -32,7 +38,10 @@ export {
     wrapHugeThoughts,
     finalizeFileEditBadges,
     requestScrollToBottom,
-    initScrollToBottom
+    initScrollToBottom,
+    forceReengageAutoScroll,
+    detachUserScroll,
+    reengageUserScroll
 };
 
 export function createAIMessageShell() {
@@ -60,7 +69,7 @@ export function createAIMessageShell() {
     `;
 
     chat.appendChild(div);
-    chat.scrollTop = chat.scrollHeight;
+    requestScrollToBottom(chat);
     return div;
 }
 
@@ -791,7 +800,7 @@ export function finalizeStopped(element, startTime, hasTools) {
         }
     }
     element.dataset.rawText = (targetContent?.innerText || targetContent?.textContent || "").trim();
-    chat.scrollTop = chat.scrollHeight;
+    requestScrollToBottom(chat);
 }
 
 export function initChatDelegation() {

@@ -9,7 +9,7 @@ import { copyTextToClipboard, getMessageTextToCopy } from "../utils/clipboard.js
 import { send, updateSendButtonState } from "./composer.js";
 import { generateChatId, saveStoredChats, saveCurrentChatState } from "../services/storage.js";
 import { switchToChat, deleteChatSession, renderChatList } from "./side-panel.js";
-import { createAIMessageShell } from "./chat-ui.js";
+import { createAIMessageShell, requestScrollToBottom } from "./chat-ui.js";
 import { runAgent } from "../services/agent.js";
 import { logEvent } from "../utils/logger.js";
 import { showErrorRecoveryPopup } from "./error-recovery.js";
@@ -486,7 +486,7 @@ export async function regenerateFromMessage(target) {
 
         if (state.currentChatId === targetChatId) {
             updateSendButtonState(false);
-            chat.scrollTop = chat.scrollHeight;
+            requestScrollToBottom(chat);
         }
 
         saveStoredChats();
@@ -758,7 +758,7 @@ export async function submitEditUserMessage(userEl) {
 
         if (state.currentChatId === targetChatId) {
             updateSendButtonState(false);
-            chat.scrollTop = chat.scrollHeight;
+            requestScrollToBottom(chat);
         }
 
         saveStoredChats();

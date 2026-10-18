@@ -24,7 +24,8 @@ const DEFAULT_CONFIG = {
         AutoScroll: true,
         StreamReasoning: false,
         TurnTimeoutSeconds: 120,
-        TaskDaemon: "python"
+        TaskDaemon: "python",
+        TaskServer: "python"
     },
     Tools: {
         EnableTerminal: true,
@@ -165,6 +166,15 @@ function mergeWithDefaults(parsed) {
             }
         }
     }
+    // Synchronize TaskServer and TaskDaemon aliases in Agent section
+    if (merged.Agent) {
+        const engineVal = (parsed && parsed.Agent && (parsed.Agent.TaskServer || parsed.Agent.TaskDaemon)) ||
+                          merged.Agent.TaskServer || merged.Agent.TaskDaemon;
+        if (engineVal) {
+            merged.Agent.TaskServer = engineVal;
+            merged.Agent.TaskDaemon = engineVal;
+        }
+    }
     return merged;
 }
 
@@ -287,5 +297,6 @@ module.exports = {
     getDefaultConfigPath,
     parseINI,
     serializeINI,
+    mergeWithDefaults,
     DEFAULT_CONFIG
 };

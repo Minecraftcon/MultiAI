@@ -134,10 +134,14 @@ function getTaskDaemonEngine() {
     try {
         const { getConfig } = require("../core/config_manager");
         const cfg = getConfig();
-        if (cfg && cfg.Agent && cfg.Agent.TaskDaemon) {
-            const cfgVal = String(cfg.Agent.TaskDaemon).trim().toLowerCase();
-            if (cfgVal === "golang") return "go";
-            return cfgVal;
+        if (cfg) {
+            const raw = (cfg.Agent && (cfg.Agent.TaskServer || cfg.Agent.TaskDaemon)) ||
+                        (cfg.General && (cfg.General.TaskServer || cfg.General.TaskDaemon));
+            if (raw) {
+                const cfgVal = String(raw).trim().toLowerCase();
+                if (cfgVal === "golang") return "go";
+                return cfgVal;
+            }
         }
     } catch (_) {}
 
@@ -194,11 +198,19 @@ function startPythonTaskServer() {
     // Determine task daemon engine (go or python)
     let engine = getTaskDaemonEngine();
     let goBinaryName = process.platform === "win32" ? "task_daemon.exe" : "task_daemon";
-    if (process.platform !== "win32" && process.arch === "arm64") {
-        if (fs.existsSync(path.join(repoRoot, "bin", "task_daemon_arm64"))) {
-            goBinaryName = "task_daemon_arm64";
-        } else if (fs.existsSync(path.join(repoRoot, "bin", "task_daemon_android_arm64"))) {
-            goBinaryName = "task_daemon_android_arm64";
+    if (process.platform === "darwin") {
+        if (process.arch === "arm64" && fs.existsSync(path.join(repoRoot, "bin", "task_daemon_darwin_arm64"))) {
+            goBinaryName = "task_daemon_darwin_arm64";
+        }
+    } else if (process.platform !== "win32") {
+        if (process.arch === "arm64") {
+            if (fs.existsSync(path.join(repoRoot, "bin", "task_daemon_android_arm64")) && !fs.existsSync(path.join(repoRoot, "bin", "task_daemon_arm64"))) {
+                goBinaryName = "task_daemon_android_arm64";
+            } else {
+                goBinaryName = "task_daemon_arm64";
+            }
+        } else if (process.arch === "arm") {
+            goBinaryName = "task_daemon_armv7l";
         }
     }
     const goBinaryPath = path.join(repoRoot, "bin", goBinaryName);
@@ -283,7 +295,7 @@ function startPythonTaskServer() {
             if (engine === "go") {
                 startupTemplate = startupTemplate
                     .replace(/python3?\s+\{TASK_SERVER_SCRIPT\}/g, goBinaryPath)
-                    .replace(/python3?\s+\/workspace\/task_server\.py/g, "/workspace/bin/task_daemon");
+                    .replace(/python3?\s+\/workspace\/task_server\.py/g, `/workspace/bin/${goBinaryName}`);
             }
 
             const fullCmd = resolveCommandTemplate(startupTemplate, {

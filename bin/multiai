@@ -4,6 +4,7 @@
 # ==============================================================================
 # Launches MultiAI backend with the current working directory as the workspace.
 # Designed to be symlinked into ~/.local/bin/multiai or /usr/local/bin/multiai.
+# Supports editing config ('multiai conf') and models ('multiai models') via $EDITOR.
 # ==============================================================================
 
 set -e
@@ -24,6 +25,85 @@ if [ ! -f "$MULTIAI_DIR/start.py" ]; then
   echo "Error: MultiAI installation not found at $MULTIAI_DIR" >&2
   exit 1
 fi
+
+resolve_editor() {
+  local ed="${EDITOR:-${VISUAL:-}}"
+  if [ -n "$ed" ]; then
+    echo "$ed"
+    return
+  fi
+  for cand in nano vim vi; do
+    if command -v "$cand" >/dev/null 2>&1; then
+      echo "$cand"
+      return
+    fi
+  done
+  echo "nano"
+}
+
+resolve_config_path() {
+  if [ -n "$MULTIAI_CONFIG_PATH" ]; then
+    echo "$MULTIAI_CONFIG_PATH"
+    return
+  fi
+  local user_cfg="$HOME/.MultiAI/config.ini"
+  if [ -f "$user_cfg" ]; then
+    echo "$user_cfg"
+    return
+  fi
+  mkdir -p "$HOME/.MultiAI" 2>/dev/null || true
+  local root_cfg="$MULTIAI_DIR/config.ini"
+  if [ -f "$root_cfg" ]; then
+    cp "$root_cfg" "$user_cfg" 2>/dev/null || true
+    if [ -f "$user_cfg" ]; then
+      echo "$user_cfg"
+      return
+    fi
+    echo "$root_cfg"
+    return
+  fi
+  local example_cfg="$MULTIAI_DIR/config.example.ini"
+  if [ -f "$example_cfg" ]; then
+    cp "$example_cfg" "$user_cfg" 2>/dev/null || true
+    if [ -f "$user_cfg" ]; then
+      echo "$user_cfg"
+      return
+    fi
+  fi
+  echo "$user_cfg"
+}
+
+resolve_models_path() {
+  local user_models="$HOME/.MultiAI/models.yaml"
+  if [ -f "$user_models" ]; then
+    echo "$user_models"
+    return
+  fi
+  local root_models="$MULTIAI_DIR/models.yaml"
+  if [ -f "$root_models" ]; then
+    echo "$root_models"
+    return
+  fi
+  echo "$user_models"
+}
+
+# Subcommands: configuration and models file editing via $EDITOR
+case "$1" in
+  conf|config)
+    shift
+    EDITOR_BIN="$(resolve_editor)"
+    TARGET_FILE="$(resolve_config_path)"
+    echo -e "\033[96m[MultiAI]\033[0m Opening configuration in $EDITOR_BIN: $TARGET_FILE"
+    exec $EDITOR_BIN "$TARGET_FILE" "$@"
+    ;;
+  models|model)
+    shift
+    EDITOR_BIN="$(resolve_editor)"
+    TARGET_FILE="$(resolve_models_path)"
+    echo -e "\033[96m[MultiAI]\033[0m Opening models configuration in $EDITOR_BIN: $TARGET_FILE"
+    exec $EDITOR_BIN "$TARGET_FILE" "$@"
+    ;;
+esac
 
 # Detect Python 3 executable
 PYTHON_BIN="python3"

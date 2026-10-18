@@ -24,6 +24,9 @@ import webbrowser
 import atexit
 import argparse
 import shutil
+import platform
+import urllib.request
+import urllib.error
 
 # Enable unbuffered / line-buffered stdout so logs stream immediately
 if hasattr(sys.stdout, "reconfigure"):
@@ -108,6 +111,138 @@ def find_executable(name):
                 return found
     return None
 
+def get_platform_daemon_info():
+    """
+    Returns (binary_name, goos, goarch, goarm) for the current host architecture.
+    """
+    machine = platform.machine().lower()
+    if sys.platform == "win32":
+        goos = "windows"
+        goarch = "arm64" if ("arm" in machine or "aarch64" in machine) else "amd64"
+        return "task_daemon.exe", goos, goarch, None
+    elif sys.platform == "darwin":
+        goos = "darwin"
+        goarch = "arm64" if ("arm" in machine or "aarch64" in machine) else "amd64"
+        return f"task_daemon_darwin_{goarch}", goos, goarch, None
+    else:  # Linux / Unix / Android
+        goos = "linux"
+        if machine in ("aarch64", "arm64", "armv8l", "armv8b", "armv8"):
+            return "task_daemon_arm64", goos, "arm64", None
+        elif machine.startswith("arm") or machine in ("armv7l", "armv7", "armhf", "armel"):
+            return "task_daemon_armv7l", goos, "arm", "7"
+        elif machine in ("x86_64", "amd64"):
+            return "task_daemon", goos, "amd64", None
+        elif machine in ("i386", "i686", "x86"):
+            return "task_daemon_386", goos, "386", None
+        else:
+            return "task_daemon", goos, "amd64", None
+
+def download_task_daemon(bin_name, target_path):
+    """
+    Attempt to download task daemon binary from GitHub Releases or configured mirror.
+    """
+    base_url = os.environ.get(
+        "MULTIAI_RELEASE_BASE_URL",
+        "https://github.com/Minecraftcon/MultiAI/releases/latest/download"
+    ).rstrip("/")
+    download_url = f"{base_url}/{bin_name}"
+
+    log_info(f"Downloading task daemon binary '{bin_name}' from {download_url}...")
+    tmp_path = target_path + ".tmp"
+    req = urllib.request.Request(
+        download_url,
+        headers={"User-Agent": "MultiAI-Starter/1.0"}
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=25) as resp, open(tmp_path, "wb") as f:
+            shutil.copyfileobj(resp, f)
+
+        if os.path.exists(tmp_path) and os.path.getsize(tmp_path) > 1024:
+            if sys.platform != "win32":
+                os.chmod(tmp_path, 0o755)
+            os.replace(tmp_path, target_path)
+            log_success(f"Task daemon binary downloaded successfully: {bin_name}")
+            return True
+        else:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+            return False
+    except urllib.error.HTTPError as e:
+        log_warn(f"Download failed (HTTP {e.code} {e.reason}).")
+    except Exception as e:
+        log_warn(f"Download failed: {e}")
+    finally:
+        if os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except Exception:
+                pass
+    return False
+
+def ensure_task_daemon_binary(root_dir):
+    """
+    Verify the Go task daemon binary exists for the current platform/architecture.
+    If missing, attempt auto-download from releases, or auto-compile if Go is installed.
+    """
+    bin_name, goos, goarch, goarm = get_platform_daemon_info()
+    bin_dir = os.path.join(root_dir, "bin")
+    os.makedirs(bin_dir, exist_ok=True)
+    target_path = os.path.join(bin_dir, bin_name)
+
+    # 1. Check if already present and non-empty
+    if os.path.exists(target_path) and os.path.getsize(target_path) > 0:
+        if sys.platform != "win32":
+            try:
+                st = os.stat(target_path)
+                if not (st.st_mode & 0o111):
+                    os.chmod(target_path, st.st_mode | 0o755)
+            except Exception:
+                pass
+        log_success(f"Task server daemon binary verified ({bin_name}).")
+        return True
+
+    # 2. Check Android/Termux fallback if on ARM64
+    if bin_name == "task_daemon_arm64":
+        alt_path = os.path.join(bin_dir, "task_daemon_android_arm64")
+        if os.path.exists(alt_path) and os.path.getsize(alt_path) > 0:
+            log_success("Task server daemon binary verified (task_daemon_android_arm64).")
+            return True
+
+    log_warn(f"Task daemon binary '{bin_name}' not found in bin/.")
+
+    # 3. Attempt auto-download from releases
+    if download_task_daemon(bin_name, target_path):
+        return True
+
+    # 4. If download fails or is unavailable, check if Go compiler is available locally
+    go_bin = find_executable("go")
+    task_go_dir = os.path.join(root_dir, "task_server_go")
+    if go_bin and os.path.isdir(task_go_dir):
+        log_info(f"Found local Go compiler ({go_bin}). Compiling '{bin_name}' locally...")
+        build_env = os.environ.copy()
+        build_env["CGO_ENABLED"] = "0"
+        build_env["GOOS"] = goos
+        build_env["GOARCH"] = goarch
+        if goarm:
+            build_env["GOARM"] = goarm
+        cmd = [go_bin, "build", "-ldflags=-s -w", "-o", target_path, "."]
+        try:
+            res = subprocess.run(cmd, cwd=task_go_dir, env=build_env, capture_output=True, text=True)
+            if res.returncode == 0 and os.path.exists(target_path) and os.path.getsize(target_path) > 0:
+                if sys.platform != "win32":
+                    os.chmod(target_path, 0o755)
+                log_success(f"Task daemon binary compiled locally: {bin_name}")
+                return True
+            else:
+                err_msg = res.stderr.strip() if res.stderr else "Compilation failed"
+                log_warn(f"Local Go build failed: {err_msg}")
+        except Exception as e:
+            log_warn(f"Failed to run Go compiler: {e}")
+
+    log_warn(f"Task daemon binary '{bin_name}' is currently unavailable.")
+    log_info("MultiAI will seamlessly use the Python Flask task server fallback.")
+    return False
+
 def check_setup():
     """Verify prerequisites and auto-install missing packages."""
     print(f"\n{BOLD}{CYAN}=== MultiSearch AI Setup & Pre-Flight Check ==={RESET}\n", flush=True)
@@ -181,11 +316,16 @@ def check_setup():
             log_success("Flask installed successfully.")
 
     # 6. Check models.yaml
-    models_file = os.path.join(root_dir, "models.yaml")
+    user_models = os.path.expanduser("~/.MultiAI/models.yaml")
+    root_models = os.path.join(root_dir, "models.yaml")
+    models_file = user_models if os.path.exists(user_models) else root_models
     if not os.path.exists(models_file):
-        log_warn("models.yaml not found in project root. Some models may need configuration.")
+        log_warn("models.yaml not found. Some models may need configuration.")
     else:
-        log_success("models.yaml found.")
+        log_success(f"models.yaml found ({models_file}).")
+
+    # 7. Check Task Server Daemon Binary
+    ensure_task_daemon_binary(root_dir)
 
     print(f"\n{GREEN}All dependencies and setup checks passed!{RESET}\n", flush=True)
 
@@ -389,6 +529,8 @@ def run_console(supervisor, root_dir, workspace_dir, port, host="0.0.0.0"):
         print(f"  {BOLD}restart{RESET} | {BOLD}reload{RESET}       Restart web server and task server")
         print(f"  {BOLD}pull{RESET} [args]            Run 'git pull' and auto-restart if updated")
         print(f"  {BOLD}status{RESET} | {BOLD}info{RESET}         Show server status, active ports, PID, uptime")
+        print(f"  {BOLD}conf{RESET} | {BOLD}config{RESET}         Open config.ini in editor ($EDITOR or nano)")
+        print(f"  {BOLD}models{RESET} | {BOLD}model{RESET}       Open models.yaml in editor ($EDITOR or nano)")
         print(f"  {BOLD}clear{RESET} | {BOLD}cls{RESET}           Clear console screen")
         print(f"  {BOLD}help{RESET} | {BOLD}?{RESET}              Show this help message\n", flush=True)
 
@@ -498,6 +640,14 @@ def run_console(supervisor, root_dir, workspace_dir, port, host="0.0.0.0"):
             os.system("cls" if sys.platform == "win32" else "clear")
             print(f"\n{BOLD}{CYAN}MultiAI Console Active{RESET} (type 'help' for commands)\n", flush=True)
 
+        elif command in ("conf", "config"):
+            ini_path = resolve_config_ini_path()
+            open_file_in_editor(ini_path, "MultiAI configuration", exit_on_done=False)
+
+        elif command in ("models", "model"):
+            models_path = resolve_models_path()
+            open_file_in_editor(models_path, "MultiAI models configuration", exit_on_done=False)
+
         elif command in ("help", "?", "h"):
             print_help()
 
@@ -505,6 +655,41 @@ def run_console(supervisor, root_dir, workspace_dir, port, host="0.0.0.0"):
             print(f"{YELLOW}Unknown command: '{command}'. Type 'help' for available commands.{RESET}", flush=True)
 
 import configparser
+import shlex
+
+def resolve_editor():
+    editor = os.environ.get("EDITOR") or os.environ.get("VISUAL")
+    if editor:
+        cmd = shlex.split(editor)[0]
+        if shutil.which(cmd):
+            return editor
+    for candidate in ["nano", "vim", "vi", "code", "notepad"]:
+        if shutil.which(candidate):
+            return candidate
+    return editor or ("notepad" if sys.platform == "win32" else "nano")
+
+def resolve_models_path():
+    user_models = os.path.expanduser("~/.MultiAI/models.yaml")
+    if os.path.exists(user_models):
+        return user_models
+    root_dir = os.path.dirname(os.path.abspath(__file__))
+    root_models = os.path.join(root_dir, "models.yaml")
+    if os.path.exists(root_models):
+        return root_models
+    return user_models
+
+def open_file_in_editor(file_path, label="configuration", exit_on_done=True):
+    editor = resolve_editor()
+    print(f"{CYAN}[MultiAI]{RESET} Opening {label} in {editor}: {file_path}", flush=True)
+    cmd_parts = shlex.split(editor) + [file_path]
+    try:
+        res = subprocess.call(cmd_parts)
+        if exit_on_done:
+            sys.exit(res)
+    except FileNotFoundError:
+        log_error(f"Editor '{editor}' not found. Please install nano or set the EDITOR environment variable (e.g. export EDITOR=vim).")
+        if exit_on_done:
+            sys.exit(1)
 
 def resolve_config_ini_path():
     if os.environ.get("MULTIAI_CONFIG_PATH"):
@@ -526,6 +711,7 @@ def resolve_config_ini_path():
 def get_config_general(default_port=8080, default_host="0.0.0.0"):
     port = default_port
     host = default_host
+    task_daemon = None
     try:
         cfg = configparser.ConfigParser()
         ini_path = resolve_config_ini_path()
@@ -540,12 +726,23 @@ def get_config_general(default_port=8080, default_host="0.0.0.0"):
                     h = str(cfg["General"]["Host"]).strip().strip("\"'")
                     if h:
                         host = h
+                if "TaskServer" in cfg["General"]:
+                    task_daemon = str(cfg["General"]["TaskServer"]).strip().lower()
+                elif "TaskDaemon" in cfg["General"]:
+                    task_daemon = str(cfg["General"]["TaskDaemon"]).strip().lower()
+            if "Agent" in cfg:
+                if "TaskServer" in cfg["Agent"]:
+                    task_daemon = str(cfg["Agent"]["TaskServer"]).strip().lower()
+                elif "TaskDaemon" in cfg["Agent"]:
+                    task_daemon = str(cfg["Agent"]["TaskDaemon"]).strip().lower()
     except Exception:
         pass
-    return port, host
+    if task_daemon == "golang":
+        task_daemon = "go"
+    return port, host, task_daemon
 
 def main():
-    configured_port, configured_host = get_config_general(8080, "0.0.0.0")
+    configured_port, configured_host, configured_task_daemon = get_config_general(8080, "0.0.0.0")
     parser = argparse.ArgumentParser(description="MultiAI Universal Starter & Supervisor")
     parser.add_argument("--check-only", action="store_true", help="Run setup check and exit without starting servers")
     parser.add_argument("--no-browser", action="store_true", help="Do not open browser automatically")
@@ -555,8 +752,16 @@ def main():
     parser.add_argument("--ipc", choices=["socket", "tcp"], default=None, help="IPC transport type between Node.js and Python task server ('socket' for Unix domain socket, 'tcp' for TCP port 5000)")
     parser.add_argument("--socket", action="store_true", help="Force Unix domain socket IPC")
     parser.add_argument("--tcp", action="store_true", help="Force TCP IPC on port 5000")
-    parser.add_argument("--task-daemon", choices=["python", "go"], default=None, help="Task server daemon engine ('python' or 'go')")
+    parser.add_argument("--task-daemon", "--task-server", dest="task_daemon", choices=["python", "go"], default=configured_task_daemon, help="Task server daemon engine ('python' or 'go')")
+    parser.add_argument("command", nargs="?", choices=["conf", "config", "models", "model"], help="Subcommand: 'conf' to edit config.ini, 'models' to edit models.yaml ($EDITOR or default nano)")
     args = parser.parse_args()
+
+    if args.command in ("conf", "config"):
+        ini_path = resolve_config_ini_path()
+        open_file_in_editor(ini_path, "MultiAI configuration")
+    elif args.command in ("models", "model"):
+        models_path = resolve_models_path()
+        open_file_in_editor(models_path, "MultiAI models configuration")
 
     probe_host = "127.0.0.1" if args.host in ("0.0.0.0", "", "::") else args.host
     display_host = "localhost" if args.host in ("0.0.0.0", "127.0.0.1", "") else args.host

@@ -6,6 +6,7 @@
    ========================================================= */
 
 import { renderIcons } from "../utils/icons.js";
+import { requestScrollToBottom } from "./chat-ui.js";
 
 /**
  * Render the HTML shell for the DeepSearch Live Stats Box.
@@ -149,7 +150,7 @@ export function wireDeepSearchBar(container, jobId) {
                 reportDiv.style.display = "block";
                 if (label) label.textContent = "Hide Final Report";
                 const chat = document.getElementById("chat");
-                if (chat) chat.scrollTop = chat.scrollHeight;
+                if (chat) requestScrollToBottom(chat);
             } catch (err) {
                 if (label) label.textContent = "Failed to load report";
             }

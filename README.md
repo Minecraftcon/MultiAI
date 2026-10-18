@@ -97,12 +97,12 @@ MultiAI provides two switchable task engines to execute terminal commands, run i
 ### How to Switch Engines
 
 The active engine is dynamically resolved at launch:
-1. **CLI Flag**: `multiai --task-daemon=go` or `multiai --task-daemon=python`
+1. **CLI Flag**: `multiai --task-server=go` or `multiai --task-daemon=go` (or `python`)
 2. **Environment Variable**: `MULTIAI_TASK_DAEMON=go` or `MULTIAI_TASK_DAEMON=python`
 3. **Configuration File**: In `~/.MultiAI/config.ini`:
    ```ini
    [Agent]
-   TaskDaemon = go   # Options: go | python
+   TaskServer = go   # Options: go | python (alias: TaskDaemon = go)
    ```
 4. **Auto-Fallback**: If `go` is requested but the compiled binary (`bin/task_daemon` or `bin/task_daemon.exe`) is missing, MultiAI logs a warning and automatically falls back to Python without crashing.
 
@@ -296,7 +296,23 @@ python3 start.py
 node src/index.js
 ```
 
-### 2. Available CLI Flags
+### 2. Configuration & Model Management
+
+Quickly inspect and edit your MultiAI settings and model catalog in your preferred terminal editor (`$EDITOR` or `$VISUAL`, defaulting to `nano`):
+
+```bash
+# Open canonical configuration file (~/.MultiAI/config.ini)
+multiai conf
+# or with a custom editor:
+EDITOR=vim multiai conf
+
+# Open models & providers configuration (models.yaml)
+multiai models
+# or with a custom editor:
+EDITOR=nano multiai models
+```
+
+### 3. Available CLI Flags
 
 | Flag | Description |
 | :--- | :--- |
@@ -324,18 +340,29 @@ While MultiAI is running, you can enter management commands directly into the te
 
 ## Compiling the Go Task Daemon
 
-The Go task daemon lives in [`task_server_go/`](task_server_go/) and can be compiled across platforms with zero external C dependencies (`CGO_ENABLED=0`):
+The Go task daemon lives in [`task_server_go/`](task_server_go/) and can be compiled statically across platforms with zero external C dependencies (`CGO_ENABLED=0`):
 
 ```bash
-# Compile for host platform (Linux / macOS) -> bin/task_daemon
+# Compile for host platform (Linux x86_64) -> bin/task_daemon
 npm run build:daemon
 
-# Compile for Android ARM64 (PIE binary for Termux/Native Android)
-npm run build:daemon:android
+# Compile static binary for Linux ARM64 (aarch64 / proot) -> bin/task_daemon_arm64
+npm run build:daemon:arm64
+
+# Compile static binary for Linux ARMv7l (32-bit ARM / proot) -> bin/task_daemon_armv7l
+npm run build:daemon:armv7l
 
 # Compile for Windows x64 -> bin/task_daemon.exe
 npm run build:daemon:windows
+
+# Compile for macOS ARM64 -> bin/task_daemon_darwin_arm64
+npm run build:daemon:darwin
+
+# Compile all platform binaries at once
+npm run build:daemon:all
 ```
+
+> **Automatic Pre-Flight Download**: MultiAI's startup script (`start.py`) automatically detects your host architecture (`x86_64`, `arm64`, `armv7l`, `windows`, etc.) and downloads the appropriate static binary from GitHub Releases if missing. If offline or unavailable, it will automatically compile locally via `go build` if Go is installed, or seamlessly fall back to the Python Flask task server.
 
 ---
 

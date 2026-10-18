@@ -8,7 +8,7 @@ import { renderIcons } from "../utils/icons.js";
 import { createNewChatSession, saveStoredChats, saveCurrentChatState } from "../services/storage.js";
 import { runAgent } from "../services/agent.js";
 import { startServerAgent, stopServerAgent } from "../agent/agent-bridge.js";
-import { createAIMessageShell } from "./chat-ui.js";
+import { createAIMessageShell, forceReengageAutoScroll, requestScrollToBottom } from "./chat-ui.js";
 import { hideMobileActions } from "./context-menu.js";
 import { renderChatList } from "./side-panel.js";
 import { showErrorRecoveryPopup } from "./error-recovery.js";
@@ -139,7 +139,7 @@ export async function send() {
     userDiv.dataset.rawText = text || (images.length > 0 ? "Attached image" : "Attached document");
     chat.appendChild(userDiv);
     renderIcons(userDiv);
-    chat.scrollTop = chat.scrollHeight;
+    forceReengageAutoScroll(chat);
 
     // Attach click listener for image lightbox
     userDiv.querySelectorAll(".msg-img-card").forEach(card => {
@@ -236,7 +236,7 @@ export async function send() {
 
         if (state.currentChatId === targetChatId) {
             updateSendButtonState(false);
-            chat.scrollTop = chat.scrollHeight;
+            requestScrollToBottom(chat);
         }
 
         saveStoredChats();

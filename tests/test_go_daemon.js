@@ -4,7 +4,15 @@ const path = require("path");
 const assert = require("assert");
 
 const repoRoot = path.join(__dirname, "..");
-const daemonBin = path.join(repoRoot, "bin/task_daemon");
+
+let daemonBinName = process.platform === "win32" ? "task_daemon.exe" : "task_daemon";
+if (process.platform === "darwin" && process.arch === "arm64") {
+    daemonBinName = "task_daemon_darwin_arm64";
+} else if (process.platform !== "win32") {
+    if (process.arch === "arm64") daemonBinName = "task_daemon_arm64";
+    else if (process.arch === "arm") daemonBinName = "task_daemon_armv7l";
+}
+const daemonBin = path.join(repoRoot, "bin", daemonBinName);
 
 function requestJSON(port, method, reqPath, data) {
     return new Promise((resolve, reject) => {

@@ -450,7 +450,7 @@ export function addToolBadge(element, toolName, args) {
             void countEl.offsetWidth;
             countEl.classList.add("count-updated");
 
-            if (chat) chat.scrollTop = chat.scrollHeight;
+            if (chat) requestScrollToBottom(chat);
             return existingEditBadge;
         }
     }
@@ -536,7 +536,7 @@ export function addToolBadge(element, toolName, args) {
     }
 
     renderIcons(item);
-    if (chat) chat.scrollTop = chat.scrollHeight;
+    if (chat) requestScrollToBottom(chat);
     return item;
 }
 
@@ -804,7 +804,7 @@ export function addCompactionBadge(element, { messagesCount = 0, tokensBefore = 
     item._collapseDiv = collapseDiv;
 
     renderIcons(item);
-    if (chat) chat.scrollTop = chat.scrollHeight;
+    if (chat) requestScrollToBottom(chat);
 
     return {
         item,
@@ -912,7 +912,7 @@ export function addCompactionBadge(element, { messagesCount = 0, tokensBefore = 
                 }
             }
             saveCurrentChatState();
-            if (chat) chat.scrollTop = chat.scrollHeight;
+            if (chat) requestScrollToBottom(chat);
         }
     };
 }
