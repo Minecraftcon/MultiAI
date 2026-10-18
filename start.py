@@ -506,15 +506,29 @@ def run_console(supervisor, root_dir, workspace_dir, port, host="0.0.0.0"):
 
 import configparser
 
+def resolve_config_ini_path():
+    if os.environ.get("MULTIAI_CONFIG_PATH"):
+        return os.environ.get("MULTIAI_CONFIG_PATH")
+    user_config = os.path.expanduser("~/.MultiAI/config.ini")
+    if os.path.exists(user_config):
+        return user_config
+    root_dir = os.path.dirname(os.path.abspath(__file__))
+    root_config = os.path.join(root_dir, "config.ini")
+    if os.path.exists(root_config):
+        try:
+            os.makedirs(os.path.expanduser("~/.MultiAI"), exist_ok=True)
+            shutil.copyfile(root_config, user_config)
+            return user_config
+        except Exception:
+            return root_config
+    return os.path.join(root_dir, "src", "core", "config.ini")
+
 def get_config_general(default_port=8080, default_host="0.0.0.0"):
     port = default_port
     host = default_host
     try:
         cfg = configparser.ConfigParser()
-        root_dir = os.path.dirname(os.path.abspath(__file__))
-        ini_path = os.environ.get("MULTIAI_CONFIG_PATH") or os.path.join(root_dir, "config.ini")
-        if not os.path.exists(ini_path):
-            ini_path = os.path.join(root_dir, "src", "core", "config.ini")
+        ini_path = resolve_config_ini_path()
         if os.path.exists(ini_path):
             cfg.read(ini_path)
             if "General" in cfg:
@@ -608,9 +622,7 @@ def main():
         node_env["MULTIAI_IPC"] = ipc_mode
     if args.task_daemon:
         node_env["MULTIAI_TASK_DAEMON"] = args.task_daemon
-    ini_path = os.environ.get("MULTIAI_CONFIG_PATH") or os.path.join(root_dir, "config.ini")
-    if not os.path.exists(ini_path):
-        ini_path = os.path.join(root_dir, "src", "core", "config.ini")
+    ini_path = resolve_config_ini_path()
     node_env["MULTIAI_CONFIG_PATH"] = ini_path
 
     node_modules_path = os.path.join(root_dir, "node_modules")

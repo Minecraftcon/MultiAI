@@ -1,6 +1,7 @@
 // Zero-Dependency INI Configuration Manager
 const fs = require("fs");
 const path = require("path");
+const os = require("os");
 
 const DEFAULT_CONFIG = {
     General: {
@@ -169,19 +170,45 @@ function mergeWithDefaults(parsed) {
 
 /**
  * Resolves the canonical config.ini path, prioritizing:
- * 1. MULTIAI_CONFIG_PATH environment variable (if set)
- * 2. Repository root config.ini (if exists)
- * 3. src/core/config.ini fallback
+ * 1. MULTIAI_CONFIG_PATH environment variable (if explicitly set and exists)
+ * 2. Primary user directory: ~/.MultiAI/config.ini
+ * 3. Repository root config.ini (legacy/override, if exists)
+ * 4. src/core/config.ini fallback template
  */
 function getDefaultConfigPath() {
     if (process.env.MULTIAI_CONFIG_PATH && fs.existsSync(process.env.MULTIAI_CONFIG_PATH)) {
         return process.env.MULTIAI_CONFIG_PATH;
     }
+
+    const homeDir = os.homedir();
+    const primaryUserConfig = path.join(homeDir, ".MultiAI", "config.ini");
+    if (fs.existsSync(primaryUserConfig)) {
+        return primaryUserConfig;
+    }
+
     const repoRoot = process.env.MULTIAI_REPO_DIR || path.resolve(__dirname, "../..");
     const rootConfig = path.join(repoRoot, "config.ini");
+
+    // Auto-migrate: If ~/.MultiAI can be prepared, copy from root config.ini to ~/.MultiAI/config.ini
+    try {
+        const userDir = path.join(homeDir, ".MultiAI");
+        if (!fs.existsSync(userDir)) {
+            fs.mkdirSync(userDir, { recursive: true });
+        }
+        if (fs.existsSync(rootConfig)) {
+            fs.copyFileSync(rootConfig, primaryUserConfig);
+            return primaryUserConfig;
+        }
+    } catch (_) {}
+
+    if (fs.existsSync(primaryUserConfig)) {
+        return primaryUserConfig;
+    }
+
     if (fs.existsSync(rootConfig)) {
         return rootConfig;
     }
+
     return path.join(__dirname, "config.ini");
 }
 
@@ -203,6 +230,10 @@ function loadConfig(filePath) {
             return cachedConfig;
         } else {
             // Write defaults to config.ini if file does not exist
+            const dir = path.dirname(targetPath);
+            if (!fs.existsSync(dir)) {
+                fs.mkdirSync(dir, { recursive: true });
+            }
             const serialized = serializeINI(DEFAULT_CONFIG);
             fs.writeFileSync(targetPath, serialized, "utf8");
             cachedConfig = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
@@ -231,19 +262,16 @@ function deepMerge(target, source) {
  */
 function saveConfig(updates, filePath) {
     const targetPath = filePath || getDefaultConfigPath();
+    const dir = path.dirname(targetPath);
+    if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+    }
+
     const current = loadConfig(targetPath);
     const merged = deepMerge(current, updates);
     const updated = mergeWithDefaults(merged);
     const serialized = serializeINI(updated);
     fs.writeFileSync(targetPath, serialized, "utf8");
-
-    // If writing to root config.ini, mirror to src/core/config.ini if present to keep them synchronized
-    const fallbackPath = path.join(__dirname, "config.ini");
-    if (targetPath !== fallbackPath && fs.existsSync(fallbackPath)) {
-        try {
-            fs.writeFileSync(fallbackPath, serialized, "utf8");
-        } catch (_) {}
-    }
 
     cachedConfig = updated;
     try {
@@ -256,6 +284,7 @@ module.exports = {
     loadConfig,
     getConfig: () => loadConfig(),
     saveConfig,
+    getDefaultConfigPath,
     parseINI,
     serializeINI,
     DEFAULT_CONFIG

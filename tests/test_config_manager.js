@@ -88,4 +88,17 @@ console.log("Test: saveConfig preserves customized keys within section on partia
     }
 }
 
+// 4. Test getDefaultConfigPath resolution
+console.log("Test: getDefaultConfigPath resolution");
+{
+    const { getDefaultConfigPath } = require("../src/core/config_manager");
+    const resolved = getDefaultConfigPath();
+    assert(typeof resolved === "string" && resolved.endsWith("config.ini"), "Must resolve a valid config.ini path");
+    // Verify it resolves to ~/.MultiAI/config.ini if present
+    const userCfg = path.join(os.homedir(), ".MultiAI", "config.ini");
+    if (fs.existsSync(userCfg)) {
+        assert.strictEqual(resolved, userCfg, "Must prioritize ~/.MultiAI/config.ini");
+    }
+}
+
 console.log("✓ ALL CONFIG MANAGER SAFETY NET TESTS PASSED CLEANLY!");
