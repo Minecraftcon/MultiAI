@@ -20,6 +20,8 @@ NEXT.md
 *.jar
 *.so
 bin/task_daemon*
+task_server_go/task_server*
+task_server_go/task_daemon*
 *.sock
 
 # Test Output Artifacts
