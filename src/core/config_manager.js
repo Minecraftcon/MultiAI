@@ -16,7 +16,8 @@ const DEFAULT_CONFIG = {
         Port: 8080,
         Host: "0.0.0.0",
         LogLevel: "info",
-        LogFile: "./logs.txt"
+        LogFile: "./logs.txt",
+        SystemPreset: "default"
     },
     Agent: {
         MaxToolRounds: 0,
@@ -24,6 +25,7 @@ const DEFAULT_CONFIG = {
         AutoScroll: true,
         StreamReasoning: false,
         TurnTimeoutSeconds: 120,
+        Temperature: 0.7,
         TaskDaemon: "python",
         TaskServer: "python"
     },

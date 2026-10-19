@@ -1,8 +1,52 @@
-# MultiAI Model Configuration
-# API keys are referenced by environment variable names (defined in ~/.bashrc or system environment)
-# Backend resolves keys securely on the server and never exposes them to the client.
+# ==============================================================================
+# MultiAI Model & Provider Configuration (models.yaml)
+# ==============================================================================
+# This file defines the LLM providers and model presets available in MultiAI.
+# Location precedence:
+#   1. ~/.MultiAI/models.yaml (user configuration directory, if present)
+#   2. ./models.yaml (repository workspace root fallback)
+#
+# Commands:
+#   multiai models  - Open this configuration in your terminal editor ($EDITOR or nano)
+#   multiai conf    - Open system presets and server configuration (config.ini)
+#
+# Key Concepts & Guidelines:
+# ------------------------------------------------------------------------------
+# 1. API Keys & Security:
+#    - API keys are NEVER hardcoded in this file.
+#    - Specify 'api_key_env' with the name of your environment variable (e.g. GEMINI_API_KEY).
+#    - Export keys in your shell (~/.bashrc, ~/.zshrc) or in a local .env file.
+#    - The server resolves keys securely in backend memory; keys are NEVER sent to the browser.
+#
+# 2. Default Model Selection:
+#    - Set 'default: true' on exactly ONE model preset to be the default on initial load.
+#    - Alternatively, set 'DefaultStartupLLM = <model-id>' in config.ini.
+#
+# 3. Model Capabilities:
+#    - 'supports_tools: true': Enables autonomous function calling (shell tasks, web search,
+#                              file editing, and MCP tool execution). Set to false for chat-only models.
+#    - 'supports_vision: true': Enables image & screenshot input for multimodal reasoning.
+#    - 'max_context_tokens: <N>': Custom context window ceiling. If omitted, MultiAI applies
+#                                 provider/model architecture defaults (e.g. 1M for Gemini, 128k for Llama).
+#
+# 4. Provider Types:
+#    - 'gemini': Google Generative Language API (v1beta).
+#    - 'zai': Z.AI GLM models via PaaS v4 API.
+#    - 'openai_compatible': Any OpenAI-compliant endpoint (Groq, OpenRouter, SambaNova, etc.).
+#    - 'cohere': Cohere v2 chat API.
+#    - 'puter': Puter.js serverless proxy (free, no API key needed).
+#    - 'local': Local models (Ollama, Kobold.cpp, LM Studio, vLLM) on localhost.
+#    - 'tokenharbor': Token Harbor community gateway.
+#    - 'omniroute': Local OmniRoute multi-model gateway.
+#    - 'opencode': OpenCode Zen free tier endpoints.
+# ==============================================================================
 
 providers:
+  # ----------------------------------------------------------------------------
+  # Google Gemini & Gemma
+  # API Key: export GEMINI_API_KEY="your-gemini-key" (https://aistudio.google.com)
+  # Features: 1M-2M token context, native tool calling, multimodal vision.
+  # ----------------------------------------------------------------------------
   gemini:
     name: "Google Gemini & Gemma"
     type: "gemini"
@@ -71,6 +115,11 @@ providers:
         supports_tools: true
         supports_vision: false
 
+  # ----------------------------------------------------------------------------
+  # Z.AI (GLM Architecture)
+  # API Key: export Z_AI_API_KEY="your-key" (https://z.ai)
+  # Features: Advanced Chinese/English bilingual reasoning & fast tool calling.
+  # ----------------------------------------------------------------------------
   zai:
     name: "Z.AI (GLM)"
     type: "zai"
@@ -104,6 +153,11 @@ providers:
         supports_vision: false
         max_context_tokens: 110000
 
+  # ----------------------------------------------------------------------------
+  # LLM7.io High-Speed Gateway
+  # API Key: export LLM7_API_KEY="your-key" (https://llm7.io)
+  # Features: MiniMax, Codestral, DeepSeek V4 Flash & large context models.
+  # ----------------------------------------------------------------------------
   llm7:
     name: "LLM7.io"
     type: "llm7"
@@ -141,6 +195,12 @@ providers:
         supports_tools: true
         supports_vision: false
         max_context_tokens: 1000000
+
+  # ----------------------------------------------------------------------------
+  # Logfare AI
+  # API Key: export LOGFLARE_API_KEY="your-key" (https://logfare.ai)
+  # Features: Qwen, Gemma, and Moondream lightweight vision models.
+  # ----------------------------------------------------------------------------
   logflare:
     name: "Logfare AI"
     type: "logflare"
@@ -171,6 +231,11 @@ providers:
         supports_tools: false
         supports_vision: true
 
+  # ----------------------------------------------------------------------------
+  # ArliAI (Uncensored / Derestricted Models)
+  # API Key: export ARLIAI_API_KEY="your-key" (https://arliai.com)
+  # Features: Unrestricted reasoning, creative writing, and fast trial models.
+  # ----------------------------------------------------------------------------
   arliai:
     name: "ArliAI"
     type: "arliai"
@@ -204,6 +269,11 @@ providers:
         supports_tools: true
         supports_vision: false
 
+  # ----------------------------------------------------------------------------
+  # Groq Cloud (Ultra-Low Latency Inference)
+  # API Key: export API_KEY="your-groq-key" or GROQ_API_KEY (https://console.groq.com)
+  # Features: Blazing fast token generation on Groq LPUs.
+  # ----------------------------------------------------------------------------
   groq:
     name: "Groq Cloud"
     type: "openai_compatible"
@@ -236,6 +306,11 @@ providers:
         supports_tools: true
         supports_vision: false
 
+  # ----------------------------------------------------------------------------
+  # OpenRouter (Multi-Provider Aggregator)
+  # API Key: export OPEN_ROUTER="your-key" (https://openrouter.ai)
+  # Features: Access to Claude 3.7, DeepSeek V4.1 (1M Context), Llama 3.3, and free models.
+  # ----------------------------------------------------------------------------
   openrouter:
     name: "OpenRouter"
     type: "openai_compatible"
@@ -273,6 +348,11 @@ providers:
         supports_tools: true
         supports_vision: false
 
+  # ----------------------------------------------------------------------------
+  # Cohere
+  # API Key: export COHERE_API_KEY="your-key" (https://cohere.com)
+  # Features: Enterprise Command R / R+, multilingual Aya models, and multimodal vision.
+  # ----------------------------------------------------------------------------
   cohere:
     name: "Cohere"
     type: "cohere"
@@ -316,6 +396,11 @@ providers:
         supports_tools: false
         supports_vision: false
 
+  # ----------------------------------------------------------------------------
+  # NVIDIA NIM (Inference Microservices)
+  # API Key: export NVIDIA_API_KEY="your-key" (https://build.nvidia.com)
+  # Features: High-throughput Nemotron and Llama Vision inference.
+  # ----------------------------------------------------------------------------
   nvidia:
     name: "NVIDIA NIM"
     type: "openai_compatible"
@@ -335,6 +420,11 @@ providers:
         supports_tools: true
         supports_vision: true
 
+  # ----------------------------------------------------------------------------
+  # Mistral AI
+  # API Key: export MISTRAL_API_KEY="your-key" (https://console.mistral.ai)
+  # Features: Frontier European reasoning, Codestral programming specialist.
+  # ----------------------------------------------------------------------------
   mistral:
     name: "Mistral AI"
     type: "openai_compatible"
@@ -354,6 +444,11 @@ providers:
         supports_tools: true
         supports_vision: false
 
+  # ----------------------------------------------------------------------------
+  # Puter Free Models
+  # API Key: Not required (free serverless access via Puter.js)
+  # Features: Free access to GPT-4o, Claude 3.7 Sonnet, DeepSeek R1 & V3.
+  # ----------------------------------------------------------------------------
   puter:
     name: "Puter Free Models"
     type: "puter"
@@ -388,6 +483,11 @@ providers:
         supports_tools: true
         supports_vision: false
 
+  # ----------------------------------------------------------------------------
+  # Local Models (Kobold.cpp / Ollama / LM Studio / vLLM)
+  # API Key: Not required (runs entirely locally on your host machine)
+  # Features: Rolling detection auto-detects loaded model from your local server.
+  # ----------------------------------------------------------------------------
   local:
     name: "Local"
     type: "local"
@@ -406,6 +506,11 @@ providers:
     repetition_penalty: null
     models: []
 
+  # ----------------------------------------------------------------------------
+  # Token Harbor
+  # API Key: export TOKENHARBOUR_API_KEY="your-key" (https://tokenharbor.ai)
+  # Features: Free campaign access to DeepSeek V4.1, MiMo, and Qwen models.
+  # ----------------------------------------------------------------------------
   tokenharbor:
     name: "Token Harbor"
     type: "tokenharbor"
@@ -433,6 +538,11 @@ providers:
         supports_tools: true
         supports_vision: false
 
+  # ----------------------------------------------------------------------------
+  # OmniRoute (Local Multi-Model Gateway)
+  # API Key: export OMNIROUTE_API_KEY="your-key" (http://localhost:20128/v1)
+  # Features: Smart fallback routing across Claude, GPT-4o, and DeepSeek backends.
+  # ----------------------------------------------------------------------------
   omniroute:
     name: "OmniRoute (Local Gateway)"
     type: "omniroute"
@@ -464,6 +574,11 @@ providers:
         supports_tools: true
         supports_vision: false
 
+  # ----------------------------------------------------------------------------
+  # OpenCode Zen (Free Tier)
+  # API Key: export OPENCODE_API_KEY="your-key" (https://opencode.ai)
+  # Features: Free community models including Nemotron, MiMo, and Ling.
+  # ----------------------------------------------------------------------------
   opencode:
     name: "OpenCode Zen (Free Tier)"
     type: "opencode"
