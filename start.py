@@ -137,9 +137,19 @@ def get_platform_daemon_info():
         else:
             return "task_daemon", goos, "amd64", None
 
+def format_bytes(n_bytes):
+    if n_bytes >= 1024 * 1024 * 1024:
+        return f"{n_bytes / (1024 * 1024 * 1024):.2f} GB"
+    elif n_bytes >= 1024 * 1024:
+        return f"{n_bytes / (1024 * 1024):.2f} MB"
+    elif n_bytes >= 1024:
+        return f"{n_bytes / 1024:.1f} KB"
+    return f"{int(n_bytes)} B"
+
 def download_task_daemon(bin_name, target_path):
     """
-    Attempt to download task daemon binary from GitHub Releases or configured mirror.
+    Attempt to download task daemon binary from GitHub Releases or configured mirror
+    with an interactive progress bar.
     """
     base_url = os.environ.get(
         "MULTIAI_RELEASE_BASE_URL",
@@ -147,29 +157,97 @@ def download_task_daemon(bin_name, target_path):
     ).rstrip("/")
     download_url = f"{base_url}/{bin_name}"
 
-    log_info(f"Downloading task daemon binary '{bin_name}' from {download_url}...")
+    log_info(f"Downloading task daemon binary '{bin_name}'...")
     tmp_path = target_path + ".tmp"
     req = urllib.request.Request(
         download_url,
         headers={"User-Agent": "MultiAI-Starter/1.0"}
     )
+    is_tty = sys.stdout.isatty()
+    use_unicode = True
     try:
-        with urllib.request.urlopen(req, timeout=25) as resp, open(tmp_path, "wb") as f:
-            shutil.copyfileobj(resp, f)
+        enc = (sys.stdout.encoding or "").lower()
+        if enc and enc not in ("utf-8", "utf8"):
+            use_unicode = False
+    except Exception:
+        use_unicode = False
+
+    fill_char = "█" if use_unicode else "="
+    empty_char = "░" if use_unicode else " "
+
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp, open(tmp_path, "wb") as f:
+            total_header = resp.headers.get("Content-Length")
+            total_size = int(total_header) if total_header and total_header.isdigit() else 0
+            downloaded = 0
+            start_time = time.time()
+            last_render_time = 0
+            last_non_tty_pct = -1
+            bar_width = 28
+            chunk_size = 65536  # 64 KB chunks
+
+            while True:
+                chunk = resp.read(chunk_size)
+                if not chunk:
+                    break
+                f.write(chunk)
+                downloaded += len(chunk)
+                now = time.time()
+
+                if is_tty:
+                    # Throttle render updates to ~12 FPS (every 80ms) to prevent console flicker
+                    if now - last_render_time >= 0.08 or (total_size and downloaded >= total_size):
+                        last_render_time = now
+                        elapsed = max(0.001, now - start_time)
+                        speed = downloaded / elapsed
+                        speed_str = f"{format_bytes(speed)}/s"
+                        if total_size > 0:
+                            pct = min(100.0, (downloaded / total_size) * 100)
+                            filled = int(bar_width * (downloaded / total_size))
+                            filled = min(bar_width, max(0, filled))
+                            bar = fill_char * filled + empty_char * (bar_width - filled)
+                            down_str = format_bytes(downloaded)
+                            tot_str = format_bytes(total_size)
+                            sys.stdout.write(
+                                f"\r{CYAN}[MultiAI]{RESET} [{GREEN}{bar}{RESET}] {BOLD}{pct:5.1f}%{RESET} ({down_str}/{tot_str}, {speed_str})   "
+                            )
+                        else:
+                            down_str = format_bytes(downloaded)
+                            sys.stdout.write(
+                                f"\r{CYAN}[MultiAI]{RESET} Downloading {bin_name}: {BOLD}{down_str}{RESET} ({speed_str})   "
+                            )
+                        sys.stdout.flush()
+                else:
+                    if total_size > 0:
+                        pct = int((downloaded / total_size) * 100)
+                        if pct // 20 > last_non_tty_pct:
+                            last_non_tty_pct = pct // 20
+                            log_info(f"Downloading {bin_name}: {pct}% ({format_bytes(downloaded)}/{format_bytes(total_size)})")
+
+            if is_tty:
+                sys.stdout.write("\n")
+                sys.stdout.flush()
 
         if os.path.exists(tmp_path) and os.path.getsize(tmp_path) > 1024:
             if sys.platform != "win32":
                 os.chmod(tmp_path, 0o755)
             os.replace(tmp_path, target_path)
-            log_success(f"Task daemon binary downloaded successfully: {bin_name}")
+            file_size_str = format_bytes(os.path.getsize(target_path))
+            log_success(f"Task daemon binary downloaded successfully: {bin_name} ({file_size_str})")
             return True
         else:
             if os.path.exists(tmp_path):
                 os.remove(tmp_path)
             return False
     except urllib.error.HTTPError as e:
+        if is_tty:
+            sys.stdout.write("\n")
+            sys.stdout.flush()
         log_warn(f"Download failed (HTTP {e.code} {e.reason}).")
     except Exception as e:
+        if is_tty:
+            sys.stdout.write("\n")
+            sys.stdout.flush()
         log_warn(f"Download failed: {e}")
     finally:
         if os.path.exists(tmp_path):
