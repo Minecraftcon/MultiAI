@@ -243,6 +243,50 @@ def ensure_task_daemon_binary(root_dir):
     log_info("MultiAI will seamlessly use the Python Flask task server fallback.")
     return False
 
+def ensure_user_configuration(root_dir):
+    """
+    Ensure ~/.MultiAI exists and install config.ini and models.yaml if missing.
+    """
+    user_dir = os.path.expanduser("~/.MultiAI")
+    try:
+        os.makedirs(user_dir, exist_ok=True)
+    except Exception as e:
+        log_warn(f"Could not create user configuration directory {user_dir}: {e}")
+        return
+
+    # 1. Ensure config.ini in ~/.MultiAI
+    user_config = os.path.join(user_dir, "config.ini")
+    if not os.path.exists(user_config) or os.path.getsize(user_config) == 0:
+        root_config = os.path.join(root_dir, "config.ini")
+        example_config = os.path.join(root_dir, "config.example.ini")
+        core_config = os.path.join(root_dir, "src", "core", "config.ini")
+        src_path = None
+        for candidate in [root_config, example_config, core_config]:
+            if os.path.exists(candidate) and os.path.getsize(candidate) > 0:
+                src_path = candidate
+                break
+        if src_path:
+            try:
+                shutil.copyfile(src_path, user_config)
+                log_success(f"Installed default config.ini to {user_config}")
+            except Exception as e:
+                log_warn(f"Failed to copy config.ini to {user_config}: {e}")
+    else:
+        log_success(f"config.ini found ({user_config}).")
+
+    # 2. Ensure models.yaml in ~/.MultiAI
+    user_models = os.path.join(user_dir, "models.yaml")
+    if not os.path.exists(user_models) or os.path.getsize(user_models) == 0:
+        root_models = os.path.join(root_dir, "models.yaml")
+        if os.path.exists(root_models) and os.path.getsize(root_models) > 0:
+            try:
+                shutil.copyfile(root_models, user_models)
+                log_success(f"Installed default models.yaml to {user_models}")
+            except Exception as e:
+                log_warn(f"Failed to copy models.yaml to {user_models}: {e}")
+    else:
+        log_success(f"models.yaml found ({user_models}).")
+
 def check_setup():
     """Verify prerequisites and auto-install missing packages."""
     print(f"\n{BOLD}{CYAN}=== MultiSearch AI Setup & Pre-Flight Check ==={RESET}\n", flush=True)
@@ -315,14 +359,8 @@ def check_setup():
         else:
             log_success("Flask installed successfully.")
 
-    # 6. Check models.yaml
-    user_models = os.path.expanduser("~/.MultiAI/models.yaml")
-    root_models = os.path.join(root_dir, "models.yaml")
-    models_file = user_models if os.path.exists(user_models) else root_models
-    if not os.path.exists(models_file):
-        log_warn("models.yaml not found. Some models may need configuration.")
-    else:
-        log_success(f"models.yaml found ({models_file}).")
+    # 6. Check & Initialize User Configuration (~/.MultiAI/config.ini & models.yaml)
+    ensure_user_configuration(root_dir)
 
     # 7. Check Task Server Daemon Binary
     ensure_task_daemon_binary(root_dir)
@@ -670,12 +708,17 @@ def resolve_editor():
 
 def resolve_models_path():
     user_models = os.path.expanduser("~/.MultiAI/models.yaml")
-    if os.path.exists(user_models):
+    if os.path.exists(user_models) and os.path.getsize(user_models) > 0:
         return user_models
     root_dir = os.path.dirname(os.path.abspath(__file__))
     root_models = os.path.join(root_dir, "models.yaml")
-    if os.path.exists(root_models):
-        return root_models
+    if os.path.exists(root_models) and os.path.getsize(root_models) > 0:
+        try:
+            os.makedirs(os.path.expanduser("~/.MultiAI"), exist_ok=True)
+            shutil.copyfile(root_models, user_models)
+            return user_models
+        except Exception:
+            return root_models
     return user_models
 
 def open_file_in_editor(file_path, label="configuration", exit_on_done=True):
@@ -695,18 +738,25 @@ def resolve_config_ini_path():
     if os.environ.get("MULTIAI_CONFIG_PATH"):
         return os.environ.get("MULTIAI_CONFIG_PATH")
     user_config = os.path.expanduser("~/.MultiAI/config.ini")
-    if os.path.exists(user_config):
+    if os.path.exists(user_config) and os.path.getsize(user_config) > 0:
         return user_config
     root_dir = os.path.dirname(os.path.abspath(__file__))
     root_config = os.path.join(root_dir, "config.ini")
-    if os.path.exists(root_config):
+    example_config = os.path.join(root_dir, "config.example.ini")
+    core_config = os.path.join(root_dir, "src", "core", "config.ini")
+    src_path = None
+    for cand in [root_config, example_config, core_config]:
+        if os.path.exists(cand) and os.path.getsize(cand) > 0:
+            src_path = cand
+            break
+    if src_path:
         try:
             os.makedirs(os.path.expanduser("~/.MultiAI"), exist_ok=True)
-            shutil.copyfile(root_config, user_config)
+            shutil.copyfile(src_path, user_config)
             return user_config
         except Exception:
-            return root_config
-    return os.path.join(root_dir, "src", "core", "config.ini")
+            return src_path
+    return user_config
 
 def get_config_general(default_port=8080, default_host="0.0.0.0"):
     port = default_port

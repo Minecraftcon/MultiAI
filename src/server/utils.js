@@ -36,8 +36,18 @@ function getEnvKey(keyName) {
 
 function loadModelsConfig() {
     try {
-        const userYamlPath = path.join(os.homedir(), ".MultiAI", "models.yaml");
+        const userDir = path.join(os.homedir(), ".MultiAI");
+        const userYamlPath = path.join(userDir, "models.yaml");
         const repoYamlPath = path.join(__dirname, "../..", "models.yaml");
+        
+        // Auto-install to ~/.MultiAI/models.yaml if not present
+        if (!fs.existsSync(userYamlPath) && fs.existsSync(repoYamlPath)) {
+            try {
+                if (!fs.existsSync(userDir)) fs.mkdirSync(userDir, { recursive: true });
+                fs.copyFileSync(repoYamlPath, userYamlPath);
+            } catch (_) {}
+        }
+        
         const yamlPath = fs.existsSync(userYamlPath) ? userYamlPath : repoYamlPath;
         if (fs.existsSync(yamlPath)) {
             const fileContent = fs.readFileSync(yamlPath, "utf8");

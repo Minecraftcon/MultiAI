@@ -47,7 +47,7 @@ resolve_config_path() {
     return
   fi
   local user_cfg="$HOME/.MultiAI/config.ini"
-  if [ -f "$user_cfg" ]; then
+  if [ -s "$user_cfg" ]; then
     echo "$user_cfg"
     return
   fi
@@ -55,7 +55,7 @@ resolve_config_path() {
   local root_cfg="$MULTIAI_DIR/config.ini"
   if [ -f "$root_cfg" ]; then
     cp "$root_cfg" "$user_cfg" 2>/dev/null || true
-    if [ -f "$user_cfg" ]; then
+    if [ -s "$user_cfg" ]; then
       echo "$user_cfg"
       return
     fi
@@ -65,7 +65,7 @@ resolve_config_path() {
   local example_cfg="$MULTIAI_DIR/config.example.ini"
   if [ -f "$example_cfg" ]; then
     cp "$example_cfg" "$user_cfg" 2>/dev/null || true
-    if [ -f "$user_cfg" ]; then
+    if [ -s "$user_cfg" ]; then
       echo "$user_cfg"
       return
     fi
@@ -75,12 +75,18 @@ resolve_config_path() {
 
 resolve_models_path() {
   local user_models="$HOME/.MultiAI/models.yaml"
-  if [ -f "$user_models" ]; then
+  if [ -s "$user_models" ]; then
     echo "$user_models"
     return
   fi
+  mkdir -p "$HOME/.MultiAI" 2>/dev/null || true
   local root_models="$MULTIAI_DIR/models.yaml"
   if [ -f "$root_models" ]; then
+    cp "$root_models" "$user_models" 2>/dev/null || true
+    if [ -s "$user_models" ]; then
+      echo "$user_models"
+      return
+    fi
     echo "$root_models"
     return
   fi
