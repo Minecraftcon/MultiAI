@@ -28,7 +28,11 @@ function findWorkspaceRoot(targetPath) {
             fs.existsSync(path.join(curr, "pyproject.toml")) ||
             fs.existsSync(path.join(curr, "Cargo.toml")) ||
             fs.existsSync(path.join(curr, "go.mod")) ||
-            fs.existsSync(path.join(curr, "CMakeLists.txt"))
+            fs.existsSync(path.join(curr, "CMakeLists.txt")) ||
+            fs.existsSync(path.join(curr, "build.gradle")) ||
+            fs.existsSync(path.join(curr, "build.gradle.kts")) ||
+            fs.existsSync(path.join(curr, "pom.xml")) ||
+            fs.existsSync(path.join(curr, "Makefile"))
         ) {
             foundRoot = curr;
             break;
@@ -105,16 +109,6 @@ function getWorkspacesForChat(chatId) {
                                                 if (fs.existsSync(wsRoot)) {
                                                     list.add(wsRoot);
                                                     recordChatWorkspace(chatId, wsRoot);
-                                                    try {
-                                                        const cleanRel = path.relative(wsRoot, resolved);
-                                                        if (fs.existsSync(resolved)) {
-                                                            recordPostEditCommit(wsRoot, cleanRel, {
-                                                                chatId,
-                                                                tool: fnName,
-                                                                instruction: "Tracked modification"
-                                                            });
-                                                        }
-                                                    } catch (_) {}
                                                 }
                                             }
                                         }
@@ -166,10 +160,13 @@ function runGit(shadowGitDir, workspaceRoot, args, options = {}) {
             ...options
         });
     } catch (err) {
-        const stderr = err.stderr ? err.stderr.toString() : err.message;
-        const error = new Error(`Shadow Git Error [git ${args.join(" ")}]: ${stderr}`);
+        const stderr = err.stderr ? err.stderr.toString() : "";
+        const stdout = err.stdout ? err.stdout.toString() : "";
+        const combined = (stderr || stdout || err.message || "").trim();
+        const error = new Error(`Shadow Git Error [git ${args.join(" ")}]: ${combined}`);
         error.code = err.status;
         error.stderr = stderr;
+        error.stdout = stdout;
         throw error;
     }
 }
@@ -247,8 +244,9 @@ function recordPostEditCommit(workspaceRoot, relativePath, meta = {}) {
         }
         return true;
     } catch (err) {
-        // If nothing changed, git commit exits with 1
-        if (err.stderr && err.stderr.includes("nothing to commit")) {
+        // If nothing changed or tree is already clean, git commit exits with 1
+        const out = `${err.stdout || ""} ${err.stderr || ""} ${err.message || ""}`;
+        if (out.includes("nothing to commit") || out.includes("working tree clean")) {
             return false;
         }
         console.warn("[ShadowGit] Commit failed:", err.message);
