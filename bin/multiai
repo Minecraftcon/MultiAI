@@ -9,8 +9,11 @@
 
 set -e
 
-# Capture caller working directory as target workspace
-TARGET_WORKSPACE="$(pwd -P)"
+# Capture caller working directory as target workspace (gracefully fallback if cwd was unlinked)
+TARGET_WORKSPACE="$(pwd -P 2>/dev/null || pwd 2>/dev/null || true)"
+if [ -z "$TARGET_WORKSPACE" ] || [ ! -d "$TARGET_WORKSPACE" ]; then
+  TARGET_WORKSPACE="$HOME"
+fi
 
 # Resolve physical path to this script, resolving symlink chains
 SOURCE="${BASH_SOURCE[0]}"
