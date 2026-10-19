@@ -4,6 +4,7 @@ const fs = require("fs");
 const path = require("path");
 const os = require("os");
 const { execSync } = require("child_process");
+const { getUserHome } = require("./config_manager");
 
 const DEFAULT_SANDBOX_CONFIG = {
     enabled: false,
@@ -56,7 +57,7 @@ const DIRECT_PROFILE = {
 };
 
 function getStorageDir() {
-    const home = os.homedir();
+    const home = getUserHome();
     const multiaiDir = path.join(home, ".MultiAI");
     if (!fs.existsSync(multiaiDir)) {
         try {
@@ -429,7 +430,7 @@ function resolveCommandTemplate(template, vars = {}) {
  * @returns {string} Space-separated --tmpfs mount arguments
  */
 function getSandboxShieldArgs() {
-    const home = os.homedir();
+    const home = getUserHome();
     const sensitiveDirs = [
         ".ssh",
         ".gnupg",

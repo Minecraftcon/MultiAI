@@ -7,7 +7,7 @@
 const fs = require("fs");
 const path = require("path");
 const os = require("os");
-const { getConfig } = require("./config_manager");
+const { getConfig, getUserHome } = require("./config_manager");
 const {
     readJsonFile,
     writeJsonFile,
@@ -22,7 +22,7 @@ let migrationDone = false;
 function resolveHome(p) {
     if (!p || typeof p !== "string") return "";
     if (p.startsWith("~/") || p === "~") {
-        return path.join(os.homedir(), p.slice(1));
+        return path.join(getUserHome(), p.slice(1));
     }
     return path.resolve(p);
 }

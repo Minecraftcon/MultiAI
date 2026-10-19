@@ -13,6 +13,7 @@ const fs = require("fs");
 const path = require("path");
 const os = require("os");
 const crypto = require("crypto");
+const { getUserHome } = require("./config_manager");
 
 /**
  * Automatically identifies the project root for an arbitrary target path
@@ -48,7 +49,7 @@ function findWorkspaceRoot(targetPath) {
 }
 
 function getChatWorkspacesFilePath() {
-    return path.join(os.homedir(), ".MultiAI", "shadow_git", "chat_workspaces.json");
+    return path.join(getUserHome(), ".MultiAI", "shadow_git", "chat_workspaces.json");
 }
 
 function recordChatWorkspace(chatId, workspaceRoot) {
@@ -137,7 +138,7 @@ function getShadowGitDir(workspaceRoot) {
     const norm = path.resolve(workspaceRoot);
     const hash = crypto.createHash("md5").update(norm).digest("hex").slice(0, 10);
     const baseName = path.basename(norm).toLowerCase().replace(/[^a-z0-9_-]+/g, "-") || "workspace";
-    return path.join(os.homedir(), ".MultiAI", "shadow_git", `${baseName}-${hash}`);
+    return path.join(getUserHome(), ".MultiAI", "shadow_git", `${baseName}-${hash}`);
 }
 
 /**

@@ -180,6 +180,33 @@ function mergeWithDefaults(parsed) {
     return merged;
 }
 
+function getUserHome() {
+    if (process.env.MULTIAI_HOME && fs.existsSync(process.env.MULTIAI_HOME)) {
+        return process.env.MULTIAI_HOME;
+    }
+    const termuxHome = "/data/data/com.termux/files/home";
+    if (process.env.TERMUX_VERSION || process.platform === "android" || fs.existsSync(termuxHome)) {
+        if (process.env.HOME && process.env.HOME.includes("/files/home") && fs.existsSync(process.env.HOME)) {
+            return process.env.HOME;
+        }
+        if (fs.existsSync(termuxHome)) {
+            return termuxHome;
+        }
+        const altTermuxHome = "/data/user/0/com.termux/files/home";
+        if (fs.existsSync(altTermuxHome)) {
+            return altTermuxHome;
+        }
+        if (process.env.TERMUX_VERSION) {
+            return termuxHome;
+        }
+    }
+    const envHome = process.env.HOME;
+    if (envHome && envHome !== "/" && envHome !== "/data" && envHome !== "/data/user/0/com.termux" && fs.existsSync(envHome)) {
+        return envHome;
+    }
+    return os.homedir();
+}
+
 /**
  * Resolves the canonical config.ini path, prioritizing:
  * 1. MULTIAI_CONFIG_PATH environment variable (if explicitly set and exists)
@@ -192,7 +219,7 @@ function getDefaultConfigPath() {
         return process.env.MULTIAI_CONFIG_PATH;
     }
 
-    const homeDir = os.homedir();
+    const homeDir = getUserHome();
     const primaryUserConfig = path.join(homeDir, ".MultiAI", "config.ini");
     if (fs.existsSync(primaryUserConfig)) {
         return primaryUserConfig;
@@ -200,15 +227,18 @@ function getDefaultConfigPath() {
 
     const repoRoot = process.env.MULTIAI_REPO_DIR || path.resolve(__dirname, "../..");
     const rootConfig = path.join(repoRoot, "config.ini");
+    const exampleConfig = path.join(repoRoot, "config.example.ini");
+    const coreConfig = path.join(__dirname, "config.ini");
 
-    // Auto-migrate: If ~/.MultiAI can be prepared, copy from root config.ini to ~/.MultiAI/config.ini
+    // Auto-migrate: If ~/.MultiAI can be prepared, copy from root config.ini or example to ~/.MultiAI/config.ini
     try {
         const userDir = path.join(homeDir, ".MultiAI");
         if (!fs.existsSync(userDir)) {
             fs.mkdirSync(userDir, { recursive: true });
         }
-        if (fs.existsSync(rootConfig)) {
-            fs.copyFileSync(rootConfig, primaryUserConfig);
+        const srcCand = [rootConfig, exampleConfig, coreConfig].find(p => fs.existsSync(p) && fs.statSync(p).size > 0);
+        if (srcCand) {
+            fs.copyFileSync(srcCand, primaryUserConfig);
             return primaryUserConfig;
         }
     } catch (_) {}
@@ -293,6 +323,7 @@ function saveConfig(updates, filePath) {
 }
 
 module.exports = {
+    getUserHome,
     loadConfig,
     getConfig: () => loadConfig(),
     saveConfig,

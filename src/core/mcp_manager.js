@@ -7,6 +7,7 @@
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
+const { getUserHome } = require("./config_manager");
 const { Client } = require("@modelcontextprotocol/sdk/client/index.js");
 const { StdioClientTransport } = require("@modelcontextprotocol/sdk/client/stdio.js");
 const { SSEClientTransport } = require("@modelcontextprotocol/sdk/client/sse.js");
@@ -20,7 +21,7 @@ class McpManager {
     }
 
     _resolveConfigPath() {
-        const homeDir = os.homedir();
+        const homeDir = getUserHome();
         const primary = path.join(homeDir, ".MultiAI", "mcp_servers.json");
         const secondary = path.join(process.cwd(), "mcp_config.json");
 

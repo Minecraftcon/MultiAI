@@ -243,16 +243,52 @@ def ensure_task_daemon_binary(root_dir):
     log_info("MultiAI will seamlessly use the Python Flask task server fallback.")
     return False
 
-def ensure_user_configuration(root_dir):
-    """
-    Ensure ~/.MultiAI exists and install config.ini and models.yaml if missing.
-    """
-    user_dir = os.path.expanduser("~/.MultiAI")
+def get_user_home():
+    if os.environ.get("MULTIAI_HOME") and os.path.isdir(os.environ["MULTIAI_HOME"]):
+        return os.environ["MULTIAI_HOME"]
+    termux_home = "/data/data/com.termux/files/home"
+    if os.environ.get("TERMUX_VERSION") or (sys.platform == "linux" and os.path.isdir(termux_home)):
+        home_env = os.environ.get("HOME", "")
+        if home_env and home_env.endswith("/files/home") and os.path.isdir(home_env):
+            return home_env
+        if os.path.isdir(termux_home):
+            return termux_home
+        alt_termux_home = "/data/user/0/com.termux/files/home"
+        if os.path.isdir(alt_termux_home):
+            return alt_termux_home
+        if os.environ.get("TERMUX_VERSION"):
+            return termux_home
+    home_env = os.environ.get("HOME", "")
+    if home_env and home_env not in ("/", "/data", "/data/user/0/com.termux") and os.path.isdir(home_env):
+        return home_env
+    try:
+        from pathlib import Path
+        h = str(Path.home())
+        if h and h not in ("/", "/data", "/data/user/0/com.termux") and os.path.isdir(h):
+            return h
+    except Exception:
+        pass
+    expanded = os.path.expanduser("~")
+    if expanded and expanded not in ("/", "/data", "/data/user/0/com.termux") and os.path.isdir(expanded):
+        return expanded
+    if os.path.isdir(termux_home):
+        return termux_home
+    return home_env or "/tmp"
+
+def get_user_storage_dir():
+    home = get_user_home()
+    user_dir = os.path.join(home, ".MultiAI")
     try:
         os.makedirs(user_dir, exist_ok=True)
     except Exception as e:
         log_warn(f"Could not create user configuration directory {user_dir}: {e}")
-        return
+    return user_dir
+
+def ensure_user_configuration(root_dir):
+    """
+    Ensure ~/.MultiAI exists and install config.ini and models.yaml if missing.
+    """
+    user_dir = get_user_storage_dir()
 
     # 1. Ensure config.ini in ~/.MultiAI
     user_config = os.path.join(user_dir, "config.ini")
@@ -707,14 +743,16 @@ def resolve_editor():
     return editor or ("notepad" if sys.platform == "win32" else "nano")
 
 def resolve_models_path():
-    user_models = os.path.expanduser("~/.MultiAI/models.yaml")
+    if os.environ.get("MULTIAI_MODELS_PATH") and os.path.exists(os.environ["MULTIAI_MODELS_PATH"]):
+        return os.environ["MULTIAI_MODELS_PATH"]
+    user_dir = get_user_storage_dir()
+    user_models = os.path.join(user_dir, "models.yaml")
     if os.path.exists(user_models) and os.path.getsize(user_models) > 0:
         return user_models
     root_dir = os.path.dirname(os.path.abspath(__file__))
     root_models = os.path.join(root_dir, "models.yaml")
     if os.path.exists(root_models) and os.path.getsize(root_models) > 0:
         try:
-            os.makedirs(os.path.expanduser("~/.MultiAI"), exist_ok=True)
             shutil.copyfile(root_models, user_models)
             return user_models
         except Exception:
@@ -735,27 +773,23 @@ def open_file_in_editor(file_path, label="configuration", exit_on_done=True):
             sys.exit(1)
 
 def resolve_config_ini_path():
-    if os.environ.get("MULTIAI_CONFIG_PATH"):
-        return os.environ.get("MULTIAI_CONFIG_PATH")
-    user_config = os.path.expanduser("~/.MultiAI/config.ini")
+    if os.environ.get("MULTIAI_CONFIG_PATH") and os.path.exists(os.environ["MULTIAI_CONFIG_PATH"]):
+        return os.environ["MULTIAI_CONFIG_PATH"]
+    user_dir = get_user_storage_dir()
+    user_config = os.path.join(user_dir, "config.ini")
     if os.path.exists(user_config) and os.path.getsize(user_config) > 0:
         return user_config
     root_dir = os.path.dirname(os.path.abspath(__file__))
     root_config = os.path.join(root_dir, "config.ini")
     example_config = os.path.join(root_dir, "config.example.ini")
     core_config = os.path.join(root_dir, "src", "core", "config.ini")
-    src_path = None
     for cand in [root_config, example_config, core_config]:
         if os.path.exists(cand) and os.path.getsize(cand) > 0:
-            src_path = cand
-            break
-    if src_path:
-        try:
-            os.makedirs(os.path.expanduser("~/.MultiAI"), exist_ok=True)
-            shutil.copyfile(src_path, user_config)
-            return user_config
-        except Exception:
-            return src_path
+            try:
+                shutil.copyfile(cand, user_config)
+                return user_config
+            except Exception:
+                return cand
     return user_config
 
 def get_config_general(default_port=8080, default_host="0.0.0.0"):
@@ -877,8 +911,11 @@ def main():
         node_env["MULTIAI_IPC"] = ipc_mode
     if args.task_daemon:
         node_env["MULTIAI_TASK_DAEMON"] = args.task_daemon
+    node_env["MULTIAI_HOME"] = get_user_home()
     ini_path = resolve_config_ini_path()
     node_env["MULTIAI_CONFIG_PATH"] = ini_path
+    models_path = resolve_models_path()
+    node_env["MULTIAI_MODELS_PATH"] = models_path
 
     node_modules_path = os.path.join(root_dir, "node_modules")
     existing_node_path = node_env.get("NODE_PATH", "")

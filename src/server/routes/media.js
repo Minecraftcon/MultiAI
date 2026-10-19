@@ -3,7 +3,7 @@ const path = require("path");
 const os = require("os");
 const url = require("url");
 const { getMimeType, getEnvKey, sendJSON } = require("../utils");
-const { getConfig } = require("../../core/config_manager");
+const { getConfig, getUserHome } = require("../../core/config_manager");
 const conversationsManager = require("../../core/conversations_manager");
 const { resolveImageProvider } = require("../../providers");
 
@@ -49,7 +49,7 @@ async function handleMedia(req, res) {
         }
 
         if (rawPath.startsWith("~/") || rawPath === "~") {
-            rawPath = path.join(os.homedir(), rawPath.slice(1));
+            rawPath = path.join(getUserHome(), rawPath.slice(1));
         }
 
         const candidates = [];
@@ -59,15 +59,16 @@ async function handleMedia(req, res) {
             candidates.push(path.join(__dirname, "../../../client", rawPath.replace(/^\/+/, "")));
             candidates.push(path.join(process.cwd(), "../client", rawPath.replace(/^\/+/, "")));
         } else {
+            const home = getUserHome();
             candidates.push(path.resolve(process.cwd(), rawPath));
             candidates.push(path.resolve(__dirname, "../../../client", rawPath));
             candidates.push(path.resolve(process.cwd(), "../client", rawPath));
             candidates.push(path.resolve(process.cwd(), "generated_images", rawPath));
-            candidates.push(path.resolve(os.homedir(), rawPath));
-            candidates.push(path.resolve(os.homedir(), "Videos", rawPath));
-            candidates.push(path.resolve(os.homedir(), "Pictures", rawPath));
-            candidates.push(path.resolve(os.homedir(), "Downloads", rawPath));
-            candidates.push(path.resolve(os.homedir(), "Documents", rawPath));
+            candidates.push(path.resolve(home, rawPath));
+            candidates.push(path.resolve(home, "Videos", rawPath));
+            candidates.push(path.resolve(home, "Pictures", rawPath));
+            candidates.push(path.resolve(home, "Downloads", rawPath));
+            candidates.push(path.resolve(home, "Documents", rawPath));
         }
 
         let targetPath = null;

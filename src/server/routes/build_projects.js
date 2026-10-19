@@ -3,6 +3,7 @@ const fs = require("fs");
 const path = require("path");
 const os = require("os");
 const conversationsManager = require("../../core/conversations_manager");
+const { getUserHome } = require("../../core/config_manager");
 const { sendJSON } = require("../utils");
 
 async function parseBodyJSON(req) {
@@ -25,7 +26,7 @@ async function handleValidateDirRoute(req, res) {
         const queryPath = parsedUrl.searchParams.get("path");
 
         if (!queryPath) {
-            const home = os.homedir();
+            const home = getUserHome();
             const candidatePaths = [
                 path.join(home, "Documents"),
                 path.join(home, "Projects"),

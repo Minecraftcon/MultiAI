@@ -44,45 +44,79 @@ resolve_editor() {
   echo "nano"
 }
 
+resolve_user_home() {
+  if [ -n "$MULTIAI_HOME" ] && [ -d "$MULTIAI_HOME" ]; then
+    echo "$MULTIAI_HOME"
+    return
+  fi
+  local termux_home="/data/data/com.termux/files/home"
+  if [ -n "$TERMUX_VERSION" ] || [ -d "$termux_home" ]; then
+    if [ -n "$HOME" ] && [[ "$HOME" == *"/files/home"* ]] && [ -d "$HOME" ]; then
+      echo "$HOME"
+      return
+    fi
+    if [ -d "$termux_home" ]; then
+      echo "$termux_home"
+      return
+    fi
+    local alt_termux_home="/data/user/0/com.termux/files/home"
+    if [ -d "$alt_termux_home" ]; then
+      echo "$alt_termux_home"
+      return
+    fi
+    if [ -n "$TERMUX_VERSION" ]; then
+      echo "$termux_home"
+      return
+    fi
+  fi
+  if [ -n "$HOME" ] && [ "$HOME" != "/" ] && [ "$HOME" != "/data" ] && [ "$HOME" != "/data/user/0/com.termux" ] && [ -d "$HOME" ]; then
+    echo "$HOME"
+    return
+  fi
+  echo "${HOME:-/tmp}"
+}
+
+USER_HOME="$(resolve_user_home)"
+export MULTIAI_HOME="$USER_HOME"
+
 resolve_config_path() {
   if [ -n "$MULTIAI_CONFIG_PATH" ]; then
     echo "$MULTIAI_CONFIG_PATH"
     return
   fi
-  local user_cfg="$HOME/.MultiAI/config.ini"
+  local user_dir="$USER_HOME/.MultiAI"
+  local user_cfg="$user_dir/config.ini"
   if [ -s "$user_cfg" ]; then
     echo "$user_cfg"
     return
   fi
-  mkdir -p "$HOME/.MultiAI" 2>/dev/null || true
+  mkdir -p "$user_dir" 2>/dev/null || true
   local root_cfg="$MULTIAI_DIR/config.ini"
-  if [ -f "$root_cfg" ]; then
-    cp "$root_cfg" "$user_cfg" 2>/dev/null || true
-    if [ -s "$user_cfg" ]; then
-      echo "$user_cfg"
-      return
-    fi
-    echo "$root_cfg"
-    return
-  fi
   local example_cfg="$MULTIAI_DIR/config.example.ini"
-  if [ -f "$example_cfg" ]; then
-    cp "$example_cfg" "$user_cfg" 2>/dev/null || true
-    if [ -s "$user_cfg" ]; then
-      echo "$user_cfg"
-      return
+  for cand in "$root_cfg" "$example_cfg"; do
+    if [ -f "$cand" ]; then
+      cp "$cand" "$user_cfg" 2>/dev/null || true
+      if [ -s "$user_cfg" ]; then
+        echo "$user_cfg"
+        return
+      fi
     fi
-  fi
+  done
   echo "$user_cfg"
 }
 
 resolve_models_path() {
-  local user_models="$HOME/.MultiAI/models.yaml"
+  if [ -n "$MULTIAI_MODELS_PATH" ]; then
+    echo "$MULTIAI_MODELS_PATH"
+    return
+  fi
+  local user_dir="$USER_HOME/.MultiAI"
+  local user_models="$user_dir/models.yaml"
   if [ -s "$user_models" ]; then
     echo "$user_models"
     return
   fi
-  mkdir -p "$HOME/.MultiAI" 2>/dev/null || true
+  mkdir -p "$user_dir" 2>/dev/null || true
   local root_models="$MULTIAI_DIR/models.yaml"
   if [ -f "$root_models" ]; then
     cp "$root_models" "$user_models" 2>/dev/null || true
@@ -90,8 +124,6 @@ resolve_models_path() {
       echo "$user_models"
       return
     fi
-    echo "$root_models"
-    return
   fi
   echo "$user_models"
 }
@@ -125,9 +157,11 @@ if ! command -v python3 >/dev/null 2>&1; then
   fi
 fi
 
-# Export workspace environment variables
+# Export workspace and configuration environment variables
 export MULTIAI_REPO_DIR="$MULTIAI_DIR"
 export MULTIAI_WORKSPACE_DIR="$TARGET_WORKSPACE"
+export MULTIAI_CONFIG_PATH="$(resolve_config_path)"
+export MULTIAI_MODELS_PATH="$(resolve_models_path)"
 
 # Execute Universal Starter in workspace
 exec "$PYTHON_BIN" "$MULTIAI_DIR/start.py" --workspace "$TARGET_WORKSPACE" "$@"

@@ -7,8 +7,45 @@ const { getConfig, saveConfig } = require("../core/config_manager");
 const conversationsManager = require("../core/conversations_manager");
 const { getTaskServerTarget } = require("../core/sandbox_manager");
 
+function getUserHome() {
+    if (process.env.MULTIAI_HOME && fs.existsSync(process.env.MULTIAI_HOME)) {
+        return process.env.MULTIAI_HOME;
+    }
+    const termuxHome = "/data/data/com.termux/files/home";
+    if (process.env.TERMUX_VERSION || process.platform === "android" || fs.existsSync(termuxHome)) {
+        if (process.env.HOME && process.env.HOME.includes("/files/home") && fs.existsSync(process.env.HOME)) {
+            return process.env.HOME;
+        }
+        if (fs.existsSync(termuxHome)) {
+            return termuxHome;
+        }
+        const altTermuxHome = "/data/user/0/com.termux/files/home";
+        if (fs.existsSync(altTermuxHome)) {
+            return altTermuxHome;
+        }
+        if (process.env.TERMUX_VERSION) {
+            return termuxHome;
+        }
+    }
+    const envHome = process.env.HOME;
+    if (envHome && envHome !== "/" && envHome !== "/data" && envHome !== "/data/user/0/com.termux" && fs.existsSync(envHome)) {
+        return envHome;
+    }
+    return os.homedir();
+}
+
+function getUserStorageDir() {
+    const home = getUserHome();
+    const multiaiDir = path.join(home, ".MultiAI");
+    if (!fs.existsSync(multiaiDir)) {
+        try { fs.mkdirSync(multiaiDir, { recursive: true }); } catch (_) {}
+    }
+    return multiaiDir;
+}
+
 function getEnvKey(keyName) {
     if (!keyName) return null;
+    if (process.env[keyName]) return process.env[keyName];
     const aliases = [keyName];
     if (keyName === "TOKENHARBOR_API_KEY") aliases.push("TOKENHARBOUR_API_KEY");
     if (keyName === "TOKENHARBOUR_API_KEY") aliases.push("TOKENHARBOR_API_KEY");
@@ -19,7 +56,7 @@ function getEnvKey(keyName) {
         if (process.env[k]) return process.env[k];
     }
     try {
-        const bashrcPath = path.join(os.homedir(), ".bashrc");
+        const bashrcPath = path.join(getUserHome(), ".bashrc");
         if (fs.existsSync(bashrcPath)) {
             const content = fs.readFileSync(bashrcPath, "utf8");
             for (const k of aliases) {
@@ -36,7 +73,11 @@ function getEnvKey(keyName) {
 
 function loadModelsConfig() {
     try {
-        const userDir = path.join(os.homedir(), ".MultiAI");
+        if (process.env.MULTIAI_MODELS_PATH && fs.existsSync(process.env.MULTIAI_MODELS_PATH)) {
+            const fileContent = fs.readFileSync(process.env.MULTIAI_MODELS_PATH, "utf8");
+            return YAML.parse(fileContent) || { providers: {} };
+        }
+        const userDir = getUserStorageDir();
         const userYamlPath = path.join(userDir, "models.yaml");
         const repoYamlPath = path.join(__dirname, "../..", "models.yaml");
         
@@ -458,6 +499,8 @@ function sendJSON(res, status, data) {
 }
 
 module.exports = {
+    getUserHome,
+    getUserStorageDir,
     getEnvKey,
     loadModelsConfig,
     getModelDefaultContext,
