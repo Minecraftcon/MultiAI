@@ -331,6 +331,26 @@ providers:
         name: "Qwen 3.8 27B"
         supports_tools: true
         supports_vision: false
+      - id: "qwen/qwen3.8-2.4t-a95b"
+        name: "Qwen 3.8 2.4T A95B"
+        supports_tools: true
+        supports_vision: false
+        max_context_tokens: 1048576
+      - id: "qwen/qwen3.6-plus"
+        name: "Qwen 3.6 Plus"
+        supports_tools: true
+        supports_vision: false
+        max_context_tokens: 1000000
+      - id: "qwen/qwen3.7-plus"
+        name: "Qwen 3.7 Plus"
+        supports_tools: true
+        supports_vision: false
+        max_context_tokens: 1000000
+      - id: "qwen/qwen3.5-flash-02-23"
+        name: "Qwen 3.5 Flash 02-23"
+        supports_tools: true
+        supports_vision: false
+        max_context_tokens: 1000000
       - id: "google/gemma-4-26b-a4b-it:free"
         name: "Gemma 4 26B IT (Free)"
         supports_tools: true
@@ -574,17 +594,22 @@ providers:
         supports_tools: true
         supports_vision: false
 
-  # ----------------------------------------------------------------------------
+  # ------------------------------------------------------------------------------
   # OpenCode Zen (Free Tier)
   # API Key: export OPENCODE_API_KEY="your-key" (https://opencode.ai)
-  # Features: Free community models including Nemotron, MiMo, and Ling.
-  # ----------------------------------------------------------------------------
+  # Features: Free community models including Nemotron, MiMo, GLM, DeepSeek, and more.
+  # ------------------------------------------------------------------------------
   opencode:
     name: "OpenCode Zen (Free Tier)"
     type: "opencode"
     api_key_env: "OPENCODE_API_KEY"
     base_url: "https://opencode.ai/zen/v1"
     models:
+      # NVIDIA Free Models
+      - id: "nemotron-3.5-super-vl-free"
+        name: "Nemotron 3.5 Super VL (Free)"
+        supports_tools: true
+        supports_vision: false
       - id: "nemotron-3.5-lightning-free"
         name: "Nemotron 3.5 Lightning (Free)"
         supports_tools: true
@@ -593,6 +618,8 @@ providers:
         name: "Nemotron 3 Ultra (Free)"
         supports_tools: true
         supports_vision: false
+      
+      # MiMo Models
       - id: "mimo-v2.6-flash-free"
         name: "MiMo V2.6 Flash (Free)"
         supports_tools: true
@@ -601,10 +628,50 @@ providers:
         name: "MiMo V2.5 (Free — Vision)"
         supports_tools: true
         supports_vision: true
+      
+      # GLM Models
+      - id: "glm-5.3-flash-free"
+        name: "GLM 5.3 Flash (Free)"
+        supports_tools: true
+        supports_vision: false
+        max_context_tokens: 110000
+      
+      # DeepSeek Models
+      - id: "deepseek-v4.1-flash-free"
+        name: "DeepSeek V4.1 Flash (Free)"
+        supports_tools: true
+        supports_vision: false
+        max_context_tokens: 1000000
+      
+      # Ling Models
       - id: "ling-3.0-flash-fin-free"
         name: "Ling 3.0 Flash Fin (Free)"
         supports_tools: true
         supports_vision: false
+      
+      # Other Free Models
+      - id: "big-pickle"
+        name: "Big Pickle (Free)"
+        supports_tools: true
+        supports_vision: false
+      - id: "pulse-alpha-free"
+        name: "Pulse Alpha (Free)"
+        supports_tools: true
+        supports_vision: false
+      - id: "beam-free"
+        name: "Beam (Free)"
+        supports_tools: true
+        supports_vision: false
+      - id: "flint-40b-free"
+        name: "Flint 40B (Free)"
+        supports_tools: true
+        supports_vision: false
+      - id: "jev-1.13-free"
+        name: "Jev 1.13 (Free)"
+        supports_tools: true
+        supports_vision: false
+      
+      # Vision Models
       - id: "space-bunny-free"
         name: "Space Bunny (Free — Vision)"
         supports_tools: true

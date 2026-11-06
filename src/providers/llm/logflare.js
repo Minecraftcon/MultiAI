@@ -5,10 +5,11 @@ class LogflareProvider extends BaseProvider {
     static id = "logflare";
     static displayName = "Logfare AI";
     static matchPatterns = [
-        /^(log[-_]?f[l]?a[r]?e|logfare|logflare)$/i,
+        /^(log[-_]?f[l]?a[r]?e|logfare|LOGFLARE|LOGFARE|logflare)$/i,
         "logflare",
         "logfare",
-        "logfare.ai"
+        "logfare.ai",
+        "LOGFLARE"
     ];
 
     getEndpoint(config = {}, model, apiKey) {
