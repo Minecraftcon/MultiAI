@@ -6,6 +6,8 @@ import { state } from "../state.js";
 
 let isPickerOpen = false;
 let currentSearch = "";
+// Provider groups are collapsed by default. Keys are provider ids (or group labels).
+const expandedGroups = new Set();
 
 export function updateModelPickerDisplay() {
     const modelSelect = document.getElementById("modelSelect");
@@ -47,7 +49,7 @@ export function renderModelPickerList(filter = "") {
     let totalRendered = 0;
 
     if (optgroups.length > 0) {
-        optgroups.forEach(group => {
+        optgroups.forEach((group, groupIndex) => {
             const rawOptions = Array.from(group.querySelectorAll("option"));
             const matchingOptions = rawOptions.filter(opt => {
                 if (!filterLower) return true;
@@ -58,16 +60,51 @@ export function renderModelPickerList(filter = "") {
 
             if (matchingOptions.length === 0) return;
 
-            const groupEl = document.createElement("div");
-            groupEl.className = "model-group";
+            const groupKey = group.dataset.provider || group.label;
+            const isSearching = Boolean(filterLower);
+            // Groups stay collapsed by default; searching temporarily expands matches.
+            const isExpanded = isSearching || expandedGroups.has(groupKey);
 
-            const headerEl = document.createElement("div");
-            headerEl.className = "model-group-title";
-            headerEl.textContent = group.label;
+            const groupEl = document.createElement("div");
+            groupEl.className = `model-group${isExpanded ? " is-expanded" : ""}`;
+
+            const itemsId = `modelGroupItems-${groupIndex}`;
+
+            const headerEl = document.createElement("button");
+            headerEl.type = "button";
+            headerEl.className = "model-group-header";
+            headerEl.setAttribute("aria-expanded", isExpanded ? "true" : "false");
+            headerEl.setAttribute("aria-controls", itemsId);
+
+            const titleEl = document.createElement("span");
+            titleEl.className = "model-group-title";
+            titleEl.textContent = group.label;
+
+            const chevronEl = document.createElement("i");
+            chevronEl.setAttribute("data-lucide", "chevron-down");
+            chevronEl.className = "model-group-chevron";
+
+            headerEl.append(titleEl, chevronEl);
+
+            headerEl.addEventListener("click", (e) => {
+                // Re-rendering detaches this node, which would otherwise make the
+                // document-level outside-click handler think the click was outside.
+                e.stopPropagation();
+                if (isSearching) return;
+                if (expandedGroups.has(groupKey)) {
+                    expandedGroups.delete(groupKey);
+                } else {
+                    expandedGroups.add(groupKey);
+                }
+                renderModelPickerList(filter);
+            });
+
             groupEl.appendChild(headerEl);
 
             const itemsEl = document.createElement("div");
             itemsEl.className = "model-group-items";
+            itemsEl.id = itemsId;
+            itemsEl.hidden = !isExpanded;
 
             matchingOptions.forEach(opt => {
                 totalRendered++;
@@ -180,6 +217,7 @@ export function openModelPicker() {
 
     currentSearch = "";
     if (searchInput) searchInput.value = "";
+    expandedGroups.clear();
 
     renderModelPickerList("");
 

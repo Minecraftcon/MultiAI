@@ -91,6 +91,7 @@ export async function loadAvailableModels() {
             if (!provider.models || provider.models.length === 0) return;
             const group = document.createElement("optgroup");
             group.label = provider.name + (provider.available ? "" : " (No Key)");
+            group.dataset.provider = provider.id;
             if (!provider.available) {
                 group.disabled = true;
             }
