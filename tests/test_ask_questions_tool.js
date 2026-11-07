@@ -10,7 +10,7 @@ async function runTests() {
 
     // 2. Test chat-tool-badges configuration
     console.log("Test: chat-tool-badges for ask_question and ask_questions");
-    const badgesModule = await import("../client/src/components/chat-tool-badges.js");
+    const badgesModule = await import("../UI/webui/src/components/chat-tool-badges.js");
     const { getToolBadgeConfig } = badgesModule;
 
     const badge1 = getToolBadgeConfig("ask_question", {
@@ -31,7 +31,7 @@ async function runTests() {
 
     // 3. Test question prompt normalization
     console.log("Test: normalizeQuestionsPayload in chat-question-prompt");
-    const promptModule = await import("../client/src/components/chat-question-prompt.js");
+    const promptModule = await import("../UI/webui/src/components/chat-question-prompt.js");
     const { normalizeQuestionsPayload } = promptModule;
 
     const norm1 = normalizeQuestionsPayload({
@@ -56,7 +56,7 @@ async function runTests() {
 
     // 4. Test dom.js formatToolResult
     console.log("Test: formatToolResult in dom.js");
-    const domModule = await import("../client/src/utils/dom.js");
+    const domModule = await import("../UI/webui/src/utils/dom.js");
     const { formatToolResult } = domModule;
 
     const answeredResult = formatToolResult({
@@ -125,7 +125,7 @@ async function runTests() {
         createElement: (tag) => new SimpleMockEl(tag)
     };
 
-    const badgeSyncModule = await import("../client/src/tools/badge-sync.js");
+    const badgeSyncModule = await import("../UI/webui/src/tools/badge-sync.js");
     const { onToolComplete } = badgeSyncModule;
 
     const mockBadge = new SimpleMockEl("div");

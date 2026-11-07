@@ -184,7 +184,9 @@ function startPythonTaskServer() {
 
     const repoRoot = path.join(__dirname, "../..");
     const pythonCmd = process.platform === "win32" ? "python" : "python3";
-    const taskScript = path.join(repoRoot, "task_server.py");
+    const defaultTaskScript = path.join(repoRoot, "daemon", "task_server.py");
+    const legacyTaskScript = path.join(repoRoot, "task_server.py");
+    const taskScript = fs.existsSync(defaultTaskScript) ? defaultTaskScript : legacyTaskScript;
 
     const dataDir = getStorageDir();
 
@@ -199,12 +201,14 @@ function startPythonTaskServer() {
     let engine = getTaskDaemonEngine();
     let goBinaryName = process.platform === "win32" ? "task_daemon.exe" : "task_daemon";
     if (process.platform === "darwin") {
-        if (process.arch === "arm64" && fs.existsSync(path.join(repoRoot, "bin", "task_daemon_darwin_arm64"))) {
+        if (process.arch === "arm64" && (fs.existsSync(path.join(repoRoot, "daemon", "bin", "task_daemon_darwin_arm64")) || fs.existsSync(path.join(repoRoot, "bin", "task_daemon_darwin_arm64")))) {
             goBinaryName = "task_daemon_darwin_arm64";
         }
     } else if (process.platform !== "win32") {
         if (process.arch === "arm64") {
-            if (fs.existsSync(path.join(repoRoot, "bin", "task_daemon_android_arm64")) && !fs.existsSync(path.join(repoRoot, "bin", "task_daemon_arm64"))) {
+            const hasArm64 = fs.existsSync(path.join(repoRoot, "daemon", "bin", "task_daemon_arm64")) || fs.existsSync(path.join(repoRoot, "bin", "task_daemon_arm64"));
+            const hasAndroidArm64 = fs.existsSync(path.join(repoRoot, "daemon", "bin", "task_daemon_android_arm64")) || fs.existsSync(path.join(repoRoot, "bin", "task_daemon_android_arm64"));
+            if (hasAndroidArm64 && !hasArm64) {
                 goBinaryName = "task_daemon_android_arm64";
             } else {
                 goBinaryName = "task_daemon_arm64";
@@ -213,7 +217,9 @@ function startPythonTaskServer() {
             goBinaryName = "task_daemon_armv7l";
         }
     }
-    const goBinaryPath = path.join(repoRoot, "bin", goBinaryName);
+    const daemonBinPath = path.join(repoRoot, "daemon", "bin", goBinaryName);
+    const legacyBinPath = path.join(repoRoot, "bin", goBinaryName);
+    const goBinaryPath = fs.existsSync(daemonBinPath) ? daemonBinPath : legacyBinPath;
 
     if (engine === "go") {
         if (!fs.existsSync(goBinaryPath)) {
@@ -295,7 +301,10 @@ function startPythonTaskServer() {
             if (engine === "go") {
                 startupTemplate = startupTemplate
                     .replace(/python3?\s+\{TASK_SERVER_SCRIPT\}/g, goBinaryPath)
-                    .replace(/python3?\s+\/workspace\/task_server\.py/g, `/workspace/bin/${goBinaryName}`);
+                    .replace(/python3?\s+\/workspace\/(daemon\/)?task_server\.py/g, `/workspace/daemon/bin/${goBinaryName}`);
+            } else {
+                startupTemplate = startupTemplate
+                    .replace(/\/workspace\/task_server\.py/g, `/workspace/daemon/task_server.py`);
             }
 
             const fullCmd = resolveCommandTemplate(startupTemplate, {

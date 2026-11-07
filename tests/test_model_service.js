@@ -3,7 +3,7 @@ const assert = require("assert");
 console.log("=== Running Safety Net Tests for Model Service & Vision Capabilities ===");
 
 (async () => {
-    const { isModelVisionCapable, availableModels, modelVisionMap, modelProviderMap } = await import("../client/src/services/models.js");
+    const { isModelVisionCapable, availableModels, modelVisionMap, modelProviderMap } = await import("../UI/webui/src/services/models.js");
 
     console.log("Test: isModelVisionCapable default heuristic");
     // 1. Built-in vision model name heuristics

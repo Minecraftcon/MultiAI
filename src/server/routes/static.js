@@ -9,7 +9,10 @@ function handleStatic(req, res) {
     }
 
     let reqPath = req.url.split("?")[0];
-    if (reqPath.startsWith("/../client")) {
+    if (reqPath.startsWith("/../UI/webui")) {
+        reqPath = reqPath.slice("/../UI/webui".length);
+        if (!reqPath.startsWith("/")) reqPath = "/" + reqPath;
+    } else if (reqPath.startsWith("/../client")) {
         reqPath = reqPath.slice("/../client".length);
         if (!reqPath.startsWith("/")) reqPath = "/" + reqPath;
     }
@@ -18,7 +21,9 @@ function handleStatic(req, res) {
         return res.end("Bad request");
     }
 
-    const webRoot = path.join(__dirname, "../../../client");
+    const defaultWebRoot = path.join(__dirname, "../../../UI/webui");
+    const legacyWebRoot = path.join(__dirname, "../../../client");
+    const webRoot = fs.existsSync(defaultWebRoot) ? defaultWebRoot : legacyWebRoot;
     let filePath = "";
     if (reqPath === "/" || reqPath === "/index.html" || reqPath === "/modular") {
         filePath = path.join(webRoot, "index.html");

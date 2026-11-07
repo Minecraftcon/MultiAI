@@ -2,7 +2,9 @@ const fs = require("fs");
 const path = require("path");
 const https = require("https");
 
-const VENDOR_ROOT = path.join(__dirname, "../client/vendor");
+const VENDOR_ROOT = fs.existsSync(path.join(__dirname, "../UI/webui")) 
+    ? path.join(__dirname, "../UI/webui/vendor") 
+    : path.join(__dirname, "../client/vendor");
 
 function downloadFile(url, destPath) {
     return new Promise((resolve, reject) => {

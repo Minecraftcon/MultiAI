@@ -5,7 +5,7 @@ async function runTests() {
 
     // 1. Tool Registry & Planning Tools export
     console.log("Test: Planning tools registered in tools module");
-    const toolsModule = await import("../client/src/tools/index.js");
+    const toolsModule = await import("../UI/webui/src/tools/index.js");
     const { getTool, hasTool, tools } = toolsModule;
 
     assert(hasTool("write_todos"), "Tool registry must contain 'write_todos'");
@@ -26,7 +26,7 @@ async function runTests() {
 
     // 2. Testing write_todos handler logic
     console.log("Test: write_todos handler normalizes tasks and computes counts");
-    const planningModule = await import("../client/src/tools/planning/index.js");
+    const planningModule = await import("../UI/webui/src/tools/planning/index.js");
     const { writeTodosTool } = planningModule;
 
     const result = await writeTodosTool.handler({
@@ -48,12 +48,12 @@ async function runTests() {
 
     // 3. Subagent module exports
     console.log("Test: Subagent engine exports runSubagent");
-    const subagentModule = await import("../client/src/agent/subagent.js");
+    const subagentModule = await import("../UI/webui/src/agent/subagent.js");
     assert.strictEqual(typeof subagentModule.runSubagent, "function", "runSubagent must be an exported function");
 
     // 4. Plan Serializer & Artifact path
     console.log("Test: Plan serializer formats markdown and resolves artifact path");
-    const { formatTodosMarkdown, resolvePlanArtifactPath } = await import("../client/src/tools/planning/plan-serializer.js");
+    const { formatTodosMarkdown, resolvePlanArtifactPath } = await import("../UI/webui/src/tools/planning/plan-serializer.js");
     const sampleTodos = [
         { id: "1", content: "Create module A", status: "completed" },
         { id: "2", content: "Implement module B", status: "in_progress" },
@@ -71,7 +71,7 @@ async function runTests() {
 
     // 5. Plan HITL Detection & Card Metadata
     console.log("Test: Plan HITL detection detects plan text vs normal chat");
-    const { isPlanApprovalRequired, extractPlanMetadata } = await import("../client/src/components/plan-hitl.js");
+    const { isPlanApprovalRequired, extractPlanMetadata } = await import("../UI/webui/src/components/plan-hitl.js");
     const planText = "## Implementation Plan - Core Engine\nThis is the plan description.\n1. Add component\n2. Add test\nShall I proceed with this plan?";
     assert(isPlanApprovalRequired(planText, { mode: "build" }), "Must detect plan requiring approval in build mode");
     assert(!isPlanApprovalRequired("Hello, what is the weather today?", { mode: "build" }), "Normal chat must not require plan approval");
@@ -82,7 +82,7 @@ async function runTests() {
 
     // 5b. Plan Commenting Prompt Formatter
     console.log("Test: Plan commenting formats structured feedback prompt");
-    const { formatCommentsFeedbackPrompt } = await import("../client/src/components/plan-commenting.js");
+    const { formatCommentsFeedbackPrompt } = await import("../UI/webui/src/components/plan-commenting.js");
     const sampleComments = [
         { quote: "Add component", text: "Please use ES modules" },
         { quote: "Add test", text: "Include safety net unit tests" }
@@ -96,7 +96,7 @@ async function runTests() {
 
     // 6. Verification Gate
     console.log("Test: Verification gate evaluates test tool calls and completion conditions");
-    const { isVerificationToolCall, shouldTriggerVerification, getVerificationPrompt } = await import("../client/src/agent/verification-gate.js");
+    const { isVerificationToolCall, shouldTriggerVerification, getVerificationPrompt } = await import("../UI/webui/src/agent/verification-gate.js");
     assert(isVerificationToolCall("run_task", { command: "npm test" }), "npm test is a verification tool call");
     assert(isVerificationToolCall("run_task", { command: "vitest run" }), "vitest is a verification tool call");
     assert(isVerificationToolCall("run_command", { command: "pytest" }), "pytest is a verification tool call");

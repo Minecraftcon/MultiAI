@@ -56,11 +56,15 @@ async function handleMedia(req, res) {
         if (path.isAbsolute(rawPath)) {
             candidates.push(path.normalize(rawPath));
             candidates.push(path.join(process.cwd(), rawPath.replace(/^\/+/, "")));
+            candidates.push(path.join(__dirname, "../../../UI/webui", rawPath.replace(/^\/+/, "")));
+            candidates.push(path.join(process.cwd(), "../UI/webui", rawPath.replace(/^\/+/, "")));
             candidates.push(path.join(__dirname, "../../../client", rawPath.replace(/^\/+/, "")));
             candidates.push(path.join(process.cwd(), "../client", rawPath.replace(/^\/+/, "")));
         } else {
             const home = getUserHome();
             candidates.push(path.resolve(process.cwd(), rawPath));
+            candidates.push(path.resolve(__dirname, "../../../UI/webui", rawPath));
+            candidates.push(path.resolve(process.cwd(), "../UI/webui", rawPath));
             candidates.push(path.resolve(__dirname, "../../../client", rawPath));
             candidates.push(path.resolve(process.cwd(), "../client", rawPath));
             candidates.push(path.resolve(process.cwd(), "generated_images", rawPath));

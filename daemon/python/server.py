@@ -13,12 +13,19 @@ import urllib.parse
 from http.server import HTTPServer, ThreadingHTTPServer, BaseHTTPRequestHandler
 
 if __package__ is None or __package__ == "":
-    parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    if parent_dir not in sys.path:
-        sys.path.insert(0, parent_dir)
-    from task_server.backends import TaskManager
-    from task_server.tools import execute_code_grep, execute_python_code
-    from task_server.config import DEFAULT_PORT, DEFAULT_HOST
+    curr_dir = os.path.dirname(os.path.abspath(__file__))
+    parent_dir = os.path.dirname(curr_dir)
+    for p in [curr_dir, parent_dir]:
+        if p not in sys.path:
+            sys.path.insert(0, p)
+    try:
+        from backends import TaskManager
+        from tools import execute_code_grep, execute_python_code
+        from config import DEFAULT_PORT, DEFAULT_HOST
+    except ImportError:
+        from daemon.python.backends import TaskManager
+        from daemon.python.tools import execute_code_grep, execute_python_code
+        from daemon.python.config import DEFAULT_PORT, DEFAULT_HOST
 else:
     from .backends import TaskManager
     from .tools import execute_code_grep, execute_python_code

@@ -261,9 +261,12 @@ def ensure_task_daemon_binary(root_dir):
     """
     Verify the Go task daemon binary exists for the current platform/architecture.
     If missing, attempt auto-download from releases, or auto-compile if Go is installed.
+    Checks daemon/bin first, then bin/.
     """
     bin_name, goos, goarch, goarm = get_platform_daemon_info()
-    bin_dir = os.path.join(root_dir, "bin")
+    bin_dir = os.path.join(root_dir, "daemon", "bin")
+    if not os.path.exists(bin_dir):
+        bin_dir = os.path.join(root_dir, "bin")
     os.makedirs(bin_dir, exist_ok=True)
     target_path = os.path.join(bin_dir, bin_name)
 
@@ -279,14 +282,22 @@ def ensure_task_daemon_binary(root_dir):
         log_success(f"Task server daemon binary verified ({bin_name}).")
         return True
 
+    # 1b. Check legacy bin/ path
+    legacy_path = os.path.join(root_dir, "bin", bin_name)
+    if os.path.exists(legacy_path) and os.path.getsize(legacy_path) > 0:
+        log_success(f"Task server daemon binary verified ({bin_name}).")
+        return True
+
     # 2. Check Android/Termux fallback if on ARM64
     if bin_name == "task_daemon_arm64":
         alt_path = os.path.join(bin_dir, "task_daemon_android_arm64")
+        if not os.path.exists(alt_path):
+            alt_path = os.path.join(root_dir, "bin", "task_daemon_android_arm64")
         if os.path.exists(alt_path) and os.path.getsize(alt_path) > 0:
             log_success("Task server daemon binary verified (task_daemon_android_arm64).")
             return True
 
-    log_warn(f"Task daemon binary '{bin_name}' not found in bin/.")
+    log_warn(f"Task daemon binary '{bin_name}' not found in daemon/bin/.")
 
     # 3. Attempt auto-download from releases
     if download_task_daemon(bin_name, target_path):
@@ -294,7 +305,9 @@ def ensure_task_daemon_binary(root_dir):
 
     # 4. If download fails or is unavailable, check if Go compiler is available locally
     go_bin = find_executable("go")
-    task_go_dir = os.path.join(root_dir, "task_server_go")
+    task_go_dir = os.path.join(root_dir, "daemon", "go")
+    if not os.path.isdir(task_go_dir):
+        task_go_dir = os.path.join(root_dir, "task_server_go")
     if go_bin and os.path.isdir(task_go_dir):
         log_info(f"Found local Go compiler ({go_bin}). Compiling '{bin_name}' locally...")
         build_env = os.environ.copy()

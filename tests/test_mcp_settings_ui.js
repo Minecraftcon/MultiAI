@@ -7,8 +7,8 @@ async function runTests() {
 
     // 1. Verify index.html / settings-template.js contains MCP controls and card in subScreen_tools
     console.log("Test: markup for MCP controls");
-    const htmlPath = path.join(__dirname, "../client/index.html");
-    const templatePath = path.join(__dirname, "../client/src/components/settings-template.js");
+    const htmlPath = path.join(__dirname, "../UI/webui/index.html");
+    const templatePath = path.join(__dirname, "../UI/webui/src/components/settings-template.js");
     const html = fs.readFileSync(htmlPath, "utf8") + (fs.existsSync(templatePath) ? fs.readFileSync(templatePath, "utf8") : "");
 
     assert(html.includes('id="cfgEnableMcp"'), "index.html must contain cfgEnableMcp checkbox");
@@ -25,7 +25,7 @@ async function runTests() {
 
     // 2. Verify settings.css contains MCP styles adhering to color hierarchy
     console.log("Test: settings.css styles and color hierarchy tokens");
-    const cssPath = path.join(__dirname, "../client/styles/settings.css");
+    const cssPath = path.join(__dirname, "../UI/webui/styles/settings.css");
     const css = fs.readFileSync(cssPath, "utf8");
 
     assert(css.includes(".mcp-server-item"), "settings.css must define .mcp-server-item");
@@ -38,7 +38,7 @@ async function runTests() {
 
     // 3. Verify settings-view.js exports and functions
     console.log("Test: settings-view.js exports and controller logic");
-    const settingsViewPath = path.join(__dirname, "../client/src/components/settings-view.js");
+    const settingsViewPath = path.join(__dirname, "../UI/webui/src/components/settings-view.js");
     const settingsCode = fs.readFileSync(settingsViewPath, "utf8");
 
     assert(settingsCode.includes("renderMcpServersList"), "settings-view.js must define renderMcpServersList");

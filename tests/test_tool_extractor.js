@@ -208,7 +208,7 @@ console.log("Test: extractImageFromToolResult");
     assert(!parsedNewlineImg.base64.includes("\r"), "Must strip carriage returns from base64 string");
 
     // 5f. formatMessagesToTranscript must format image tool result cleanly without slicing base64
-    const { formatMessagesToTranscript } = await import("../client/src/agent/compactor.js");
+    const { formatMessagesToTranscript } = await import("../UI/webui/src/agent/compactor.js");
     const transcript = formatMessagesToTranscript([{
         role: "tool",
         name: "read_file",

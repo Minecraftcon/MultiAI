@@ -73,7 +73,7 @@ MultiAI is built around a decoupled three-tier architecture:
 ### Design Principles
 
 * **Strict Provider Decoupling**: Provider-specific quirks, payload transforms, and API anomalies are encapsulated strictly within [`src/providers/`](src/providers/). The frontend remains 100% provider-agnostic.
-* **Component-First Frontend**: Pure standards-based ES modules. Markup templates (such as [`client/src/components/settings-template.js`](client/src/components/settings-template.js)) and modular CSS split by domain ([`composer.css`](client/styles/composer.css), [`bottom-sheet.css`](client/styles/bottom-sheet.css), [`error-recovery.css`](client/styles/error-recovery.css), [`start-page.css`](client/styles/start-page.css)).
+* **Component-First Frontend**: Pure standards-based ES modules. Markup templates (such as [`UI/webui/src/components/settings-template.js`](UI/webui/src/components/settings-template.js)) and modular CSS split by domain ([`composer.css`](UI/webui/styles/composer.css), [`bottom-sheet.css`](UI/webui/styles/bottom-sheet.css), [`error-recovery.css`](UI/webui/styles/error-recovery.css), [`start-page.css`](UI/webui/styles/start-page.css)).
 * **Resilient IPC**: Node.js communicates with the local task daemon via loopback HTTP (`http://127.0.0.1:5789`) or local Unix Domain Sockets (`~/.MultiAI/task_server.sock`).
 
 ---

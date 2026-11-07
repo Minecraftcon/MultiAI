@@ -3,6 +3,8 @@ const { spawn } = require("child_process");
 const path = require("path");
 const assert = require("assert");
 
+const fs = require("fs");
+
 const repoRoot = path.join(__dirname, "..");
 
 let daemonBinName = process.platform === "win32" ? "task_daemon.exe" : "task_daemon";
@@ -12,7 +14,9 @@ if (process.platform === "darwin" && process.arch === "arm64") {
     if (process.arch === "arm64") daemonBinName = "task_daemon_arm64";
     else if (process.arch === "arm") daemonBinName = "task_daemon_armv7l";
 }
-const daemonBin = path.join(repoRoot, "bin", daemonBinName);
+const daemonBinPath = path.join(repoRoot, "daemon", "bin", daemonBinName);
+const legacyDaemonBin = path.join(repoRoot, "bin", daemonBinName);
+const daemonBin = fs.existsSync(daemonBinPath) ? daemonBinPath : legacyDaemonBin;
 
 function requestJSON(port, method, reqPath, data) {
     return new Promise((resolve, reject) => {

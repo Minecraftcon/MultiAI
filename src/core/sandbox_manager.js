@@ -29,7 +29,7 @@ const DEFAULT_SANDBOX_CONFIG = {
             description: "Syscall emulation sandbox for non-root containers and Termux environments.",
             icon: "smartphone",
             mode: "daemon",
-            startup: 'pd sh debian-sandbox --bind {PROJECT_PATH}:/workspace --bind {DATA_DIR}:/data -- python3 /workspace/task_server.py {IPC_ARGS}',
+            startup: 'pd sh debian-sandbox --bind {PROJECT_PATH}:/workspace --bind {DATA_DIR}:/data -- python3 /workspace/daemon/task_server.py {IPC_ARGS}',
             detect_cmd: '(command -v pd || command -v proot-distro) && (pd login debian-sandbox -- true 2>/dev/null || proot-distro login debian-sandbox -- true 2>/dev/null || [ -d "${PREFIX:-/data/data/com.termux/files/usr}/var/lib/proot-distro/installed-rootfs/debian-sandbox" ])'
         },
         docker: {
@@ -86,7 +86,7 @@ function loadSandboxConfig() {
 
             if (profiles.proot) {
                 if (profiles.proot.startup && (profiles.proot.startup.includes("/workspace/task_server/server.py") || profiles.proot.startup.includes("pd sh debian "))) {
-                    profiles.proot.startup = 'pd sh debian-sandbox --bind {PROJECT_PATH}:/workspace --bind {DATA_DIR}:/data -- python3 /workspace/task_server.py --port {TASK_PORT}';
+                    profiles.proot.startup = 'pd sh debian-sandbox --bind {PROJECT_PATH}:/workspace --bind {DATA_DIR}:/data -- python3 /workspace/daemon/task_server.py --port {TASK_PORT}';
                 }
                 profiles.proot.detect_cmd = DEFAULT_SANDBOX_CONFIG.profiles.proot.detect_cmd;
             }

@@ -4,7 +4,7 @@ const assert = require("assert");
 async function runTests() {
     console.log("=== Running Characterization Tests for Chat Tool Badges ===");
 
-    const badgesModule = await import("../client/src/components/chat-tool-badges.js");
+    const badgesModule = await import("../UI/webui/src/components/chat-tool-badges.js");
     const { getToolBadgeConfig } = badgesModule;
 
     assert(typeof getToolBadgeConfig === "function", "getToolBadgeConfig must be exported as a function");
@@ -143,7 +143,7 @@ async function runTests() {
     // 6. formatToolResult formatting
     console.log("Test: formatToolResult running status and exit code");
     {
-        const domModule = await import("../client/src/utils/dom.js");
+        const domModule = await import("../UI/webui/src/utils/dom.js");
         const { formatToolResult } = domModule;
 
         // When task is running: status: running must appear, exit_code must be omitted completely

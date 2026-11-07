@@ -160,7 +160,7 @@ async function runTests() {
 
     // 8. Test chat-tool-badges for MCP tools
     console.log("Test: chat-tool-badges badge config for MCP tools");
-    const badgesModule = await import("../client/src/components/chat-tool-badges.js");
+    const badgesModule = await import("../UI/webui/src/components/chat-tool-badges.js");
     const { getToolBadgeConfig } = badgesModule;
 
     const mcpBadge = getToolBadgeConfig("mcp_filesystem_read_file", { path: "package.json" });
@@ -171,7 +171,7 @@ async function runTests() {
 
     // 9. Test client-side McpActiveTools
     console.log("Test: Client McpActiveTools & exposure in system prompt");
-    const mcpClientModule = await import("../client/src/tools/mcp/index.js");
+    const mcpClientModule = await import("../UI/webui/src/tools/mcp/index.js");
     const { McpActiveTools, McpActiveToolsManager } = mcpClientModule;
     assert(McpActiveTools instanceof McpActiveToolsManager, "McpActiveTools must be instance of McpActiveToolsManager");
     assert(typeof McpActiveTools.refresh === "function", "refresh must be a function");
@@ -215,12 +215,12 @@ async function runTests() {
     assert(refreshedTools.length > 0, "McpActiveTools.refresh must populate tools");
     assert(refreshedTools.some(t => t.name === "mcp_test_mcp_test_ping"), "mcp_test_mcp_test_ping must be registered");
 
-    const toolsModule = await import("../client/src/tools/index.js");
+    const toolsModule = await import("../UI/webui/src/tools/index.js");
     const { getActiveToolSchemas } = toolsModule;
     const activeSchemas = getActiveToolSchemas();
     assert(activeSchemas.some(s => s.function?.name === "mcp_test_mcp_test_ping"), "getActiveToolSchemas must expose mcp_test_mcp_test_ping");
 
-    const systemModule = await import("../client/src/services/system.js");
+    const systemModule = await import("../UI/webui/src/services/system.js");
     const { buildFullSystemPrompt } = systemModule;
     const fullPrompt = buildFullSystemPrompt();
     assert(fullPrompt.includes("[EXTERNAL MODEL CONTEXT PROTOCOL (MCP) TOOLS]"), "System prompt must contain external MCP tools section");

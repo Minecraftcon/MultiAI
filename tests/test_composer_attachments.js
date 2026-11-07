@@ -7,7 +7,7 @@ import {
     formatFileSize,
     stagedAttachments,
     clearStagedAttachments
-} from "../client/src/components/composer-attachments.js";
+} from "../UI/webui/src/components/composer-attachments.js";
 
 console.log("=== Running Safety Net Tests for Composer Attachments ===");
 

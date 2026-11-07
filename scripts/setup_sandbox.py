@@ -80,7 +80,7 @@ def configure_multiai_sandbox_config():
         "description": "Syscall emulation sandbox for non-root containers and Termux environments.",
         "icon": "smartphone",
         "mode": "daemon",
-        "startup": "pd sh debian-sandbox --bind {PROJECT_PATH}:/workspace --bind {DATA_DIR}:/data -- python3 /workspace/task_server.py --port {TASK_PORT}",
+        "startup": "pd sh debian-sandbox --bind {PROJECT_PATH}:/workspace --bind {DATA_DIR}:/data -- python3 /workspace/daemon/task_server.py --port {TASK_PORT}",
         "detect_cmd": "(command -v pd || command -v proot-distro) && (pd login debian-sandbox -- true 2>/dev/null || proot-distro login debian-sandbox -- true 2>/dev/null || [ -d \"${PREFIX:-/data/data/com.termux/files/usr}/var/lib/proot-distro/installed-rootfs/debian-sandbox\" ])"
     }
 

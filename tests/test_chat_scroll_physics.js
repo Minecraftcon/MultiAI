@@ -58,7 +58,7 @@ async function runTests() {
     };
 
     // Dynamically import chat-scroll.js
-    const scrollModule = await import("../client/src/components/chat-scroll.js");
+    const scrollModule = await import("../UI/webui/src/components/chat-scroll.js");
     const { 
         getIsUserDetached, 
         detachUserScroll, 

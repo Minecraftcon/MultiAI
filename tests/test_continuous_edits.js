@@ -172,9 +172,9 @@ async function runTests() {
     const chatEl = new MockElement("div");
     chatEl.id = "chat";
 
-    const badgesModule = await import("../client/src/components/chat-tool-badges.js");
+    const badgesModule = await import("../UI/webui/src/components/chat-tool-badges.js");
     const { addToolBadge, finalizeFileEditBadges } = badgesModule;
-    const { onToolComplete } = await import("../client/src/tools/badge-sync.js");
+    const { onToolComplete } = await import("../UI/webui/src/tools/badge-sync.js");
 
     // Create AI message shell
     const aiMessage = new MockElement("div");
