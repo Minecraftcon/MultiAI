@@ -570,12 +570,12 @@ export function updateAIStream(element, fullText, isDone, startTime, hasTools) {
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
 
     if (isDone) {
-        activityLabel.textContent = `Worked for ${elapsed} seconds`;
+        if (activityLabel) activityLabel.textContent = `Worked for ${elapsed} seconds`;
         const hasCommentary = activityWrapper && Boolean(activityWrapper.querySelector(".activity-thought-item"));
         if (!hasCommentary && activityWrapper && activityWrapper.classList.contains("open") && !element.dataset.manuallyToggled) {
             activityWrapper.classList.remove("open");
         }
-    } else {
+    } else if (activityLabel && !activityLabel.textContent.trim()) {
         activityLabel.textContent = `Working... (${elapsed}s)`;
     }
 
