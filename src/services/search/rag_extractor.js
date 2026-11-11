@@ -40,8 +40,34 @@ const BOILERPLATE_PATTERNS = [
     /javascript\s*is\s*disabled/i,
     /please\s*enable\s*cookies/i,
     /navigation\s*menu/i,
-    /jump\s*to\s*content/i
+    /jump\s*to\s*(?:content|search|navigation)/i,
+    /skip\s*to\s*(?:main\s*)?content/i,
+    /back\s*to\s*top/i,
+    /sign\s*in\s*to\s*github/i,
+    /you\s*signed\s*in\s*with/i,
+    /reload\s*to\s*refresh\s*your\s*session/i
 ];
+
+const GENERIC_TECH_WORDS = new Set([
+    "driver", "kernel", "linux", "patch", "datasheet", "display", "screen",
+    "support", "module", "device", "source", "system", "version", "update",
+    "github", "gitlab", "commit", "review", "status", "series", "project",
+    "guide", "manual", "example", "tutorial", "issue", "pull", "request",
+    "index", "documentation", "reference", "code", "file", "build"
+]);
+
+/**
+ * Extracts high-specificity anchor tokens from a query.
+ * e.g. "ili9882n", "mt6768", "dl_async", "starry", "6.16.0"
+ */
+function extractAnchorTokens(queryTokens) {
+    return queryTokens.filter(t => {
+        if (/[0-9]/.test(t) && /[a-z]/i.test(t)) return true;
+        if (/[_.-]/.test(t)) return true;
+        if (t.length >= 6 && !GENERIC_TECH_WORDS.has(t)) return true;
+        return false;
+    });
+}
 
 /**
  * Clean & tokenize into lowercase tokens, filtering stop words.
@@ -232,9 +258,9 @@ function computePositionalAttention(queryTokens, docTokensWithOffsets, rawText) 
         spanMultiplier = 0.25; // Heavily penalize isolated scattered terms in tables
     }
 
-    // Extract Context-Centric Micro-Window (200 - 380 chars around best span)
+    // Extract Context-Centric Micro-Window (tight 200 - 320 chars around best span)
     const center = Math.floor((bestSpan.startChar + bestSpan.endChar) / 2);
-    const targetRadius = 160;
+    const targetRadius = 135;
     let winStart = Math.max(0, center - targetRadius);
     let winEnd = Math.min(rawText.length, center + targetRadius);
 
@@ -282,6 +308,7 @@ function scoreChunksPASBM25(query, chunksWithMeta, options = {}) {
         return [];
     }
 
+    const anchorTokens = extractAnchorTokens(queryTokens);
     const N = chunksWithMeta.length;
     let totalLength = 0;
     const chunkTokensList = [];
@@ -313,6 +340,18 @@ function scoreChunksPASBM25(query, chunksWithMeta, options = {}) {
         const tokenOffsets = docOffsetsList[i];
         const docLen = tokens.length;
 
+        // Discard ultra-short crumbs (< 6 words) unless containing code
+        if (docLen < 6 && !/```|CONFIG_|obj-\$|#\s*include|def\s+|const\s+|static\s+/i.test(item.text)) {
+            continue;
+        }
+
+        // Anchor Constraint: If the query specified high-specificity technical anchors (e.g. part numbers, symbols),
+        // the chunk MUST match at least one anchor token to qualify. This kills off-topic collisions (e.g. Illumina).
+        if (anchorTokens.length > 0) {
+            const hasAnchor = tokens.some(dt => anchorTokens.some(at => softTokenMatch(at, dt) >= 0.85));
+            if (!hasAnchor) continue;
+        }
+
         let bm25Score = 0;
         let matchedTerms = 0;
 
@@ -330,7 +369,9 @@ function scoreChunksPASBM25(query, chunksWithMeta, options = {}) {
                 const n_t = docFreq[qt] || 1;
                 const idf = Math.log(1 + (N - n_t + 0.5) / (n_t + 0.5));
                 const numerator = maxTf * (k1 + 1);
-                const denominator = maxTf + k1 * (1 - b + b * (docLen / avgdl));
+                // Length normalization floor: prevents short 2-token crumbs from exploding the score
+                const effectiveDocLen = Math.max(docLen, 25);
+                const denominator = maxTf + k1 * (1 - b + b * (effectiveDocLen / avgdl));
                 bm25Score += idf * (numerator / denominator);
             }
         }
