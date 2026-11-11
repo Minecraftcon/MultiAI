@@ -701,7 +701,7 @@ function setBadgeDiffStats(badgeEl, queryEl, statHtml) {
             } else if (name === "web_search") {
                 const parts = [];
                 if (data.excerpts && Array.isArray(data.excerpts) && data.excerpts.length > 0) {
-                    parts.push("=== DEEPSEARCH RAG EXCERPTS ===");
+                    parts.push("=== DEEPSEARCH RAG EXCERPTS (PAS-BM25) ===");
                     for (const ex of data.excerpts) {
                         parts.push(`[${ex.source}] (${ex.url})\n${ex.text}`);
                     }

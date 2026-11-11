@@ -1,8 +1,7 @@
 const { sendJSON } = require("../utils");
 const { getConfig } = require("../../core/config_manager");
 const { searchDuckDuckGo } = require("../../services/deepsearch/engines/duckduckgo");
-const { fetchWebpage } = require("../../services/deepsearch/engines/fetch_page");
-const { extractRagPassages } = require("../../services/search/rag_extractor");
+const { extractRagPassages, tokenize } = require("../../services/search/rag_extractor");
 
 function getTinyFishApiKey() {
     return process.env.TINYFISH_API_KEY || getConfig().General?.TinyFishApiKey;
@@ -72,7 +71,99 @@ async function duckduckgoSearch(args) {
 }
 
 /**
- * Unified search handler with Pair DeepSearch (Heuristic RAG) support.
+ * Fast stream webpage fetcher.
+ * - Downloads text with 3500ms hard timeout.
+ * - Strips scripts, styles, SVGs, headers, navs, and footers in memory.
+ * - Zero Chromium subprocesses (runs smoothly on Termux / low-end Android).
+ */
+async function fetchWebpageFast(url, timeoutMs = 3500, maxChars = 25000) {
+    if (!url || !url.startsWith("http")) {
+        return { url, title: "", content: "" };
+    }
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+        const res = await fetch(url, {
+            headers: {
+                "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
+                "Accept": "text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.8"
+            },
+            signal: controller.signal
+        });
+
+        clearTimeout(timer);
+        if (!res.ok) {
+            return { url, title: "", content: "" };
+        }
+
+        const raw = await res.text();
+        const titleMatch = raw.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+        const title = titleMatch ? titleMatch[1].replace(/<[^>]+>/g, "").trim() : "";
+
+        // Fast clean: strip heavy non-content sections
+        let cleaned = raw
+            .replace(/<script[\s\S]*?<\/script>/gi, "")
+            .replace(/<style[\s\S]*?<\/style>/gi, "")
+            .replace(/<svg[\s\S]*?<\/svg>/gi, "")
+            .replace(/<noscript[\s\S]*?<\/noscript>/gi, "")
+            .replace(/<header[\s\S]*?<\/header>/gi, "")
+            .replace(/<footer[\s\S]*?<\/footer>/gi, "")
+            .replace(/<nav[\s\S]*?<\/nav>/gi, "")
+            .replace(/<!--[\s\S]*?-->/g, "");
+
+        // Convert structural markers
+        cleaned = cleaned
+            .replace(/<h[1-4][^>]*>([\s\S]*?)<\/h[1-4]>/gi, "\n\n# $1\n\n")
+            .replace(/<p[^>]*>([\s\S]*?)<\/p>/gi, "\n\n$1\n\n")
+            .replace(/<li[^>]*>([\s\S]*?)<\/li>/gi, "\n* $1")
+            .replace(/<br\s*[\/]?>/gi, "\n")
+            .replace(/<pre[^>]*>([\s\S]*?)<\/pre>/gi, "\n```\n$1\n```\n");
+
+        let text = cleaned
+            .replace(/<[^>]+>/g, " ")
+            .replace(/&amp;/g, "&")
+            .replace(/&lt;/g, "<")
+            .replace(/&gt;/g, ">")
+            .replace(/&quot;/g, "\"")
+            .replace(/&#39;/g, "'")
+            .replace(/&nbsp;/g, " ")
+            .replace(/[ \t]+/g, " ")
+            .replace(/\n{3,}/g, "\n\n")
+            .trim();
+
+        if (text.length > maxChars) {
+            text = text.slice(0, maxChars);
+        }
+
+        return {
+            url,
+            title,
+            content: text
+        };
+    } catch (_) {
+        clearTimeout(timer);
+        return { url, title: "", content: "" };
+    }
+}
+
+/**
+ * Automatically relaxes over-specific queries that returned 0 results.
+ */
+function relaxQuery(rawQuery) {
+    if (!rawQuery) return "";
+    let relaxed = rawQuery.replace(/["']/g, " ").trim();
+    relaxed = relaxed.replace(/\b(and|or|not)\b/gi, " ");
+    const words = tokenize(relaxed);
+    if (words.length > 4) {
+        return words.slice(0, 4).join(" ");
+    }
+    return words.join(" ");
+}
+
+/**
+ * Unified search handler with PAS-BM25 Positional Attention Soft-BM25 RAG.
  */
 async function unifiedSearch(args) {
     const query = String(args.query || "").trim();
@@ -101,31 +192,59 @@ async function unifiedSearch(args) {
     }
 
     const rawList = searchResult?.results || [];
-    const normalizedResults = rawList.map(r => ({
+    let normalizedResults = rawList.map(r => ({
         title: r.title || "",
         url: r.url || "",
         snippet: r.snippet || r.text || r.content || ""
     }));
 
+    // Auto-Relaxation fallback if over-constrained query returned zero results
+    if (normalizedResults.length === 0 && query.length > 12) {
+        const relaxed = relaxQuery(query);
+        if (relaxed && relaxed !== query) {
+            try {
+                const retryRes = effectiveProvider === "tinyfish"
+                    ? await tinyfishSearch({ ...args, query: relaxed }).catch(() => duckduckgoSearch({ ...args, query: relaxed }))
+                    : await duckduckgoSearch({ ...args, query: relaxed });
+                const retryList = retryRes?.results || [];
+                if (retryList.length > 0) {
+                    normalizedResults = retryList.map(r => ({
+                        title: r.title || "",
+                        url: r.url || "",
+                        snippet: r.snippet || r.text || r.content || ""
+                    }));
+                }
+            } catch (_) {}
+        }
+    }
+
     let excerpts = [];
 
-    // Pair DeepSearch (Heuristic RAG): Fetch top pages in parallel & extract key passages
+    // Pair DeepSearch (PAS-BM25): Fast concurrent stream-capped fetch & positional attention RAG
     if (shouldPairDeepSearch && normalizedResults.length > 0) {
-        const topPagesToFetch = normalizedResults.slice(0, 2);
+        const topPagesToFetch = normalizedResults.slice(0, 3);
         try {
             const fetchedPages = await Promise.all(
                 topPagesToFetch.map(async (r) => {
-                    try {
-                        return await fetchWebpage(r.url, { timeoutMs: 3500 });
-                    } catch (_) {
-                        return { url: r.url, title: r.title, content: r.snippet || "" };
+                    const page = await fetchWebpageFast(r.url, 3000, 80000);
+                    if (!page.content || page.content.length < 80) {
+                        return {
+                            url: r.url,
+                            title: r.title,
+                            content: r.snippet ? `${r.title}\n\n${r.snippet}` : ""
+                        };
                     }
+                    return page;
                 })
             );
 
-            excerpts = extractRagPassages(query, fetchedPages, { maxExcerpts: 4 });
+            excerpts = extractRagPassages(query, fetchedPages, {
+                maxExcerpts: 3,
+                maxPerSource: 2,
+                maxTotalWords: 450
+            });
         } catch (ragErr) {
-            console.warn("[SEARCH] Heuristic RAG extraction error:", ragErr.message);
+            console.warn("[SEARCH] PAS-BM25 extraction error:", ragErr.message);
         }
     }
 
@@ -134,6 +253,7 @@ async function unifiedSearch(args) {
         type: "search",
         query,
         pair_deepsearch: shouldPairDeepSearch,
+        engine: "PAS-BM25",
         results: normalizedResults,
         excerpts
     };
@@ -152,20 +272,19 @@ async function handleSearchRoute(req, res) {
         }
 
         if (reqUrl === "/api/fetch") {
-            // First attempt TinyFish if key configured; otherwise fallback to local fetchWebpage
             const apiKey = getTinyFishApiKey();
             if (apiKey) {
                 try {
                     const result = await tinyfishFetch(args);
                     return sendJSON(res, 200, result);
                 } catch (fetchErr) {
-                    console.warn(`[SEARCH] TinyFish fetch failed (${fetchErr.message}). Using local fetcher.`);
+                    console.warn(`[SEARCH] TinyFish fetch failed (${fetchErr.message}). Using local fast fetcher.`);
                 }
             }
 
             const targetUrl = args.url || (Array.isArray(args.urls) ? args.urls[0] : "");
             if (!targetUrl) throw new Error("No URL provided to fetch");
-            const page = await fetchWebpage(targetUrl, { timeoutMs: 8000 });
+            const page = await fetchWebpageFast(targetUrl, 6000, 150000);
             return sendJSON(res, 200, {
                 provider: "local",
                 url: page.url,
@@ -186,5 +305,6 @@ module.exports = {
     unifiedSearch,
     tinyfishSearch,
     tinyfishFetch,
-    duckduckgoSearch
+    duckduckgoSearch,
+    fetchWebpageFast
 };
