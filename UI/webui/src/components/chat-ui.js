@@ -436,6 +436,26 @@ export function renderSessionMessages(session, chat) {
 
 const activeStreamers = new WeakMap();
 
+/**
+ * Clears any in-progress streamed content from an AI message element's finalContent
+ * and detaches its streamer so subsequent streaming starts fresh. Used when a model
+ * response contains tool calls: the intermediate text is rendered via addThoughtTrace
+ * inside the activity area (above final-content), so any text already streamed into
+ * final-content must be removed to avoid it appearing duplicated at the bottom.
+ */
+export function clearAIStream(element) {
+    if (!element) return;
+    const streamer = activeStreamers.get(element);
+    if (streamer) {
+        streamer.stop();
+        activeStreamers.delete(element);
+    }
+    const finalContent = element.querySelector(".final-content");
+    if (finalContent) {
+        finalContent.innerHTML = "";
+    }
+}
+
 class StreamBatchRenderer {
     constructor(element, finalContent, cursor) {
         this.element = element;

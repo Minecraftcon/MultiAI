@@ -4,7 +4,7 @@ import { logEvent } from "../utils/logger.js";
 import { extractText, formatToolResult, extractChatTitleAndContent } from "../utils/dom.js";
 import { tools, getActiveToolSchemas, executeTool, onToolStart, onToolComplete, onToolError, hasTool, McpActiveTools } from "../tools/index.js";
 import { registerAgentRunner } from "../tools/terminal/task-watcher.js";
-import { addToolBadge, addThoughtTrace, updateAIStream, finalizeStopped } from "../components/chat-ui.js";
+import { addToolBadge, addThoughtTrace, clearAIStream, updateAIStream, finalizeStopped } from "../components/chat-ui.js";
 import { saveStoredChats } from "../services/storage.js";
 import { renderChatList } from "../components/side-panel.js";
 import { sanitizeMessage } from "./sanitizer.js";
@@ -480,6 +480,10 @@ export async function runAgent(userText, currentAIMessage, chatId, images = [], 
             // Render live intermediate reasoning along the timeline line
             if (roundText && roundText.trim()) {
                 addThoughtTrace(currentAIMessage, roundText);
+                // The intermediate text is now rendered inside the activity area (above final-content).
+                // Clear any text already streamed into final-content so it does not appear
+                // duplicated at the bottom below the active tool-call badges.
+                clearAIStream(currentAIMessage);
             }
 
             const calls = toolCalls.slice(0, MAX_TOOLS_PER_ROUND);
