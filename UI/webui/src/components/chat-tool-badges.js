@@ -1027,3 +1027,82 @@ export function finalizeFileEditBadges(container) {
     });
 }
 
+/**
+ * Creates and appends an autonomous wake-up badge at the top of the AI model message section.
+ */
+export function addWakeupBadge(element, { taskName, duration, isTimer, exitCode, stdout, stderr, taskId } = {}) {
+    if (!element) return null;
+    const wrapper = element.querySelector(".activity-wrapper");
+    const searchContainer = element.querySelector(".search-items-container");
+    if (wrapper) {
+        wrapper.style.display = "block";
+        if (!element.dataset.manuallyToggled) {
+            wrapper.classList.add("open");
+        }
+    }
+    if (!searchContainer) return null;
+
+    const hasOutput = Boolean((stdout && stdout.trim()) || (stderr && stderr.trim()));
+    const item = document.createElement("div");
+    item.className = "search-badge-item timer-badge timer-finished" + (hasOutput ? " clickable-badge" : "");
+
+    let mainText = "";
+    if (isTimer) {
+        mainText = taskName ? `Timer for task ${taskName} has expired` : `Timer has expired`;
+    } else {
+        const nameStr = taskName || taskId || "task";
+        const durStr = duration ? `. Took ${duration}s` : "";
+        mainText = `Task ${nameStr} has finished${durStr}`;
+    }
+
+    item.innerHTML = `
+        <div class="search-icon-circle has-timer-ring">
+            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-clock" aria-hidden="true" style="opacity: 0.6;"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        </div>
+        <div>
+            <span class="search-label" style="color: var(--text-tertiary, #94a3b8); font-size: 13px; font-weight: 400;">${escapeHTML(mainText)}</span>
+            ${hasOutput ? '<span class="badge-expand-chevron" aria-hidden="true">▶</span>' : ''}
+        </div>
+    `;
+
+    searchContainer.appendChild(item);
+
+    if (hasOutput) {
+        const collapseDiv = document.createElement("div");
+        collapseDiv.className = "badge-collapse";
+        collapseDiv.style.display = "none";
+        collapseDiv.innerHTML = `
+            <div class="badge-collapse-inner">
+                <div class="command-output-box">
+                    <pre><div class="command-output-res">${escapeHTML((stdout || "") + (stderr ? "\n" + stderr : ""))}</div></pre>
+                </div>
+            </div>
+        `;
+        searchContainer.appendChild(collapseDiv);
+
+        item.setAttribute("role", "button");
+        item.setAttribute("tabindex", "0");
+        item.setAttribute("aria-expanded", "false");
+
+        const toggle = () => {
+            item.classList.toggle("open");
+            const isOpen = item.classList.contains("open");
+            item.setAttribute("aria-expanded", isOpen ? "true" : "false");
+            const chev = item.querySelector(".badge-expand-chevron");
+            if (chev) chev.textContent = isOpen ? "▼" : "▶";
+            collapseDiv.style.display = isOpen ? "block" : "none";
+        };
+
+        item.addEventListener("click", toggle);
+        item.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                toggle();
+            }
+        });
+    }
+
+    return item;
+}
+
+

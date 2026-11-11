@@ -3,6 +3,7 @@ import { state } from "../state/index.js";
 import { logEvent } from "../utils/logger.js";
 import { extractText, formatToolResult, extractChatTitleAndContent } from "../utils/dom.js";
 import { tools, getActiveToolSchemas, executeTool, onToolStart, onToolComplete, onToolError, hasTool, McpActiveTools } from "../tools/index.js";
+import { registerAgentRunner } from "../tools/terminal/task-watcher.js";
 import { addToolBadge, addThoughtTrace, updateAIStream, finalizeStopped } from "../components/chat-ui.js";
 import { saveStoredChats } from "../services/storage.js";
 import { renderChatList } from "../components/side-panel.js";
@@ -41,11 +42,14 @@ followed immediately by your normal response.`;
  * @param {string} chatId
  * @param {Array<Object>} [images]
  */
-export async function runAgent(userText, currentAIMessage, chatId, images = []) {
+export async function runAgent(userText, currentAIMessage, chatId, images = [], badgeInfo = null) {
     const genState = state.activeGenerations[chatId];
     if (!genState || genState.abortRequested) {
         finalizeStopped(currentAIMessage, Date.now(), false);
         return;
+    }
+    if (!genState.chatId) {
+        genState.chatId = chatId;
     }
 
     const session = state.chatSessions[chatId];
@@ -72,7 +76,12 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
     // Clean up any historical synthetic system notices so they never pollute session turns
     session.messages = session.messages.filter(m => !(m && m.role === "user" && typeof m.content === "string" && m.content.startsWith("[System Notice]:")));
 
-    session.messages.push({ role: "user", content: userContent });
+    const userMsgObj = { role: "user", content: userContent };
+    if (badgeInfo) {
+        userMsgObj.isNotification = true;
+        userMsgObj.badgeInfo = badgeInfo;
+    }
+    session.messages.push(userMsgObj);
     state.messages = session.messages;
     saveStoredChats();
     const isFirstUserTurn = session.messages.filter(m => m.role === "user").length === 1;
@@ -92,6 +101,7 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
     let verificationNudgeCount = 0;
     let invalidToolRetries = 0;
     let transientCorrectionNotice = null;
+    let detachedStatusMessage = null;
     const fileReadCounts = new Map();
 
     logEvent("REQUEST_START", { chatId, model: selectedModel, userText, isFirstUserTurn });
@@ -381,24 +391,32 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
                 }
 
                 if (!emptyRetryUsed && finalDisplay.length === 0) {
-                    emptyRetryUsed = true;
-                    logEvent("EMPTY_REPLY_RETRY", { model: selectedModel, userText, round, hasRunTools });
-                    const retryPrompt = hasRunTools
-                        ? "All requested tool actions have finished executing. Please provide a clear summary of the results and your final answer."
-                        : "Your previous reply was empty. Provide an immediate direct answer or perform the required tool action.";
-                    session.messages.push({
-                        role: "user",
-                        content: retryPrompt
-                    });
-                    state.messages = session.messages;
-                    saveStoredChats();
-                    continue;
+                    if (detachedStatusMessage) {
+                        finalDisplay = detachedStatusMessage;
+                    } else {
+                        emptyRetryUsed = true;
+                        logEvent("EMPTY_REPLY_RETRY", { model: selectedModel, userText, round, hasRunTools });
+                        const retryPrompt = hasRunTools
+                            ? "All requested tool actions have finished executing. Please provide a clear summary of the results and your final answer."
+                            : "Your previous reply was empty. Provide an immediate direct answer or perform the required tool action.";
+                        session.messages.push({
+                            role: "user",
+                            content: retryPrompt
+                        });
+                        state.messages = session.messages;
+                        saveStoredChats();
+                        continue;
+                    }
                 }
 
                 if (finalDisplay.length === 0 && !hasRunTools) {
                     const err = new Error("Model returned an empty response.");
                     err.statusCode = 204;
                     throw err;
+                }
+
+                if (finalDisplay.length === 0 && detachedStatusMessage) {
+                    finalDisplay = detachedStatusMessage;
                 }
 
                 logEvent("REQUEST_FINAL", {
@@ -517,6 +535,9 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
                         onToolStart(toolName, args, badgeEl);
                         onToolComplete(toolName, args, badgeEl, result);
                     }
+                    if (result && (result.detached || result.status === "scheduled_detached")) {
+                        detachedStatusMessage = result.status_message || detachedStatusMessage || (args.status_message || args.message || args.messege);
+                    }
                     if (isVerificationToolCall(toolName, args)) {
                         hasRunVerification = true;
                     }
@@ -545,6 +566,45 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
                     });
                     state.messages = session.messages;
                     saveStoredChats();
+
+                    // DETACH IMMEDIATELY: Conclude this conversational turn cleanly so the user can interact freely
+                    if (result && (result.detached || result.status === "scheduled_detached")) {
+                        const finalMsg = result.status_message 
+                            || (args.status_message || args.message || args.messege)
+                            || (args.reason ? `The task is running in the background (${args.reason}). I will keep a watch on it and notify you when finished; until then you can do other tasks or close the window.` : null)
+                            || detachedStatusMessage
+                            || (roundText && roundText.trim() ? roundText.trim() : null)
+                            || "The task is running in the background. I will keep a watch on it and notify you when it finishes; until then you can do other tasks or close the window.";
+
+                        // Fill synthetic results for any remaining tool calls in this batch if any
+                        const remainingCalls = calls.slice(i + 1);
+                        for (const remainingCall of remainingCalls) {
+                            session.messages.push({
+                                role: "tool",
+                                tool_call_id: remainingCall.id,
+                                name: remainingCall.function?.name,
+                                content: JSON.stringify({ status: "detached" })
+                            });
+                        }
+
+                        // Conclude assistant turn with the final status message
+                        session.messages.push({
+                            role: "assistant",
+                            content: finalMsg
+                        });
+                        session.updatedAt = Date.now();
+                        state.messages = session.messages;
+                        saveStoredChats();
+
+                        logEvent("DETACHED_TURN_CONCLUDED", {
+                            chatId,
+                            toolName,
+                            finalMsg
+                        });
+
+                        await updateAIStream(currentAIMessage, finalMsg, true, overallStartTime, true);
+                        return;
+                    }
                 } catch (error) {
                     if (genState.abortRequested || error.message === "Generation stopped by user") {
                         // Push synthetic cancelled results for the current tool and any remaining ones
@@ -604,3 +664,7 @@ export async function runAgent(userText, currentAIMessage, chatId, images = []) 
         }
     }
 }
+
+// Register runner callback with task watcher for autonomous wake-up turns
+registerAgentRunner(runAgent);
+

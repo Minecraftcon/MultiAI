@@ -1154,4 +1154,69 @@ svg.plan-lucide-spin,
     border-radius: 3px;
     transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
-========================================================= */
+
+/* ── Running Background Tasks Dock Tab & Window ───────────── */
+.dock-running-pulse {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--text-secondary);
+    box-shadow: 0 0 4px rgba(255, 255, 255, 0.15);
+    flex-shrink: 0;
+    margin-right: 4px;
+    animation: runningTaskPulse 2s infinite ease-in-out;
+}
+
+@keyframes runningTaskPulse {
+    0%, 100% { opacity: 0.95; transform: scale(1); }
+    50% { opacity: 0.35; transform: scale(0.85); }
+}
+
+.dock-kill-task-btn:hover {
+    color: #ef4444 !important;
+    background: rgba(239, 68, 68, 0.15) !important;
+}
+
+.dock-kill-all-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 9px;
+    background: transparent;
+    color: var(--text-secondary);
+    border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.12));
+    border-radius: 6px;
+    font-size: 11.5px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    user-select: none;
+    outline: none;
+}
+
+.dock-kill-all-btn:hover:not(:disabled) {
+    color: #ef4444;
+    border-color: rgba(239, 68, 68, 0.35);
+    background: rgba(239, 68, 68, 0.1);
+}
+
+.dock-kill-all-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.dock-tab-btn.has-running-tasks {
+    color: var(--text-primary);
+}
+
+.dock-tab-btn.has-running-tasks .dock-tab-badge {
+    background: var(--surface-2, rgba(255, 255, 255, 0.08));
+    color: var(--text-secondary);
+}
+
+.dock-tab-btn.has-running-tasks:hover .dock-tab-badge,
+.dock-tab-btn.has-running-tasks.is-active .dock-tab-badge {
+    color: var(--text-primary);
+    background: var(--hover-3, rgba(255, 255, 255, 0.14));
+}

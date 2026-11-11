@@ -5,12 +5,101 @@ import { renderIcons } from "../utils/icons.js";
 import { escapeHTML } from "../utils/dom.js";
 import { renderDiffCardHtml, renderCodeViewerCardHtml, bindDiffViewerCards } from "../components/diff-viewer.js";
 import { deriveCommandTag } from "../components/chat-tool-badges.js";
+import { parseTerminalAnsi } from "./terminal/term-emulator.js";
+
+/**
+ * Streams terminal command output smoothly into .command-output-res with a terminal cursor.
+ */
+export function streamTerminalOutput(resEl, fullText) {
+    if (!resEl) return;
+    const cleanText = (fullText || "").trim();
+    if (!cleanText) {
+        resEl.textContent = "(Executed with no standard output)";
+        return;
+    }
+
+    if (resEl._streamTimer) {
+        clearInterval(resEl._streamTimer);
+        resEl._streamTimer = null;
+    }
+
+    const pre = resEl.closest("pre");
+    resEl.innerHTML = `<span class="terminal-stream-text"></span><span class="terminal-stream-cursor">█</span>`;
+    const textSpan = resEl.querySelector(".terminal-stream-text");
+    const cursorSpan = resEl.querySelector(".terminal-stream-cursor");
+
+    // Allow user click to instantly finish stream
+    const onSkip = () => {
+        if (resEl._streamTimer) {
+            clearInterval(resEl._streamTimer);
+            resEl._streamTimer = null;
+            resEl.innerHTML = parseTerminalAnsi(cleanText);
+            if (pre) pre.scrollTop = pre.scrollHeight;
+        }
+    };
+    resEl.addEventListener("click", onSkip, { once: true });
+
+    // If text contains interactive control codes (\r, ANSI colors), render full terminal state
+    const hasAnsi = cleanText.includes("\x1b") || cleanText.includes("\u001b") || /\[\d+m/.test(cleanText) || cleanText.includes("\r");
+    if (hasAnsi) {
+        if (textSpan) textSpan.innerHTML = parseTerminalAnsi(cleanText);
+        if (cursorSpan) {
+            cursorSpan.classList.add("settled");
+            setTimeout(() => {
+                if (cursorSpan && cursorSpan.parentNode) cursorSpan.remove();
+            }, 800);
+        }
+        if (pre) pre.scrollTop = pre.scrollHeight;
+        return;
+    }
+
+    const totalLen = cleanText.length;
+    // Target 250ms - 750ms total streaming duration for snappy feel
+    const targetDurationMs = Math.min(750, Math.max(250, totalLen * 2));
+    const intervalMs = 16;
+    const totalFrames = Math.max(1, Math.floor(targetDurationMs / intervalMs));
+    const charsPerFrame = Math.max(1, Math.ceil(totalLen / totalFrames));
+
+    let curIdx = 0;
+
+    resEl._streamTimer = setInterval(() => {
+        curIdx += charsPerFrame;
+        if (curIdx >= totalLen) {
+            curIdx = totalLen;
+            clearInterval(resEl._streamTimer);
+            resEl._streamTimer = null;
+            if (textSpan) textSpan.innerHTML = parseTerminalAnsi(cleanText);
+            if (cursorSpan) {
+                cursorSpan.classList.add("settled");
+                setTimeout(() => {
+                    if (cursorSpan && cursorSpan.parentNode) {
+                        cursorSpan.remove();
+                    }
+                }, 1000);
+            }
+        } else {
+            if (textSpan) textSpan.textContent = cleanText.slice(0, curIdx);
+        }
+
+        if (pre) {
+            pre.scrollTop = pre.scrollHeight;
+        }
+    }, intervalMs);
+}
 
 /**
  * Initializes visual timers and indicators on tool badge start.
  */
 export function onToolStart(name, args, badgeEl) {
     if (!badgeEl) return;
+
+    const isCommand = (name === "run_task" || name === "run_command" || Boolean(args && (args.command || args.CommandLine || args.cmd)));
+    if (isCommand && badgeEl._collapseDiv) {
+        const resEl = badgeEl._collapseDiv.querySelector(".command-output-res");
+        if (resEl) {
+            resEl.innerHTML = `<span class="terminal-stream-running">Running command…</span> <span class="terminal-stream-cursor">█</span>`;
+        }
+    }
 
     if (name === "run_task") {
         const cooldown = Math.max(1, parseInt(args.timer || args.timeout, 10) || 5);
@@ -40,7 +129,7 @@ export function onToolStart(name, args, badgeEl) {
 /**
  * Updates badge indicators and collapse panel output upon completion.
  */
-export function onToolComplete(name, args, badgeEl, data) {
+export function onToolComplete(name, args, badgeEl, data, options = {}) {
     if (!badgeEl) return;
 
     if (name === "run_task" || name === "schedule") {
@@ -54,7 +143,12 @@ export function onToolComplete(name, args, badgeEl, data) {
         if (name === "schedule" && data) {
             const labelEl = badgeEl.querySelector(".search-label");
             const queryEl = badgeEl.querySelector(".search-query");
-            if (data.status === "task_completed") {
+            if (data.status === "scheduled_detached" || data.detached) {
+                if (labelEl) labelEl.textContent = "Detached to background";
+                const taskDesc = (data.task_id || args.task) ? ` for ${data.task_id || args.task}` : "";
+                const elapsed = data.time || args.time || args.seconds || 60;
+                if (queryEl) queryEl.textContent = `${elapsed}s supervisor watch${taskDesc}`;
+            } else if (data.status === "task_completed") {
                 if (labelEl) labelEl.textContent = "Task completed";
                 if (queryEl) queryEl.textContent = `${data.task_id || args.task || "task"} exited in ${data.elapsed_seconds}s (code: ${data.exit_code ?? 0})`;
             } else if (data.status === "task_output") {
@@ -617,7 +711,23 @@ function setBadgeDiffStats(badgeEl, queryEl, statHtml) {
             } else {
                 outText = JSON.stringify(data, null, 2);
             }
-            resEl.textContent = outText.trim() || "(Executed with no standard output)";
+            const isCommand = (name === "run_task" || name === "run_command" || Boolean(args && (args.command || args.CommandLine || args.cmd)));
+            if (isCommand) {
+                if (data && data.alreadyStreamed) {
+                    // Already streamed live in real-time as the command ran
+                    const cursor = resEl.querySelector(".terminal-stream-cursor");
+                    if (cursor) cursor.remove();
+                    if (!resEl.innerHTML || !resEl.textContent.trim()) {
+                        resEl.innerHTML = parseTerminalAnsi(outText.trim() || "(Executed with no standard output)");
+                    }
+                } else if (!options.isRehydration) {
+                    streamTerminalOutput(resEl, outText);
+                } else {
+                    resEl.innerHTML = parseTerminalAnsi(outText.trim() || "(Executed with no standard output)");
+                }
+            } else {
+                resEl.textContent = outText.trim() || "(Executed with no standard output)";
+            }
         }
     }
 }

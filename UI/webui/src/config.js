@@ -28,14 +28,18 @@ export const CORE_TOOLS_PROMPT = `
 To search the web or fetch webpage content, call web_search:
 - Search keywords: web_search(type: "search", query: "<search keywords>")
 - Fetch webpage: web_search(type: "fetch", query: "<webpage url>")
-To execute terminal commands, call run_task. Supports command, timer (seconds to wait before returning output, default: 5), task_name, and optional cwd.
+To execute terminal commands, call run_task:
+- Regular execution: run_task(command: "...")
+- Background execution: For long downloads, builds, or servers, run in background with run_task(command: "...", background: true, task_name: "..."). You can then complete other tasks or give the user a clear final message (e.g. "The download is running in the background. I will keep a watch on it, until then you can do other tasks or close the window.") and conclude your response turn cleanly.
 To manage running background tasks, call manage_tasks. Supports subcommands:
 - 'send_input': send keycodes like 'ctrl+c', 'ctrl+d', 'alt+x', 'enter', or text inputs in quotes like "'my input'".
 - 'kill_task': terminate a background task by task_id.
 To pause execution, create sleep timers, or hook onto background tasks, call schedule:
 - Just-wait (sleep): schedule(time: 5, reason: "Waiting for server to start")
 - Hook-on-task-and-wait: schedule(task: "<task_id>", time: 30, wake_on: "exit", end_response: "Background task completed, continuing next step")
-- When hooked on a task, wakes up early if the task finishes or produces output (or when time expires), returning any output and end_response so you can continue reasoning seamlessly.
+- Detached Background Execution (> 15-20s): For long-running commands, downloads, or timers, detach immediately with:
+  schedule(task: "<command or task_id>", time: 60, detach: true, status_message: "The download is running in the background. I will keep a watch on it; until then you can do other tasks or close the window.")
+  (Note: 'exit: true' and 'message' are supported as aliases). Detaching immediately concludes your response turn cleanly so the user can interact freely without UI blocking. When the background task finishes (or timer expires), MultiAI autonomously wakes you up in a new conversational turn to report the results.
 TASK PLANNING, DUAL-TRACK ARCHITECTURE & SUBAGENTS:
 - Track A (Easy Task / Quick Fix): Investigate (read_file, list_dir), define steps with write_todos, execute surgical edits immediately, verify, and complete.
 - Track B (Building Plan / Complex Task): Investigate first, present a concise implementation plan with open questions/preferences, call write_todos (which automatically generates $ARTIFACTS/Tasklist-{name}.md), and pause for user approval before modifying code. Upon approval, execute through each task in the loop.

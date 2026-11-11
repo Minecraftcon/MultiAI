@@ -16,12 +16,15 @@ import { state } from "../state/index.js";
 import { escapeHTML } from "../utils/dom.js";
 import { renderIcons } from "../utils/icons.js";
 import { renderDiffCardHtml, bindDiffViewerCards } from "./diff-viewer.js";
+import { deriveCommandTag } from "./chat-tool-badges.js";
 
 let activeTodos = null;
 let unacceptedChanges = [];
-let activeTab = null; // null (collapsed toolbar), "changes", or "tasks"
+let runningTasks = [];
+let activeTab = null; // null (collapsed toolbar), "changes", "tasks", or "running-tasks"
 let autoDismissTimer = null;
 let userManuallyToggled = false;
+let runningTasksPollTimer = null;
 
 /**
  * Initializes the dock listeners and fetches initial state.
@@ -39,14 +42,28 @@ export function initPlanDock() {
         fetchUnacceptedChanges().then(() => syncDockState());
     });
 
-    // Check changes on initial load and chat switch
-    fetchUnacceptedChanges().then(() => {
+    document.addEventListener("runningTasksUpdated", () => {
+        fetchRunningTasks().then(() => syncDockState());
+    });
+
+    if (!runningTasksPollTimer) {
+        runningTasksPollTimer = setInterval(() => {
+            fetchRunningTasks().then((hasChanged) => {
+                if (hasChanged) syncDockState();
+            });
+        }, 2500);
+    }
+
+    // Check changes and running tasks on initial load and chat switch
+    Promise.all([fetchUnacceptedChanges(), fetchRunningTasks()]).then(() => {
         if (state.currentChatId && state.chatSessions?.[state.currentChatId]?.todos) {
             activeTodos = state.chatSessions[state.currentChatId].todos;
         }
         syncDockState();
     });
-}/**
+}
+
+/**
  * Synchronizes dock state with the active chat session.
  */
 export function syncPlanDock(chatId = state.currentChatId) {
@@ -56,9 +73,105 @@ export function syncPlanDock(chatId = state.currentChatId) {
         activeTodos = state.chatSessions[chatId].todos || null;
     }
 
-    fetchUnacceptedChanges().then(() => {
+    Promise.all([fetchUnacceptedChanges(), fetchRunningTasks()]).then(() => {
         syncDockState();
     });
+}
+
+/**
+ * Fetches running tasks from the task daemon and cross-references active watches.
+ */
+async function fetchRunningTasks() {
+    try {
+        const res = await fetch("/api/task/list");
+        if (res.ok) {
+            const data = await res.json();
+            const list = [];
+            let watches = [];
+            try {
+                watches = JSON.parse(localStorage.getItem("multiai_active_task_watches") || "[]");
+            } catch (_) {}
+            const watchMap = new Map();
+            for (const w of watches) {
+                if (w.taskId) watchMap.set(w.taskId, w);
+            }
+
+            for (const [id, t] of Object.entries(data)) {
+                if (t && t.running === true) {
+                    const matchedWatch = watchMap.get(id);
+                    const name = matchedWatch?.reason || deriveCommandTag(t.command) || `Task ${id}`;
+                    const elapsed = t.start_time ? Math.max(1, Math.round(Date.now() / 1000 - t.start_time)) : null;
+                    list.push({
+                        id,
+                        name,
+                        command: t.command,
+                        elapsed,
+                        startTime: t.start_time
+                    });
+                }
+            }
+
+            const prevLength = runningTasks.length;
+            runningTasks = list;
+
+            if (activeTab === "running-tasks" && runningTasks.length === 0) {
+                activeTab = null;
+            }
+
+            return prevLength !== runningTasks.length || (activeTab === "running-tasks");
+        }
+    } catch (_) {}
+    const hadTasks = runningTasks.length > 0;
+    runningTasks = [];
+    return hadTasks;
+}
+
+/**
+ * Terminates a specific running task.
+ */
+async function killTask(taskId) {
+    try {
+        await fetch(`/api/task/kill/${encodeURIComponent(taskId)}`, { method: "POST" });
+        try {
+            const raw = localStorage.getItem("multiai_active_task_watches");
+            if (raw) {
+                const watches = JSON.parse(raw);
+                const filtered = watches.filter(w => w.taskId !== taskId);
+                localStorage.setItem("multiai_active_task_watches", JSON.stringify(filtered));
+            }
+        } catch (_) {}
+        await fetchRunningTasks();
+        syncDockState();
+    } catch (err) {
+        console.error("[Dock] Failed to kill task:", err);
+    }
+}
+
+/**
+ * Terminates all currently running tasks.
+ */
+async function killAllRunningTasks() {
+    const tasksToKill = [...runningTasks];
+    try {
+        await Promise.all(tasksToKill.map(t => fetch(`/api/task/kill/${encodeURIComponent(t.id)}`, { method: "POST" })));
+        try {
+            const raw = localStorage.getItem("multiai_active_task_watches");
+            if (raw) {
+                const watches = JSON.parse(raw);
+                const killIds = new Set(tasksToKill.map(t => t.id));
+                const filtered = watches.filter(w => !killIds.has(w.taskId));
+                localStorage.setItem("multiai_active_task_watches", JSON.stringify(filtered));
+            }
+        } catch (_) {}
+        await fetchRunningTasks();
+        if (activeTab === "running-tasks") {
+            transitionToTab(null);
+        } else {
+            syncDockState();
+        }
+    } catch (err) {
+        console.error("[Dock] Failed to kill all tasks:", err);
+    }
 }
 
 /**
@@ -245,6 +358,14 @@ function renderDock(transitionMeta = {}) {
     const hasTodos = totalTasks > 0;
     const hasActiveTasks = totalTasks > 0 && completedTasks < totalTasks;
     const pct = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+    const hasChanges = unacceptedChanges.length > 0;
+    const hasRunningTasks = runningTasks.length > 0;
+
+    // If nothing to show (no changes, no todos, no running tasks) and window is not open
+    if (!hasChanges && !hasTodos && !hasRunningTasks && activeTab === null) {
+        dismissPlanDock();
+        return;
+    }
 
     const isWindowOpen = activeTab !== null;
     card.classList.toggle("is-collapsed", !isWindowOpen);
@@ -358,10 +479,57 @@ function renderDock(transitionMeta = {}) {
                 </div>
             </div>
         `;
+    } else if (activeTab === "running-tasks") {
+        windowHtml = `
+            <div class="dock-window-view ${windowAnimClass}">
+                <!-- Top: Running Tasks Box (HAS BG) -->
+                <div class="dock-changes-box">
+                    <div class="dock-changes-list" role="list">
+                        ${hasRunningTasks ? runningTasks.map(t => `
+                            <div class="dock-change-row dock-running-task-row" role="listitem" data-task-id="${escapeHTML(t.id)}">
+                                <div class="dock-change-left" title="${escapeHTML(t.command || t.name)}">
+                                    <span class="dock-running-pulse"></span>
+                                    <span class="dock-file-name" style="font-weight: 500;">${escapeHTML(t.name)}</span>
+                                    ${t.elapsed ? `<span class="dock-file-dir">(${t.elapsed}s)</span>` : ""}
+                                </div>
+                                <div class="dock-change-actions">
+                                    <button type="button" class="dock-row-action-btn dock-kill-task-btn" title="Kill task ${escapeHTML(t.id)}" data-task-id="${escapeHTML(t.id)}">
+                                        <i data-lucide="x"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        `).join("") : `
+                            <div class="dock-empty-changes">
+                                <span>No running tasks</span>
+                            </div>
+                        `}
+                    </div>
+                </div>
+
+                <!-- Bottom: The Bar (NO BG) -->
+                <div class="dock-window-header dock-tasks-bar">
+                    <div class="dock-window-header-left">
+                        <button type="button" class="dock-back-btn" title="Back" aria-label="Back">
+                            <i data-lucide="arrow-left"></i>
+                        </button>
+                        <i data-lucide="terminal" class="dock-bar-task-icon"></i>
+                        <span class="dock-window-title">
+                            <span class="dock-title-count">${runningTasks.length}</span> 
+                            <span class="dock-title-full">${runningTasks.length === 1 ? 'Running Task' : 'Running Tasks'}</span>
+                            <span class="dock-title-short">${runningTasks.length} Running</span>
+                        </span>
+                    </div>
+                    <div class="dock-window-header-right">
+                        <button type="button" class="dock-kill-all-btn" title="Kill all running tasks" ${!hasRunningTasks ? "disabled" : ""}>
+                            <span>Kill all</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
     }
 
     // ── 2. Bottom Toolbar HTML (When closed, compact floating icons) ─────
-    const hasChanges = unacceptedChanges.length > 0;
     const toolbarAnimClass = transitionMeta.entering === 'toolbar' ? 'is-entering' : '';
 
     const toolbarHtml = `
@@ -377,6 +545,14 @@ function renderDock(transitionMeta = {}) {
                 ${hasTodos ? `
                     <button type="button" class="dock-tab-btn ${activeTab === 'tasks' ? 'is-active' : ''}" data-tab="tasks" title="Active Plan">
                         <i data-lucide="list-todo"></i>
+                    </button>
+                ` : ""}
+
+                <!-- Terminal icon for running tasks -->
+                ${hasRunningTasks ? `
+                    <button type="button" class="dock-tab-btn ${activeTab === 'running-tasks' ? 'is-active' : ''} has-running-tasks" data-tab="running-tasks" title="Running Tasks (${runningTasks.length})">
+                        <i data-lucide="terminal"></i>
+                        <span class="dock-tab-badge">${runningTasks.length}</span>
                     </button>
                 ` : ""}
             </div>
@@ -511,6 +687,30 @@ function renderDock(transitionMeta = {}) {
             openDiffModal(filePath, workspace);
         });
     });
+
+    // Kill Single Task Button
+    card.querySelectorAll(".dock-kill-task-btn").forEach(btn => {
+        btn.addEventListener("click", async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const taskId = btn.getAttribute("data-task-id");
+            if (taskId) {
+                btn.disabled = true;
+                await killTask(taskId);
+            }
+        });
+    });
+
+    // Kill All Running Tasks Button
+    const killAllBtn = card.querySelector(".dock-kill-all-btn");
+    if (killAllBtn) {
+        killAllBtn.addEventListener("click", async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            killAllBtn.disabled = true;
+            await killAllRunningTasks();
+        });
+    }
 
     renderIcons(card);
 }

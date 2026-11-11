@@ -17,7 +17,8 @@ import {
     addCompactionBadge,
     addThoughtTrace,
     wrapHugeThoughts,
-    finalizeFileEditBadges
+    finalizeFileEditBadges,
+    addWakeupBadge
 } from "./chat-tool-badges.js";
 import { 
     requestScrollToBottom, 
@@ -37,6 +38,7 @@ export {
     addThoughtTrace,
     wrapHugeThoughts,
     finalizeFileEditBadges,
+    addWakeupBadge,
     requestScrollToBottom,
     initScrollToBottom,
     forceReengageAutoScroll,
@@ -152,6 +154,25 @@ export function renderTurn(turn, session, compactionRef, isLastTurn) {
             <div class="followup-suggestions" style="display: none;"></div>
         `;
 
+        // If this turn was awakened by a background task or timer, display the wake-up badge at the top
+        if (turn.wakeupNotice) {
+            const m = turn.wakeupNotice;
+            let bInfo = m.badgeInfo;
+            if (!bInfo && typeof m.content === "string") {
+                const isTimer = m.content.startsWith("[Timer Notification]:") || m.content.startsWith("[Background Task Timeout]:");
+                const matchTask = m.content.match(/Task '([^']+)'/);
+                const matchDur = m.content.match(/after ([0-9.]+)s/) || m.content.match(/\(([0-9.]+)s/);
+                bInfo = {
+                    taskName: matchTask ? matchTask[1] : "",
+                    duration: matchDur ? matchDur[1] : "",
+                    isTimer
+                };
+            }
+            if (bInfo) {
+                addWakeupBadge(aiDiv, bInfo);
+            }
+        }
+
         const preSearchContent = aiDiv.querySelector(".pre-search-content");
         const activityWrapper = aiDiv.querySelector(".activity-wrapper");
         const searchContainer = aiDiv.querySelector(".search-items-container");
@@ -209,7 +230,7 @@ export function renderTurn(turn, session, compactionRef, isLastTurn) {
                             toolData = { stdout: toolMsg.content };
                         }
                     }
-                    onToolComplete(toolName, args, badgeEl, toolData);
+                    onToolComplete(toolName, args, badgeEl, toolData, { isRehydration: true });
                 }
             }
         }
@@ -306,6 +327,20 @@ export function renderSessionMessages(session, chat) {
     for (let i = 0; i < nonSystem.length; i++) {
         const m = nonSystem[i];
         if (m.role === "user") {
+            const isWakeupNotice = Boolean(m.isNotification || (typeof m.content === "string" && (
+                m.content.startsWith("[Background Task Notification]:") || 
+                m.content.startsWith("[Timer Notification]:") || 
+                m.content.startsWith("[Background Task Timeout]:")
+            )));
+
+            if (isWakeupNotice) {
+                if (currentTurn) {
+                    turns.push(currentTurn);
+                }
+                currentTurn = { userMessage: null, aiMessages: [], wakeupNotice: m };
+                continue;
+            }
+
             if (currentTurn) {
                 turns.push(currentTurn);
             }

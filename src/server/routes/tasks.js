@@ -115,6 +115,32 @@ async function handleTaskRoute(req, res) {
             headers
         };
 
+        // Real-time Event-Stream proxy for streaming command output
+        if (req.url.startsWith("/api/task/stream")) {
+            const proxyReq = http.request(options, (proxyRes) => {
+                res.writeHead(proxyRes.statusCode || 200, {
+                    "Content-Type": "text/event-stream",
+                    "Cache-Control": "no-cache, no-transform",
+                    "Connection": "keep-alive",
+                    "Access-Control-Allow-Origin": "*",
+                    "X-Accel-Buffering": "no"
+                });
+                proxyRes.on("data", (chunk) => {
+                    res.write(chunk);
+                    if (typeof res.flush === "function") res.flush();
+                });
+                proxyRes.on("end", () => {
+                    res.end();
+                });
+            });
+            proxyReq.on("error", (err) => {
+                sendJSON(res, 502, { error: `Task daemon unavailable: ${err.message}` });
+            });
+            if (reqBody) proxyReq.write(reqBody);
+            proxyReq.end();
+            return;
+        }
+
         const startTime = Date.now();
         const proxyReq = http.request(options, (proxyRes) => {
             let resData = "";

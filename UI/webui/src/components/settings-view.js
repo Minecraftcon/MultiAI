@@ -113,7 +113,11 @@ export function switchSubScreen(screenId) {
     // Update header badge or label
     const badge = document.getElementById("settingsActiveBadge");
     if (badge) {
-        badge.textContent = screenId.toUpperCase();
+        badge.textContent = screenId === "mcp" ? "MCP SERVERS" : screenId.toUpperCase();
+    }
+
+    if (screenId === "mcp") {
+        renderMcpServersList();
     }
 
     // Refresh Lucide icons inside newly shown subscreen

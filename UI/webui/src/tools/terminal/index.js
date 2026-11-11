@@ -1,11 +1,154 @@
 import { toolFetch } from "../http.js";
+import { parseTerminalAnsi, cleanTerminalScreen } from "./term-emulator.js";
+import { watchBackgroundTask } from "./task-watcher.js";
 
 /* =========================================================
    TERMINAL & TASK MANAGEMENT TOOLS (CLEAN & MINIMAL)
    ========================================================= */
 
 /**
- * Executes a shell command with a wait timer cooldown.
+ * Streams real-time terminal command execution chunks directly into the UI badge.
+ */
+async function streamTaskExecution(args, { badgeEl, genState } = {}) {
+    const isBg = Boolean(args.background || args.is_daemon || args.isDaemon);
+    const defaultTimer = isBg ? 1 : 10;
+    const timerVal = args.timer !== undefined ? Number(args.timer) : defaultTimer;
+
+    const payload = {
+        command: args.command,
+        timer: timerVal,
+        timeout: timerVal,
+        background: isBg,
+        task_name: args.task_name,
+        cwd: args.cwd
+    };
+
+    const resEl = badgeEl?._collapseDiv?.querySelector(".command-output-res");
+    const pre = resEl?.closest("pre");
+
+    if (resEl) {
+        resEl.innerHTML = `<span class="terminal-stream-text"></span><span class="terminal-stream-cursor">█</span>`;
+    }
+    const textSpan = resEl?.querySelector(".terminal-stream-text");
+
+    let response;
+    try {
+        response = await fetch("/api/task/stream", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                ...(genState?.chatId ? { "x-chat-id": genState.chatId } : {})
+            },
+            body: JSON.stringify(payload),
+            signal: genState?.abortController?.signal
+        });
+    } catch (_) {
+        return await fallbackRunTask(args, genState);
+    }
+
+    if (!response.ok || !response.body) {
+        return await fallbackRunTask(args, genState);
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let accumulatedStdout = "";
+    let accumulatedStderr = "";
+    let finalPayload = null;
+
+    try {
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const events = buffer.split("\n\n");
+            buffer = events.pop() || "";
+
+            for (const ev of events) {
+                const trimmed = ev.trim();
+                if (!trimmed.startsWith("data:")) continue;
+                const jsonStr = trimmed.slice(5).trim();
+                if (!jsonStr) continue;
+
+                try {
+                    const data = JSON.parse(jsonStr);
+                    if (data.type === "chunk") {
+                        if (data.stdout) {
+                            accumulatedStdout += data.stdout;
+                        }
+                        if (data.stderr) {
+                            accumulatedStderr += data.stderr;
+                        }
+                        if (textSpan) {
+                            const raw = accumulatedStdout + (accumulatedStderr ? (accumulatedStdout ? "\n" : "") + accumulatedStderr : "");
+                            textSpan.innerHTML = parseTerminalAnsi(raw);
+                            if (pre) pre.scrollTop = pre.scrollHeight;
+                        }
+                    } else if (data.type === "done") {
+                        finalPayload = data;
+                    }
+                } catch (_) {}
+            }
+        }
+    } catch (streamErr) {
+        if (genState?.abortRequested) throw streamErr;
+        console.warn("Stream interrupted, using accumulated output:", streamErr);
+    }
+
+    const cursor = resEl?.querySelector(".terminal-stream-cursor");
+    if (cursor) cursor.remove();
+
+    if (finalPayload) {
+        finalPayload.alreadyStreamed = true;
+        finalPayload.clean_stdout = cleanTerminalScreen(finalPayload.stdout || accumulatedStdout);
+        finalPayload.clean_stderr = cleanTerminalScreen(finalPayload.stderr || accumulatedStderr);
+
+        const shouldDetach = Boolean(args.detach || args.exit || args.Exit);
+        if (shouldDetach && isBg && finalPayload.running) {
+            finalPayload.detached = true;
+            finalPayload.status_message = args.status_message || args.message || args.messege || `Background task '${finalPayload.task_id}' is running. I will monitor it and notify you when finished.`;
+            if (finalPayload.task_id && genState?.chatId) {
+                watchBackgroundTask({
+                    chatId: genState.chatId,
+                    taskId: finalPayload.task_id,
+                    time: Number(args.time || args.timeout || 3600),
+                    wakeOn: "exit",
+                    reason: args.task_name || args.command,
+                    statusMessage: finalPayload.status_message
+                });
+            }
+        }
+        return finalPayload;
+    }
+
+    return {
+        task_id: "task",
+        status: "completed",
+        running: false,
+        exit_code: 0,
+        stdout: accumulatedStdout,
+        stderr: accumulatedStderr,
+        clean_stdout: cleanTerminalScreen(accumulatedStdout),
+        clean_stderr: cleanTerminalScreen(accumulatedStderr),
+        alreadyStreamed: true
+    };
+}
+
+async function fallbackRunTask(args, genState) {
+    const payload = {
+        command: args.command,
+        timer: args.timer || 5,
+        timeout: args.timer || 5,
+        task_name: args.task_name,
+        cwd: args.cwd
+    };
+    return await toolFetch("/api/task/run", { method: "POST", body: payload, genState });
+}
+
+/**
+ * Executes a shell command with real-time output streaming.
  */
 export const runTaskTool = {
     name: "run_task",
@@ -23,7 +166,19 @@ export const runTaskTool = {
                     },
                     timer: {
                         type: "integer",
-                        description: "Seconds to wait for command output before returning (default: 5)."
+                        description: "Seconds to wait for command output before returning control (default: 10). If command takes longer, it continues running safely in the background."
+                    },
+                    background: {
+                        type: "boolean",
+                        description: "Set to true for long-running jobs (downloads, dev servers, long builds) to let them run in the background immediately so you can continue other work and conclude your response."
+                    },
+                    detach: {
+                        type: "boolean",
+                        description: "Set to true alongside background: true to conclude your response turn immediately; MultiAI will monitor the task in the background and re-awaken you when it finishes."
+                    },
+                    status_message: {
+                        type: "string",
+                        description: "Optional concluding status message for the user explaining that the background job is running."
                     },
                     task_name: {
                         type: "string",
@@ -38,15 +193,8 @@ export const runTaskTool = {
             }
         }
     },
-    handler: async (args, { genState }) => {
-        const payload = {
-            command: args.command,
-            timer: args.timer || 5,
-            timeout: args.timer || 5,
-            task_name: args.task_name,
-            cwd: args.cwd
-        };
-        return await toolFetch("/api/task/run", { method: "POST", body: payload, genState });
+    handler: async (args, { badgeEl, genState } = {}) => {
+        return await streamTaskExecution(args, { badgeEl, genState });
     }
 };
 
@@ -164,17 +312,25 @@ export const scheduleTool = {
         type: "function",
         function: {
             name: "schedule",
-            description: "Schedule a timer, pause execution, or hook onto a background task with an optional wake condition and completion response. Supports 'hook-on-task-and-wait' or pure 'just-wait' sleep modes.",
+            description: "Schedule a timer, pause execution, or hook onto a background task. For long tasks or waits (> 15-20s), set 'detach: true' to finish your response turn immediately; MultiAI will monitor the task in the background and re-awaken you when it completes.",
             parameters: {
                 type: "object",
                 properties: {
                     time: {
                         type: "number",
-                        description: "Duration in seconds to sleep or wait (e.g. 5, 10, 30)."
+                        description: "Duration in seconds to sleep or wait (e.g. 5, 30, 60, 300)."
                     },
                     task: {
                         type: "string",
-                        description: "Optional background task_id to monitor (or shell command to start and monitor). If omitted, performs a pure sleep timer."
+                        description: "Optional background task_id to monitor (or shell command to start and monitor in background). If omitted, performs a sleep timer."
+                    },
+                    detach: {
+                        type: "boolean",
+                        description: "Set to true for long-running tasks or timers (> 15-20s) to detach from the current turn immediately, deliver your status message, and conclude your response turn cleanly. MultiAI will autonomously monitor the task and re-awaken you in a new turn when it finishes."
+                    },
+                    status_message: {
+                        type: "string",
+                        description: "Optional status message for the user explaining that the task is running in the background and you will check back on it (e.g. 'The download is running in the background, I will keep a watch on it every few minutes; until then you can do other tasks or close the window.')."
                     },
                     end_response: {
                         type: "string",
@@ -201,6 +357,17 @@ export const scheduleTool = {
         const endResponse = args.end_response ?? args["end-response"] ?? null;
         const wakeOn = args.wake_on || "exit";
         const reason = args.reason || (task ? `Monitoring ${task}` : `Sleeping for ${time}s`);
+        const explicitlyBlocking = (args.detach === false || args.exit === false || args.Exit === false);
+        const isDetached = !explicitlyBlocking && Boolean(
+            args.detach || 
+            args.exit || 
+            args.Exit || 
+            args.background || 
+            args.async || 
+            time >= 20 || 
+            (typeof reason === "string" && /\b(detach|background)\b/i.test(reason))
+        );
+        const statusMessage = args.status_message || args.statusMessage || args.message || args.messege || args.exit_message || args.exitMessage || "";
 
         let taskId = null;
         if (task) {
@@ -214,7 +381,7 @@ export const scheduleTool = {
                         genState
                     });
                     taskId = runRes.task_id || null;
-                    if (!taskId && runRes.stdout !== undefined) {
+                    if (!taskId && runRes.stdout !== undefined && !isDetached) {
                         return {
                             status: "task_completed",
                             task,
@@ -227,6 +394,29 @@ export const scheduleTool = {
                     console.warn("[SCHEDULE] Could not launch task command:", err.message);
                 }
             }
+        }
+
+        // If detached mode is requested, register background watcher and yield immediately!
+        if (isDetached) {
+            watchBackgroundTask({
+                chatId: genState?.chatId,
+                taskId,
+                time,
+                wakeOn,
+                endResponse,
+                reason,
+                statusMessage
+            });
+
+            return {
+                status: "scheduled_detached",
+                detached: true,
+                task_id: taskId,
+                time,
+                wake_on: wakeOn,
+                reason,
+                status_message: statusMessage || `Task running in background (${time}s timeout, wake on ${wakeOn}). I will monitor it and notify you when finished.`
+            };
         }
 
         const res = await toolFetch("/api/task/idle", {

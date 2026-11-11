@@ -112,3 +112,69 @@
     color: var(--text-tertiary);
     font-style: italic;
 }
+
+/* Terminal streaming cursor & running state for command output */
+.terminal-stream-cursor {
+    display: inline-block;
+    color: var(--accent-primary, #6366f1);
+    margin-left: 2px;
+    font-weight: 700;
+    line-height: 1;
+    vertical-align: baseline;
+    animation: termCursorBlink 0.9s steps(2, start) infinite;
+}
+
+@keyframes termCursorBlink {
+    to { visibility: hidden; }
+}
+
+.terminal-stream-cursor.settled {
+    opacity: 0.5;
+    animation: termCursorBlink 1.4s steps(2, start) infinite;
+}
+
+.terminal-stream-running {
+    color: var(--text-tertiary);
+    font-style: italic;
+}
+
+/* =========================================================
+   ANSI TERMINAL COLORS & TEXT STYLES
+   ========================================================= */
+
+/* Standard Foreground Colors (30-37) */
+.ansi-30 { color: #4b5563; }
+.ansi-31 { color: #f87171; }
+.ansi-32 { color: #34d399; }
+.ansi-33 { color: #fbbf24; }
+.ansi-34 { color: #60a5fa; }
+.ansi-35 { color: #e879f9; }
+.ansi-36 { color: #22d3ee; }
+.ansi-37 { color: #f3f4f6; }
+
+/* Bright Foreground Colors (90-97) */
+.ansi-90 { color: #9ca3af; }
+.ansi-91 { color: #fca5a5; }
+.ansi-92 { color: #6ee7b7; }
+.ansi-93 { color: #fde047; }
+.ansi-94 { color: #93c5fd; }
+.ansi-95 { color: #f0abfc; }
+.ansi-96 { color: #67e8f9; }
+.ansi-97 { color: #ffffff; }
+
+/* Standard Background Colors (40-47) */
+.ansi-bg-40 { background-color: #1f2937; }
+.ansi-bg-41 { background-color: rgba(239, 68, 68, 0.25); border-radius: 2px; }
+.ansi-bg-42 { background-color: rgba(16, 185, 129, 0.25); border-radius: 2px; }
+.ansi-bg-43 { background-color: rgba(245, 158, 11, 0.25); border-radius: 2px; }
+.ansi-bg-44 { background-color: rgba(59, 130, 246, 0.25); border-radius: 2px; }
+.ansi-bg-45 { background-color: rgba(217, 70, 239, 0.25); border-radius: 2px; }
+.ansi-bg-46 { background-color: rgba(6, 182, 212, 0.25); border-radius: 2px; }
+.ansi-bg-47 { background-color: rgba(243, 244, 246, 0.25); border-radius: 2px; }
+
+/* Text Style Modifiers */
+.ansi-bold { font-weight: 600; }
+.ansi-dim { opacity: 0.65; }
+.ansi-italic { font-style: italic; }
+.ansi-underline { text-decoration: underline; }
+

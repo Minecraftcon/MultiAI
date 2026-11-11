@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 )
 
 var manager = NewTaskManager()
@@ -52,6 +53,167 @@ func handleRoutes(w http.ResponseWriter, r *http.Request) {
 			"status": "ok",
 			"engine": "go",
 		})
+		return
+	}
+
+	// Stream task: POST /api/task/stream
+	if r.Method == http.MethodPost && path == "/api/task/stream" {
+		var req struct {
+			Command      string      `json:"command"`
+			Timer        interface{} `json:"timer"`
+			Timeout      interface{} `json:"timeout"`
+			WaitMs       interface{} `json:"wait_ms"`
+			Background   bool        `json:"background"`
+			IsDaemon     bool        `json:"is_daemon"`
+			Cwd          string      `json:"cwd"`
+			Shell        string      `json:"shell"`
+			ScratchDir   string      `json:"scratch_dir"`
+			ArtifactsDir string      `json:"artifacts_dir"`
+		}
+		_ = parseJSONBody(r, &req)
+
+		if strings.TrimSpace(req.Command) == "" {
+			sendJSON(w, http.StatusBadRequest, map[string]string{"error": "No command provided"})
+			return
+		}
+
+		timeoutSec := 0.0
+		if req.Background || req.IsDaemon {
+			timeoutSec = 0.5
+		} else if req.Timer != nil {
+			timeoutSec = parseNumber(req.Timer, 0.0)
+		} else if req.Timeout != nil {
+			timeoutSec = parseNumber(req.Timeout, 0.0)
+		} else if req.WaitMs != nil {
+			timeoutSec = parseNumber(req.WaitMs, 0.0) / 1000.0
+		}
+
+		taskID, err := manager.RunTask(req.Command, req.Shell, req.ScratchDir, req.ArtifactsDir, req.Cwd)
+		if err != nil {
+			sendJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+
+		flusher, ok := w.(http.Flusher)
+
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Cache-Control", "no-cache, no-transform")
+		w.Header().Set("Connection", "keep-alive")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("X-Accel-Buffering", "no")
+		w.WriteHeader(http.StatusOK)
+
+		startPayload, _ := json.Marshal(map[string]interface{}{
+			"type":    "start",
+			"task_id": taskID,
+		})
+		fmt.Fprintf(w, "data: %s\n\n", startPayload)
+		if ok {
+			flusher.Flush()
+		}
+
+		startTime := time.Now()
+		var accumulatedStdout strings.Builder
+		var accumulatedStderr strings.Builder
+
+		ctx := r.Context()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+
+			out, err := manager.GetOutput(taskID)
+			if err != nil {
+				break
+			}
+
+			if len(out.Stdout) > 0 {
+				accumulatedStdout.WriteString(out.Stdout)
+			}
+			if len(out.Stderr) > 0 {
+				accumulatedStderr.WriteString(out.Stderr)
+			}
+
+			if len(out.Stdout) > 0 || len(out.Stderr) > 0 {
+				chunkPayload, _ := json.Marshal(map[string]interface{}{
+					"type":   "chunk",
+					"stdout": out.Stdout,
+					"stderr": out.Stderr,
+				})
+				fmt.Fprintf(w, "data: %s\n\n", chunkPayload)
+				if ok {
+					flusher.Flush()
+				}
+			}
+
+			if timeoutSec > 0 && time.Since(startTime).Seconds() >= timeoutSec && out.Running {
+				elapsed := roundFloat(time.Since(startTime).Seconds(), 2)
+				donePayload, _ := json.Marshal(map[string]interface{}{
+					"type":      "done",
+					"task_id":   taskID,
+					"done":      false,
+					"status":    "running",
+					"running":   true,
+					"stdout":    accumulatedStdout.String(),
+					"stderr":    accumulatedStderr.String(),
+					"ran_for":   fmt.Sprintf("%.2f", elapsed),
+				})
+				fmt.Fprintf(w, "data: %s\n\n", donePayload)
+				if ok {
+					flusher.Flush()
+				}
+				break
+			}
+
+			if !out.Running {
+				// Flush any remaining trailing output from pipes
+				time.Sleep(20 * time.Millisecond)
+				finalOut, _ := manager.GetOutput(taskID)
+				if len(finalOut.Stdout) > 0 {
+					accumulatedStdout.WriteString(finalOut.Stdout)
+				}
+				if len(finalOut.Stderr) > 0 {
+					accumulatedStderr.WriteString(finalOut.Stderr)
+				}
+				if len(finalOut.Stdout) > 0 || len(finalOut.Stderr) > 0 {
+					chunkPayload, _ := json.Marshal(map[string]interface{}{
+						"type":   "chunk",
+						"stdout": finalOut.Stdout,
+						"stderr": finalOut.Stderr,
+					})
+					fmt.Fprintf(w, "data: %s\n\n", chunkPayload)
+					if ok {
+						flusher.Flush()
+					}
+				}
+
+				elapsed := roundFloat(time.Since(startTime).Seconds(), 2)
+				exitCode := 0
+				if out.ExitCode != nil {
+					exitCode = *out.ExitCode
+				}
+				donePayload, _ := json.Marshal(map[string]interface{}{
+					"type":      "done",
+					"task_id":   taskID,
+					"done":      true,
+					"status":    fmt.Sprintf("exited (code: %d)", exitCode),
+					"running":   false,
+					"exit_code": exitCode,
+					"stdout":    accumulatedStdout.String(),
+					"stderr":    accumulatedStderr.String(),
+					"ran_for":   fmt.Sprintf("%.2f", elapsed),
+				})
+				fmt.Fprintf(w, "data: %s\n\n", donePayload)
+				if ok {
+					flusher.Flush()
+				}
+				break
+			}
+
+			time.Sleep(25 * time.Millisecond)
+		}
 		return
 	}
 

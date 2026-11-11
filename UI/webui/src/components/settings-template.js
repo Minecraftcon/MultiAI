@@ -45,6 +45,10 @@ export function getSettingsHTML() {
                     <i data-lucide="wrench"></i>
                     <span>Agent & Tools</span>
                 </button>
+                <button type="button" class="settings-nav-item" data-subscreen="mcp" aria-selected="false">
+                    <i data-lucide="paperclip"></i>
+                    <span>MCP Servers</span>
+                </button>
                 <button type="button" class="settings-nav-item" data-subscreen="appearance" aria-selected="false">
                     <i data-lucide="palette"></i>
                     <span>Appearance</span>
@@ -275,17 +279,6 @@ export function getSettingsHTML() {
                                 <span class="settings-slider"></span>
                             </label>
                         </div>
-
-                        <div class="settings-row">
-                            <div class="settings-item-info">
-                                <span class="settings-item-title">Model Context Protocol (MCP)</span>
-                                <span class="settings-item-desc">Enable external tool integration servers using Anthropic MCP specification</span>
-                            </div>
-                            <label class="settings-switch">
-                                <input type="checkbox" id="cfgEnableMcp" checked>
-                                <span class="settings-slider"></span>
-                            </label>
-                        </div>
                     </div>
 
                     <!-- SANDBOX & ISOLATION -->
@@ -311,12 +304,49 @@ export function getSettingsHTML() {
                         </div>
                     </div>
 
+                    <div class="settings-card">
+                        <span class="settings-card-title">Execution Budget</span>
+                        <div class="settings-row">
+                            <div class="settings-item-info">
+                                <span class="settings-item-title">Max Tool Iterations</span>
+                                <span class="settings-item-desc">Safety ceiling for tool calling loops per message turn</span>
+                            </div>
+                            <div class="settings-range-container">
+                                <input type="range" id="cfgMaxToolRounds" class="settings-range" min="0" max="100" step="5" value="0">
+                                <span id="cfgMaxToolRoundsVal" class="settings-range-val">Unlimited</span>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 5. MCP SERVERS -->
+                <section id="subScreen_mcp" class="settings-subscreen">
+                    <div class="settings-subscreen-header">
+                        <h2 class="settings-subscreen-title">Model Context Protocol (MCP)</h2>
+                        <p class="settings-subscreen-desc">Connect and manage external MCP servers (stdio subprocesses or SSE endpoints) to expand agent tool capabilities.</p>
+                    </div>
+
+                    <!-- MASTER MCP INTEGRATION TOGGLE -->
+                    <div class="settings-card">
+                        <span class="settings-card-title">Integration Status</span>
+                        <div class="settings-row">
+                            <div class="settings-item-info">
+                                <span class="settings-item-title">Enable MCP Integration</span>
+                                <span class="settings-item-desc">Allow autonomous agents to connect to external MCP servers and discover tools</span>
+                            </div>
+                            <label class="settings-switch">
+                                <input type="checkbox" id="cfgEnableMcp" checked>
+                                <span class="settings-slider"></span>
+                            </label>
+                        </div>
+                    </div>
+
                     <!-- MCP TOOL SERVERS CARD -->
                     <div class="settings-card" id="cfgMcpCard">
-                        <div class="settings-card-header-row">
-                            <div class="settings-card-header-info">
-                                <span class="settings-card-title">Model Context Protocol Servers</span>
-                                <span class="settings-item-desc">Connect external MCP servers (stdio subprocesses or SSE endpoints) to expand agent tool capabilities</span>
+                        <div class="settings-card-header-flex">
+                            <div class="settings-item-info">
+                                <span class="settings-card-title">Configured MCP Servers</span>
+                                <span class="settings-item-desc">Manage connected servers, inspect exposed tools, and configure live stdio/SSE transports.</span>
                             </div>
                             <div class="mcp-card-actions">
                                 <button type="button" id="btnRefreshMcpServers" class="settings-action-btn secondary btn-sm" title="Refresh servers and discovered tools">
@@ -376,20 +406,6 @@ export function getSettingsHTML() {
                         <div id="mcpServersList" class="mcp-servers-list">
                             <div class="mcp-loading-state">
                                 <span>Loading configured MCP servers...</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="settings-card">
-                        <span class="settings-card-title">Execution Budget</span>
-                        <div class="settings-row">
-                            <div class="settings-item-info">
-                                <span class="settings-item-title">Max Tool Iterations</span>
-                                <span class="settings-item-desc">Safety ceiling for tool calling loops per message turn</span>
-                            </div>
-                            <div class="settings-range-container">
-                                <input type="range" id="cfgMaxToolRounds" class="settings-range" min="0" max="100" step="5" value="0">
-                                <span id="cfgMaxToolRoundsVal" class="settings-range-val">Unlimited</span>
                             </div>
                         </div>
                     </div>
@@ -516,7 +532,85 @@ export function getSettingsHTML() {
                         <p class="settings-subscreen-desc">Manage local conversation storage, export chat archives, and configure context privacy filters.</p>
                     </div>
 
-                    <!-- CONTEXT PRIVACY & REGEX FILTERER -->
+                    <!-- 1. STORAGE SUMMARY -->
+                    <div class="settings-card">
+                        <span class="settings-card-title">Storage Summary</span>
+                        <div class="settings-info-grid">
+                            <div class="settings-info-box">
+                                <span class="settings-info-label">Stored Chats</span>
+                                <span id="settingsChatCount" class="settings-info-val">0 conversations</span>
+                            </div>
+                            <div class="settings-info-box">
+                                <span class="settings-info-label">Local Storage</span>
+                                <span id="settingsStorageSize" class="settings-info-val">~0 KB</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 2. DATA MANAGEMENT -->
+                    <div class="settings-card">
+                        <span class="settings-card-title">Data Management</span>
+                        <div class="settings-row">
+                            <div class="settings-item-info">
+                                <span class="settings-item-title">Export All Conversations</span>
+                                <span class="settings-item-desc">Download full archive of all stored chats in JSON format</span>
+                            </div>
+                            <button type="button" id="settingsExportAllBtn" class="settings-action-btn secondary">
+                                <i data-lucide="download"></i>
+                                <span>Export JSON</span>
+                            </button>
+                        </div>
+
+                        <div class="settings-row">
+                            <div class="settings-item-info">
+                                <span class="settings-item-title">Clear All Chat History</span>
+                                <span class="settings-item-desc">Wipes all stored sessions from your local browser database</span>
+                            </div>
+                            <button type="button" id="settingsClearAllBtn" class="settings-action-btn danger">
+                                <i data-lucide="trash-2"></i>
+                                <span>Clear History</span>
+                            </button>
+                        </div>
+
+                        <div class="settings-row">
+                            <div class="settings-item-info">
+                                <span class="settings-item-title">Reset Settings to Defaults</span>
+                                <span class="settings-item-desc">Revert all preferences to initial installation state</span>
+                            </div>
+                            <button type="button" id="settingsResetDefaultsBtn" class="settings-action-btn secondary">
+                                <i data-lucide="rotate-ccw"></i>
+                                <span>Reset Defaults</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 3. PERSISTENCE RULES -->
+                    <div class="settings-card">
+                        <span class="settings-card-title">Persistence Rules</span>
+                        <div class="settings-row">
+                            <div class="settings-item-info">
+                                <span class="settings-item-title">Record Chat History</span>
+                                <span class="settings-item-desc">Persist conversations in local storage across browser refreshes</span>
+                            </div>
+                            <label class="settings-switch">
+                                <input type="checkbox" id="cfgRecordHistory" checked>
+                                <span class="settings-slider"></span>
+                            </label>
+                        </div>
+
+                        <div class="settings-row">
+                            <div class="settings-item-info">
+                                <span class="settings-item-title">Record Timestamps</span>
+                                <span class="settings-item-desc">Store creation and update timestamps for chats</span>
+                            </div>
+                            <label class="settings-switch">
+                                <input type="checkbox" id="cfgRecordDate" checked>
+                                <span class="settings-slider"></span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- 4. CONTEXT PRIVACY & REGEX FILTERER -->
                     <div class="settings-card">
                         <div class="settings-card-header-flex">
                             <div>
@@ -635,81 +729,6 @@ export function getSettingsHTML() {
                             <div id="contextFiltersList" class="context-filters-list">
                                 <!-- Rendered dynamically via JavaScript -->
                             </div>
-                        </div>
-                    </div>
-
-                    <div class="settings-card">
-                        <span class="settings-card-title">Persistence Rules</span>
-                        <div class="settings-row">
-                            <div class="settings-item-info">
-                                <span class="settings-item-title">Record Chat History</span>
-                                <span class="settings-item-desc">Persist conversations in local storage across browser refreshes</span>
-                            </div>
-                            <label class="settings-switch">
-                                <input type="checkbox" id="cfgRecordHistory" checked>
-                                <span class="settings-slider"></span>
-                            </label>
-                        </div>
-
-                        <div class="settings-row">
-                            <div class="settings-item-info">
-                                <span class="settings-item-title">Record Timestamps</span>
-                                <span class="settings-item-desc">Store creation and update timestamps for chats</span>
-                            </div>
-                            <label class="settings-switch">
-                                <input type="checkbox" id="cfgRecordDate" checked>
-                                <span class="settings-slider"></span>
-                            </label>
-                        </div>
-                    </div>
-
-                    <div class="settings-card">
-                        <span class="settings-card-title">Storage Summary</span>
-                        <div class="settings-info-grid">
-                            <div class="settings-info-box">
-                                <span class="settings-info-label">Stored Chats</span>
-                                <span id="settingsChatCount" class="settings-info-val">0 conversations</span>
-                            </div>
-                            <div class="settings-info-box">
-                                <span class="settings-info-label">Local Storage</span>
-                                <span id="settingsStorageSize" class="settings-info-val">~0 KB</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="settings-card">
-                        <span class="settings-card-title">Data Management</span>
-                        <div class="settings-row">
-                            <div class="settings-item-info">
-                                <span class="settings-item-title">Export All Conversations</span>
-                                <span class="settings-item-desc">Download full archive of all stored chats in JSON format</span>
-                            </div>
-                            <button type="button" id="settingsExportAllBtn" class="settings-action-btn secondary">
-                                <i data-lucide="download"></i>
-                                <span>Export JSON</span>
-                            </button>
-                        </div>
-
-                        <div class="settings-row">
-                            <div class="settings-item-info">
-                                <span class="settings-item-title">Clear All Chat History</span>
-                                <span class="settings-item-desc">Wipes all stored sessions from your local browser database</span>
-                            </div>
-                            <button type="button" id="settingsClearAllBtn" class="settings-action-btn danger">
-                                <i data-lucide="trash-2"></i>
-                                <span>Clear History</span>
-                            </button>
-                        </div>
-
-                        <div class="settings-row">
-                            <div class="settings-item-info">
-                                <span class="settings-item-title">Reset Settings to Defaults</span>
-                                <span class="settings-item-desc">Revert all preferences to initial installation state</span>
-                            </div>
-                            <button type="button" id="settingsResetDefaultsBtn" class="settings-action-btn secondary">
-                                <i data-lucide="rotate-ccw"></i>
-                                <span>Reset Defaults</span>
-                            </button>
                         </div>
                     </div>
                 </section>

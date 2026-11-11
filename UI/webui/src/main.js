@@ -24,6 +24,7 @@ import { initUiScale } from "./components/ui-scale.js";
 import { initAuroraTheme } from "./components/aurora-theme.js";
 import { initModeSwitcher } from "./components/mode-switcher.js";
 import { McpActiveTools } from "./tools/mcp/index.js";
+import { initTaskWatcher } from "./tools/terminal/task-watcher.js";
 
 async function initChatSessions() {
     loadStoredChats();
@@ -108,6 +109,7 @@ async function bootstrap() {
     }
     initSystemEnvironment();
     await initChatSessions();
+    initTaskWatcher();
 }
 
 if (document.readyState === "loading") {

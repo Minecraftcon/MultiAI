@@ -36,7 +36,7 @@ manager = TaskManager()
 
 # Check if Flask is installed
 try:
-    from flask import Flask, request, jsonify
+    from flask import Flask, request, jsonify, Response
     HAS_FLASK = True
 except ImportError:
     HAS_FLASK = False
@@ -51,6 +51,62 @@ if HAS_FLASK:
     @app.route("/health", methods=["GET"])
     def health_endpoint():
         return jsonify({"status": "ok", "engine": "flask"})
+
+    @app.route("/api/task/stream", methods=["POST"])
+    def stream_task_endpoint():
+        data = request.json or {}
+        command = data.get("command")
+        if not command:
+            return jsonify({"error": "No command provided"}), 400
+
+        scratch_dir = data.get("scratch_dir")
+        artifacts_dir = data.get("artifacts_dir")
+        shell_override = data.get("shell")
+        cwd = data.get("cwd")
+        task_id = manager.run_task(command, shell_override=shell_override, scratch_dir=scratch_dir, artifacts_dir=artifacts_dir, cwd=cwd)
+
+        def generate_sse():
+            start_time = time.time()
+            accumulated_stdout = []
+            accumulated_stderr = []
+            try:
+                # Initial start event
+                yield f"data: {json.dumps({'type': 'start', 'task_id': task_id})}\n\n"
+                while True:
+                    out = manager.get_output(task_id)
+                    s_out = out.get("stdout", "")
+                    s_err = out.get("stderr", "")
+
+                    if s_out:
+                        accumulated_stdout.append(s_out)
+                    if s_err:
+                        accumulated_stderr.append(s_err)
+
+                    if s_out or s_err:
+                        yield f"data: {json.dumps({'type': 'chunk', 'stdout': s_out, 'stderr': s_err})}\n\n"
+
+                    if not out.get("running"):
+                        elapsed = round(time.time() - start_time, 2)
+                        exit_code = out.get("exit_code", 0)
+                        final_payload = {
+                            "type": "done",
+                            "task_id": task_id,
+                            "done": True,
+                            "status": f"exited (code: {exit_code})",
+                            "running": False,
+                            "exit_code": exit_code,
+                            "stdout": "".join(accumulated_stdout),
+                            "stderr": "".join(accumulated_stderr),
+                            "ran_for": str(elapsed)
+                        }
+                        yield f"data: {json.dumps(final_payload)}\n\n"
+                        break
+
+                    time.sleep(0.03)
+            except GeneratorExit:
+                pass
+
+        return Response(generate_sse(), mimetype="text/event-stream")
 
     @app.route("/api/task/run", methods=["POST"])
     def run_task_endpoint():
@@ -216,6 +272,54 @@ class FallbackHandler(BaseHTTPRequestHandler):
             data = json.loads(post_data.decode("utf-8", errors="replace")) if post_data else {}
         except Exception:
             data = {}
+
+        if path == "/api/task/stream":
+            cmd = data.get("command")
+            if not cmd:
+                return self._send_json(400, {"error": "No command provided"})
+            tid = manager.run_task(cmd, shell_override=data.get("shell"), scratch_dir=data.get("scratch_dir"), artifacts_dir=data.get("artifacts_dir"), cwd=data.get("cwd"))
+
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Cache-Control", "no-cache")
+            self.send_header("Connection", "keep-alive")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+
+            start_time = time.time()
+            accumulated_stdout = []
+            accumulated_stderr = []
+            try:
+                self.wfile.write(f"data: {json.dumps({'type': 'start', 'task_id': tid})}\n\n".encode("utf-8"))
+                self.wfile.flush()
+
+                while True:
+                    out = manager.get_output(tid)
+                    s_out = out.get("stdout", "")
+                    s_err = out.get("stderr", "")
+
+                    if s_out:
+                        accumulated_stdout.append(s_out)
+                    if s_err:
+                        accumulated_stderr.append(s_err)
+
+                    if s_out or s_err:
+                        payload = f"data: {json.dumps({'type': 'chunk', 'stdout': s_out, 'stderr': s_err})}\n\n".encode("utf-8")
+                        self.wfile.write(payload)
+                        self.wfile.flush()
+
+                    if not out.get("running"):
+                        elapsed = round(time.time() - start_time, 2)
+                        exit_code = out.get("exit_code", 0)
+                        final_payload = f"data: {json.dumps({'type': 'done', 'task_id': tid, 'done': True, 'status': f'exited (code: {exit_code})', 'running': False, 'exit_code': exit_code, 'stdout': ''.join(accumulated_stdout), 'stderr': ''.join(accumulated_stderr), 'ran_for': str(elapsed)})}\n\n".encode("utf-8")
+                        self.wfile.write(final_payload)
+                        self.wfile.flush()
+                        break
+
+                    time.sleep(0.03)
+            except Exception:
+                pass
+            return
 
         if path == "/api/task/run":
             cmd = data.get("command")
