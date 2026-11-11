@@ -195,7 +195,24 @@ export function populateSettingsValues() {
 
     // 4. Tools & Automation
     const toolSearch = document.getElementById("cfgEnableWebSearch");
-    if (toolSearch) toolSearch.checked = tools.EnableWebSearch !== false;
+    const searchSection = document.getElementById("cfgSearchConfigSection");
+    if (toolSearch) {
+        toolSearch.checked = tools.EnableWebSearch !== false;
+        if (searchSection) {
+            searchSection.style.display = toolSearch.checked ? "block" : "none";
+        }
+    }
+
+    const searchConfig = state.config.Search || {};
+    const searchProvider = document.getElementById("cfgSearchProvider");
+    if (searchProvider) {
+        searchProvider.value = (searchConfig.Provider || "tinyfish").toLowerCase();
+    }
+
+    const pairDeepSearch = document.getElementById("cfgPairDeepSearch");
+    if (pairDeepSearch) {
+        pairDeepSearch.checked = searchConfig.PairDeepSearch !== false;
+    }
 
     const toolTerminal = document.getElementById("cfgEnableTerminal");
     if (toolTerminal) toolTerminal.checked = tools.EnableTerminal !== false;
@@ -574,9 +591,27 @@ export function initSettingsView() {
 
     // 4. Tools & Automation Controls
     const toolSearch = document.getElementById("cfgEnableWebSearch");
+    const searchSection = document.getElementById("cfgSearchConfigSection");
     if (toolSearch) {
         toolSearch.addEventListener("change", (e) => {
             saveSetting("Tools", "EnableWebSearch", e.target.checked);
+            if (searchSection) {
+                searchSection.style.display = e.target.checked ? "block" : "none";
+            }
+        });
+    }
+
+    const searchProvider = document.getElementById("cfgSearchProvider");
+    if (searchProvider) {
+        searchProvider.addEventListener("change", (e) => {
+            saveSetting("Search", "Provider", e.target.value);
+        });
+    }
+
+    const pairDeepSearch = document.getElementById("cfgPairDeepSearch");
+    if (pairDeepSearch) {
+        pairDeepSearch.addEventListener("change", (e) => {
+            saveSetting("Search", "PairDeepSearch", e.target.checked);
         });
     }
 

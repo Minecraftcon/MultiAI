@@ -699,13 +699,22 @@ function setBadgeDiffStats(badgeEl, queryEl, statHtml) {
             } else if (data.stdout || data.stderr) {
                 outText = (data.stdout || "") + (data.stderr ? ("\n" + data.stderr) : "");
             } else if (name === "web_search") {
-                if (data.results && Array.isArray(data.results)) {
-                    outText = data.results.map(r => `[${r.title || r.url}]\n${(r.snippet || r.text || r.content || "").slice(0, 800)}${(r.snippet || r.text || r.content || "").length > 800 ? "..." : ""}`).join("\n\n---\n\n");
-                } else if (data.markdown || data.content) {
-                    outText = data.markdown || data.content;
-                } else {
-                    outText = JSON.stringify(data, null, 2);
+                const parts = [];
+                if (data.excerpts && Array.isArray(data.excerpts) && data.excerpts.length > 0) {
+                    parts.push("=== DEEPSEARCH RAG EXCERPTS ===");
+                    for (const ex of data.excerpts) {
+                        parts.push(`[${ex.source}] (${ex.url})\n${ex.text}`);
+                    }
+                    parts.push("=== SEARCH RESULTS ===");
                 }
+                if (data.results && Array.isArray(data.results)) {
+                    parts.push(data.results.map(r => `[${r.title || r.url}]\n${r.url ? r.url + "\n" : ""}${(r.snippet || r.text || r.content || "").slice(0, 800)}${(r.snippet || r.text || r.content || "").length > 800 ? "..." : ""}`).join("\n\n---\n\n"));
+                } else if (data.markdown || data.content) {
+                    parts.push(data.markdown || data.content);
+                } else if (parts.length === 0) {
+                    parts.push(JSON.stringify(data, null, 2));
+                }
+                outText = parts.join("\n\n");
             } else if (data.results && Array.isArray(data.results)) {
                 outText = data.results.map(r => `[${r.title || r.url}]\n${(r.text || "").slice(0, 800)}${r.text?.length > 800 ? "..." : ""}`).join("\n\n---\n\n");
             } else {

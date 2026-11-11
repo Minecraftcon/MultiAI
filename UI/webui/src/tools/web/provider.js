@@ -69,16 +69,18 @@ export class TinyFishProvider extends BaseWebSearchProvider {
     }
 
     formatSearchResults(res) {
-        if (!res) return { provider: "tinyfish", results: [] };
+        if (!res) return { provider: "search", results: [], excerpts: [] };
         if (res.results && Array.isArray(res.results)) {
             return {
-                provider: "tinyfish",
+                provider: res.provider || "search",
                 type: "search",
+                pair_deepsearch: Boolean(res.pair_deepsearch),
                 results: res.results.map(r => ({
                     title: r.title || "",
                     url: r.url || "",
                     snippet: r.snippet || r.text || r.content || ""
-                }))
+                })),
+                excerpts: Array.isArray(res.excerpts) ? res.excerpts : []
             };
         }
         return res;

@@ -39,6 +39,8 @@ const DEFAULT_CONFIG = {
         MaxFileSizeKB: 1024
     },
     Search: {
+        Provider: "tinyfish",
+        PairDeepSearch: true,
         MaxSearchResults: 5,
         SearchTimeoutSeconds: 15
     },

@@ -247,6 +247,31 @@ export function getSettingsHTML() {
                             </label>
                         </div>
 
+                        <!-- Search Provider & Pair DeepSearch -->
+                        <div id="cfgSearchConfigSection" style="padding-left: 12px; border-left: 2px solid var(--border); margin: 6px 0 12px 6px;">
+                            <div class="settings-row" style="padding: 6px 0;">
+                                <div class="settings-item-info">
+                                    <span class="settings-item-title">Search Type</span>
+                                    <span class="settings-item-desc">Underlying engine used for web queries and citations</span>
+                                </div>
+                                <select id="cfgSearchProvider" class="settings-select" style="min-width: 170px;">
+                                    <option value="tinyfish">TinyFish (API)</option>
+                                    <option value="duckduckgo">DuckDuckGo (Free)</option>
+                                </select>
+                            </div>
+
+                            <div class="settings-row" style="padding: 6px 0;">
+                                <div class="settings-item-info">
+                                    <span class="settings-item-title">Pair DeepSearch</span>
+                                    <span class="settings-item-desc">Automatically fetch top sources and extract relevant passages using instant BM25 RAG (no extra AI/tokens)</span>
+                                </div>
+                                <label class="settings-switch">
+                                    <input type="checkbox" id="cfgPairDeepSearch" checked>
+                                    <span class="settings-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+
                         <div class="settings-row">
                             <div class="settings-item-info">
                                 <span class="settings-item-title">Terminal & Shell</span>
