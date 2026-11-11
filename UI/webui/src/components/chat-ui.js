@@ -600,11 +600,38 @@ export function updateAIStream(element, fullText, isDone, startTime, hasTools) {
     const sanitizedRest = content ? parseMarkdown(content) : "";
 
     if (sanitizedThought) {
-        preSearchContent.innerHTML = sanitizedThought;
-        wrapTablesForScroll(preSearchContent);
-        if (isDone) renderIcons(preSearchContent);
+        if (element._lastRenderedThought !== sanitizedThought) {
+            const prevDetails = preSearchContent.querySelector(".thought-box");
+            const wasUserClosed = prevDetails && (!prevDetails.open || prevDetails.dataset.userToggled === "closed");
+            const wasExpanded = Boolean(preSearchContent.querySelector(".thought-collapsible.is-expanded"));
+
+            preSearchContent.innerHTML = sanitizedThought;
+            wrapTablesForScroll(preSearchContent);
+
+            const newDetails = preSearchContent.querySelector(".thought-box");
+            if (newDetails && wasUserClosed) {
+                newDetails.open = false;
+                newDetails.dataset.userToggled = "closed";
+            }
+
+            const newCollapsible = preSearchContent.querySelector(".thought-collapsible");
+            if (newCollapsible && wasExpanded) {
+                newCollapsible.classList.add("is-expanded");
+                const btn = newCollapsible.querySelector(".thought-expand-btn");
+                if (btn) {
+                    btn.setAttribute("aria-expanded", "true");
+                    btn.innerHTML = `<span class="thought-expand-icon" aria-hidden="true">▴</span> collapse`;
+                }
+            }
+
+            element._lastRenderedThought = sanitizedThought;
+            if (isDone) renderIcons(preSearchContent);
+        }
     } else {
-        preSearchContent.innerHTML = "";
+        if (preSearchContent.innerHTML) {
+            preSearchContent.innerHTML = "";
+            element._lastRenderedThought = "";
+        }
     }
 
     if (!content || !content.trim()) {
@@ -907,6 +934,17 @@ export function initChatDelegation() {
             }
             saveCurrentChatState();
             return;
+        }
+
+        const thoughtSummary = e.target.closest(".thought-summary");
+        if (thoughtSummary) {
+            const details = thoughtSummary.closest(".thought-box");
+            if (details) {
+                setTimeout(() => {
+                    details.dataset.userToggled = details.open ? "open" : "closed";
+                    saveCurrentChatState();
+                }, 0);
+            }
         }
 
         const thoughtExpandBtn = e.target.closest(".thought-expand-btn");
