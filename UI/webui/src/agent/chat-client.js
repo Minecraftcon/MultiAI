@@ -81,7 +81,8 @@ export async function callChatModel(messages, { model, tools, signal, onChunk } 
 
     const activeSignal = signal || (state.currentChatId && state.activeGenerations[state.currentChatId]?.abortController?.signal);
 
-    const shouldStream = Boolean(onChunk && (!tools || tools.length === 0));
+    // Stream when onChunk callback is provided
+    const shouldStream = Boolean(onChunk);
 
     let res;
     try {
@@ -123,7 +124,9 @@ export async function callChatModel(messages, { model, tools, signal, onChunk } 
     if (contentType.includes("text/event-stream") && res.body) {
         const reader = res.body.getReader();
         const decoder = new TextDecoder("utf-8");
-        let accumulated = "";
+        let accumulatedContent = "";
+        let accumulatedReasoning = "";
+        const toolCallsMap = {};
         let buffer = "";
 
         while (true) {
@@ -140,19 +143,66 @@ export async function callChatModel(messages, { model, tools, signal, onChunk } 
                 if (dataStr === "[DONE]") break;
                 try {
                     const parsed = JSON.parse(dataStr);
-                    const delta = parsed.delta || parsed.content || (parsed.choices?.[0]?.delta?.content) || "";
-                    if (delta) {
-                        accumulated += delta;
-                        if (onChunk) onChunk(delta, accumulated);
+                    const choice = parsed.choices?.[0] || parsed;
+                    const delta = choice?.delta || choice;
+                    if (!delta) continue;
+
+                    // 1. Thinking / Reasoning delta (DeepSeek-R1, OpenRouter, Qwen, o1/o3, etc.)
+                    const reasoningDelta = delta.reasoning_content || delta.reasoning || "";
+                    if (reasoningDelta) {
+                        accumulatedReasoning += reasoningDelta;
+                        const fullDisplay = `<think>\n${accumulatedReasoning}\n</think>\n\n${accumulatedContent}`;
+                        if (onChunk) onChunk(reasoningDelta, fullDisplay);
+                    }
+
+                    // 2. Content delta
+                    const contentDelta = delta.content || (typeof delta.text === "string" ? delta.text : "");
+                    if (contentDelta) {
+                        accumulatedContent += contentDelta;
+                        const fullDisplay = accumulatedReasoning
+                            ? `<think>\n${accumulatedReasoning}\n</think>\n\n${accumulatedContent}`
+                            : accumulatedContent;
+                        if (onChunk) onChunk(contentDelta, fullDisplay);
+                    }
+
+                    // 3. Tool Calls streaming delta aggregation
+                    if (Array.isArray(delta.tool_calls)) {
+                        for (const tc of delta.tool_calls) {
+                            const idx = typeof tc.index === "number" ? tc.index : 0;
+                            if (!toolCallsMap[idx]) {
+                                toolCallsMap[idx] = {
+                                    id: tc.id || ("call_" + Math.random().toString(36).slice(2, 10)),
+                                    type: tc.type || "function",
+                                    function: {
+                                        name: tc.function?.name || "",
+                                        arguments: tc.function?.arguments || ""
+                                    }
+                                };
+                            } else {
+                                if (tc.id) toolCallsMap[idx].id = tc.id;
+                                if (tc.function?.name) toolCallsMap[idx].function.name += tc.function.name;
+                                if (tc.function?.arguments) toolCallsMap[idx].function.arguments += tc.function.arguments;
+                            }
+                        }
                     }
                 } catch (_) {}
             }
         }
 
+        const finalToolCalls = Object.keys(toolCallsMap)
+            .sort((a, b) => Number(a) - Number(b))
+            .map(k => toolCallsMap[k])
+            .filter(tc => Boolean(tc.function?.name));
+
+        const finalContent = accumulatedReasoning
+            ? `<think>\n${accumulatedReasoning}\n</think>\n\n${accumulatedContent}`.trim()
+            : accumulatedContent;
+
         return {
             message: {
                 role: "assistant",
-                content: accumulated
+                content: finalContent,
+                tool_calls: finalToolCalls.length > 0 ? finalToolCalls : undefined
             }
         };
     }

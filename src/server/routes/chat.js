@@ -48,6 +48,24 @@ async function handleChat(req, res) {
             }
         }
 
+        // Streaming execution if requested and supported by provider handler
+        if (data.stream && typeof providerHandler.handleChatStream === "function") {
+            const streamResult = await providerHandler.handleChatStream({
+                model,
+                apiKey,
+                providerConfig: effectiveProviderConfig,
+                messages,
+                tools,
+                tool_choice,
+                req,
+                res
+            });
+            if (streamResult && streamResult.status && streamResult.status !== 200 && !res.headersSent) {
+                return sendJSON(res, streamResult.status, { error: streamResult.error || "Streaming error" });
+            }
+            return;
+        }
+
         const chatResult = await providerHandler.handleChat({
             model,
             apiKey,

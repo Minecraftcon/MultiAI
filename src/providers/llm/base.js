@@ -755,6 +755,100 @@ class BaseProvider {
             message: parsed.message
         };
     }
+
+    async handleChatStream({ model, apiKey, providerConfig = {}, messages, tools, tool_choice, options = {}, req, res }) {
+        const modelMeta = (providerConfig.models || []).find(m => m.id === model);
+        const supportsTools = modelMeta ? (modelMeta.supports_tools !== false) : true;
+        const supportsVision = modelMeta ? Boolean(modelMeta.supports_vision) : false;
+
+        const maxContextTokens = options.maxContextTokens || modelMeta?.max_context_tokens || providerConfig.max_context_tokens;
+        const chatOptions = maxContextTokens ? { ...options, maxContextTokens } : options;
+
+        const endpoint = this.getEndpoint(providerConfig, model, apiKey);
+        const headers = this.getHeaders(apiKey, { model, providerConfig, ...chatOptions });
+        headers["Accept"] = "text/event-stream";
+
+        const payload = this.formatPayload({
+            model,
+            messages,
+            tools,
+            tool_choice,
+            config: providerConfig,
+            supportsTools,
+            supportsVision,
+            options: chatOptions
+        });
+        payload.stream = true;
+
+        const timeoutMs = chatOptions.timeoutMs || providerConfig.timeout_ms || 300000;
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+        if (req) {
+            req.on("close", () => {
+                clearTimeout(timeout);
+                controller.abort();
+            });
+        }
+
+        try {
+            const upstreamRes = await fetch(endpoint, {
+                method: "POST",
+                headers,
+                body: JSON.stringify(payload),
+                signal: controller.signal
+            });
+
+            if (!upstreamRes.ok) {
+                clearTimeout(timeout);
+                const resText = await upstreamRes.text();
+                return {
+                    status: upstreamRes.status,
+                    error: `${this.constructor.displayName || this.constructor.id} API error (${upstreamRes.status}): ${resText.slice(0, 500)}`
+                };
+            }
+
+            res.writeHead(200, {
+                "Content-Type": "text/event-stream; charset=utf-8",
+                "Cache-Control": "no-cache, no-transform",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no"
+            });
+
+            if (upstreamRes.body) {
+                if (typeof upstreamRes.body.getReader === "function") {
+                    const reader = upstreamRes.body.getReader();
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        if (value) {
+                            res.write(value);
+                        }
+                    }
+                } else {
+                    for await (const chunk of upstreamRes.body) {
+                        res.write(chunk);
+                    }
+                }
+            }
+            clearTimeout(timeout);
+            res.end();
+            return { status: 200 };
+        } catch (err) {
+            clearTimeout(timeout);
+            if (err.name === "AbortError" && req?.destroyed) {
+                return { status: 499, error: "Client cancelled request" };
+            }
+            if (!res.headersSent) {
+                return {
+                    status: 502,
+                    error: `${this.constructor.displayName || this.constructor.id} streaming connection failed: ${err.message}`
+                };
+            }
+            try { res.end(); } catch (_) {}
+            return { status: 502, error: err.message };
+        }
+    }
 }
 
 module.exports = BaseProvider;

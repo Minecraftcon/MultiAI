@@ -167,7 +167,7 @@ export async function runAgent(userText, currentAIMessage, chatId, images = [], 
                 if (transientCorrectionNotice) {
                     workingMessages.push(transientCorrectionNotice);
                 }
-                const isStreamingEnabled = Boolean(state.config?.Agent?.StreamReasoning || state.config?.Agent?.StreamResponse);
+                const isStreamingEnabled = state.config?.Agent?.StreamResponse !== false;
                 response = await callChatModel(workingMessages, {
                     model: selectedModel,
                     tools: activeTools,
@@ -200,7 +200,7 @@ export async function runAgent(userText, currentAIMessage, chatId, images = [], 
                             if (transientCorrectionNotice) {
                                 workingMessagesRetry.push(transientCorrectionNotice);
                             }
-                            const isStreamingEnabledRetry = Boolean(state.config?.Agent?.StreamReasoning || state.config?.Agent?.StreamResponse);
+                            const isStreamingEnabledRetry = state.config?.Agent?.StreamResponse !== false;
                             response = await callChatModel(workingMessagesRetry, {
                                 model: selectedModel,
                                 tools: activeTools,

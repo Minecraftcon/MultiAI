@@ -656,7 +656,7 @@ export function updateAIStream(element, fullText, isDone, startTime, hasTools) {
         return Promise.resolve();
     }
 
-    const isStreamingEnabled = Boolean(state.config?.Agent?.StreamReasoning || state.config?.Agent?.StreamResponse);
+    const isStreamingEnabled = state.config?.Agent?.StreamResponse !== false;
     let streamer = activeStreamers.get(element);
 
     if (!isStreamingEnabled || (!streamer && isDone)) {
