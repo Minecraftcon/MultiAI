@@ -289,7 +289,12 @@ export function renderTurn(turn, session, compactionRef, isLastTurn) {
 
         if (searchContainer && searchContainer.children.length > 0) {
             activityWrapper.style.display = "block";
-            activityWrapper.classList.remove("open");
+            const hasCommentary = Boolean(searchContainer.querySelector(".activity-thought-item"));
+            if (hasCommentary) {
+                activityWrapper.classList.add("open");
+            } else {
+                activityWrapper.classList.remove("open");
+            }
             activityLabel.textContent = totalToolCalls > 0 
                 ? `Executed ${totalToolCalls} action${totalToolCalls > 1 ? "s" : ""}` 
                 : `Activity`;
@@ -461,147 +466,83 @@ class StreamBatchRenderer {
         this.element = element;
         this.finalContent = finalContent;
         this.cursor = cursor;
-        this.queue = [];
-        this.lastRawLength = 0;
+        this.pendingText = "";
         this.isDone = false;
         this.isStopped = false;
-        this.timer = null;
+        this.rafId = null;
         this.resolvePromise = null;
         this.promise = new Promise(resolve => {
             this.resolvePromise = resolve;
         });
 
-        this.container = document.createElement("div");
-        this.container.className = "stream-text-container";
         this.finalContent.innerHTML = "";
-        this.finalContent.appendChild(this.container);
         if (this.cursor) {
             this.finalContent.appendChild(this.cursor);
         }
-        this.inCodeBlock = false;
-        this.codeEl = null;
     }
 
     append(newText) {
         if (!newText || this.isStopped) return;
-        const delta = newText.slice(this.lastRawLength);
-        this.lastRawLength = newText.length;
-        if (!delta) return;
+        this.pendingText = newText;
+        if (!this.rafId) {
+            this.rafId = requestAnimationFrame(() => {
+                this.rafId = null;
+                this.renderFrame();
+            });
+        }
+    }
 
-        // Tokenize words and whitespace
-        const tokens = delta.match(/\S+\s*|\s+/g) || [delta];
-        this.queue.push(...tokens);
-        this.scheduleTick();
+    renderFrame() {
+        if (this.isStopped) return;
+        if (!this.pendingText) return;
+
+        // Auto-close unclosed code block fences (```)
+        let safe = this.pendingText;
+        const codeBlockCount = (safe.match(/```/g) || []).length;
+        if (codeBlockCount % 2 !== 0) {
+            safe += "\n```";
+        }
+        // Auto-close unclosed inline code (`)
+        const lastLine = safe.split("\n").pop() || "";
+        const backtickCount = (lastLine.match(/`/g) || []).length;
+        if (backtickCount % 2 !== 0) {
+            safe += "`";
+        }
+
+        const html = parseMarkdown(safe);
+        if (this.isStopped) return;
+
+        this.finalContent.innerHTML = html;
+        wrapTablesForScroll(this.finalContent);
+
+        if (this.cursor && !this.isDone) {
+            this.finalContent.appendChild(this.cursor);
+        }
+
+        const chat = document.getElementById("chat");
+        if (chat) requestScrollToBottom(chat, false);
     }
 
     markDone(onFinish) {
         this.isDone = true;
         this.onFinish = onFinish;
-        this.scheduleTick();
+        if (this.rafId) {
+            cancelAnimationFrame(this.rafId);
+            this.rafId = null;
+        }
+        this.renderFrame();
+        this.finalize();
         return this.promise;
     }
 
     stop() {
         this.isStopped = true;
-        if (this.timer) {
-            clearTimeout(this.timer);
-            this.timer = null;
+        if (this.rafId) {
+            cancelAnimationFrame(this.rafId);
+            this.rafId = null;
         }
         if (this.resolvePromise) {
             this.resolvePromise();
-        }
-    }
-
-    scheduleTick() {
-        if (this.timer || this.isStopped) return;
-
-        const remaining = this.queue.length;
-        if (remaining === 0) {
-            if (this.isDone) {
-                this.finalize();
-            }
-            return;
-        }
-
-        // Adaptive speed for high volume streams (never lags behind large payloads)
-        let batchCount = 1;
-        let delayMs = 24;
-
-        if (remaining > 120) {
-            batchCount = Math.min(32, Math.ceil(remaining / 4));
-            delayMs = 8;
-        } else if (remaining > 60) {
-            batchCount = 14;
-            delayMs = 12;
-        } else if (remaining > 30) {
-            batchCount = 7;
-            delayMs = 16;
-        } else if (remaining > 10) {
-            batchCount = 3;
-            delayMs = 20;
-        } else if (remaining > 3) {
-            batchCount = 2;
-            delayMs = 22;
-        }
-
-        this.timer = setTimeout(() => {
-            this.timer = null;
-            this.tick(batchCount);
-        }, delayMs);
-    }
-
-    tick(batchCount) {
-        if (this.isStopped) return;
-        const count = Math.min(batchCount, this.queue.length);
-        if (count > 0) {
-            const batchTokens = this.queue.splice(0, count);
-            const batchStr = batchTokens.join("");
-            this.renderBatch(batchStr);
-            const chat = document.getElementById("chat");
-            if (chat) requestScrollToBottom(chat, false);
-        }
-        this.scheduleTick();
-    }
-
-    renderBatch(str) {
-        const parts = str.split(/(```[a-z0-9_-]*|\n)/gi);
-        for (const part of parts) {
-            if (!part) continue;
-
-            if (part.startsWith("```")) {
-                if (!this.inCodeBlock) {
-                    this.inCodeBlock = true;
-                    const pre = document.createElement("pre");
-                    pre.className = "stream-code-block";
-                    const code = document.createElement("code");
-                    pre.appendChild(code);
-                    this.container.appendChild(pre);
-                    this.codeEl = code;
-                } else {
-                    this.inCodeBlock = false;
-                    this.codeEl = null;
-                }
-                continue;
-            }
-
-            if (part === "\n") {
-                if (this.inCodeBlock && this.codeEl) {
-                    this.codeEl.appendChild(document.createTextNode("\n"));
-                } else {
-                    this.container.appendChild(document.createElement("br"));
-                }
-                continue;
-            }
-
-            const span = document.createElement("span");
-            span.className = "stream-fade-batch";
-            span.textContent = part;
-
-            if (this.inCodeBlock && this.codeEl) {
-                this.codeEl.appendChild(span);
-            } else {
-                this.container.appendChild(span);
-            }
         }
     }
 
@@ -630,7 +571,8 @@ export function updateAIStream(element, fullText, isDone, startTime, hasTools) {
 
     if (isDone) {
         activityLabel.textContent = `Worked for ${elapsed} seconds`;
-        if (activityWrapper && activityWrapper.classList.contains("open") && !element.dataset.manuallyToggled) {
+        const hasCommentary = activityWrapper && Boolean(activityWrapper.querySelector(".activity-thought-item"));
+        if (!hasCommentary && activityWrapper && activityWrapper.classList.contains("open") && !element.dataset.manuallyToggled) {
             activityWrapper.classList.remove("open");
         }
     } else {

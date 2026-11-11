@@ -1,10 +1,10 @@
 /* =========================================================
    CHAT TOOL BADGES, COMPACTION BADGES & CHECKPOINT MODAL
    ========================================================= */
-import { escapeHTML } from "../utils/dom.js";
+import { escapeHTML, wrapTablesForScroll } from "../utils/dom.js";
 import { renderIcons } from "../utils/icons.js";
 import { state } from "../state.js";
-import { parseMarkdown, bindInteractiveCodeBlocks, renderMermaidInElement, renderMath } from "./renderer.js";
+import { parseMarkdown, extractThoughtAndContent, bindInteractiveCodeBlocks, renderMermaidInElement, renderMath } from "./renderer.js";
 import { saveCurrentChatState } from "../services/storage.js";
 import { requestScrollToBottom } from "./chat-ui.js";
 import { getTool } from "../tools/registry.js";
@@ -925,6 +925,19 @@ export function addThoughtTrace(element, text) {
     const chat = document.getElementById("chat");
     const wrapper = element.querySelector(".activity-wrapper");
     const searchContainer = element.querySelector(".search-items-container");
+    const preSearchContent = element.querySelector(".pre-search-content");
+
+    const { thoughtHtml, content } = extractThoughtAndContent(text);
+
+    // If thinking reasoning exists and the top thought box is empty, populate it
+    if (thoughtHtml && preSearchContent && !preSearchContent.innerHTML.trim()) {
+        preSearchContent.innerHTML = thoughtHtml;
+        wrapTablesForScroll(preSearchContent);
+    }
+
+    // Only render into the activity timeline if there is user-facing commentary content
+    const commentary = (content || "").trim();
+    if (!commentary) return null;
 
     if (wrapper) {
         wrapper.style.display = "block";
@@ -933,37 +946,10 @@ export function addThoughtTrace(element, text) {
         }
     }
 
-    // Strip synthetic <think> tags so CommonMark does not treat content as unparsed HTML block
-    const cleanText = text.replace(/<\/?think>/gi, "").trim();
-    if (!cleanText) return null;
-
     const item = document.createElement("div");
     item.className = "activity-thought-item";
-    let renderedHtml = cleanText;
-    if (typeof marked !== "undefined" && typeof marked.parse === "function") {
-        try {
-            renderedHtml = marked.parse(cleanText);
-        } catch {
-            renderedHtml = parseMarkdown(cleanText);
-        }
-    } else {
-        renderedHtml = parseMarkdown(cleanText);
-    }
-
-    const isHuge = cleanText.length > 350 || cleanText.split("\n").length > 5;
-    if (isHuge) {
-        item.classList.add("thought-collapsible");
-        item.innerHTML = `
-            <div class="thought-collapsed-body">
-                ${renderedHtml}
-            </div>
-            <button type="button" class="thought-expand-btn" aria-expanded="false">
-                <span class="thought-expand-icon" aria-hidden="true">…</span> expand
-            </button>
-        `;
-    } else {
-        item.innerHTML = renderedHtml;
-    }
+    item.innerHTML = parseMarkdown(commentary);
+    wrapTablesForScroll(item);
 
     searchContainer.appendChild(item);
     requestScrollToBottom(chat);
