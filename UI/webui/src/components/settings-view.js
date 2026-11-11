@@ -15,6 +15,13 @@ import { renderChatList } from "./side-panel.js";
 import { setStartPageMode } from "./chatbox.js";
 import { McpActiveTools } from "../tools/mcp/index.js";
 import { mountSettingsScreen } from "./settings-template.js";
+import {
+    loadContextFilters,
+    saveContextFilters,
+    refreshActiveContextFilterer,
+    BUILTIN_PRESETS,
+    DEFAULT_FILTERS
+} from "../agent/context-filter.js";
 
 export { mountSettingsScreen } from "./settings-template.js";
 
@@ -278,6 +285,12 @@ export function populateSettingsValues() {
     const recordDate = document.getElementById("cfgRecordDate");
     if (recordDate) recordDate.checked = gen.RecordDate !== false;
 
+    // Context privacy filter state
+    const { enabled: filterEnabled } = loadContextFilters();
+    const filterToggle = document.getElementById("cfgContextFilterEnabled");
+    if (filterToggle) filterToggle.checked = filterEnabled !== false;
+
+    renderContextFilterRules();
     updateStorageSummary();
     updateAboutDiagnostics();
 }
@@ -698,6 +711,9 @@ export function initSettingsView() {
         });
     }
 
+    // Context Privacy & Redaction Filterer Controls
+    bindContextFilterEvents();
+
     // Export All Chats Button
     const exportBtn = document.getElementById("settingsExportAllBtn");
     if (exportBtn) {
@@ -802,6 +818,360 @@ export function initSettingsView() {
             }
         });
     }
+}
+
+/* =========================================================
+   CONTEXT PRIVACY & REDACTION FILTER CONTROLLER
+   ========================================================= */
+
+let editingFilterId = null;
+
+function bindContextFilterEvents() {
+    const filterToggle = document.getElementById("cfgContextFilterEnabled");
+    if (filterToggle) {
+        filterToggle.addEventListener("change", (e) => {
+            const { filters } = loadContextFilters();
+            saveContextFilters(filters, e.target.checked);
+            refreshActiveContextFilterer();
+            renderContextFilterRules();
+        });
+    }
+
+    const btnAdd = document.getElementById("btnAddContextFilter");
+    if (btnAdd) {
+        btnAdd.addEventListener("click", () => {
+            openFilterForm(null);
+        });
+    }
+
+    const btnReset = document.getElementById("btnResetContextFilters");
+    if (btnReset) {
+        btnReset.addEventListener("click", () => {
+            if (confirm("Reset context privacy filters to default rules?")) {
+                saveContextFilters([...DEFAULT_FILTERS], true);
+                refreshActiveContextFilterer();
+                if (filterToggle) filterToggle.checked = true;
+                closeFilterForm();
+                renderContextFilterRules();
+            }
+        });
+    }
+
+    const btnCloseForm = document.getElementById("btnCloseFilterForm");
+    const btnCancel = document.getElementById("btnCancelFilter");
+    if (btnCloseForm) btnCloseForm.addEventListener("click", closeFilterForm);
+    if (btnCancel) btnCancel.addEventListener("click", closeFilterForm);
+
+    const typeSelect = document.getElementById("filterTypeSelect");
+    if (typeSelect) {
+        typeSelect.addEventListener("change", (e) => {
+            updateFilterFormMode(e.target.value);
+        });
+    }
+
+    const actionSelect = document.getElementById("filterActionSelect");
+    if (actionSelect) {
+        actionSelect.addEventListener("change", (e) => {
+            const replContainer = document.getElementById("filterReplacementContainer");
+            if (replContainer) {
+                replContainer.style.display = e.target.value === "block" ? "none" : "";
+            }
+        });
+    }
+
+    const presetSelect = document.getElementById("filterPresetSelect");
+    if (presetSelect) {
+        presetSelect.addEventListener("change", (e) => {
+            const preset = BUILTIN_PRESETS.find(p => p.id === e.target.value);
+            if (preset) {
+                const nameInput = document.getElementById("filterNameInput");
+                if (nameInput && (!nameInput.value || BUILTIN_PRESETS.some(p => p.name === nameInput.value))) {
+                    nameInput.value = preset.name;
+                }
+                const replInput = document.getElementById("filterReplacementInput");
+                if (replInput) replInput.value = preset.replacement;
+            }
+        });
+    }
+
+    const btnSave = document.getElementById("btnSaveFilter");
+    if (btnSave) {
+        btnSave.addEventListener("click", () => {
+            saveCurrentFilterFromForm();
+        });
+    }
+}
+
+function updateFilterFormMode(mode) {
+    const presetContainer = document.getElementById("filterPresetContainer");
+    const patternContainer = document.getElementById("filterPatternContainer");
+    const patternLabel = document.getElementById("filterPatternLabel");
+    const patternInput = document.getElementById("filterPatternInput");
+    const wholeWordWrap = document.getElementById("filterOptWholeWordWrap");
+    const replContainer = document.getElementById("filterReplacementContainer");
+    const actionSelect = document.getElementById("filterActionSelect");
+
+    if (mode === "preset") {
+        if (presetContainer) presetContainer.style.display = "";
+        if (patternContainer) patternContainer.style.display = "none";
+        if (wholeWordWrap) wholeWordWrap.style.display = "none";
+    } else if (mode === "keyword") {
+        if (presetContainer) presetContainer.style.display = "none";
+        if (patternContainer) patternContainer.style.display = "";
+        if (patternLabel) patternLabel.textContent = "Keyword to Mask";
+        if (patternInput) patternInput.placeholder = "e.g. MySecretToken or ProjectX";
+        if (wholeWordWrap) wholeWordWrap.style.display = "";
+    } else { // regex
+        if (presetContainer) presetContainer.style.display = "none";
+        if (patternContainer) patternContainer.style.display = "";
+        if (patternLabel) patternLabel.textContent = "Regex Pattern (without slashes)";
+        if (patternInput) patternInput.placeholder = "e.g. (?:sk-[a-zA-Z0-9]{20,}|ghp_[a-zA-Z0-9]+)";
+        if (wholeWordWrap) wholeWordWrap.style.display = "none";
+    }
+
+    if (replContainer && actionSelect) {
+        replContainer.style.display = actionSelect.value === "block" ? "none" : "";
+    }
+}
+
+function openFilterForm(filter = null) {
+    const form = document.getElementById("contextFilterForm");
+    if (!form) return;
+
+    editingFilterId = filter?.id || null;
+    const titleEl = document.getElementById("filterFormTitle");
+    if (titleEl) {
+        titleEl.textContent = filter ? "Edit Privacy Filter" : "New Privacy Filter";
+    }
+
+    const nameInput = document.getElementById("filterNameInput");
+    const typeSelect = document.getElementById("filterTypeSelect");
+    const presetSelect = document.getElementById("filterPresetSelect");
+    const patternInput = document.getElementById("filterPatternInput");
+    const actionSelect = document.getElementById("filterActionSelect");
+    const replInput = document.getElementById("filterReplacementInput");
+    const scopeSelect = document.getElementById("filterScopeSelect");
+    const optCase = document.getElementById("filterOptCaseInsensitive");
+    const optWord = document.getElementById("filterOptWholeWord");
+
+    if (filter) {
+        if (nameInput) nameInput.value = filter.name || "";
+        if (typeSelect) typeSelect.value = filter.type || "keyword";
+        if (presetSelect && filter.presetId) presetSelect.value = filter.presetId;
+        if (patternInput) patternInput.value = filter.pattern || "";
+        if (actionSelect) actionSelect.value = filter.action || "replace";
+        if (replInput) replInput.value = filter.replacement !== undefined ? filter.replacement : "[REDACTED]";
+        if (scopeSelect) scopeSelect.value = filter.scope || "all";
+        if (optCase) optCase.checked = filter.flags ? filter.flags.includes("i") : true;
+        if (optWord) optWord.checked = filter.wholeWord !== false;
+    } else {
+        if (nameInput) nameInput.value = "";
+        if (typeSelect) typeSelect.value = "keyword";
+        if (presetSelect) presetSelect.value = "preset_api_keys";
+        if (patternInput) patternInput.value = "";
+        if (actionSelect) actionSelect.value = "replace";
+        if (replInput) replInput.value = "[REDACTED]";
+        if (scopeSelect) scopeSelect.value = "all";
+        if (optCase) optCase.checked = true;
+        if (optWord) optWord.checked = true;
+    }
+
+    updateFilterFormMode(typeSelect?.value || "keyword");
+    form.style.display = "";
+    if (nameInput) nameInput.focus();
+}
+
+function closeFilterForm() {
+    const form = document.getElementById("contextFilterForm");
+    if (form) form.style.display = "none";
+    editingFilterId = null;
+}
+
+function saveCurrentFilterFromForm() {
+    const nameInput = document.getElementById("filterNameInput");
+    const typeSelect = document.getElementById("filterTypeSelect");
+    const presetSelect = document.getElementById("filterPresetSelect");
+    const patternInput = document.getElementById("filterPatternInput");
+    const actionSelect = document.getElementById("filterActionSelect");
+    const replInput = document.getElementById("filterReplacementInput");
+    const scopeSelect = document.getElementById("filterScopeSelect");
+    const optCase = document.getElementById("filterOptCaseInsensitive");
+    const optWord = document.getElementById("filterOptWholeWord");
+
+    const type = typeSelect?.value || "keyword";
+    let pattern = patternInput?.value?.trim() || "";
+    let presetId = null;
+
+    if (type === "preset") {
+        presetId = presetSelect?.value || "preset_api_keys";
+        const foundPreset = BUILTIN_PRESETS.find(p => p.id === presetId);
+        pattern = foundPreset ? foundPreset.pattern : "";
+    }
+
+    if (!pattern) {
+        alert("Please specify a keyword, regex pattern, or preset.");
+        return;
+    }
+
+    // Validate regex syntax
+    if (type === "regex" || type === "preset") {
+        try {
+            new RegExp(pattern);
+        } catch (err) {
+            alert("Invalid Regular Expression: " + err.message);
+            return;
+        }
+    }
+
+    const name = nameInput?.value?.trim() || (type === "preset" ? (BUILTIN_PRESETS.find(p => p.id === presetId)?.name || "Preset") : pattern);
+    const action = actionSelect?.value || "replace";
+    const replacement = action === "block" ? "" : (replInput?.value !== undefined ? replInput.value : "[REDACTED]");
+    const scope = scopeSelect?.value || "all";
+    const flags = optCase?.checked ? "gi" : "g";
+    const wholeWord = optWord ? optWord.checked : true;
+
+    const { enabled, filters } = loadContextFilters();
+    let updatedFilters = [...filters];
+
+    if (editingFilterId) {
+        const idx = updatedFilters.findIndex(f => f.id === editingFilterId);
+        if (idx !== -1) {
+            updatedFilters[idx] = {
+                ...updatedFilters[idx],
+                name,
+                type,
+                presetId,
+                pattern,
+                flags,
+                wholeWord,
+                action,
+                replacement,
+                scope
+            };
+        }
+    } else {
+        const newFilter = {
+            id: "flt_" + Math.random().toString(36).substring(2, 9),
+            name,
+            type,
+            presetId,
+            pattern,
+            flags,
+            wholeWord,
+            action,
+            replacement,
+            scope,
+            enabled: true
+        };
+        updatedFilters.push(newFilter);
+    }
+
+    saveContextFilters(updatedFilters, enabled);
+    refreshActiveContextFilterer();
+    closeFilterForm();
+    renderContextFilterRules();
+}
+
+function renderContextFilterRules() {
+    const listEl = document.getElementById("contextFiltersList");
+    if (!listEl) return;
+
+    const { enabled: globalEnabled, filters } = loadContextFilters();
+
+    if (!filters || filters.length === 0) {
+        listEl.innerHTML = `
+            <div class="context-filter-empty-state">
+                No privacy or redaction filters defined. Click <strong>Add Filter</strong> to set up rule-based masking.
+            </div>
+        `;
+        return;
+    }
+
+    listEl.innerHTML = "";
+    filters.forEach(f => {
+        const item = document.createElement("div");
+        item.className = `context-filter-item ${f.enabled === false || !globalEnabled ? "disabled" : ""}`;
+        item.dataset.filterId = f.id;
+
+        const isBlock = f.action === "block";
+        const badgeClass = f.type === "keyword" ? "badge-keyword" : (f.type === "preset" ? "badge-preset" : "badge-regex");
+        const actionBadgeClass = isBlock ? "badge-action-block" : "badge-action-replace";
+
+        let patternPreview = escapeHTML(f.pattern || "");
+        if (f.type === "keyword" && f.wholeWord !== false) {
+            patternPreview = `\\b${patternPreview}\\b`;
+        }
+
+        const scopeLabel = f.scope === "all" ? "All Context" : (f.scope === "user" ? "User Prompts" : (f.scope === "tool" ? "Tool Outputs" : "Assistant"));
+
+        item.innerHTML = `
+            <div class="context-filter-item-main">
+                <div class="context-filter-item-title-row">
+                    <span class="context-filter-item-name">${escapeHTML(f.name || f.pattern)}</span>
+                    <span class="context-filter-badge ${badgeClass}">${f.type}</span>
+                    <span class="context-filter-badge ${actionBadgeClass}">${isBlock ? "HALT / BLOCK" : "REPLACE"}</span>
+                    <span class="context-filter-badge" style="background:var(--surface-3); color:var(--text-tertiary); font-size:10px;">${scopeLabel}</span>
+                </div>
+                <div class="context-filter-pattern-line">
+                    <span class="context-filter-pattern-text" title="${escapeHTML(f.pattern)}">${patternPreview}</span>
+                    ${!isBlock ? `<span class="context-filter-arrow">➔</span><span class="context-filter-replace-text">${escapeHTML(f.replacement)}</span>` : ""}
+                </div>
+            </div>
+            <div class="context-filter-item-actions">
+                <label class="settings-switch" style="transform: scale(0.85); margin-right: 4px;" title="Toggle filter">
+                    <input type="checkbox" class="filter-enable-chk" ${f.enabled !== false ? "checked" : ""}>
+                    <span class="settings-slider"></span>
+                </label>
+                <button type="button" class="context-filter-btn filter-edit-btn" title="Edit Filter">
+                    <i data-lucide="edit-2"></i>
+                </button>
+                <button type="button" class="context-filter-btn danger filter-delete-btn" title="Delete Filter">
+                    <i data-lucide="trash-2"></i>
+                </button>
+            </div>
+        `;
+
+        // Checkbox toggle
+        const chk = item.querySelector(".filter-enable-chk");
+        if (chk) {
+            chk.addEventListener("change", (e) => {
+                const { enabled, filters: current } = loadContextFilters();
+                const target = current.find(x => x.id === f.id);
+                if (target) {
+                    target.enabled = e.target.checked;
+                    saveContextFilters(current, enabled);
+                    refreshActiveContextFilterer();
+                    renderContextFilterRules();
+                }
+            });
+        }
+
+        // Edit button
+        const editBtn = item.querySelector(".filter-edit-btn");
+        if (editBtn) {
+            editBtn.addEventListener("click", () => {
+                openFilterForm(f);
+            });
+        }
+
+        // Delete button
+        const delBtn = item.querySelector(".filter-delete-btn");
+        if (delBtn) {
+            delBtn.addEventListener("click", () => {
+                if (confirm(`Delete filter '${f.name || f.pattern}'?`)) {
+                    const { enabled, filters: current } = loadContextFilters();
+                    const filtered = current.filter(x => x.id !== f.id);
+                    saveContextFilters(filtered, enabled);
+                    refreshActiveContextFilterer();
+                    renderContextFilterRules();
+                }
+            });
+        }
+
+        listEl.appendChild(item);
+    });
+
+    renderIcons(listEl);
 }
 
 /* =========================================================

@@ -513,7 +513,129 @@ export function getSettingsHTML() {
                 <section id="subScreen_storage" class="settings-subscreen">
                     <div class="settings-subscreen-header">
                         <h2 class="settings-subscreen-title">Data & Storage</h2>
-                        <p class="settings-subscreen-desc">Manage local conversation storage, export chat archives, and reset cache.</p>
+                        <p class="settings-subscreen-desc">Manage local conversation storage, export chat archives, and configure context privacy filters.</p>
+                    </div>
+
+                    <!-- CONTEXT PRIVACY & REGEX FILTERER -->
+                    <div class="settings-card">
+                        <div class="settings-card-header-flex">
+                            <div>
+                                <span class="settings-card-title">Context Privacy & Redaction Filterer</span>
+                                <p class="settings-card-subtitle">Scrub, redact, or block sensitive tokens, private paths, or custom keywords before prompts reach LLM models.</p>
+                            </div>
+                            <label class="settings-switch">
+                                <input type="checkbox" id="cfgContextFilterEnabled" checked>
+                                <span class="settings-slider"></span>
+                            </label>
+                        </div>
+
+                        <div id="contextFilterControls" class="context-filter-section">
+                            <div class="context-filter-action-bar">
+                                <button type="button" id="btnAddContextFilter" class="settings-action-btn primary sm">
+                                    <i data-lucide="plus"></i>
+                                    <span>Add Filter</span>
+                                </button>
+                                <button type="button" id="btnResetContextFilters" class="settings-action-btn secondary sm" title="Reset to standard defaults">
+                                    <i data-lucide="rotate-ccw"></i>
+                                    <span>Reset Defaults</span>
+                                </button>
+                            </div>
+
+                            <!-- Form for Adding / Editing a Filter -->
+                            <div id="contextFilterForm" class="context-filter-form" style="display: none;">
+                                <div class="filter-form-header">
+                                    <span id="filterFormTitle" class="filter-form-title">New Privacy Filter</span>
+                                    <button type="button" id="btnCloseFilterForm" class="filter-form-close-btn" aria-label="Close">
+                                        <i data-lucide="x"></i>
+                                    </button>
+                                </div>
+
+                                <div class="filter-form-grid">
+                                    <div class="filter-form-field">
+                                        <label class="filter-field-label" for="filterNameInput">Rule Name</label>
+                                        <input type="text" id="filterNameInput" class="settings-input" placeholder="e.g. Redact Internal Project Name">
+                                    </div>
+
+                                    <div class="filter-form-field">
+                                        <label class="filter-field-label" for="filterTypeSelect">Filter Mode / Type</label>
+                                        <select id="filterTypeSelect" class="settings-select">
+                                            <option value="keyword">Keyword (Exact / Word-boundary)</option>
+                                            <option value="regex">Custom Regex Pattern</option>
+                                            <option value="preset">Built-in Preset Pattern</option>
+                                        </select>
+                                    </div>
+
+                                    <!-- Preset Selector (visible only when type is preset) -->
+                                    <div id="filterPresetContainer" class="filter-form-field" style="display: none;">
+                                        <label class="filter-field-label" for="filterPresetSelect">Choose Preset</label>
+                                        <select id="filterPresetSelect" class="settings-select">
+                                            <option value="preset_api_keys">Common API Keys & Tokens</option>
+                                            <option value="preset_email">Email Addresses</option>
+                                            <option value="preset_ip">IP Addresses (IPv4)</option>
+                                            <option value="preset_system_paths">Local Home & System Paths</option>
+                                            <option value="preset_phone">Phone Numbers</option>
+                                        </select>
+                                    </div>
+
+                                    <!-- Pattern Input (visible for keyword & regex) -->
+                                    <div id="filterPatternContainer" class="filter-form-field">
+                                        <label id="filterPatternLabel" class="filter-field-label" for="filterPatternInput">Keyword to Mask</label>
+                                        <input type="text" id="filterPatternInput" class="settings-input font-mono" placeholder="e.g. MySecretToken or sk-[a-z0-9]+">
+                                    </div>
+
+                                    <!-- Action Select -->
+                                    <div class="filter-form-field">
+                                        <label class="filter-field-label" for="filterActionSelect">Action</label>
+                                        <select id="filterActionSelect" class="settings-select">
+                                            <option value="replace">Mask / Replace with Text</option>
+                                            <option value="block">Halt / Block Request if Detected</option>
+                                        </select>
+                                    </div>
+
+                                    <!-- Replacement Text (visible when action is replace) -->
+                                    <div id="filterReplacementContainer" class="filter-form-field">
+                                        <label class="filter-field-label" for="filterReplacementInput">Replacement Text</label>
+                                        <input type="text" id="filterReplacementInput" class="settings-input font-mono" placeholder="[REDACTED]" value="[REDACTED]">
+                                    </div>
+
+                                    <!-- Scope Select -->
+                                    <div class="filter-form-field">
+                                        <label class="filter-field-label" for="filterScopeSelect">Target Scope</label>
+                                        <select id="filterScopeSelect" class="settings-select">
+                                            <option value="all">Entire Context (All Roles & Tools)</option>
+                                            <option value="user">User Prompts Only</option>
+                                            <option value="tool">Tool Outputs Only (e.g. read_file, bash)</option>
+                                            <option value="assistant">Assistant Messages Only</option>
+                                        </select>
+                                    </div>
+
+                                    <!-- Regex Flags / Whole Word Checkbox -->
+                                    <div id="filterOptionsContainer" class="filter-form-field">
+                                        <label class="filter-field-label" id="filterOptionsLabel">Match Options</label>
+                                        <div class="filter-options-row">
+                                            <label class="filter-checkbox-label">
+                                                <input type="checkbox" id="filterOptCaseInsensitive" checked>
+                                                <span>Case-Insensitive</span>
+                                            </label>
+                                            <label class="filter-checkbox-label" id="filterOptWholeWordWrap">
+                                                <input type="checkbox" id="filterOptWholeWord" checked>
+                                                <span>Whole Word Only</span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="filter-form-footer">
+                                    <button type="button" id="btnCancelFilter" class="settings-action-btn secondary sm">Cancel</button>
+                                    <button type="button" id="btnSaveFilter" class="settings-action-btn primary sm">Save Filter</button>
+                                </div>
+                            </div>
+
+                            <!-- Filter Rules List -->
+                            <div id="contextFiltersList" class="context-filters-list">
+                                <!-- Rendered dynamically via JavaScript -->
+                            </div>
+                        </div>
                     </div>
 
                     <div class="settings-card">

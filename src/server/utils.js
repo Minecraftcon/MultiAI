@@ -51,6 +51,9 @@ function getEnvKey(keyName) {
     if (keyName === "TOKENHARBOUR_API_KEY") aliases.push("TOKENHARBOR_API_KEY");
     if (keyName === "LOGFLARE_API_KEY") aliases.push("LOGFARE_API_KEY");
     if (keyName === "LOGFARE_API_KEY") aliases.push("LOGFLARE_API_KEY");
+    if (keyName === "EXPLABS_API_KEY") aliases.push("EXPERIENTIALLABS_API_KEY", "EXPRESSLABS_API_KEY");
+    if (keyName === "EXPERIENTIALLABS_API_KEY") aliases.push("EXPLABS_API_KEY", "EXPRESSLABS_API_KEY");
+    if (keyName === "EXPRESSLABS_API_KEY") aliases.push("EXPLABS_API_KEY", "EXPERIENTIALLABS_API_KEY");
 
     for (const k of aliases) {
         if (process.env[k]) return process.env[k];

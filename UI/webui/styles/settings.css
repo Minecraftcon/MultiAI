@@ -1874,3 +1874,320 @@
     border-radius: 0 6px 6px 0;
 }
 
+/* =========================================================
+   CONTEXT PRIVACY & REDACTION FILTERER STYLES
+   ========================================================= */
+
+.settings-card-header-flex {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 14px;
+}
+
+.settings-card-subtitle {
+    margin: 4px 0 0 0;
+    font-size: 12.5px;
+    line-height: 1.45;
+    color: var(--text-tertiary);
+}
+
+.context-filter-section {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.context-filter-action-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.settings-action-btn.sm {
+    height: 30px;
+    padding: 0 10px;
+    font-size: 12px;
+    gap: 5px;
+    border-radius: 6px;
+}
+
+.settings-action-btn.sm svg {
+    width: 14px;
+    height: 14px;
+}
+
+.context-filter-form {
+    background: var(--surface-2);
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    animation: filterFormSlideIn 0.16s ease-out;
+}
+
+@keyframes filterFormSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.filter-form-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border-subtle);
+    padding-bottom: 8px;
+}
+
+.filter-form-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.filter-form-close-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.15s ease, background 0.15s ease;
+}
+
+.filter-form-close-btn:hover {
+    color: var(--text-primary);
+    background: var(--surface-3);
+}
+
+.filter-form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 12px;
+}
+
+.filter-form-field {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.filter-field-label {
+    font-size: 11.5px;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.filter-options-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    height: 36px;
+}
+
+.filter-checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    user-select: none;
+}
+
+.filter-checkbox-label input[type="checkbox"] {
+    accent-color: var(--accent);
+    cursor: pointer;
+}
+
+.filter-form-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    border-top: 1px solid var(--border-subtle);
+    padding-top: 10px;
+    margin-top: 4px;
+}
+
+/* Context Filter List */
+.context-filters-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.context-filter-item {
+    background: var(--surface-2);
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    padding: 10px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.context-filter-item:hover {
+    border-color: var(--border-hover, var(--border-subtle));
+}
+
+.context-filter-item.disabled {
+    opacity: 0.6;
+}
+
+.context-filter-item-main {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    flex: 1;
+}
+
+.context-filter-item-title-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.context-filter-item-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.context-filter-badge {
+    font-size: 10.5px;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.context-filter-badge.badge-keyword {
+    background: rgba(14, 165, 233, 0.12);
+    color: #38bdf8;
+    border: 1px solid rgba(14, 165, 233, 0.25);
+}
+
+.context-filter-badge.badge-regex {
+    background: rgba(168, 85, 247, 0.12);
+    color: #c084fc;
+    border: 1px solid rgba(168, 85, 247, 0.25);
+}
+
+.context-filter-badge.badge-preset {
+    background: rgba(34, 197, 94, 0.12);
+    color: #4ade80;
+    border: 1px solid rgba(34, 197, 94, 0.25);
+}
+
+.context-filter-badge.badge-action-block {
+    background: rgba(239, 68, 68, 0.12);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
+.context-filter-badge.badge-action-replace {
+    background: rgba(100, 116, 139, 0.15);
+    color: var(--text-tertiary);
+    border: 1px solid var(--border-subtle);
+}
+
+.context-filter-pattern-line {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 11.5px;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.context-filter-pattern-text {
+    background: var(--surface-3);
+    padding: 1px 5px;
+    border-radius: 4px;
+    border: 1px solid var(--border-subtle);
+    max-width: 280px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.context-filter-arrow {
+    color: var(--text-tertiary);
+    font-size: 10px;
+}
+
+.context-filter-replace-text {
+    color: #38bdf8;
+    background: rgba(56, 189, 248, 0.08);
+    padding: 1px 5px;
+    border-radius: 4px;
+    border: 1px solid rgba(56, 189, 248, 0.2);
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.context-filter-item-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.context-filter-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    padding: 5px;
+    border-radius: 5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.15s ease, background 0.15s ease;
+}
+
+.context-filter-btn:hover {
+    color: var(--text-primary);
+    background: var(--surface-3);
+}
+
+.context-filter-btn.danger:hover {
+    color: #f87171;
+    background: rgba(239, 68, 68, 0.12);
+}
+
+.context-filter-empty-state {
+    text-align: center;
+    padding: 16px;
+    color: var(--text-tertiary);
+    font-size: 12.5px;
+    background: var(--surface-2);
+    border: 1px dashed var(--border-subtle);
+    border-radius: 8px;
+}
+
+

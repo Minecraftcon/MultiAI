@@ -27,9 +27,8 @@ async function handleChat(req, res) {
         }
 
         const apiKey = provider.api_key_env ? getEnvKey(provider.api_key_env) : null;
-        if (provider.api_key_env && !apiKey) {
-            return sendJSON(res, 400, { error: `API key for provider '${provider.name}' (${provider.api_key_env}) is not set.` });
-        }
+        // Do not block requests if no API key is set; pass apiKey (even if null) to the provider
+        // allowing free routes, local proxies, and provider-level fallbacks to operate.
 
         const providerKey = providerId || provider.name || provider.type;
         const providerHandler = resolveProvider(providerKey);

@@ -1,6 +1,7 @@
 import { state } from "../state/index.js";
 import { modelProviderMap } from "../components/side-panel.js";
 import { sanitizeMessage, cleanErrorMessage } from "./sanitizer.js";
+import { getActiveContextFilterer } from "./context-filter.js";
 
 /**
  * Sends messages to LLM backends (either Puter.js in-browser or /api/chat backend endpoint)
@@ -28,7 +29,9 @@ export async function callChatModel(messages, { model, tools, signal, onChunk } 
         (typeof model === "string" && (model.startsWith("claude-") || model.startsWith("gpt-") || model.startsWith("deepseek-"))) ? "puter" : null
     );
 
-    const cleanedMessages = Array.isArray(messages) ? messages.map(sanitizeMessage).filter(Boolean) : [];
+    const rawCleaned = Array.isArray(messages) ? messages.map(sanitizeMessage).filter(Boolean) : [];
+    const filterer = getActiveContextFilterer();
+    const cleanedMessages = filterer.filterMessages(rawCleaned);
 
     if (provider === "puter") {
         if (typeof puter === "undefined" || !puter?.ai?.chat) {

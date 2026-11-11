@@ -60,7 +60,9 @@ async function handleModels(req, res) {
     const resultProviders = [];
     for (const [providerId, provider] of Object.entries(config.providers || {})) {
         const key = provider.api_key_env ? getEnvKey(provider.api_key_env) : null;
-        const isAvailable = !provider.api_key_env || Boolean(key);
+        // Providers and models are always marked available so users can select and use free tiers,
+        // local proxies, or unauthenticated gateways without being hard-blocked.
+        const isAvailable = true;
         const entry = {
             id: providerId,
             name: provider.name || providerId,

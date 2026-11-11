@@ -681,5 +681,129 @@ providers:
         supports_tools: true
         supports_vision: false
 
+  # ----------------------------------------------------------------------------
+  # ExperientialLabs AI (ExpressLabs)
+  # API Key: export EXPLABS_API_KEY="your-key" (https://api.experientiallabs.ai)
+  # Features: Frontier models (Claude Opus 5.5, Sonnet 5.5) and uncensored models
+  #           (DeepSeek V4.1 Flash Uncensored, GLM 5.3 Uncensored).
+  # ----------------------------------------------------------------------------
+  experientiallabs:
+    name: "ExperientialLabs (ExpressLabs)"
+    type: "experientiallabs"
+    api_key_env: "EXPLABS_API_KEY"
+    base_url: "https://api.experientiallabs.ai/v1"
+    default_max_tokens: 32768
+    models:
+      - id: "deepseek-v4.1-flash-uncensored"
+        name: "DeepSeek V4.1 Flash Uncensored (ExpLabs)"
+        supports_tools: true
+        supports_vision: false
+        max_context_tokens: 1048576
+      - id: "claude-opus-5.5"
+        name: "Claude Opus 5.5 (ExpLabs)"
+        supports_tools: true
+        supports_vision: true
+        max_context_tokens: 1000000
+      - id: "claude-sonnet-5.5"
+        name: "Claude Sonnet 5.5 (ExpLabs)"
+        supports_tools: true
+        supports_vision: true
+        max_context_tokens: 1000000
+      - id: "claude-haiku-5.5"
+        name: "Claude Haiku 5.5 (ExpLabs)"
+        supports_tools: true
+        supports_vision: true
+        max_context_tokens: 1000000
+      - id: "glm-5.3-uncensored"
+        name: "GLM 5.3 Uncensored (ExpLabs)"
+        supports_tools: true
+        supports_vision: false
+        max_context_tokens: 1048576
+      - id: "glm-5.3-flash-uncensored"
+        name: "GLM 5.3 Flash Uncensored (ExpLabs)"
+        supports_tools: true
+        supports_vision: false
+        max_context_tokens: 1048576
+      - id: "deepseek-v4.1-flash"
+        name: "DeepSeek V4.1 Flash (ExpLabs)"
+        supports_tools: true
+        supports_vision: false
+        max_context_tokens: 1048576
+      - id: "deepseek-r1-0528"
+        name: "DeepSeek R1 0528 (ExpLabs)"
+        supports_tools: true
+        supports_vision: false
+        max_context_tokens: 163840
+
+  # ----------------------------------------------------------------------------
+  # Uncensored DeepSeek
+  # API Key: export UNCENSORED_DEEPSEEK_API_KEY="your-key" (https://uncensoreddeepseek.com)
+  # Features: Completely uncensored instruct DeepSeek model with zero refusals.
+  # ----------------------------------------------------------------------------
+  uncensoreddeepseek:
+    name: "Uncensored DeepSeek"
+    type: "uncensoreddeepseek"
+    api_key_env: "UNCENSORED_DEEPSEEK_API_KEY"
+    base_url: "https://api.uncensoreddeepseek.com/v1"
+    default_max_tokens: 8192
+    models:
+      - id: "uncensored"
+        name: "DeepSeek Uncensored"
+        supports_tools: true
+        supports_vision: true
+        max_context_tokens: 65536
+
+  # ----------------------------------------------------------------------------
+  # Kilo AI Gateway
+  # API Key: export KILO_API_KEY="your-key" (https://kilo.ai - free tier works without key)
+  # Features: Unified multi-model gateway with smart auto-routing and free tier models.
+  # ----------------------------------------------------------------------------
+  kilo:
+    name: "Kilo AI Gateway"
+    type: "kilo"
+    api_key_env: "KILO_API_KEY"
+    base_url: "https://ai-gateway.kilo.ai/api/v1"
+    default_max_tokens: 8192
+    models:
+      - id: "kilo-auto/free"
+        name: "Auto Free (Kilo)"
+        supports_tools: true
+        supports_vision: true
+        max_context_tokens: 256000
+      - id: "kilo-auto/efficient"
+        name: "Auto Efficient (Kilo)"
+        supports_tools: true
+        supports_vision: true
+        max_context_tokens: 1000000
+      - id: "nvidia/nemotron-3.5-super-vl:free"
+        name: "Nemotron 3.5 Super VL Free (Kilo)"
+        supports_tools: true
+        supports_vision: true
+        max_context_tokens: 1000000
+      - id: "deepseek/deepseek-v4.1-flash-1017"
+        name: "DeepSeek V4.1 Flash (Kilo)"
+        supports_tools: true
+        supports_vision: false
+        max_context_tokens: 1048576
+      - id: "thinkingmachines/inkling-2-small:free"
+        name: "Inkling 2 Small Free (Kilo)"
+        supports_tools: true
+        supports_vision: false
+        max_context_tokens: 1048576
+      - id: "openrouter/free"
+        name: "OpenRouter Free Router (Kilo)"
+        supports_tools: true
+        supports_vision: false
+        max_context_tokens: 200000
+      - id: "z-ai/glm-5.3-flash"
+        name: "GLM 5.3 Flash (Kilo)"
+        supports_tools: true
+        supports_vision: false
+        max_context_tokens: 1048576
+
+
+
+
+
 
 
