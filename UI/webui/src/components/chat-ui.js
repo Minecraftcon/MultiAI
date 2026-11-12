@@ -470,6 +470,7 @@ class StreamBatchRenderer {
         this.isDone = false;
         this.isStopped = false;
         this.rafId = null;
+        this.lastRenderTime = 0;
         this.resolvePromise = null;
         this.promise = new Promise(resolve => {
             this.resolvePromise = resolve;
@@ -485,16 +486,28 @@ class StreamBatchRenderer {
         if (!newText || this.isStopped) return;
         this.pendingText = newText;
         if (!this.rafId) {
-            this.rafId = requestAnimationFrame(() => {
+            this.rafId = requestAnimationFrame((now) => {
                 this.rafId = null;
-                this.renderFrame();
+                // Throttle markdown re-parsing to ~32ms (~30 FPS) while actively streaming.
+                // On mobile devices, re-parsing large markdown trees every 16ms (60 FPS) chokes
+                // the CPU and causes frame drops, whereas ~30 FPS is completely smooth and imperceptible.
+                const elapsed = (now || performance.now()) - this.lastRenderTime;
+                if (elapsed < 32 && !this.isDone) {
+                    this.rafId = requestAnimationFrame((nextNow) => {
+                        this.rafId = null;
+                        this.renderFrame(nextNow || performance.now());
+                    });
+                    return;
+                }
+                this.renderFrame(now || performance.now());
             });
         }
     }
 
-    renderFrame() {
+    renderFrame(now = performance.now()) {
         if (this.isStopped) return;
         if (!this.pendingText) return;
+        this.lastRenderTime = now;
 
         // Auto-close unclosed code block fences (```)
         let safe = this.pendingText;
@@ -513,7 +526,9 @@ class StreamBatchRenderer {
         if (this.isStopped) return;
 
         this.finalContent.innerHTML = html;
-        wrapTablesForScroll(this.finalContent);
+        if (html.includes("<table")) {
+            wrapTablesForScroll(this.finalContent);
+        }
 
         if (this.cursor && !this.isDone) {
             this.finalContent.appendChild(this.cursor);
@@ -530,7 +545,7 @@ class StreamBatchRenderer {
             cancelAnimationFrame(this.rafId);
             this.rafId = null;
         }
-        this.renderFrame();
+        this.renderFrame(performance.now());
         this.finalize();
         return this.promise;
     }
@@ -597,7 +612,11 @@ export function updateAIStream(element, fullText, isDone, startTime, hasTools) {
     const followups = extractedFollowups || [];
     element.dataset.rawText = content ? content.trim() : answerText;
     const sanitizedThought = thoughtHtml || "";
-    const sanitizedRest = content ? parseMarkdown(content) : "";
+
+    const isStreamingEnabled = state.config?.Agent?.StreamResponse !== false;
+    let streamer = activeStreamers.get(element);
+    const shouldSyncParse = !isStreamingEnabled || (!streamer && isDone) || isDone;
+    const sanitizedRest = (shouldSyncParse && content) ? parseMarkdown(content) : "";
 
     if (sanitizedThought) {
         if (element._lastRenderedThought !== sanitizedThought) {
@@ -606,7 +625,9 @@ export function updateAIStream(element, fullText, isDone, startTime, hasTools) {
             const wasExpanded = Boolean(preSearchContent.querySelector(".thought-collapsible.is-expanded"));
 
             preSearchContent.innerHTML = sanitizedThought;
-            wrapTablesForScroll(preSearchContent);
+            if (sanitizedThought.includes("<table")) {
+                wrapTablesForScroll(preSearchContent);
+            }
 
             const newDetails = preSearchContent.querySelector(".thought-box");
             if (newDetails && wasUserClosed) {
@@ -644,9 +665,6 @@ export function updateAIStream(element, fullText, isDone, startTime, hasTools) {
         }
         return Promise.resolve();
     }
-
-    const isStreamingEnabled = state.config?.Agent?.StreamResponse !== false;
-    let streamer = activeStreamers.get(element);
 
     if (!isStreamingEnabled || (!streamer && isDone)) {
         if (streamer) {
@@ -753,7 +771,6 @@ export function updateAIStream(element, fullText, isDone, startTime, hasTools) {
             requestScrollToBottom(chat, true);
         });
     } else {
-        requestScrollToBottom(chat, false);
         return Promise.resolve();
     }
 }

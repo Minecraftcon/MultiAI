@@ -28,3 +28,9 @@
   * State preservation: user interactions (collapsing via `<summary>` or clicking `... expand`) are tracked and preserved across stream ticks, resolving unresponsive toggle controls and border-line flickering.
 * **Preserved Intermediate Commentary**: Resolved an issue where conversational text spoken by the model before executing tool calls was previously lumped into `<think>` blocks and hidden. Intermediate commentary is now parsed cleanly and anchored directly above tool execution badges.
 * **RAF Markdown Streaming**: Upgraded `StreamBatchRenderer` to use `requestAnimationFrame` with automatic backtick and code-fence closing, enabling smooth real-time rendering of formatted markdown.
+* **Mobile Streaming & Rendering Optimization (`modern-web-guidance`)**:
+  * Added `content-visibility: auto` and `contain-intrinsic-size: auto none auto 120px` to `.message` with fallback containment (`contain: layout style`), skipping layout/paint calculations for off-screen turns and isolating layout reflows during streaming.
+  * Implemented adaptive ~32ms (~30 FPS) throttling in `StreamBatchRenderer.append()` so markdown parsing does not bottleneck mobile CPUs during high token-rate bursts, while preserving immediate synchronous execution on stream completion.
+  * Eliminated redundant full-document `parseMarkdown()` re-computations inside `updateAIStream` during active streaming chunks.
+  * Added table detection guards to `wrapTablesForScroll()` to bypass DOM queries when streams lack tables.
+
