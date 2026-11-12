@@ -129,6 +129,14 @@
                 <i data-lucide="square-pen"></i>
                 <span>New Chat</span>
             </button>
+            <button id="cloudUploadBtn" class="panel-nav-btn" type="button" title="Upload files to /tmp/user/files">
+                <i data-lucide="upload-cloud"></i>
+                <span>Upload Files</span>
+            </button>
+            <button id="cloudGitCloneBtn" class="panel-nav-btn" type="button" title="Clone a Git repository">
+                <i data-lucide="git-branch"></i>
+                <span>Clone Repo</span>
+            </button>
             <button id="newVoiceBtn" class="panel-nav-btn" type="button" title="Start voice conversation">
                 <i data-lucide="audio-lines"></i>
                 <span>New Voice Chat</span>
@@ -410,6 +418,71 @@
     <div class="project-modal-footer">
         <button id="projectModalCancelBtn" type="button" class="project-btn-secondary">Cancel</button>
         <button id="projectModalConfirmBtn" type="button" class="project-btn-primary" disabled>Add Project</button>
+    </div>
+</div>
+
+<!-- ================= CLOUD FILE UPLOAD MODAL ================= -->
+<div id="cloudUploadBackdrop" class="project-modal-backdrop" style="display: none;"></div>
+<div id="cloudUploadModal" class="project-modal" role="dialog" aria-modal="true" style="display: none;">
+    <div class="project-modal-header">
+        <div class="project-modal-title-group">
+            <i data-lucide="upload-cloud"></i>
+            <h2 class="project-modal-title">Upload Files to Cloud (/tmp/user/files)</h2>
+        </div>
+        <button id="cloudUploadCloseBtn" class="project-modal-close" type="button" aria-label="Close dialog">
+            <i data-lucide="x"></i>
+        </button>
+    </div>
+    <div class="project-modal-body">
+        <div id="cloudFileDropArea" class="cloud-drop-area">
+            <i data-lucide="upload" class="cloud-drop-icon"></i>
+            <p>Drag & drop files here, or click to browse</p>
+            <span class="cloud-drop-hint">Files are stored in /tmp/user/files</span>
+            <input type="file" id="cloudFileInput" multiple style="display: none;">
+        </div>
+        <div id="cloudUploadStatus" class="cloud-status-msg"></div>
+        <div class="project-suggestions-label" style="margin-top: 15px;">Files in /tmp/user/files</div>
+        <div id="cloudUploadedFilesList" class="cloud-files-list"></div>
+    </div>
+</div>
+
+<!-- ================= CLOUD GIT CLONE MODAL ================= -->
+<div id="cloudGitCloneBackdrop" class="project-modal-backdrop" style="display: none;"></div>
+<div id="cloudGitCloneModal" class="project-modal" role="dialog" aria-modal="true" style="display: none;">
+    <div class="project-modal-header">
+        <div class="project-modal-title-group">
+            <i data-lucide="git-branch"></i>
+            <h2 class="project-modal-title">Clone Git Repository</h2>
+        </div>
+        <button id="cloudGitCloseBtn" class="project-modal-close" type="button" aria-label="Close dialog">
+            <i data-lucide="x"></i>
+        </button>
+    </div>
+    <div class="project-modal-body">
+        <label class="project-input-label" for="cloudGitRepoUrl">Repository URL</label>
+        <div class="project-input-wrap">
+            <i data-lucide="link" class="project-input-icon"></i>
+            <input type="text" id="cloudGitRepoUrl" class="project-input" placeholder="https://github.com/user/repository.git" autocomplete="off" spellcheck="false">
+        </div>
+        <button id="cloudGitInspectBtn" type="button" class="project-btn-secondary" style="margin-top: 8px; width: 100%;">
+            Fetch Remote Branches
+        </button>
+
+        <div id="cloudGitBranchSection" style="display: none; margin-top: 15px;">
+            <label class="project-input-label" for="cloudGitBranchSelect">Select Branch</label>
+            <div class="project-input-wrap">
+                <select id="cloudGitBranchSelect" class="project-input" style="padding-left: 10px;"></select>
+            </div>
+            <label style="display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 13px; color: var(--text-secondary); cursor: pointer;">
+                <input type="checkbox" id="cloudGitCloneAll">
+                <span>Clone all branches (full clone)</span>
+            </label>
+        </div>
+
+        <div id="cloudGitStatus" class="cloud-status-msg" style="margin-top: 12px;"></div>
+    </div>
+    <div class="project-modal-footer">
+        <button id="cloudGitDoCloneBtn" type="button" class="project-btn-primary" disabled>Start Clone</button>
     </div>
 </div>
 

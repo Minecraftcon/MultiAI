@@ -23,6 +23,7 @@ import { setStartPageMode } from "./components/chatbox.js";
 import { initUiScale } from "./components/ui-scale.js";
 import { initAuroraTheme } from "./components/aurora-theme.js";
 import { initModeSwitcher } from "./components/mode-switcher.js";
+import { initCloudTools } from "./components/cloud-tools.js";
 import { McpActiveTools } from "./tools/mcp/index.js";
 import { initTaskWatcher } from "./tools/terminal/task-watcher.js";
 
@@ -95,6 +96,7 @@ async function bootstrap() {
     initComposer();
     initGestures();
     initSidePanel();
+    initCloudTools();
     initModeSwitcher();
     initChatDelegation();
     initContextMenu();

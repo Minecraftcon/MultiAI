@@ -1559,3 +1559,88 @@
     align-items: center;
     gap: 6px;
 }
+
+/* =========================================================
+   MULTI-AI CLOUD MODALS: FILE UPLOADS & GIT CLONE
+   ========================================================= */
+.cloud-drop-area {
+    border: 2px dashed var(--border-color, rgba(255, 255, 255, 0.15));
+    border-radius: 12px;
+    padding: 24px 16px;
+    text-align: center;
+    cursor: pointer;
+    background: var(--bg-surface-secondary, rgba(255, 255, 255, 0.03));
+    transition: all 0.2s ease;
+}
+.cloud-drop-area:hover, .cloud-drop-area.dragover {
+    border-color: var(--accent-primary, #6366f1);
+    background: rgba(99, 102, 241, 0.08);
+}
+.cloud-drop-icon {
+    width: 32px;
+    height: 32px;
+    margin: 0 auto 10px auto;
+    color: var(--accent-primary, #6366f1);
+    display: block;
+}
+.cloud-drop-hint {
+    font-size: 11px;
+    color: var(--text-tertiary, rgba(255, 255, 255, 0.45));
+    display: block;
+    margin-top: 4px;
+}
+.cloud-status-msg {
+    font-size: 12px;
+    min-height: 18px;
+    margin-top: 8px;
+}
+.cloud-status-info { color: #38bdf8; }
+.cloud-status-success { color: #4ade80; }
+.cloud-status-error { color: #f87171; }
+.cloud-files-list {
+    max-height: 150px;
+    overflow-y: auto;
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+    border-radius: 8px;
+    padding: 8px;
+    margin-top: 6px;
+    background: var(--bg-surface-secondary, rgba(0, 0, 0, 0.15));
+}
+.cloud-file-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 8px;
+    font-size: 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+.cloud-file-item:last-child { border-bottom: none; }
+.cloud-file-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    overflow: hidden;
+}
+.cloud-file-icon {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    color: var(--text-secondary);
+}
+.cloud-file-name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 200px;
+}
+.cloud-file-size {
+    font-size: 11px;
+    color: var(--text-tertiary, rgba(255, 255, 255, 0.4));
+    flex-shrink: 0;
+}
+.cloud-empty-files, .cloud-loading {
+    padding: 12px;
+    font-size: 12px;
+    text-align: center;
+    color: var(--text-tertiary, rgba(255, 255, 255, 0.4));
+}

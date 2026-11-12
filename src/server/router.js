@@ -21,6 +21,8 @@ const { handleBuildProjectsRoute, handleValidateDirRoute } = require("./routes/b
 const { handleBuildAgentRoute } = require("./routes/build_agent");
 const { handleMcpRoute } = require("./routes/mcp");
 const { handleHistoryRoute } = require("./routes/history");
+const { handleCloudToolsRoute } = require("./routes/cloud_tools");
+const { isAuthenticated, handleLogin, handleAuthCheck, renderLockPage } = require("./auth");
 const { sendJSON } = require("./utils");
 
 async function routeRequest(req, res) {
@@ -35,6 +37,33 @@ async function routeRequest(req, res) {
         }
 
         const reqUrl = req.url.split("?")[0];
+
+        // Public Auth Endpoints
+        if (req.method === "POST" && reqUrl === "/api/auth/login") {
+            return handleLogin(req, res);
+        }
+        if (req.method === "GET" && reqUrl === "/api/auth/check") {
+            return handleAuthCheck(req, res);
+        }
+
+        // Security Barrier: Check if session is authenticated
+        if (!isAuthenticated(req)) {
+            // If API request, return 401 Unauthorized
+            if (reqUrl.startsWith("/api/")) {
+                return sendJSON(res, 401, { error: "Authentication required. Please unlock with master security password." });
+            }
+            // For static HTML page request, serve the Security Checkpoint Lock Page
+            if (reqUrl === "/" || reqUrl === "/index.html" || reqUrl === "/modular") {
+                const html = renderLockPage();
+                res.writeHead(200, {
+                    "Content-Type": "text/html; charset=utf-8",
+                    "Content-Length": Buffer.byteLength(html),
+                    "Cache-Control": "no-store, no-cache, must-revalidate"
+                });
+                return res.end(html);
+            }
+            // Other static assets (css, js, favicon) pass through so lock page styles load cleanly
+        }
 
         // System info & config
         if ((req.method === "GET" || req.method === "HEAD") && reqUrl === "/api/system-info") {
@@ -131,6 +160,11 @@ async function routeRequest(req, res) {
         // MCP (Model Context Protocol) Endpoints
         if (reqUrl.startsWith("/api/mcp")) {
             return handleMcpRoute(req, res);
+        }
+
+        // MultiAI Cloud Tools (Uploads to /tmp/user/files & Git Clone Engine)
+        if (reqUrl.startsWith("/api/cloud/")) {
+            return handleCloudToolsRoute(req, res);
         }
 
         // Static assets

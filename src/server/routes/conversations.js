@@ -6,8 +6,8 @@ async function handleConversationsRoute(req, res) {
 
     if (req.method === "GET" && reqUrl === "/api/chats") {
         try {
-            const chats = conversationsManager.listChats();
-            return sendJSON(res, 200, { success: true, chats });
+            const chats = await conversationsManager.listChats();
+            return sendJSON(res, 200, { success: true, chats, source: "supabase" });
         } catch (err) {
             return sendJSON(res, 500, { error: err.message });
         }
@@ -19,7 +19,7 @@ async function handleConversationsRoute(req, res) {
             return sendJSON(res, 400, { error: "Chat ID is required." });
         }
         try {
-            const data = conversationsManager.getChat(chatId);
+            const data = await conversationsManager.getChat(chatId);
             if (!data) {
                 return sendJSON(res, 404, { error: `Chat '${chatId}' not found.` });
             }
@@ -53,7 +53,7 @@ async function handleConversationsRoute(req, res) {
             if (!chatSession || !chatSession.id) {
                 return sendJSON(res, 400, { error: "Valid chat session with 'id' is required." });
             }
-            const workspace = conversationsManager.saveChat(chatSession);
+            const workspace = await conversationsManager.saveChat(chatSession);
             return sendJSON(res, 200, { success: true, workspace });
         } catch (err) {
             return sendJSON(res, 500, { error: err.message });
@@ -69,7 +69,7 @@ async function handleConversationsRoute(req, res) {
             if (!chatId || !message) {
                 return sendJSON(res, 400, { error: "Parameters 'chatId' and 'message' are required." });
             }
-            const workspace = conversationsManager.appendChatMessage(chatId, message);
+            const workspace = await conversationsManager.appendChatMessage(chatId, message);
             return sendJSON(res, 200, { success: true, workspace });
         } catch (err) {
             return sendJSON(res, 500, { error: err.message });
@@ -78,7 +78,7 @@ async function handleConversationsRoute(req, res) {
 
     if (req.method === "DELETE" && reqUrl === "/api/chats") {
         try {
-            const deleted = conversationsManager.deleteAllChats();
+            const deleted = await conversationsManager.deleteAllChats();
             return sendJSON(res, 200, { success: true, deleted });
         } catch (err) {
             return sendJSON(res, 500, { error: err.message });
@@ -91,7 +91,7 @@ async function handleConversationsRoute(req, res) {
             return sendJSON(res, 400, { error: "Chat ID is required." });
         }
         try {
-            const deleted = conversationsManager.deleteChat(chatId);
+            const deleted = await conversationsManager.deleteChat(chatId);
             return sendJSON(res, 200, { success: true, deleted });
         } catch (err) {
             return sendJSON(res, 500, { error: err.message });

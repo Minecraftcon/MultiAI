@@ -4,6 +4,7 @@ const { getConfig } = require("./core/config_manager");
 const { initSupervisor } = require("./server/supervisor");
 const { routeRequest } = require("./server/router");
 const { mcpManager } = require("./core/mcp_manager");
+const supabaseStorage = require("./core/supabase_storage");
 
 const { initConsole } = require("./server/console");
 const { ensureVendorFiles } = require("../scripts/vendor_download");
@@ -18,17 +19,24 @@ if (process.env.MULTIAI_WORKSPACE_DIR && fs.existsSync(process.env.MULTIAI_WORKS
 }
 
 async function startServer() {
-    // 1. Ensure frontend vendor libraries (marked, highlight, katex, lucide, etc.) are present
+    // 1. Load cloud secrets from Supabase into process.env before servicing any requests
+    try {
+        await supabaseStorage.loadSecretsIntoEnv();
+    } catch (err) {
+        console.warn("[SECRETS] Error loading cloud secrets:", err.message);
+    }
+
+    // 2. Ensure frontend vendor libraries (marked, highlight, katex, lucide, etc.) are present
     try {
         await ensureVendorFiles();
     } catch (err) {
         console.warn("[VENDOR] Check error:", err.message);
     }
 
-    // 2. Start Python task server child process and setup termination handlers
+    // 3. Start task server child process and setup termination handlers
     initSupervisor();
 
-    // 3. Initialize configured Model Context Protocol (MCP) servers
+    // 4. Initialize configured Model Context Protocol (MCP) servers
     mcpManager.init().catch(err => {
         console.warn("[MCP] Initialization error:", err.message);
     });

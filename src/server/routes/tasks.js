@@ -1,12 +1,14 @@
-const http = require("http");
 const fs = require("fs");
 const path = require("path");
-const { sendJSON, postJSON, getChatWorkspace, getChatScratchDir, getChatArtifactsDir } = require("../utils");
+const { sendJSON } = require("../utils");
 const conversationsManager = require("../../core/conversations_manager");
-const { getTaskServerTarget } = require("../../core/sandbox_manager");
 const { imageGenTasks } = require("./media");
+const { taskManager } = require("../task_manager");
+const { executePythonCode } = require("../task_tools");
 
 async function handleTaskRoute(req, res) {
+    const reqUrl = req.url.split("?")[0];
+
     // Intercept image generation background tasks if queried via task APIs
     if (req.url.startsWith("/api/task/stdout/")) {
         const taskId = decodeURIComponent(req.url.replace("/api/task/stdout/", "")).trim();
@@ -62,14 +64,14 @@ async function handleTaskRoute(req, res) {
             let body = "";
             for await (const chunk of req) body += chunk;
             const args = JSON.parse(body || "{}");
-            const result = await postJSON(5000, "/api/python/run", args, 35000);
+            const result = await executePythonCode(args);
             return sendJSON(res, 200, result);
         } catch (error) {
             return sendJSON(res, 500, { error: error.message });
         }
     }
 
-    // Proxy terminal tasks to the supervised Python backend with large-output scratch logging
+    // Native Node.js Task Execution and Management Routes
     if (req.url.startsWith("/api/task/")) {
         let reqBody = "";
         try {
@@ -82,184 +84,187 @@ async function handleTaskRoute(req, res) {
         } catch (_) {}
 
         const chatId = req.headers["x-chat-id"] || parsedBody.chatId || parsedBody.chat_id || "";
-        const wsContext = getChatWorkspace(chatId);
-        const scratchDir = wsContext?.workspace?.scratchDir || getChatScratchDir(chatId);
-        const artifactsDir = wsContext?.workspace?.artifactsDir || getChatArtifactsDir(chatId);
-
+        let scratchDir = "";
+        let artifactsDir = "";
+        if (chatId) {
+            try {
+                const ws = conversationsManager.ensureChatWorkspace(chatId);
+                scratchDir = ws.scratchDir;
+                artifactsDir = ws.artifactsDir;
+            } catch (_) {}
+        }
+        if (!scratchDir) {
+            scratchDir = path.join(conversationsManager.getStorageRoot(), "scratch");
+        }
         if (!fs.existsSync(scratchDir)) {
             fs.mkdirSync(scratchDir, { recursive: true });
+        }
+        if (!artifactsDir) {
+            artifactsDir = path.join(conversationsManager.getStorageRoot(), "artifacts");
         }
         if (!fs.existsSync(artifactsDir)) {
             fs.mkdirSync(artifactsDir, { recursive: true });
         }
 
-        if (parsedBody && typeof parsedBody === "object") {
-            parsedBody.scratch_dir = scratchDir;
-            parsedBody.artifacts_dir = artifactsDir;
-            if (!parsedBody.cwd && wsContext?.project?.rootPath) {
-                parsedBody.cwd = wsContext.project.rootPath;
-            }
-            reqBody = JSON.stringify(parsedBody);
-        }
-
-        const headers = { ...req.headers };
-        if (reqBody) {
-            headers["content-length"] = Buffer.byteLength(reqBody);
-        }
-
-        const target = getTaskServerTarget();
-        const options = {
-            ...target,
-            path: req.url,
-            method: req.method,
-            headers
-        };
-
-        // Real-time Event-Stream proxy for streaming command output
-        if (req.url.startsWith("/api/task/stream")) {
-            const proxyReq = http.request(options, (proxyRes) => {
-                res.writeHead(proxyRes.statusCode || 200, {
-                    "Content-Type": "text/event-stream",
-                    "Cache-Control": "no-cache, no-transform",
-                    "Connection": "keep-alive",
-                    "Access-Control-Allow-Origin": "*",
-                    "X-Accel-Buffering": "no"
-                });
-                proxyRes.on("data", (chunk) => {
-                    res.write(chunk);
-                    if (typeof res.flush === "function") res.flush();
-                });
-                proxyRes.on("end", () => {
-                    res.end();
-                });
-            });
-            proxyReq.on("error", (err) => {
-                sendJSON(res, 502, { error: `Task daemon unavailable: ${err.message}` });
-            });
-            if (reqBody) proxyReq.write(reqBody);
-            proxyReq.end();
-            return;
-        }
-
         const startTime = Date.now();
-        const proxyReq = http.request(options, (proxyRes) => {
-            let resData = "";
-            proxyRes.on("data", (chunk) => { resData += chunk; });
-            proxyRes.on("end", () => {
-                let json;
-                try {
-                    json = JSON.parse(resData);
-                } catch (_) {}
+        let json = null;
+        let extractedTaskId = "";
 
-                if (json && typeof json === "object") {
-                    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-                    json.ran_for = json.elapsed_seconds ? String(json.elapsed_seconds) : elapsed;
+        if (reqUrl.startsWith("/api/task/stdout/")) {
+            extractedTaskId = decodeURIComponent(reqUrl.replace("/api/task/stdout/", "")).trim();
+            json = taskManager.getOutput(extractedTaskId);
+        } else if (reqUrl.startsWith("/api/task/status/")) {
+            extractedTaskId = decodeURIComponent(reqUrl.replace("/api/task/status/", "")).trim();
+            const out = taskManager.getOutput(extractedTaskId);
+            if (out.error) {
+                json = out;
+            } else {
+                json = {
+                    task_id: extractedTaskId,
+                    running: out.running,
+                    status: out.running ? "running" : "finished",
+                    exit_code: out.exit_code
+                };
+            }
+        } else if (reqUrl.startsWith("/api/task/input/")) {
+            extractedTaskId = decodeURIComponent(reqUrl.replace("/api/task/input/", "")).trim();
+            const inputString = parsedBody.field !== undefined ? parsedBody.field : (parsedBody.input_string !== undefined ? parsedBody.input_string : (parsedBody.input || ""));
+            const inputType = parsedBody.type || (parsedBody.combination ? "keycode" : "text");
+            const combination = parsedBody.combination || "";
+            const pressEnter = parsedBody.press_enter !== undefined ? parsedBody.press_enter : true;
 
-                    const urlParts = req.url.split("?")[0];
-                    let extractedTaskId = "";
-                    if (urlParts.startsWith("/api/task/stdout/")) {
-                        extractedTaskId = decodeURIComponent(urlParts.replace("/api/task/stdout/", "")).trim();
-                    } else if (urlParts.startsWith("/api/task/input/")) {
-                        extractedTaskId = decodeURIComponent(urlParts.replace("/api/task/input/", "")).trim();
-                    } else if (urlParts.startsWith("/api/task/kill/")) {
-                        extractedTaskId = decodeURIComponent(urlParts.replace("/api/task/kill/", "")).trim();
-                    } else if (urlParts.startsWith("/api/task/status/")) {
-                        extractedTaskId = decodeURIComponent(urlParts.replace("/api/task/status/", "")).trim();
-                    }
-
-                    const taskId = json.task_id || extractedTaskId || parsedBody.task_id || parsedBody.id || "";
-
-                    const chatId = req.headers["x-chat-id"] || parsedBody.chatId || "";
-                    const wsContext = getChatWorkspace(chatId);
-                    const scratchDir = wsContext?.workspace?.scratchDir || getChatScratchDir(chatId);
-                    if (!fs.existsSync(scratchDir)) {
-                        fs.mkdirSync(scratchDir, { recursive: true });
-                    }
-
-                    // Locate or name log file
-                    let logFileName = "";
-                    if (taskId && fs.existsSync(scratchDir)) {
-                        try {
-                            const existing = fs.readdirSync(scratchDir).find(f => f.endsWith(`-${taskId}.log`));
-                            if (existing) logFileName = existing;
-                        } catch (_) {}
-                    }
-                    if (!logFileName) {
-                        const taskName = parsedBody.task_name || parsedBody.name || "";
-                        const cleanName = taskName 
-                            ? taskName.toLowerCase().replace(/[^a-z0-9_-]+/g, "-").slice(0, 30) 
-                            : "task";
-                        logFileName = `${cleanName}-${taskId || Date.now().toString(36)}.log`;
-                    }
-                    const logFilePath = path.join(scratchDir, logFileName);
-                    const logRelPath = `scratch/${logFileName}`;
-
-                    // If reading via manage_tasks /api/task/stdout/:taskId and python queue was empty, read historical log
-                    if (urlParts.startsWith("/api/task/stdout/") && (!json.stdout || !json.stdout.trim()) && fs.existsSync(logFilePath)) {
-                        try {
-                            const diskLog = fs.readFileSync(logFilePath, "utf8");
-                            if (diskLog.trim()) {
-                                json.stdout = diskLog;
-                            }
-                        } catch (_) {}
-                    }
-
-                    const combinedOutput = (json.stdout || "") + (json.stderr ? "\n" + json.stderr : "");
-                    if (combinedOutput && combinedOutput.trim()) {
-                        try {
-                            if (urlParts.startsWith("/api/task/stdout/") && fs.existsSync(logFilePath)) {
-                                // Already in log or read from log
-                            } else if (fs.existsSync(logFilePath)) {
-                                fs.appendFileSync(logFilePath, combinedOutput, "utf8");
-                            } else {
-                                fs.writeFileSync(logFilePath, combinedOutput, "utf8");
-                            }
-                        } catch (err) {
-                            console.warn("[TASK LOG SAVE ERROR]", err.message);
-                        }
-                    }
-
-                    json.scratch_log_path = logRelPath;
-
-                    // Enforce maximum 150 lines per turn on stdout
-                    const MAX_LINES = 150;
-                    if (json.stdout && typeof json.stdout === "string") {
-                        const stdoutLines = json.stdout.split("\n");
-                        if (stdoutLines.length > MAX_LINES) {
-                            const kept = stdoutLines.slice(-MAX_LINES).join("\n");
-                            json.stdout = `[Output truncated ... showing last ${MAX_LINES} lines]\n${kept}`;
-                            json.is_large_output = true;
-                            json.truncated_lines = kept;
-                        }
-                    }
-
-                    // Enforce maximum 150 lines per turn on stderr
-                    if (json.stderr && typeof json.stderr === "string") {
-                        const stderrLines = json.stderr.split("\n");
-                        if (stderrLines.length > MAX_LINES) {
-                            const kept = stderrLines.slice(-MAX_LINES).join("\n");
-                            json.stderr = `[Output truncated ... showing last ${MAX_LINES} lines]\n${kept}`;
-                            json.is_large_output = true;
-                        }
-                    }
-
-                    return sendJSON(res, proxyRes.statusCode, json);
-                }
-
-                res.writeHead(proxyRes.statusCode, proxyRes.headers);
-                res.end(resData);
+            json = taskManager.sendInput(extractedTaskId, {
+                inputString,
+                inputType,
+                combination,
+                pressEnter
             });
-        });
+        } else if (reqUrl.startsWith("/api/task/kill/")) {
+            extractedTaskId = decodeURIComponent(reqUrl.replace("/api/task/kill/", "")).trim();
+            json = taskManager.killTask(extractedTaskId);
+        } else if (reqUrl === "/api/task/list") {
+            json = taskManager.listTasks();
+            return sendJSON(res, 200, json);
+        } else if (reqUrl === "/api/task/clean") {
+            const cleaned = taskManager.cleanFinished();
+            return sendJSON(res, 200, { cleaned });
+        } else if (reqUrl === "/api/task/run" && req.method === "POST") {
+            const command = parsedBody.command;
+            if (!command) {
+                return sendJSON(res, 400, { error: "No command provided" });
+            }
+            const timerVal = parsedBody.timer !== undefined ? parsedBody.timer : parsedBody.timeout;
+            const timeoutSecs = Number(timerVal !== undefined ? timerVal : (parsedBody.wait_ms ? Number(parsedBody.wait_ms) / 1000 : 5.0));
+            const shellOverride = parsedBody.shell;
+            const cwd = parsedBody.cwd;
 
-        proxyReq.on("error", (e) => {
-            console.error(`[PROXY ERROR] Python server unreachable: ${e.message}`);
-            sendJSON(res, 500, { error: "Python backend is not responding." });
-        });
+            const taskId = taskManager.runTask({
+                command,
+                shellOverride,
+                scratchDir,
+                artifactsDir,
+                cwd
+            });
 
-        if (reqBody) {
-            proxyReq.write(reqBody);
+            json = await taskManager.waitForTask(taskId, timeoutSecs);
+        } else if (reqUrl === "/api/task/idle" && req.method === "POST") {
+            const seconds = parsedBody.seconds !== undefined ? parsedBody.seconds : 5;
+            const taskId = parsedBody.task_id;
+            const wakeOn = parsedBody.wake_on || "exit";
+            const reason = parsedBody.reason || "";
+
+            json = await taskManager.idle({
+                seconds,
+                taskId,
+                wakeOn,
+                reason
+            });
+            return sendJSON(res, 200, json);
+        } else {
+            return sendJSON(res, 404, { error: "Task endpoint not found" });
         }
-        proxyReq.end();
+
+        if (json && typeof json === "object") {
+            if (json.error && !json.status) {
+                return sendJSON(res, 404, json);
+            }
+
+            const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+            json.ran_for = json.elapsed_seconds ? String(json.elapsed_seconds) : elapsed;
+
+            const taskId = json.task_id || extractedTaskId || parsedBody.task_id || parsedBody.id || "";
+
+            // Locate or name log file
+            let logFileName = "";
+            if (taskId && fs.existsSync(scratchDir)) {
+                try {
+                    const existing = fs.readdirSync(scratchDir).find(f => f.endsWith(`-${taskId}.log`));
+                    if (existing) logFileName = existing;
+                } catch (_) {}
+            }
+            if (!logFileName) {
+                const taskName = parsedBody.task_name || parsedBody.name || "";
+                const cleanName = taskName 
+                    ? taskName.toLowerCase().replace(/[^a-z0-9_-]+/g, "-").slice(0, 30) 
+                    : "task";
+                logFileName = `${cleanName}-${taskId || Date.now().toString(36)}.log`;
+            }
+            const logFilePath = path.join(scratchDir, logFileName);
+            const logRelPath = `scratch/${logFileName}`;
+
+            // If reading via manage_tasks /api/task/stdout/:taskId and queue was empty, read historical log
+            if (reqUrl.startsWith("/api/task/stdout/") && (!json.stdout || !json.stdout.trim()) && fs.existsSync(logFilePath)) {
+                try {
+                    const diskLog = fs.readFileSync(logFilePath, "utf8");
+                    if (diskLog.trim()) {
+                        json.stdout = diskLog;
+                    }
+                } catch (_) {}
+            }
+
+            const combinedOutput = (json.stdout || "") + (json.stderr ? "\n" + json.stderr : "");
+            if (combinedOutput && combinedOutput.trim()) {
+                try {
+                    if (reqUrl.startsWith("/api/task/stdout/") && fs.existsSync(logFilePath)) {
+                        // Already in log or read from log
+                    } else if (fs.existsSync(logFilePath)) {
+                        fs.appendFileSync(logFilePath, combinedOutput, "utf8");
+                    } else {
+                        fs.writeFileSync(logFilePath, combinedOutput, "utf8");
+                    }
+                } catch (err) {
+                    console.warn("[TASK LOG SAVE ERROR]", err.message);
+                }
+            }
+
+            json.scratch_log_path = logRelPath;
+
+            // Enforce maximum 150 lines per turn on stdout
+            const MAX_LINES = 150;
+            if (json.stdout && typeof json.stdout === "string") {
+                const stdoutLines = json.stdout.split("\n");
+                if (stdoutLines.length > MAX_LINES) {
+                    const kept = stdoutLines.slice(-MAX_LINES).join("\n");
+                    json.stdout = `[Output truncated ... showing last ${MAX_LINES} lines]\n${kept}`;
+                    json.is_large_output = true;
+                    json.truncated_lines = kept;
+                }
+            }
+
+            // Enforce maximum 150 lines per turn on stderr
+            if (json.stderr && typeof json.stderr === "string") {
+                const stderrLines = json.stderr.split("\n");
+                if (stderrLines.length > MAX_LINES) {
+                    const kept = stderrLines.slice(-MAX_LINES).join("\n");
+                    json.stderr = `[Output truncated ... showing last ${MAX_LINES} lines]\n${kept}`;
+                    json.is_large_output = true;
+                }
+            }
+
+            return sendJSON(res, 200, json);
+        }
+
+        return sendJSON(res, 404, { error: "Endpoint not found" });
     }
 }
 
