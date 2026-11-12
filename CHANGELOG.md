@@ -40,4 +40,7 @@
 * **Reasoning Stream Continuity & TCP Low-Latency Streaming**:
   * Removed premature active-stream collapsing in `formatThoughtHtml()`, allowing live reasoning thoughts to remain fully visible as they stream without disappearing into a 160px clamped overflow. Huge thoughts are now wrapped cleanly into collapsible cards once finalized.
   * Enabled TCP `setNoDelay(true)` and immediate header flushing on SSE stream response sockets in `base.js` and `routes/chat.js` to eliminate OS-level Nagle packet buffering during real-time token delivery.
+* **Inline Dynamic Streaming Cursor**:
+  * Upgraded streaming mode in `StreamBatchRenderer` to attach the blinking cursor directly inline at the tip of the actively generating leaf element (paragraphs, lists, blockquotes, and code blocks), so the cursor moves naturally with the streaming words instead of sitting on a static line at the bottom.
+  * Styled `.blinking-cursor` with proportional `1.15em` height and `-0.15em` baseline alignment to match font sizes seamlessly across prose, headings, and code snippets.
 

@@ -280,10 +280,11 @@
 .blinking-cursor {
     display: inline-block;
     width: 7px;
-    height: 16px;
+    height: 1.15em;
     background-color: var(--text-primary);
-    vertical-align: middle;
+    vertical-align: -0.15em;
     margin-left: 4px;
+    border-radius: 1px;
     animation: blink 1s step-end infinite;
 }
 

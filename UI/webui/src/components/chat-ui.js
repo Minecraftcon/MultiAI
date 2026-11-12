@@ -461,6 +461,63 @@ export function clearAIStream(element) {
     }
 }
 
+/**
+ * Attaches the blinking cursor inline right after the last character of text
+ * inside the active block element, so it flows dynamically with the streaming response.
+ */
+function attachStreamingCursor(container, cursor) {
+    if (!container || !cursor) return;
+
+    cursor.remove();
+
+    let target = container.lastElementChild;
+    if (!target) {
+        container.appendChild(cursor);
+        return;
+    }
+
+    // Traverse down block containers to find the leaf block element
+    while (target) {
+        const tag = target.tagName ? target.tagName.toLowerCase() : "";
+        if (tag === "ul" || tag === "ol") {
+            target = target.lastElementChild || target;
+            continue;
+        }
+        if (tag === "blockquote") {
+            if (target.lastElementChild) {
+                target = target.lastElementChild;
+                continue;
+            }
+        }
+        if (tag === "pre") {
+            const codeEl = target.querySelector("code");
+            if (codeEl) {
+                target = codeEl;
+            }
+            break;
+        }
+        if (tag === "li") {
+            if (target.lastElementChild && target.lastElementChild.tagName && target.lastElementChild.tagName.toLowerCase() === "p") {
+                target = target.lastElementChild;
+                continue;
+            }
+        }
+        if (tag === "table" || tag === "div") {
+            if (target.lastElementChild) {
+                target = target.lastElementChild;
+                continue;
+            }
+        }
+        break;
+    }
+
+    if (target) {
+        target.appendChild(cursor);
+    } else {
+        container.appendChild(cursor);
+    }
+}
+
 class StreamBatchRenderer {
     constructor(element, finalContent, cursor) {
         this.element = element;
@@ -478,7 +535,7 @@ class StreamBatchRenderer {
 
         this.finalContent.innerHTML = "";
         if (this.cursor) {
-            this.finalContent.appendChild(this.cursor);
+            attachStreamingCursor(this.finalContent, this.cursor);
         }
     }
 
@@ -531,7 +588,7 @@ class StreamBatchRenderer {
         }
 
         if (this.cursor && !this.isDone) {
-            this.finalContent.appendChild(this.cursor);
+            attachStreamingCursor(this.finalContent, this.cursor);
         }
 
         const chat = document.getElementById("chat");
@@ -545,6 +602,9 @@ class StreamBatchRenderer {
             cancelAnimationFrame(this.rafId);
             this.rafId = null;
         }
+        if (this.cursor) {
+            this.cursor.remove();
+        }
         this.renderFrame(performance.now());
         this.finalize();
         return this.promise;
@@ -555,6 +615,9 @@ class StreamBatchRenderer {
         if (this.rafId) {
             cancelAnimationFrame(this.rafId);
             this.rafId = null;
+        }
+        if (this.cursor) {
+            this.cursor.remove();
         }
         if (this.resolvePromise) {
             this.resolvePromise();
