@@ -24,9 +24,21 @@ function getSupabaseConfig() {
         }
     }
 
-    const host = process.env.SUPABASE_DB_HOST || "db.REDACTED_PROJECT.supabase.co";
+    // Render free-tier / IPv4-only networks must connect via the IPv4 Supabase pooler
+    // Project 'REDACTED_PROJECT' is hosted on REDACTED_HOST.pooler.supabase.com
+    const defaultHost = "REDACTED_HOST.pooler.supabase.com";
+    let host = process.env.SUPABASE_DB_HOST || defaultHost;
+    let user = process.env.SUPABASE_DB_USER || "postgres.REDACTED_PROJECT";
+
+    // Auto-rewrite direct db.* host to IPv4 pooler if on Render or if direct host was provided
+    if (host.startsWith("db.") && host.includes(".supabase.co")) {
+        host = defaultHost;
+        if (user === "postgres") {
+            user = "postgres.REDACTED_PROJECT";
+        }
+    }
+
     const port = parseInt(process.env.SUPABASE_DB_PORT || "5432", 10);
-    const user = process.env.SUPABASE_DB_USER || "postgres";
     const database = process.env.SUPABASE_DB_NAME || "postgres";
 
     if (!password) return null;
