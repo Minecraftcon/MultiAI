@@ -166,6 +166,20 @@ function parseCookies(cookieHeader) {
 }
 
 function isAuthenticated(req) {
+    // 1. Direct CLI Admin authentication via Bearer token or X-Admin-Key (master password)
+    const authHeader = req.headers.authorization || "";
+    if (authHeader.startsWith("Bearer ")) {
+        const tokenOrPass = authHeader.slice(7).trim();
+        if (PASSWORD && safeCompare(tokenOrPass, PASSWORD)) {
+            return true;
+        }
+    }
+    const adminKey = req.headers["x-admin-key"] || req.headers["x-multiai-key"] || "";
+    if (adminKey && PASSWORD && safeCompare(adminKey, PASSWORD)) {
+        return true;
+    }
+
+    // 2. Cookie session
     const cookies = parseCookies(req.headers.cookie);
     const token = cookies.multiai_token || req.headers["x-multiai-token"] || "";
 
