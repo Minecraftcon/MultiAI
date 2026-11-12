@@ -63,14 +63,25 @@ export function buildFullSystemPrompt(workspace = null, personaOverride = null) 
         envPrompt += `- Terminal Shell: ${cachedSystemInfo.shellName}\n`;
         
         const effectiveWorkdir = (workspace && workspace.workdir) || cachedSystemInfo.cwd || "/tmp/workspace";
-        envPrompt += `- Active Workspace Directory: ${effectiveWorkdir}\n`;
+        envPrompt += `- Active Workspace Directory (CWD): ${effectiveWorkdir}\n`;
         envPrompt += `- User Uploads Directory: /tmp/user/files\n`;
+        if (workspace && workspace.chatDir) {
+            envPrompt += `- Active Session Storage Root: ${workspace.chatDir}\n`;
+            envPrompt += `- Session Scratch Directory ($SCRATCH): ${workspace.scratchDir || workspace.chatDir + '/scratch'}\n`;
+            envPrompt += `- Session Artifacts Directory ($ARTIFACTS): ${workspace.artifactsDir || workspace.chatDir + '/artifacts'}\n`;
+        }
         if (cachedSystemInfo.username) envPrompt += `- Current User: ${cachedSystemInfo.username}\n`;
 
-        envPrompt += `\n[WORKSPACE & UPLOAD AUTONOMY GUIDELINES]:\n`;
-        envPrompt += `1. ISOLATION: The MultiAI application source code is isolated. Your default working directory for all tasks, file creations, and git clones is '${effectiveWorkdir}'. Do NOT create or modify files inside MultiAI server directories unless explicitly instructed.\n`;
-        envPrompt += `2. USER UPLOAD AUTONOMY: When the user asks about uploaded files, documents, archives, or datasets, autonomously inspect '/tmp/user/files' using list_dir(DirectoryPath: "/tmp/user/files") or read_file. Files uploaded by the user via the cloud UI land directly in '/tmp/user/files'.\n`;
-        envPrompt += `3. WORKSPACE PATH RESOLUTION: Relative paths in read_file, write_file, and run_task resolve against the Active Workspace Directory ('${effectiveWorkdir}').`;
+        envPrompt += `\n[CLOUD SESSION PATH TOPOLOGY & DISAMBIGUATION GUIDELINES]:\n`;
+        envPrompt += `1. THREE-TIER PATH TOPOLOGY: The cloud environment separates working contexts into distinct directories:\n`;
+        envPrompt += `   - Project Workspace ('${effectiveWorkdir}'): Current working directory where user project files live and shell commands execute.\n`;
+        envPrompt += `   - Cloud Session Root ('${workspace?.chatDir || "/tmp/multiai_cloud/chats/<chat_id>"}'): Dedicated per-conversation storage containing '$SCRATCH' and '$ARTIFACTS'.\n`;
+        envPrompt += `   - User Uploads ('/tmp/user/files'): Ingestion folder for web UI uploads. They are NOT in './uploads' or '${effectiveWorkdir}'. Check '/tmp/user/files' directly when asked about user-uploaded documents.\n`;
+        envPrompt += `2. SHELL VS TOOL PATH TRAPS:\n`;
+        envPrompt += `   - In 'run_task', commands run in '${effectiveWorkdir}'. The conversation scratchpad does NOT exist at './scratch'. Never execute 'python scratch/script.py' or 'cd scratch'. Always use '$SCRATCH' or '$SCRATCH_DIR' (e.g. 'python3 "$SCRATCH/script.py"').\n`;
+        envPrompt += `   - In tool calls ('read_file', 'write_file', 'list_dir'), '$SCRATCH/' and '$ARTIFACTS/' prefixes automatically map to this chat session's storage.\n`;
+        envPrompt += `3. ISOLATION: The MultiAI application source code is isolated. Do NOT modify files inside MultiAI server directories unless explicitly instructed.\n`;
+        envPrompt += `4. STORAGE DUAL-NATURE: Conversation messages, turns, and metadata are persistently stored in Supabase ('public.chats' & 'public.chat_messages'), while container storage under '/tmp' provides runtime scratchpads and artifacts for the active cloud session.`;
 
         if (Array.isArray(cachedSystemInfo.instructions) && cachedSystemInfo.instructions.length > 0) {
             envPrompt += `\n\n[TERMINAL & SHELL INSTRUCTIONS FOR THIS SYSTEM]:\n`;
@@ -82,17 +93,20 @@ export function buildFullSystemPrompt(workspace = null, personaOverride = null) 
     }
 
     if (workspace && workspace.scratchDir) {
+        const effectiveWorkdir = (workspace && workspace.workdir) || cachedSystemInfo?.cwd || "/tmp/workspace";
         const wsText = workspace.workspacePrompt || [
-            `[SCRATCHPAD & CONVERSATION WORKSPACE]:`,
+            `[SCRATCHPAD, ARTIFACTS & CLOUD SESSION PATH ARCHITECTURE]:`,
             `- Active Chat ID: ${workspace.chatId}`,
             `- Conversation Root: ${workspace.chatDir}`,
-            `- Scratchsheet Directory ($SCRATCH): ${workspace.scratchDir}`,
+            `- Scratch Directory ($SCRATCH): ${workspace.scratchDir}`,
+            `- Artifacts Directory ($ARTIFACTS): ${workspace.artifactsDir || workspace.chatDir + '/artifacts'}`,
             `- Images Directory: ${workspace.imagesDir}`,
-            `- SCRATCHPAD & TEMPORARY FILE GUIDELINES:`,
-            `  1. You have a dedicated scratchsheet directory (${workspace.scratchDir}) for this conversation accessible via '$SCRATCH'.`,
-            `  2. For non-relevant, temporary scripts, one-off test files, mock data, scratchpad notes, or benchmarks, write them using '$SCRATCH/<filename>' (or the full path ${workspace.scratchDir}/<filename>). Paths starting with '$SCRATCH/' automatically resolve to this directory.`,
-            `  3. In run_task, you can directly use '$SCRATCH/<filename>' or '$SCRATCH_DIR/<filename>' in terminal commands.`,
-            `  4. Regular relative paths resolve normally against the project workspace.`
+            `- User Uploads Directory: /tmp/user/files`,
+            `- Active Execution Workspace (CWD): ${effectiveWorkdir}`,
+            `- CLOUD SESSION PATH AWARENESS:`,
+            `  1. In 'run_task', terminal commands run in '${effectiveWorkdir}'. Do not look for './scratch' or './uploads' here; use '$SCRATCH' and '/tmp/user/files'.`,
+            `  2. In tool calls ('read_file', 'write_file', 'list_dir'), '$SCRATCH/' and '$ARTIFACTS/' resolve automatically to this session.`,
+            `  3. Session messages & logs are persistently mirrored in Supabase, while working files are kept in this local session root.`
         ].join("\n");
         sections.push(wsText.trim());
     }

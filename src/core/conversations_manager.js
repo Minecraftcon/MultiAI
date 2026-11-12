@@ -66,17 +66,30 @@ function ensureChatWorkspace(chatId, dateStr) {
     } catch (_) {}
 
     const workspacePrompt = [
-        `[SCRATCHPAD, ARTIFACTS & WORKSPACE]:`,
+        `[SCRATCHPAD, ARTIFACTS & CLOUD SESSION PATH ARCHITECTURE]:`,
         `- Active Chat ID: ${chatId}`,
         `- Conversation Root: ${chatDir}`,
         `- Scratch Directory ($SCRATCH): ${scratchDir}`,
         `- Artifacts Directory ($ARTIFACTS): ${artifactsDir}`,
         `- Images Directory: ${imagesDir}`,
-        `- STORAGE & WORKSPACE GUIDELINES:`,
-        `  1. You have a dedicated scratch directory (${scratchDir}) accessible via '$SCRATCH/<filename>' for temporary test scripts, scratch notes, working logs, or one-off benchmarks.`,
-        `  2. You have a dedicated artifacts directory (${artifactsDir}) accessible via '$ARTIFACTS/<filename>' for persistent milestone archives, architecture briefs, and state snapshots.`,
-        `  3. In run_task, you can directly reference '$SCRATCH' or '$ARTIFACTS' (or '$SCRATCH_DIR', '$ARTIFACTS_DIR') in terminal commands.`,
-        `  4. Regular relative paths resolve normally against the project workspace.`
+        `- User Uploads Directory: /tmp/user/files`,
+        `- Active Execution Workspace (CWD): /tmp/workspace`,
+        `- CLOUD SESSION PATH AWARENESS & ROUTING GUIDELINES:`,
+        `  1. THREE-TIER PATH TOPOLOGY:`,
+        `     - Project Workspace: '/tmp/workspace' is your current working directory (CWD). Relative paths in tool calls and terminal commands resolve here.`,
+        `     - Session Storage: '${chatDir}' is the dedicated storage for this conversation session, housing '$SCRATCH', '$ARTIFACTS', and generated images.`,
+        `     - User Uploads: '/tmp/user/files' is where files uploaded via the web UI arrive. They are NOT in './uploads' or './workspace'. When the user mentions an uploaded file, always check '/tmp/user/files'.`,
+        `  2. TERMINAL SHELL VS TOOL PATH TRAPS:`,
+        `     - In 'run_task', terminal commands execute with 'pwd=/tmp/workspace'. Conversation scratch is NOT at './scratch'. Never execute 'python scratch/script.py' or 'cd scratch'. Always use '$SCRATCH' or '$SCRATCH_DIR' (e.g. 'python3 "$SCRATCH/script.py"').`,
+        `     - In tool calls ('read_file', 'write_file', 'list_dir'), paths starting with '$SCRATCH/' or '$ARTIFACTS/' are automatically resolved to this chat's isolated directory.`,
+        `  3. PERSISTENT ARTIFACTS & SCRATCH:`,
+        `     - Write temporary test scripts, mock outputs, or one-off code into '$SCRATCH/<filename>'.`,
+        `     - Write milestone briefs, task lists, architecture specs, or permanent documents into '$ARTIFACTS/<filename>'.`,
+        `  4. STORAGE DUAL-NATURE:`,
+        `     - Conversation messages, turn histories, and session metadata are persistently mirrored in Supabase ('public.chats' & 'public.chat_messages').`,
+        `     - Disk storage under '/tmp/multiai_cloud' provides high-speed scratchpad and working files for the active cloud container session.`,
+        `  5. SERVER APPLICATION ISOLATION:`,
+        `     - MultiAI server source code is isolated. Do NOT modify server files or configs unless explicitly requested.`
     ].join("\n");
 
     return {
