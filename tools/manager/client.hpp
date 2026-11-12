@@ -5,11 +5,17 @@
 #include <fstream>
 #include <sstream>
 #include <iostream>
+#include <cstdlib>
+#include <unistd.h>
+
+#if defined(USE_LIBCURL) && !defined(__ANDROID__)
 #include <curl/curl.h>
-#include <boost/json.hpp>
+#endif
+
+#include <nlohmann/json.hpp>
 #include "obfuscation.hpp"
 
-namespace json = boost::json;
+using json = nlohmann::json;
 
 struct ChatSummary {
     std::string id;
@@ -45,6 +51,13 @@ private:
     std::string repoRoot;
     bool directSupabaseMode = false;
 
+    struct HttpResponse {
+        long code = 0;
+        std::string body;
+        std::string error;
+    };
+
+#if defined(USE_LIBCURL) && !defined(__ANDROID__)
     static size_t writeCallback(void* contents, size_t size, size_t nmemb, void* userp) {
         size_t total = size * nmemb;
         std::string* s = static_cast<std::string*>(userp);
@@ -52,29 +65,132 @@ private:
         return total;
     }
 
-    struct curl_slist* buildAuthHeaders(bool isJson = true) {
-        struct curl_slist* headers = NULL;
-        if (isJson) {
-            headers = curl_slist_append(headers, "Content-Type: application/json");
+    HttpResponse executeLibcurl(const std::string& method, const std::string& url, const std::vector<std::string>& headers, const std::string& body) {
+        HttpResponse resp;
+        CURL* curl = curl_easy_init();
+        if (!curl) { resp.error = "Failed to initialize curl"; return resp; }
+
+        struct curl_slist* hList = NULL;
+        for (const auto& h : headers) {
+            hList = curl_slist_append(hList, h.c_str());
         }
 
+        curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, hList);
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeCallback);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &resp.body);
+        curl_easy_setopt(curl, CURLOPT_TIMEOUT, 15L);
+        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
+
+        if (method == "POST") {
+            curl_easy_setopt(curl, CURLOPT_POST, 1L);
+            curl_easy_setopt(curl, CURLOPT_POSTFIELDS, body.c_str());
+        } else if (method == "DELETE") {
+            curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "DELETE");
+        }
+
+        CURLcode res = curl_easy_perform(curl);
+        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &resp.code);
+        curl_slist_free_all(hList);
+        curl_easy_cleanup(curl);
+
+        if (res != CURLE_OK) {
+            resp.error = curl_easy_strerror(res);
+        }
+        return resp;
+    }
+#endif
+
+    HttpResponse executeCurlCli(const std::string& method, const std::string& url, const std::vector<std::string>& headers, const std::string& body) {
+        HttpResponse resp;
+        std::string tempFile = "";
+        if (!body.empty()) {
+            char tpl[] = "/tmp/multiai_mgr_XXXXXX";
+            int fd = mkstemp(tpl);
+            if (fd < 0) {
+                char tpl2[] = "/data/local/tmp/multiai_mgr_XXXXXX";
+                fd = mkstemp(tpl2);
+                if (fd >= 0) tempFile = tpl2;
+            } else {
+                tempFile = tpl;
+            }
+            if (fd >= 0) {
+                ssize_t w = write(fd, body.data(), body.size());
+                (void)w;
+                close(fd);
+            }
+        }
+
+        std::string cmd = "curl -s -k -w \"\\n%{http_code}\" -X " + method;
+        for (const auto& h : headers) {
+            cmd += " -H \"" + h + "\"";
+        }
+        if (!tempFile.empty()) {
+            cmd += " --data-binary \"@" + tempFile + "\"";
+        }
+        cmd += " \"" + url + "\" 2>/dev/null";
+
+        FILE* fp = popen(cmd.c_str(), "r");
+        if (!tempFile.empty()) {
+            unlink(tempFile.c_str());
+        }
+        if (!fp) {
+            resp.error = "Failed to launch curl";
+            return resp;
+        }
+
+        std::string output;
+        char buf[4096];
+        while (fgets(buf, sizeof(buf), fp)) {
+            output += buf;
+        }
+        pclose(fp);
+
+        size_t lastNl = output.find_last_of('\n');
+        if (lastNl != std::string::npos) {
+            std::string codeStr = output.substr(lastNl + 1);
+            while (!codeStr.empty() && (codeStr.back() == '\r' || codeStr.back() == '\n' || codeStr.back() == ' ')) {
+                codeStr.pop_back();
+            }
+            try {
+                resp.code = std::stol(codeStr);
+                resp.body = output.substr(0, lastNl);
+            } catch (...) {
+                resp.body = output;
+            }
+        } else {
+            resp.body = output;
+        }
+
+        return resp;
+    }
+
+    std::vector<std::string> getAuthHeadersList(bool isJson = true) {
+        std::vector<std::string> headers;
+        if (isJson) {
+            headers.push_back("Content-Type: application/json");
+        }
         if (directSupabaseMode) {
             std::string sbKey = DEMANGLE(Secrets::SUPABASE_ANON_KEY);
-            headers = curl_slist_append(headers, ("apikey: " + sbKey).c_str());
-            headers = curl_slist_append(headers, ("Authorization: Bearer " + sbKey).c_str());
+            headers.push_back("apikey: " + sbKey);
+            headers.push_back("Authorization: Bearer " + sbKey);
         } else {
-            // Server API fast-path admin authentication
-            std::string bearer = "Authorization: Bearer " + password;
-            headers = curl_slist_append(headers, bearer.c_str());
-            std::string admKey = "X-Admin-Key: " + password;
-            headers = curl_slist_append(headers, admKey.c_str());
-
+            headers.push_back("Authorization: Bearer " + password);
+            headers.push_back("X-Admin-Key: " + password);
             if (!sessionCookie.empty()) {
-                std::string cHeader = "Cookie: " + sessionCookie;
-                headers = curl_slist_append(headers, cHeader.c_str());
+                headers.push_back("Cookie: " + sessionCookie);
             }
         }
         return headers;
+    }
+
+    HttpResponse performRequest(const std::string& method, const std::string& url, bool isJson = false, const std::string& body = "") {
+        auto headers = getAuthHeadersList(isJson);
+#if defined(USE_LIBCURL) && !defined(__ANDROID__)
+        return executeLibcurl(method, url, headers, body);
+#else
+        return executeCurlCli(method, url, headers, body);
+#endif
     }
 
 public:
@@ -82,7 +198,6 @@ public:
         : baseUrl(DEMANGLE(Secrets::DEFAULT_CLOUD_URL)),
           password(DEMANGLE(Secrets::DEFAULT_PASSWORD)),
           repoRoot(root) {
-        // Check if local .env has updated password
         auto env = loadLocalEnv();
         if (env.count("CLOUD_PASSWORD") && !env["CLOUD_PASSWORD"].empty()) {
             password = env["CLOUD_PASSWORD"];
@@ -111,47 +226,13 @@ public:
 
     std::vector<ChatSummary> listChats(std::string& errMsg) {
         std::vector<ChatSummary> list;
-        CURL* curl = curl_easy_init();
-        if (!curl) { errMsg = "Failed to initialize curl"; return list; }
+        std::string url = directSupabaseMode
+            ? (DEMANGLE(Secrets::SUPABASE_REST_URL) + "/chats?select=*&order=updated_at.desc")
+            : (baseUrl + DEMANGLE(Secrets::ENDPOINT_CHATS));
 
-        std::string url;
-        if (directSupabaseMode) {
-            url = DEMANGLE(Secrets::SUPABASE_REST_URL) + "/chats?select=*&order=updated_at.desc";
-        } else {
-            url = baseUrl + DEMANGLE(Secrets::ENDPOINT_CHATS);
-        }
-
-        std::string response;
-        struct curl_slist* headers = buildAuthHeaders(false);
-
-        curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeCallback);
-        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
-        curl_easy_setopt(curl, CURLOPT_TIMEOUT, 12L);
-        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
-
-        CURLcode res = curl_easy_perform(curl);
-        long httpCode = 0;
-        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &httpCode);
-        curl_slist_free_all(headers);
-        curl_easy_cleanup(curl);
-
-        if (res != CURLE_OK) {
-            errMsg = curl_easy_strerror(res);
-            // Fallback: try direct Supabase if server network fails
-            if (!directSupabaseMode) {
-                directSupabaseMode = true;
-                list = listChats(errMsg);
-                if (!list.empty()) return list;
-                directSupabaseMode = false;
-            }
-            return list;
-        }
-
-        if (httpCode >= 400) {
-            errMsg = "HTTP " + std::to_string(httpCode) + ": " + response;
-            // Fallback: try direct Supabase
+        HttpResponse resp = performRequest("GET", url, false);
+        if (resp.code >= 400 || !resp.error.empty()) {
+            errMsg = resp.error.empty() ? ("HTTP " + std::to_string(resp.code) + ": " + resp.body) : resp.error;
             if (!directSupabaseMode) {
                 directSupabaseMode = true;
                 list = listChats(errMsg);
@@ -162,41 +243,27 @@ public:
         }
 
         try {
-            auto val = json::parse(response);
+            auto val = json::parse(resp.body);
+            const json* arrPtr = nullptr;
             if (val.is_array()) {
-                // Direct Supabase array response
-                for (auto& item : val.as_array()) {
-                    if (item.is_object()) {
-                        auto& obj = item.as_object();
+                arrPtr = &val;
+            } else if (val.is_object() && val.contains("chats") && val["chats"].is_array()) {
+                arrPtr = &val["chats"];
+            }
+
+            if (arrPtr) {
+                for (const auto& obj : *arrPtr) {
+                    if (obj.is_object()) {
                         ChatSummary s;
-                        if (obj.contains("id") && obj["id"].is_string()) s.id = obj["id"].as_string().c_str();
-                        if (obj.contains("title") && obj["title"].is_string()) s.title = obj["title"].as_string().c_str();
-                        if (obj.contains("type") && obj["type"].is_string()) s.type = obj["type"].as_string().c_str();
-                        if (obj.contains("date_folder") && obj["date_folder"].is_string()) s.date_folder = obj["date_folder"].as_string().c_str();
-                        if (obj.contains("updated_at") && obj["updated_at"].is_string()) s.updated_at = obj["updated_at"].as_string().c_str();
-                        list.push_back(s);
-                    }
-                }
-            } else if (val.is_object() && val.as_object().contains("chats")) {
-                // Server API wrapper response
-                auto& arr = val.as_object()["chats"].as_array();
-                for (auto& item : arr) {
-                    if (item.is_object()) {
-                        auto& obj = item.as_object();
-                        ChatSummary s;
-                        if (obj.contains("id") && obj["id"].is_string()) s.id = obj["id"].as_string().c_str();
-                        if (obj.contains("title") && obj["title"].is_string()) s.title = obj["title"].as_string().c_str();
-                        if (obj.contains("type") && obj["type"].is_string()) s.type = obj["type"].as_string().c_str();
-
-                        if (obj.contains("date_folder") && obj["date_folder"].is_string()) s.date_folder = obj["date_folder"].as_string().c_str();
-                        else if (obj.contains("date") && obj["date"].is_string()) s.date_folder = obj["date"].as_string().c_str();
-
-                        if (obj.contains("updated_at") && obj["updated_at"].is_string()) s.updated_at = obj["updated_at"].as_string().c_str();
-                        else if (obj.contains("updatedAt") && obj["updatedAt"].is_string()) s.updated_at = obj["updatedAt"].as_string().c_str();
-
-                        if (obj.contains("message_count") && obj["message_count"].is_int64()) s.message_count = (int)obj["message_count"].as_int64();
-                        else if (obj.contains("messageCount") && obj["messageCount"].is_int64()) s.message_count = (int)obj["messageCount"].as_int64();
-
+                        if (obj.contains("id") && obj["id"].is_string()) s.id = obj["id"].get<std::string>();
+                        if (obj.contains("title") && obj["title"].is_string()) s.title = obj["title"].get<std::string>();
+                        if (obj.contains("type") && obj["type"].is_string()) s.type = obj["type"].get<std::string>();
+                        if (obj.contains("date_folder") && obj["date_folder"].is_string()) s.date_folder = obj["date_folder"].get<std::string>();
+                        else if (obj.contains("date") && obj["date"].is_string()) s.date_folder = obj["date"].get<std::string>();
+                        if (obj.contains("updated_at") && obj["updated_at"].is_string()) s.updated_at = obj["updated_at"].get<std::string>();
+                        else if (obj.contains("updatedAt") && obj["updatedAt"].is_string()) s.updated_at = obj["updatedAt"].get<std::string>();
+                        if (obj.contains("message_count") && obj["message_count"].is_number()) s.message_count = obj["message_count"].get<int>();
+                        else if (obj.contains("messageCount") && obj["messageCount"].is_number()) s.message_count = obj["messageCount"].get<int>();
                         list.push_back(s);
                     }
                 }
@@ -207,152 +274,76 @@ public:
         return list;
     }
 
-    static std::string formatJson(const json::value& jv, const std::string& indent = "") {
-        switch (jv.kind()) {
-            case json::kind::object: {
-                auto const& obj = jv.get_object();
-                if (obj.empty()) return "{}";
-                std::string out = "{\n";
-                size_t i = 0;
-                for (auto const& item : obj) {
-                    out += indent + "  \"" + std::string(item.key()) + "\": " + formatJson(item.value(), indent + "  ");
-                    if (++i < obj.size()) out += ",";
-                    out += "\n";
-                }
-                out += indent + "}";
-                return out;
-            }
-            case json::kind::array: {
-                auto const& arr = jv.get_array();
-                if (arr.empty()) return "[]";
-                std::string out = "[\n";
-                for (size_t i = 0; i < arr.size(); ++i) {
-                    out += indent + "  " + formatJson(arr[i], indent + "  ");
-                    if (i + 1 < arr.size()) out += ",";
-                    out += "\n";
-                }
-                out += indent + "]";
-                return out;
-            }
-            default:
-                return json::serialize(jv);
-        }
-    }
-
     bool getChat(const std::string& id, ChatDetail& detail, std::string& errMsg) {
-        CURL* curl = curl_easy_init();
-        if (!curl) { errMsg = "Failed to initialize curl"; return false; }
-
         if (directSupabaseMode) {
-            // 1. Get chat row
             std::string cUrl = DEMANGLE(Secrets::SUPABASE_REST_URL) + "/chats?id=eq." + id + "&select=*";
-            std::string cResp;
-            struct curl_slist* h = buildAuthHeaders(false);
-
-            curl_easy_setopt(curl, CURLOPT_URL, cUrl.c_str());
-            curl_easy_setopt(curl, CURLOPT_HTTPHEADER, h);
-            curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeCallback);
-            curl_easy_setopt(curl, CURLOPT_WRITEDATA, &cResp);
-            curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
-            CURLcode res = curl_easy_perform(curl);
-
-            // 2. Get messages
+            auto cResp = performRequest("GET", cUrl);
             std::string mUrl = DEMANGLE(Secrets::SUPABASE_REST_URL) + "/chat_messages?chat_id=eq." + id + "&select=*&order=id.asc";
-            std::string mResp;
-            curl_easy_setopt(curl, CURLOPT_URL, mUrl.c_str());
-            curl_easy_setopt(curl, CURLOPT_WRITEDATA, &mResp);
-            res = curl_easy_perform(curl);
-            curl_slist_free_all(h);
-            curl_easy_cleanup(curl);
-
-            if (res != CURLE_OK) { errMsg = curl_easy_strerror(res); return false; }
-
+            auto mResp = performRequest("GET", mUrl);
+            if (mResp.code != 200) { errMsg = "HTTP " + std::to_string(mResp.code) + ": " + mResp.body; return false; }
             detail.id = id;
             try {
-                auto mVal = json::parse(mResp);
-                detail.raw_json = formatJson(mVal);
+                auto mVal = json::parse(mResp.body);
+                detail.raw_json = mVal.dump(2);
                 if (mVal.is_array()) {
-                    for (auto& item : mVal.as_array()) {
-                        if (item.is_object()) {
-                            auto& obj = item.as_object();
+                    for (const auto& obj : mVal) {
+                        if (obj.is_object()) {
                             ChatMessage msg;
-                            if (obj.contains("role") && obj["role"].is_string()) msg.role = obj["role"].as_string().c_str();
+                            if (obj.contains("role") && obj["role"].is_string()) msg.role = obj["role"].get<std::string>();
                             if (obj.contains("content")) {
-                                if (obj["content"].is_string()) msg.content = obj["content"].as_string().c_str();
-                                else msg.content = json::serialize(obj["content"]);
+                                if (obj["content"].is_string()) msg.content = obj["content"].get<std::string>();
+                                else msg.content = obj["content"].dump();
                             }
-                            if (obj.contains("created_at") && obj["created_at"].is_string()) msg.timestamp = obj["created_at"].as_string().c_str();
+                            if (obj.contains("created_at") && obj["created_at"].is_string()) msg.timestamp = obj["created_at"].get<std::string>();
                             detail.messages.push_back(msg);
                         }
                     }
                 }
                 return true;
             } catch (const std::exception& e) {
-                detail.raw_json = mResp;
+                detail.raw_json = mResp.body;
                 errMsg = e.what();
                 return false;
             }
         }
 
-        // Server API route
         std::string url = baseUrl + DEMANGLE(Secrets::ENDPOINT_CHATS) + "/" + id;
-        std::string response;
-        struct curl_slist* headers = buildAuthHeaders(false);
-
-        curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeCallback);
-        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
-        curl_easy_setopt(curl, CURLOPT_TIMEOUT, 15L);
-        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
-
-        CURLcode res = curl_easy_perform(curl);
-        long code = 0;
-        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &code);
-        curl_slist_free_all(headers);
-        curl_easy_cleanup(curl);
-
-        if (res != CURLE_OK || code >= 400) {
-            errMsg = (res != CURLE_OK) ? curl_easy_strerror(res) : ("HTTP " + std::to_string(code) + ": " + response);
+        auto resp = performRequest("GET", url);
+        if (resp.code != 200) {
+            errMsg = resp.error.empty() ? ("HTTP " + std::to_string(resp.code) + ": " + resp.body) : resp.error;
             return false;
         }
-
         try {
-            auto val = json::parse(response);
+            auto val = json::parse(resp.body);
             if (val.is_object()) {
-                auto& rootObj = val.as_object();
-                auto* objPtr = &rootObj;
-                if (rootObj.contains("session") && rootObj["session"].is_object()) {
-                    objPtr = &rootObj["session"].as_object();
+                const json* objPtr = &val;
+                if (val.contains("session") && val["session"].is_object()) {
+                    objPtr = &val["session"];
                 }
-                detail.raw_json = formatJson(*objPtr);
-                auto& obj = *objPtr;
+                detail.raw_json = objPtr->dump(2);
+                const auto& obj = *objPtr;
                 detail.id = id;
-                if (obj.contains("title") && obj["title"].is_string()) detail.title = obj["title"].as_string().c_str();
-                if (obj.contains("type") && obj["type"].is_string()) detail.type = obj["type"].as_string().c_str();
-                if (obj.contains("date") && obj["date"].is_string()) detail.date_folder = obj["date"].as_string().c_str();
-
+                if (obj.contains("title") && obj["title"].is_string()) detail.title = obj["title"].get<std::string>();
+                if (obj.contains("type") && obj["type"].is_string()) detail.type = obj["type"].get<std::string>();
+                if (obj.contains("date") && obj["date"].is_string()) detail.date_folder = obj["date"].get<std::string>();
                 if (obj.contains("meta") && obj["meta"].is_object()) {
-                    auto& m = obj["meta"].as_object();
-                    if (detail.title.empty() && m.contains("title") && m["title"].is_string()) {
-                        detail.title = m["title"].as_string().c_str();
-                    }
-                    if (m.contains("updatedAt") && m["updatedAt"].is_string()) detail.updated_at = m["updatedAt"].as_string().c_str();
+                    const auto& m = obj["meta"];
+                    if (detail.title.empty() && m.contains("title") && m["title"].is_string()) detail.title = m["title"].get<std::string>();
+                    if (m.contains("updatedAt") && m["updatedAt"].is_string()) detail.updated_at = m["updatedAt"].get<std::string>();
                 }
                 if (obj.contains("messages") && obj["messages"].is_array()) {
-                    for (auto& mVal : obj["messages"].as_array()) {
-                        if (mVal.is_object()) {
-                            auto& mObj = mVal.as_object();
+                    for (const auto& mObj : obj["messages"]) {
+                        if (mObj.is_object()) {
                             ChatMessage msg;
-                            if (mObj.contains("role") && mObj["role"].is_string()) msg.role = mObj["role"].as_string().c_str();
+                            if (mObj.contains("role") && mObj["role"].is_string()) msg.role = mObj["role"].get<std::string>();
                             if (mObj.contains("content")) {
-                                if (mObj["content"].is_string()) msg.content = mObj["content"].as_string().c_str();
-                                else msg.content = json::serialize(mObj["content"]);
+                                if (mObj["content"].is_string()) msg.content = mObj["content"].get<std::string>();
+                                else msg.content = mObj["content"].dump();
                             }
-                            if (mObj.contains("model") && mObj["model"].is_string()) msg.model = mObj["model"].as_string().c_str();
+                            if (mObj.contains("model") && mObj["model"].is_string()) msg.model = mObj["model"].get<std::string>();
                             if (mObj.contains("timestamp")) {
-                                if (mObj["timestamp"].is_string()) msg.timestamp = mObj["timestamp"].as_string().c_str();
-                                else if (mObj["timestamp"].is_int64()) msg.timestamp = std::to_string(mObj["timestamp"].as_int64());
+                                if (mObj["timestamp"].is_string()) msg.timestamp = mObj["timestamp"].get<std::string>();
+                                else if (mObj["timestamp"].is_number()) msg.timestamp = std::to_string(mObj["timestamp"].get<int64_t>());
                             }
                             detail.messages.push_back(msg);
                         }
@@ -361,109 +352,66 @@ public:
                 return true;
             }
         } catch (const std::exception& e) {
-            detail.raw_json = response;
+            detail.raw_json = resp.body;
             errMsg = e.what();
         }
         return false;
     }
 
     bool saveChatRaw(const std::string& rawJson, std::string& errMsg) {
-        CURL* curl = curl_easy_init();
-        if (!curl) { errMsg = "Failed to initialize curl"; return false; }
-
         std::string payload = rawJson;
         try {
             auto val = json::parse(rawJson);
-            if (val.is_object() && val.as_object().contains("session") && val.as_object()["session"].is_object()) {
-                payload = json::serialize(val.as_object()["session"]);
+            if (val.is_object() && val.contains("session") && val["session"].is_object()) {
+                payload = val["session"].dump();
             }
         } catch (...) {}
-
         std::string url = baseUrl + DEMANGLE(Secrets::ENDPOINT_CHATS_SAVE);
-        std::string response;
-        struct curl_slist* headers = buildAuthHeaders(true);
-
-        curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-        curl_easy_setopt(curl, CURLOPT_POST, 1L);
-        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, payload.c_str());
-        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeCallback);
-        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
-        curl_easy_setopt(curl, CURLOPT_TIMEOUT, 15L);
-        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
-
-        CURLcode res = curl_easy_perform(curl);
-        long code = 0;
-        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &code);
-        curl_slist_free_all(headers);
-        curl_easy_cleanup(curl);
-
-        if (res != CURLE_OK) { errMsg = curl_easy_strerror(res); return false; }
-        return (code == 200);
+        auto resp = performRequest("POST", url, true, payload);
+        if (resp.code != 200) { errMsg = resp.error.empty() ? ("HTTP " + std::to_string(resp.code) + ": " + resp.body) : resp.error; return false; }
+        return true;
     }
 
     bool deleteChat(const std::string& id, std::string& errMsg) {
-        CURL* curl = curl_easy_init();
-        if (!curl) { errMsg = "Failed to initialize curl"; return false; }
-
-        std::string url;
-        if (directSupabaseMode) {
-            url = DEMANGLE(Secrets::SUPABASE_REST_URL) + "/chats?id=eq." + id;
-        } else {
-            url = baseUrl + DEMANGLE(Secrets::ENDPOINT_CHATS) + "/" + id;
+        std::string url = directSupabaseMode
+            ? (DEMANGLE(Secrets::SUPABASE_REST_URL) + "/chats?id=eq." + id)
+            : (baseUrl + DEMANGLE(Secrets::ENDPOINT_CHATS) + "/" + id);
+        auto resp = performRequest("DELETE", url, false);
+        if (resp.code != 200 && resp.code != 204) {
+            errMsg = resp.error.empty() ? ("HTTP " + std::to_string(resp.code) + ": " + resp.body) : resp.error;
+            return false;
         }
-
-        std::string response;
-        struct curl_slist* headers = buildAuthHeaders(false);
-
-        curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-        curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "DELETE");
-        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeCallback);
-        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
-        curl_easy_setopt(curl, CURLOPT_TIMEOUT, 15L);
-        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
-
-        CURLcode res = curl_easy_perform(curl);
-        long code = 0;
-        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &code);
-        curl_slist_free_all(headers);
-        curl_easy_cleanup(curl);
-
-        if (res != CURLE_OK) { errMsg = curl_easy_strerror(res); return false; }
-        return (code == 200 || code == 204);
+        return true;
     }
 
     std::map<std::string, std::string> loadLocalEnv() {
-        std::map<std::string, std::string> envMap;
+        std::map<std::string, std::string> env;
         std::string envPath = repoRoot + "/" + DEMANGLE(Secrets::ENV_FILE);
         std::ifstream file(envPath);
-        if (!file.is_open()) return envMap;
+        if (!file.is_open()) return env;
 
         std::string line;
         while (std::getline(file, line)) {
+            if (line.empty() || line[0] == '#') continue;
             size_t eq = line.find('=');
-            if (eq != std::string::npos && line[0] != '#') {
+            if (eq != std::string::npos) {
                 std::string k = line.substr(0, eq);
                 std::string v = line.substr(eq + 1);
-                while (!k.empty() && isspace(k.back())) k.pop_back();
-                while (!k.empty() && isspace(k.front())) k.erase(0, 1);
-                while (!v.empty() && isspace(v.back())) v.pop_back();
-                while (!v.empty() && isspace(v.front())) v.erase(0, 1);
-                if (!k.empty()) envMap[k] = v;
+                while (!k.empty() && (k.back() == ' ' || k.back() == '\t')) k.pop_back();
+                while (!v.empty() && (v.front() == ' ' || v.front() == '\t' || v.front() == '"')) v.erase(v.begin());
+                while (!v.empty() && (v.back() == ' ' || v.back() == '\t' || v.back() == '"' || v.back() == '\r')) v.pop_back();
+                env[k] = v;
             }
         }
-        return envMap;
+        return env;
     }
 
-    bool saveLocalEnv(const std::map<std::string, std::string>& envMap, std::string& errMsg) {
+    bool saveLocalEnv(const std::map<std::string, std::string>& env, std::string& errMsg) {
         std::string envPath = repoRoot + "/" + DEMANGLE(Secrets::ENV_FILE);
         std::ofstream file(envPath);
         if (!file.is_open()) { errMsg = "Cannot write to " + envPath; return false; }
-
-        file << "# MultiAI Master Environment & API Key Registry\n";
-        for (const auto& [k, v] : envMap) {
-            file << k << "=" << v << "\n";
+        for (const auto& [k, v] : env) {
+            file << k << "=\"" << v << "\"\n";
         }
         return true;
     }
