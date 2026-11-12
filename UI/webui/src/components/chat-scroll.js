@@ -63,8 +63,8 @@ function pullTick(now) {
     const maxScroll = Math.max(0, chat.scrollHeight - chat.clientHeight);
     const diff = maxScroll - current;
 
-    // Subpixel landing check: finish cleanly at bottom
-    if (Math.abs(diff) <= 0.8) {
+    // Subpixel landing check: finish cleanly at bottom without micro-oscillations
+    if (Math.abs(diff) <= 1.5) {
         if (current !== maxScroll) {
             isProgrammaticScroll = true;
             chat.scrollTop = maxScroll;

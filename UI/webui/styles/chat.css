@@ -20,14 +20,7 @@
     line-height: 1.6;
     word-wrap: break-word;
     overflow-wrap: anywhere;
-    content-visibility: auto;
-    contain-intrinsic-size: auto none auto 120px;
-}
-
-@supports not (content-visibility: auto) {
-    .message {
-        contain: layout style;
-    }
+    contain: style;
 }
 
 /* Restrict entrance animation to latest/streaming message, avoiding concurrent animations on 50+ items */

@@ -40,6 +40,10 @@
 * **Reasoning Stream Continuity & TCP Low-Latency Streaming**:
   * Removed premature active-stream collapsing in `formatThoughtHtml()`, allowing live reasoning thoughts to remain fully visible as they stream without disappearing into a 160px clamped overflow. Huge thoughts are now wrapped cleanly into collapsible cards once finalized.
   * Enabled TCP `setNoDelay(true)` and immediate header flushing on SSE stream response sockets in `base.js` and `routes/chat.js` to eliminate OS-level Nagle packet buffering during real-time token delivery.
+* **Eliminated Micro-Shaking & Vertical Jitter on Badges & Elements**:
+  * Replaced `content-visibility: auto` on `.message` with stable CSS style containment (`contain: style;`). In chat layouts with highly variable message heights, `content-visibility: auto` dynamically swapped off-screen turns between placeholder sizes and rendered heights, creating an infinite scroll oscillation feedback loop against smooth auto-scrolling.
+  * Increased subpixel landing threshold in `chat-scroll.js` from `0.8px` to `1.5px`, eliminating subpixel ping-pong oscillations on displays with non-integer scaling ratios (125%, 150%, Retina).
+  * Replaced vertical `popIn` (`translateY(8px)`) animation on `.search-badge-item` with a clean opacity fade (`fadeIn 0.2s ease-out`), preventing tool call badges and status chips from hopping up and down as they render.
 * **Inline Dynamic Streaming Cursor**:
   * Upgraded streaming mode in `StreamBatchRenderer` to attach the blinking cursor directly inline at the tip of the actively generating leaf element (paragraphs, lists, blockquotes, and code blocks), so the cursor moves naturally with the streaming words instead of sitting on a static line at the bottom.
   * Styled `.blinking-cursor` with proportional `1.15em` height and `-0.15em` baseline alignment to match font sizes seamlessly across prose, headings, and code snippets.
