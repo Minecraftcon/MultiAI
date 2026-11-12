@@ -22,7 +22,7 @@ const { handleBuildAgentRoute } = require("./routes/build_agent");
 const { handleMcpRoute } = require("./routes/mcp");
 const { handleHistoryRoute } = require("./routes/history");
 const { handleCloudToolsRoute } = require("./routes/cloud_tools");
-const { isAuthenticated, handleLogin, handleAuthCheck, renderLockPage } = require("./auth");
+const { isAuthenticated, handleLogin, handleAuthCheck, handleCaptchaEndpoint, renderLockPage } = require("./auth");
 const { sendJSON } = require("./utils");
 
 async function routeRequest(req, res) {
@@ -44,6 +44,9 @@ async function routeRequest(req, res) {
         }
         if (req.method === "GET" && reqUrl === "/api/auth/check") {
             return handleAuthCheck(req, res);
+        }
+        if (req.method === "GET" && reqUrl === "/api/auth/captcha") {
+            return handleCaptchaEndpoint(req, res);
         }
 
         // Security Barrier: Check if session is authenticated
