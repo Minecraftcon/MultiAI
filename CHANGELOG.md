@@ -33,4 +33,8 @@
   * Implemented adaptive ~32ms (~30 FPS) throttling in `StreamBatchRenderer.append()` so markdown parsing does not bottleneck mobile CPUs during high token-rate bursts, while preserving immediate synchronous execution on stream completion.
   * Eliminated redundant full-document `parseMarkdown()` re-computations inside `updateAIStream` during active streaming chunks.
   * Added table detection guards to `wrapTablesForScroll()` to bypass DOM queries when streams lack tables.
+* **Stream Model Response & Reasoning Settings**:
+  * Exposed dedicated **Stream Model Responses** (`StreamResponse`) switch under **Settings ➔ Models & AI ➔ Inference Tuning** to toggle real-time token streaming on or off.
+  * Connected **Stream Reasoning & Thinking** (`StreamReasoning`) directly to SSE stream delta aggregation in `chat-client.js` so reasoning thoughts can stream or only render upon completion.
+  * Added `StreamResponse` to system default configuration schemas across `config_manager.js`, `config.ini`, and UI settings auto-save.
 

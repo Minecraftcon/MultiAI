@@ -23,6 +23,7 @@ const DEFAULT_CONFIG = {
         MaxToolRounds: 0,
         MaxToolsPerRound: 10,
         AutoScroll: true,
+        StreamResponse: true,
         StreamReasoning: false,
         TurnTimeoutSeconds: 120,
         Temperature: 0.7,

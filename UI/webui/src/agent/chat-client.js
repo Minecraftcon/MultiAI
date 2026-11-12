@@ -151,15 +151,19 @@ export async function callChatModel(messages, { model, tools, signal, onChunk } 
                     const reasoningDelta = delta.reasoning_content || delta.reasoning || "";
                     if (reasoningDelta) {
                         accumulatedReasoning += reasoningDelta;
-                        const fullDisplay = `<think>\n${accumulatedReasoning}\n</think>\n\n${accumulatedContent}`;
-                        if (onChunk) onChunk(reasoningDelta, fullDisplay);
+                        const isReasoningStreamEnabled = state.config?.Agent?.StreamReasoning !== false;
+                        if (isReasoningStreamEnabled && onChunk) {
+                            const fullDisplay = `<think>\n${accumulatedReasoning}\n</think>\n\n${accumulatedContent}`;
+                            onChunk(reasoningDelta, fullDisplay);
+                        }
                     }
 
                     // 2. Content delta
                     const contentDelta = delta.content || (typeof delta.text === "string" ? delta.text : "");
                     if (contentDelta) {
                         accumulatedContent += contentDelta;
-                        const fullDisplay = accumulatedReasoning
+                        const isReasoningStreamEnabled = state.config?.Agent?.StreamReasoning !== false;
+                        const fullDisplay = (accumulatedReasoning && isReasoningStreamEnabled)
                             ? `<think>\n${accumulatedReasoning}\n</think>\n\n${accumulatedContent}`
                             : accumulatedContent;
                         if (onChunk) onChunk(contentDelta, fullDisplay);

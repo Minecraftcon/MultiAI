@@ -174,6 +174,9 @@ export function populateSettingsValues() {
     if (tempSlider) tempSlider.value = storedTemp;
     if (tempVal) tempVal.textContent = parseFloat(storedTemp).toFixed(2);
 
+    const streamResponse = document.getElementById("cfgStreamResponse");
+    if (streamResponse) streamResponse.checked = agent.StreamResponse !== false;
+
     const streamReasoning = document.getElementById("cfgStreamReasoning");
     if (streamReasoning) streamReasoning.checked = Boolean(agent.StreamReasoning);
 
@@ -546,6 +549,13 @@ export function initSettingsView() {
         });
     }
 
+    const streamResponse = document.getElementById("cfgStreamResponse");
+    if (streamResponse) {
+        streamResponse.addEventListener("change", (e) => {
+            saveSetting("Agent", "StreamResponse", e.target.checked);
+        });
+    }
+
     const streamReasoning = document.getElementById("cfgStreamReasoning");
     if (streamReasoning) {
         streamReasoning.addEventListener("change", (e) => {
@@ -824,6 +834,7 @@ export function initSettingsView() {
                         MaxToolRounds: 0,
                         MaxToolsPerRound: 10,
                         AutoScroll: true,
+                        StreamResponse: true,
                         StreamReasoning: false,
                         TurnTimeoutSeconds: 120
                     },

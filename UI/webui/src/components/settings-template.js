@@ -141,6 +141,17 @@ export function getSettingsHTML() {
 
                         <div class="settings-row">
                             <div class="settings-item-info">
+                                <span class="settings-item-title">Stream Model Responses</span>
+                                <span class="settings-item-desc">Stream assistant response tokens in real-time</span>
+                            </div>
+                            <label class="settings-switch">
+                                <input type="checkbox" id="cfgStreamResponse" checked>
+                                <span class="settings-slider"></span>
+                            </label>
+                        </div>
+
+                        <div class="settings-row">
+                            <div class="settings-item-info">
                                 <span class="settings-item-title">Stream Reasoning & Thinking</span>
                                 <span class="settings-item-desc">Display real-time thinking process and thoughts collapsible card</span>
                             </div>
