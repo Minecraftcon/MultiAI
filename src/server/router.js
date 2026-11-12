@@ -27,11 +27,22 @@ const { sendJSON } = require("./utils");
 
 async function routeRequest(req, res) {
     try {
+        // Enforce baseline HTTP security headers on all responses
+        res.setHeader("X-Content-Type-Options", "nosniff");
+        res.setHeader("X-Frame-Options", "DENY");
+        res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+        res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+
+        const origin = req.headers.origin;
+        const host = req.headers.host;
+        const isSameOrigin = !origin || (host && origin.includes(host));
+
         if (req.method === "OPTIONS") {
             res.writeHead(204, {
-                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Origin": isSameOrigin && origin ? origin : "null",
                 "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-                "Access-Control-Allow-Headers": "Content-Type, Range, Authorization, X-Chat-ID"
+                "Access-Control-Allow-Headers": "Content-Type, Range, Authorization, X-Chat-ID",
+                "Access-Control-Allow-Credentials": "true"
             });
             return res.end();
         }
@@ -55,17 +66,23 @@ async function routeRequest(req, res) {
             if (reqUrl.startsWith("/api/")) {
                 return sendJSON(res, 401, { error: "Authentication required. Please unlock with master security password." });
             }
-            // For static HTML page request, serve the Security Checkpoint Lock Page
-            if (reqUrl === "/" || reqUrl === "/index.html" || reqUrl === "/modular") {
+
+            // Allowed static resource prefixes needed strictly for the login page assets
+            const isAuthStaticAsset = reqUrl.startsWith("/styles/") ||
+                                      reqUrl.startsWith("/vendor/") ||
+                                      reqUrl === "/favicon.ico";
+
+            // If not an allowed static asset, serve the Security Checkpoint Lock Page for ANY requested path
+            if (!isAuthStaticAsset) {
                 const html = renderLockPage();
                 res.writeHead(200, {
                     "Content-Type": "text/html; charset=utf-8",
                     "Content-Length": Buffer.byteLength(html),
-                    "Cache-Control": "no-store, no-cache, must-revalidate"
+                    "Cache-Control": "no-store, no-cache, must-revalidate",
+                    "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob:;"
                 });
                 return res.end(html);
             }
-            // Other static assets (css, js, favicon) pass through so lock page styles load cleanly
         }
 
         // System info & config

@@ -23,6 +23,17 @@ const loginAttempts = new Map();
 const MAX_ATTEMPTS = 5;
 const WINDOW_MS = 60 * 1000;       // 1 minute window
 const LOCKOUT_MS = 5 * 60 * 1000;  // 5 minutes lockout if exceeded
+const MAX_TRACKED_IPS = 1000;      // Bound memory to prevent map exhaustion DoS
+
+// Periodic cleanup of stale rate limit entries every 60 seconds
+setInterval(() => {
+    const now = Date.now();
+    for (const [ip, record] of loginAttempts.entries()) {
+        if (now > record.resetTime && (!record.lockedUntil || now > record.lockedUntil)) {
+            loginAttempts.delete(ip);
+        }
+    }
+}, 60 * 1000).unref();
 
 // In-memory challenge store for lightweight math CAPTCHA (id -> { answer, expiresAt })
 const captchaChallenges = new Map();
@@ -64,15 +75,29 @@ function handleCaptchaEndpoint(req, res) {
 }
 
 function getClientIp(req) {
-    return req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
-           req.socket?.remoteAddress ||
-           "unknown";
+    // Cloudflare sets CF-Connecting-IP, which cannot be spoofed by client headers
+    if (req.headers["cf-connecting-ip"]) {
+        return String(req.headers["cf-connecting-ip"]).trim();
+    }
+    // If behind reverse proxy without CF, take the last hop in X-Forwarded-For (proxy appended)
+    const xff = req.headers["x-forwarded-for"];
+    if (xff) {
+        const parts = xff.split(",");
+        const lastHop = parts[parts.length - 1]?.trim();
+        if (lastHop) return lastHop;
+    }
+    return req.socket?.remoteAddress || "unknown";
 }
 
 function checkRateLimit(ip) {
     const now = Date.now();
     let record = loginAttempts.get(ip);
     if (!record || now > record.resetTime) {
+        if (loginAttempts.size >= MAX_TRACKED_IPS) {
+            // Evict oldest entry if capacity reached
+            const firstKey = loginAttempts.keys().next().value;
+            if (firstKey) loginAttempts.delete(firstKey);
+        }
         record = { count: 0, resetTime: now + WINDOW_MS, lockedUntil: 0 };
         loginAttempts.set(ip, record);
     }
@@ -149,7 +174,18 @@ function handleLogin(req, res) {
     }
 
     let body = "";
-    req.on("data", chunk => { body += chunk; });
+    let bodyLength = 0;
+    const MAX_LOGIN_BODY_BYTES = 4096; // 4KB bound
+
+    req.on("data", chunk => {
+        bodyLength += chunk.length;
+        if (bodyLength > MAX_LOGIN_BODY_BYTES) {
+            req.destroy();
+            return sendJSON(res, 413, { error: "Payload too large" });
+        }
+        body += chunk;
+    });
+
     req.on("end", () => {
         try {
             const data = JSON.parse(body || "{}");
@@ -185,7 +221,7 @@ function handleLogin(req, res) {
                     "Set-Cookie": cookieHeader,
                     "Content-Type": "application/json"
                 });
-                return res.end(JSON.stringify({ success: true, token }));
+                return res.end(JSON.stringify({ success: true }));
             } else {
                 recordFailedAttempt(ip);
                 return sendJSON(res, 401, {

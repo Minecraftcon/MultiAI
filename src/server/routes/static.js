@@ -24,22 +24,36 @@ function handleStatic(req, res) {
     const defaultWebRoot = path.join(__dirname, "../../../UI/webui");
     const legacyWebRoot = path.join(__dirname, "../../../client");
     const webRoot = fs.existsSync(defaultWebRoot) ? defaultWebRoot : legacyWebRoot;
+
+    // Disallow hidden files or dotfiles (e.g. .git, .env, .gitignore)
+    if (reqPath.includes("/.") || reqPath.startsWith("/.")) {
+        res.writeHead(404);
+        return res.end("Not found");
+    }
+
     let filePath = "";
     if (reqPath === "/" || reqPath === "/index.html" || reqPath === "/modular") {
         filePath = path.join(webRoot, "index.html");
     } else if (reqPath.startsWith("/styles/") || reqPath.startsWith("/src/") || reqPath.startsWith("/scripts/") || reqPath.startsWith("/vendor/")) {
         filePath = path.join(webRoot, reqPath);
-    } else if (fs.existsSync(path.join(webRoot, reqPath)) && !fs.statSync(path.join(webRoot, reqPath)).isDirectory()) {
-        filePath = path.join(webRoot, reqPath);
-    } else if (fs.existsSync(path.join(process.cwd(), reqPath)) && !fs.statSync(path.join(process.cwd(), reqPath)).isDirectory()) {
-        filePath = path.join(process.cwd(), reqPath);
-    } else if (fs.existsSync(path.join(__dirname, "../../..", reqPath)) && !fs.statSync(path.join(__dirname, "../../..", reqPath)).isDirectory()) {
-        filePath = path.join(__dirname, "../../..", reqPath);
     } else {
-        filePath = path.join(webRoot, "index.html");
+        const potentialPath = path.join(webRoot, reqPath);
+        // Strictly serve files that exist inside webRoot only (never process.cwd() or repo root)
+        if (fs.existsSync(potentialPath) && !fs.statSync(potentialPath).isDirectory()) {
+            filePath = potentialPath;
+        } else {
+            filePath = path.join(webRoot, "index.html");
+        }
     }
 
-    fs.readFile(filePath, (err, data) => {
+    // Verify resolved path strictly starts with webRoot
+    const resolvedPath = path.resolve(filePath);
+    if (!resolvedPath.startsWith(path.resolve(webRoot))) {
+        res.writeHead(403);
+        return res.end("Forbidden");
+    }
+
+    fs.readFile(resolvedPath, (err, data) => {
         if (err) {
             res.writeHead(404);
             return res.end("Not found");
