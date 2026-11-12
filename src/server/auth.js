@@ -24,6 +24,45 @@ const MAX_ATTEMPTS = 5;
 const WINDOW_MS = 60 * 1000;       // 1 minute window
 const LOCKOUT_MS = 5 * 60 * 1000;  // 5 minutes lockout if exceeded
 
+// In-memory challenge store for lightweight math CAPTCHA (id -> { answer, expiresAt })
+const captchaChallenges = new Map();
+const CAPTCHA_TTL_MS = 3 * 60 * 1000; // 3 minutes
+
+function generateCaptcha() {
+    // Clean up expired captchas
+    const now = Date.now();
+    for (const [id, c] of captchaChallenges.entries()) {
+        if (now > c.expiresAt) captchaChallenges.delete(id);
+    }
+
+    const a = Math.floor(Math.random() * 12) + 2;
+    const b = Math.floor(Math.random() * 9) + 1;
+    const isAdd = Math.random() > 0.4;
+    const question = isAdd ? `${a} + ${b}` : `${Math.max(a, b)} - ${Math.min(a, b)}`;
+    const answer = String(isAdd ? a + b : Math.max(a, b) - Math.min(a, b));
+    const id = crypto.randomBytes(16).toString("hex");
+
+    captchaChallenges.set(id, { answer, expiresAt: now + CAPTCHA_TTL_MS });
+    return { id, question };
+}
+
+function verifyCaptcha(id, userInput) {
+    if (!id || typeof userInput === "undefined") return false;
+    const record = captchaChallenges.get(id);
+    if (!record) return false;
+    captchaChallenges.delete(id); // Single use
+    if (Date.now() > record.expiresAt) return false;
+    return String(userInput).trim() === record.answer;
+}
+
+function handleCaptchaEndpoint(req, res) {
+    const captcha = generateCaptcha();
+    return sendJSON(res, 200, {
+        id: captcha.id,
+        question: captcha.question
+    });
+}
+
 function getClientIp(req) {
     return req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
            req.socket?.remoteAddress ||
@@ -115,10 +154,21 @@ function handleLogin(req, res) {
         try {
             const data = JSON.parse(body || "{}");
             const submittedPass = String(data.password || "").trim();
+            const captchaId = String(data.captchaId || "").trim();
+            const captchaAnswer = String(data.captchaAnswer || "").trim();
 
             if (!PASSWORD) {
                 return sendJSON(res, 503, {
                     error: "Server configuration error: CLOUD_PASSWORD is not configured on this instance."
+                });
+            }
+
+            // Verify CAPTCHA challenge
+            if (!verifyCaptcha(captchaId, captchaAnswer)) {
+                recordFailedAttempt(ip);
+                return sendJSON(res, 400, {
+                    error: "Invalid or expired verification challenge. Please try again.",
+                    needNewCaptcha: true
                 });
             }
 
@@ -138,10 +188,13 @@ function handleLogin(req, res) {
                 return res.end(JSON.stringify({ success: true, token }));
             } else {
                 recordFailedAttempt(ip);
-                return sendJSON(res, 401, { error: "Invalid security key. Access denied." });
+                return sendJSON(res, 401, {
+                    error: "Invalid security key. Access denied.",
+                    needNewCaptcha: true
+                });
             }
         } catch (e) {
-            return sendJSON(res, 400, { error: "Malformed request" });
+            return sendJSON(res, 400, { error: "Malformed request", needNewCaptcha: true });
         }
     });
 }
@@ -159,25 +212,24 @@ function renderLockPage() {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MultiAI Cloud Security Gate</title>
+    <title>Login</title>
     <style>
         :root {
-            --mono-bg: #111215;
-            --mono-surface: #18191f;
-            --mono-surface-hover: #1e2027;
-            --mono-field: #22242c;
-            --mono-field-focus: #282a34;
+            --mono-bg: #0c0d10;
+            --mono-surface: #14151a;
+            --mono-surface-hover: #1a1c23;
+            --mono-field: #1b1d24;
+            --mono-field-focus: #21242e;
             --mono-border: rgba(255, 255, 255, 0.08);
-            --mono-border-focus: rgba(255, 255, 255, 0.22);
+            --mono-border-focus: rgba(255, 255, 255, 0.28);
             --mono-text: #f3f4f6;
             --mono-muted: #8b909f;
             --mono-dim: #5a5f70;
             --mono-btn-bg: #ededed;
-            --mono-btn-text: #111215;
+            --mono-btn-text: #0c0d10;
             --mono-btn-hover: #ffffff;
             --mono-error: #f87171;
-            --font-ui: "Plus Jakarta Sans", "SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-            --font-mono: "JetBrains Mono", "SF Mono", ui-monospace, monospace;
+            --font-ui: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -231,53 +283,22 @@ function renderLockPage() {
             position: relative;
             z-index: 10;
             width: 100%;
-            max-width: 370px;
+            max-width: 360px;
         }
 
         /* Minimalist Elevated Bento Card */
         .login-card {
             background: var(--mono-surface);
             border: 1px solid var(--mono-border);
-            border-radius: 14px;
-            padding: 34px 28px;
+            border-radius: 12px;
+            padding: 34px 26px;
             box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
-            transition: border-color 0.2s ease;
         }
 
         /* Header block */
-        .brand-header {
-            text-align: center;
-            margin-bottom: 28px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-
-        .brand-icon {
-            width: 44px;
-            height: 44px;
-            border-radius: 10px;
-            background: var(--mono-field);
-            border: 1px solid var(--mono-border);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin-bottom: 14px;
-            color: var(--mono-text);
-        }
-
-        .brand-badge {
-            display: inline-block;
-            font-size: 11px;
-            font-family: var(--font-mono);
-            letter-spacing: 0.04em;
-            padding: 2px 7px;
-            background: rgba(255, 255, 255, 0.05);
-            color: var(--mono-muted);
-            border: 1px solid var(--mono-border);
-            border-radius: 4px;
-            margin-bottom: 8px;
-            text-transform: uppercase;
+        .header-block {
+            text-align: left;
+            margin-bottom: 26px;
         }
 
         h1 {
@@ -285,7 +306,7 @@ function renderLockPage() {
             font-weight: 600;
             letter-spacing: -0.02em;
             color: var(--mono-text);
-            margin-bottom: 4px;
+            margin-bottom: 6px;
         }
 
         .subtitle {
@@ -298,17 +319,16 @@ function renderLockPage() {
         form {
             display: flex;
             flex-direction: column;
-            gap: 16px;
+            gap: 14px;
         }
 
-        /* Borderless Filled Field with floating label logic */
         .field-box {
             position: relative;
             background: var(--mono-field);
             border: 1px solid var(--mono-border);
             border-radius: 8px;
             transition: background-color 0.15s ease, border-color 0.15s ease;
-            height: 52px;
+            height: 50px;
             display: flex;
             align-items: center;
             padding: 0 14px;
@@ -325,8 +345,8 @@ function renderLockPage() {
         }
 
         .field-icon {
-            width: 17px;
-            height: 17px;
+            width: 16px;
+            height: 16px;
             color: var(--mono-dim);
             flex-shrink: 0;
             margin-right: 12px;
@@ -353,9 +373,8 @@ function renderLockPage() {
             border: none;
             outline: none;
             color: var(--mono-text);
-            font-size: 13.5px;
-            font-family: var(--font-mono);
-            letter-spacing: 0.05em;
+            font-size: 13px;
+            font-family: var(--font-ui);
             padding-top: 14px;
             padding-bottom: 2px;
         }
@@ -369,15 +388,14 @@ function renderLockPage() {
             color: var(--mono-muted);
             pointer-events: none;
             transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), font-size 0.18s ease, color 0.18s ease;
-            letter-spacing: -0.01em;
         }
 
         .field-input:focus ~ .floating-label,
         .field-input:not(:placeholder-shown) ~ .floating-label {
-            transform: translateY(-16px);
+            transform: translateY(-15px);
             font-size: 10px;
             color: var(--mono-muted);
-            letter-spacing: 0.02em;
+            letter-spacing: 0.04em;
             text-transform: uppercase;
         }
 
@@ -396,6 +414,56 @@ function renderLockPage() {
 
         .toggle-vis-btn:hover {
             color: var(--mono-text);
+        }
+
+        /* Captcha Box */
+        .captcha-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .captcha-challenge {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 12px;
+            height: 50px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--mono-border);
+            border-radius: 8px;
+            flex: 1;
+            font-size: 12px;
+            color: var(--mono-text);
+            user-select: none;
+        }
+
+        .captcha-question {
+            font-weight: 600;
+            letter-spacing: 0.05em;
+            color: var(--mono-text);
+        }
+
+        .refresh-captcha-btn {
+            background: transparent;
+            border: none;
+            color: var(--mono-dim);
+            cursor: pointer;
+            padding: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: color 0.15s ease, transform 0.2s ease;
+        }
+
+        .refresh-captcha-btn:hover {
+            color: var(--mono-text);
+            transform: rotate(45deg);
+        }
+
+        .captcha-input-box {
+            width: 100px;
+            flex-shrink: 0;
         }
 
         /* Material Ripple */
@@ -433,7 +501,7 @@ function renderLockPage() {
             align-items: center;
             justify-content: center;
             gap: 8px;
-            margin-top: 8px;
+            margin-top: 6px;
             transition: background-color 0.15s ease, transform 0.08s ease;
         }
 
@@ -456,7 +524,7 @@ function renderLockPage() {
             width: 16px;
             height: 16px;
             border: 2px solid rgba(0, 0, 0, 0.2);
-            border-top-color: #111215;
+            border-top-color: #0c0d10;
             border-radius: 50%;
             animation: spin 0.6s linear infinite;
         }
@@ -471,7 +539,7 @@ function renderLockPage() {
             bottom: 24px;
             left: 50%;
             transform: translateX(-50%) translateY(16px);
-            background: #1e2027;
+            background: #1b1d24;
             border: 1px solid var(--mono-border);
             color: var(--mono-text);
             font-size: 12px;
@@ -510,19 +578,13 @@ function renderLockPage() {
     <div class="login-wrap">
         <div class="login-card">
             
-            <div class="brand-header">
-                <div class="brand-badge">MultiAI Cloud</div>
-                <div class="brand-icon">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-                    </svg>
-                </div>
-                <h1>Security Checkpoint</h1>
-                <p class="subtitle">Enter master security password to access console</p>
+            <div class="header-block">
+                <h1>Login</h1>
+                <p class="subtitle">Please enter your password</p>
             </div>
 
             <form id="loginForm" autocomplete="off">
-                <!-- Master Security Password Field -->
+                <!-- Security Password Field -->
                 <div class="field-box">
                     <svg class="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <rect width="18" height="11" x="3" y="11" rx="2" ry="2"/>
@@ -538,7 +600,7 @@ function renderLockPage() {
                             required 
                             autofocus
                         />
-                        <label for="passInput" class="floating-label">Security Key</label>
+                        <label for="passInput" class="floating-label">Password</label>
                     </div>
 
                     <button type="button" class="toggle-vis-btn" id="toggleVisBtn" aria-label="Toggle password visibility">
@@ -549,12 +611,35 @@ function renderLockPage() {
                     </button>
                 </div>
 
+                <!-- CAPTCHA Verification Row -->
+                <div class="captcha-row">
+                    <div class="captcha-challenge">
+                        <span id="captchaText" class="captcha-question">Loading challenge…</span>
+                        <button type="button" class="refresh-captcha-btn" id="refreshCaptchaBtn" title="Refresh challenge">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                                <path d="M3 3v5h5"/>
+                            </svg>
+                        </button>
+                    </div>
+
+                    <div class="field-box captcha-input-box">
+                        <div class="field-input-wrap">
+                            <input 
+                                type="text" 
+                                id="captchaInput" 
+                                class="field-input" 
+                                placeholder=" " 
+                                required
+                            />
+                            <label for="captchaInput" class="floating-label">Answer</label>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Submit Button with Ink Ripple -->
                 <button type="submit" class="submit-btn" id="submitBtn">
-                    <span id="btnText">Unlock MultiAI</span>
-                    <svg id="btnIcon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M5 12h14M12 5l7 7-7 7"/>
-                    </svg>
+                    <span id="btnText">Unlock</span>
                     <div class="spinner" id="btnSpinner"></div>
                 </button>
             </form>
@@ -617,43 +702,79 @@ function renderLockPage() {
             }, 3500);
         }
 
+        // CAPTCHA Management
+        let currentCaptchaId = "";
+        const captchaText = document.getElementById("captchaText");
+        const captchaInput = document.getElementById("captchaInput");
+        const refreshCaptchaBtn = document.getElementById("refreshCaptchaBtn");
+
+        async function fetchCaptcha() {
+            try {
+                captchaText.textContent = "…";
+                const res = await fetch("/api/auth/captcha");
+                const data = await res.json();
+                if (data.id && data.question) {
+                    currentCaptchaId = data.id;
+                    captchaText.textContent = data.question + " = ?";
+                    captchaInput.value = "";
+                }
+            } catch (e) {
+                captchaText.textContent = "Error loading";
+            }
+        }
+
+        refreshCaptchaBtn.addEventListener("click", fetchCaptcha);
+        fetchCaptcha();
+
         // Form submission
         const form = document.getElementById("loginForm");
         const btnText = document.getElementById("btnText");
-        const btnIcon = document.getElementById("btnIcon");
         const btnSpinner = document.getElementById("btnSpinner");
 
         form.addEventListener("submit", async (e) => {
             e.preventDefault();
             const pass = passInput.value.trim();
+            const answer = captchaInput.value.trim();
+
             if (!pass) return;
+            if (!answer) {
+                showToast("Please solve the verification challenge.", true);
+                captchaInput.focus();
+                return;
+            }
 
             submitBtn.disabled = true;
             btnText.style.display = "none";
-            btnIcon.style.display = "none";
             btnSpinner.style.display = "block";
 
             try {
                 const res = await fetch("/api/auth/login", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ password: pass })
+                    body: JSON.stringify({
+                        password: pass,
+                        captchaId: currentCaptchaId,
+                        captchaAnswer: answer
+                    })
                 });
                 const data = await res.json().catch(() => ({}));
                 if (res.ok && data.success) {
                     showToast("Access granted. Loading console...");
-                    setTimeout(() => window.location.reload(), 400);
+                    setTimeout(() => window.location.reload(), 300);
                 } else {
-                    showToast(data.error || "Invalid security key. Access denied.", true);
+                    showToast(data.error || "Access denied.", true);
+                    if (data.needNewCaptcha) {
+                        fetchCaptcha();
+                    }
                     passInput.value = "";
                     passInput.focus();
                 }
             } catch (err) {
                 showToast("Network error: " + err.message, true);
+                fetchCaptcha();
             } finally {
                 submitBtn.disabled = false;
                 btnText.style.display = "inline";
-                btnIcon.style.display = "inline";
                 btnSpinner.style.display = "none";
             }
         });
@@ -666,6 +787,7 @@ module.exports = {
     isAuthenticated,
     handleLogin,
     handleAuthCheck,
+    handleCaptchaEndpoint,
     renderLockPage
 };
 
