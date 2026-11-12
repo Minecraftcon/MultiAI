@@ -55,23 +55,17 @@ async function runTests() {
 
     // 3. Live API validation
     const config = loadModelsConfig();
-    const providerConfig = config.providers.opencode;
-    const apiKey = getEnvKey(providerConfig.api_key_env);
+    const providerConfig = config.providers.opencode || {};
 
-    if (apiKey) {
-        console.log(" Validating live chat with muse-spark-1.3-contributor-free...");
-        const res = await provider.handleChat({
-            model: "muse-spark-1.3-contributor-free",
-            apiKey,
-            providerConfig,
-            messages: [{ role: "user", content: "Reply with the word PONG only." }]
-        });
-        assert.strictEqual(res.status, 200, `Live call failed: ${res.error}`);
-        assert.ok(res.message?.content, "Must contain assistant message content");
-        console.log(` [PASS] Live response received: "${res.message.content.trim()}"`);
-    } else {
-        console.log(" [SKIP] No OPENCODE_API_KEY found, skipping live check.");
-    }
+    console.log(" Validating live chat with mimo-v2.6-flash-free...");
+    const res = await provider.handleChat({
+        model: "mimo-v2.6-flash-free",
+        providerConfig,
+        messages: [{ role: "user", content: "Reply with the word PONG only." }]
+    });
+    assert.strictEqual(res.status, 200, `Live call failed: ${res.error}`);
+    assert.ok(res.message?.content, "Must contain assistant message content");
+    console.log(` [PASS] Live response received: "${res.message.content.trim()}"`);
 
     console.log("\nAll OpenCode provider dual protocol tests passed successfully!");
 }

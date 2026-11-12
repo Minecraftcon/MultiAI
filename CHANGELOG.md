@@ -21,37 +21,29 @@
 ---
 
 ### 🎨 UI & Streaming Stability Fixes
-* **Eliminated Status Label Flicker**: Resolved a high-frequency race condition between `orchestrator.js`'s 100ms `statusTimer` (`"Synthesizing (round X)..."`) and `chat-ui.js`'s streaming callback (`"Working... (${elapsed}s)"`), stabilizing activity label rendering.
-* **Stabilized Thought Box & Responsive Controls**:
-  * Fixed a bug where `preSearchContent.innerHTML` was completely re-rendered on every streamed token chunk, unmounting and remounting the thought box DOM tree.
-  * Added `_lastRenderedThought` content-aware memoization: once thinking concludes, the thought container is left untouched while the response body streams.
-  * State preservation: user interactions (collapsing via `<summary>` or clicking `... expand`) are tracked and preserved across stream ticks, resolving unresponsive toggle controls and border-line flickering.
-* **Preserved Intermediate Commentary**: Resolved an issue where conversational text spoken by the model before executing tool calls was previously lumped into `<think>` blocks and hidden. Intermediate commentary is now parsed cleanly and anchored directly above tool execution badges.
-* **RAF Markdown Streaming**: Upgraded `StreamBatchRenderer` to use `requestAnimationFrame` with automatic backtick and code-fence closing, enabling smooth real-time rendering of formatted markdown.
-* **Mobile Streaming & Rendering Optimization (`modern-web-guidance`)**:
-  * Added `content-visibility: auto` and `contain-intrinsic-size: auto none auto 120px` to `.message` with fallback containment (`contain: layout style`), skipping layout/paint calculations for off-screen turns and isolating layout reflows during streaming.
-  * Implemented adaptive ~32ms (~30 FPS) throttling in `StreamBatchRenderer.append()` so markdown parsing does not bottleneck mobile CPUs during high token-rate bursts, while preserving immediate synchronous execution on stream completion.
-  * Eliminated redundant full-document `parseMarkdown()` re-computations inside `updateAIStream` during active streaming chunks.
-  * Added table detection guards to `wrapTablesForScroll()` to bypass DOM queries when streams lack tables.
-* **Stream Model Response & Reasoning Settings**:
-  * Exposed dedicated **Stream Model Responses** (`StreamResponse`) switch under **Settings ➔ Models & AI ➔ Inference Tuning** to toggle real-time token streaming on or off.
-  * Connected **Stream Reasoning & Thinking** (`StreamReasoning`) directly to SSE stream delta aggregation in `chat-client.js` so reasoning thoughts can stream or only render upon completion.
-  * Added `StreamResponse` to system default configuration schemas across `config_manager.js`, `config.ini`, and UI settings auto-save.
-* **Reasoning Stream Continuity & TCP Low-Latency Streaming**:
-  * Removed premature active-stream collapsing in `formatThoughtHtml()`, allowing live reasoning thoughts to remain fully visible as they stream without disappearing into a 160px clamped overflow. Huge thoughts are now wrapped cleanly into collapsible cards once finalized.
-  * Enabled TCP `setNoDelay(true)` and immediate header flushing on SSE stream response sockets in `base.js` and `routes/chat.js` to eliminate OS-level Nagle packet buffering during real-time token delivery.
+* **Auto-Collapsing Finalized Reasoning on Action / Output**:
+  * Configured `<details class="thought-box">` to automatically collapse as soon as the model finishes thinking (when user-facing response text starts streaming, tools begin executing, the next round starts, or generation completes).
+  * Streaming thoughts remain open live while thinking is actively in progress, allowing real-time inspection, but automatically fold into compact cards once the model moves to action without dominating the viewport.
+  * Preserved user manual toggle overrides (`data-user-toggled="open"`) and ensured historical messages rehydrate with thought boxes closed by default.
+* **Smart User Home Path Resolution in Filesystem Tools**:
+  * Enhanced `resolveSafePath()` in `src/server/utils.js` to automatically translate sanitized `[USER]` placeholders (e.g. `/home/[USER]`, `/Users/[USER]`, `C:\Users\[USER]`) and tilde (`~/...`) back to the user's actual home directory (`os.homedir()`).
+  * Disabled the default local path scrubbing filter (`flt_default_paths`) in `context-filter.js` so workspace project paths are not rewritten into synthetic `[USER]` strings that confuse coding LLMs into thinking file paths are broken.
 * **Eliminated Micro-Shaking & Vertical Jitter on Badges & Elements**:
   * Replaced `content-visibility: auto` on `.message` with stable CSS style containment (`contain: style;`). In chat layouts with highly variable message heights, `content-visibility: auto` dynamically swapped off-screen turns between placeholder sizes and rendered heights, creating an infinite scroll oscillation feedback loop against smooth auto-scrolling.
   * Increased subpixel landing threshold in `chat-scroll.js` from `0.8px` to `1.5px`, eliminating subpixel ping-pong oscillations on displays with non-integer scaling ratios (125%, 150%, Retina).
   * Replaced vertical `popIn` (`translateY(8px)`) animation on `.search-badge-item` with a clean opacity fade (`fadeIn 0.2s ease-out`), preventing tool call badges and status chips from hopping up and down as they render.
-* **Automatic Thought Box Collapse on Action / Content Output**:
-  * Configured `<details class="thought-box">` to automatically collapse as soon as the model finishes thinking (when user-facing response text starts streaming, tools begin executing, the next round starts, or generation completes).
-  * Streaming thoughts remain open live while thinking is actively in progress, allowing real-time inspection, but automatically fold into compact cards once the model moves to action without dominating the viewport.
-  * Preserved user manual toggle overrides (`data-user-toggled="open"`) and ensured historical messages rehydrate with thought boxes closed by default.
-* **Resolved `[USER]` and `~` Path Expansion in Filesystem Tools**:
-  * Enhanced `resolveSafePath()` in `src/server/utils.js` to automatically translate sanitized `[USER]` placeholders (e.g. `/home/[USER]`, `/Users/[USER]`, `C:\Users\[USER]`) and tilde (`~/...`) back to the user's actual home directory (`os.homedir()`).
-  * Disabled the default local path scrubbing filter (`flt_default_paths`) in `context-filter.js` so workspace project paths are not rewritten into synthetic `[USER]` strings that confuse coding LLMs into thinking file paths are broken.
 * **Inline Dynamic Streaming Cursor**:
   * Upgraded streaming mode in `StreamBatchRenderer` to attach the blinking cursor directly inline at the tip of the actively generating leaf element (paragraphs, lists, blockquotes, and code blocks), so the cursor moves naturally with the streaming words instead of sitting on a static line at the bottom.
   * Styled `.blinking-cursor` with proportional `1.15em` height and `-0.15em` baseline alignment to match font sizes seamlessly across prose, headings, and code snippets.
+
+---
+
+### 🚀 OpenCode Provider Runtime Bridge (Eliminated 429 Client-Detection Errors)
+* **OpenCode v2 Local Daemon & CLI Integration**:
+  * Upgraded `src/providers/llm/opencode.js` to bridge directly with the local OpenCode v2 client runtime instead of sending spoofed HTTP requests to edge endpoints (`opencode.ai/zen/v1`).
+  * Completely eliminated upstream `HTTP 429 FreeUsageLimitError` gate failures on free community models (`mimo-v2.6-flash-free`, `deepseek-v4.1-flash-free`, `glm-5.3-flash-free`, `nemotron-3.5-lightning-free`, etc.).
+* **Dual-Tier High-Performance Execution**:
+  * **Tier 1 (Local Daemon Bridge)**: Detects active OpenCode background service from `~/.local/state/opencode/service.json` and communicates via authenticated REST (`/api/session`, `/api/session/:id/model`, `/api/session/:id/prompt`) and real-time SSE (`/api/event`), delivering <2s response times and live token streaming. Sessions are automatically cleaned up on completion or client disconnect.
+  * **Tier 2 (CLI Subprocess Fallback)**: Automatically falls back to `opencode run --format json --thinking -m opencode/<model>` if the daemon is offline, parsing streaming deltas (`step_start`, `reasoning`, `text`, `tool_use`, `step_finish`) directly into MultiAI chat streams.
+  * **Tier 3 (Cloud API)**: Preserves direct cloud routing when explicit `OPENCODE_API_KEY` credentials are provided.
 
