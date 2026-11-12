@@ -94,11 +94,11 @@ private:
             } else if (k == KEY_DOWN) {
                 if (selected + 1 < (int)menuItems.size()) selected++;
             } else if (k == KEY_CTRL_R) {
-                std::string err;
-                if (client.authenticate(err)) {
-                    statusMsg = "Connected & Authenticated to " + client.getBaseUrl();
+                std::string info;
+                if (client.ping(info)) {
+                    statusMsg = "Ping success: " + info;
                 } else {
-                    statusMsg = "Connection check: " + err;
+                    statusMsg = "Ping failed: " + info;
                 }
             } else if (k == KEY_ENTER) {
                 if (selected == 0) viewDatabase();
@@ -518,29 +518,180 @@ private:
         term.clearScreen();
         term.renderHeader("Switch Target Host");
         term.moveCursor(4, 5);
-        std::cout << "1. Cloud Target: " << DEMANGLE(Secrets::DEFAULT_CLOUD_URL) << "\r\n";
+        std::cout << "1. Cloud Web API: " << DEMANGLE(Secrets::DEFAULT_CLOUD_URL) << "\r\n";
         term.moveCursor(5, 5);
-        std::cout << "2. Local Target: " << DEMANGLE(Secrets::DEFAULT_LOCAL_URL) << "\r\n";
-        term.moveCursor(7, 5);
-        std::cout << "Press [1] for Cloud, [2] for Local, or [Esc] to cancel.";
+        std::cout << "2. Local Web API: " << DEMANGLE(Secrets::DEFAULT_LOCAL_URL) << "\r\n";
+        term.moveCursor(6, 5);
+        std::cout << "3. Direct Supabase Postgres REST (Zero-Latency Native Query)\r\n";
+        term.moveCursor(8, 5);
+        std::cout << "Press [1] for Cloud, [2] for Local, [3] for Direct Supabase, or [Esc] to cancel.";
 
         int k = term.readKey();
         if (k == '1') {
+            client.setDirectSupabaseMode(false);
             client.setBaseUrl(DEMANGLE(Secrets::DEFAULT_CLOUD_URL));
             statusMsg = "Switched to Cloud: " + client.getBaseUrl();
         } else if (k == '2') {
+            client.setDirectSupabaseMode(false);
             client.setBaseUrl(DEMANGLE(Secrets::DEFAULT_LOCAL_URL));
             statusMsg = "Switched to Local: " + client.getBaseUrl();
+        } else if (k == '3') {
+            client.setDirectSupabaseMode(true);
+            statusMsg = "Switched to Direct Supabase REST Mode";
         }
+    }
+
+public:
+    void printCliList() {
+        std::string err;
+        auto chats = client.listChats(err);
+        std::cout << "\033[1;36m=== MultiAI Database Chats (" << chats.size() << " records) ===\033[0m\n";
+        std::cout << "Target: " << client.getBaseUrl() << "\n\n";
+        if (chats.empty()) {
+            std::cout << "No records found.\n";
+            if (!err.empty()) std::cout << "\033[31mError: " << err << "\033[0m\n";
+            return;
+        }
+        std::cout << "\033[1;37m"
+                  << std::left << std::setw(28) << "CHAT ID"
+                  << std::setw(32) << "TITLE"
+                  << std::setw(10) << "TYPE"
+                  << std::setw(14) << "DATE"
+                  << std::setw(26) << "UPDATED AT"
+                  << "\033[0m\n";
+        std::cout << std::string(110, '-') << "\n";
+        for (const auto& c : chats) {
+            std::cout << std::left << std::setw(28) << c.id.substr(0, 26)
+                      << std::setw(32) << c.title.substr(0, 30)
+                      << "\033[36m" << std::setw(10) << c.type << "\033[0m"
+                      << "\033[90m" << std::setw(14) << c.date_folder << "\033[0m"
+                      << std::setw(26) << c.updated_at
+                      << "\n";
+        }
+    }
+
+    void printCliView(const std::string& chatId) {
+        std::string err;
+        ChatDetail detail;
+        if (!client.getChat(chatId, detail, err)) {
+            std::cerr << "\033[31mError retrieving chat '" << chatId << "': " << err << "\033[0m\n";
+            return;
+        }
+        std::cout << "\033[1;36m================================================================================\033[0m\n";
+        std::cout << "\033[1;37mChat ID: " << detail.id << "\033[0m\n";
+        std::cout << "Title  : " << detail.title << "\n";
+        std::cout << "Date   : " << detail.date_folder << " | Type: " << detail.type << "\n";
+        std::cout << "Turns  : " << detail.messages.size() << " messages\n";
+        std::cout << "\033[1;36m================================================================================\033[0m\n\n";
+
+        for (size_t i = 0; i < detail.messages.size(); ++i) {
+            const auto& m = detail.messages[i];
+            std::string headerColor = "\033[1;32m"; // green for user
+            if (m.role == "system") headerColor = "\033[1;33m"; // yellow
+            else if (m.role == "assistant") headerColor = "\033[1;34m"; // blue
+
+            std::cout << headerColor << "┌── [" << m.role << "] ";
+            if (!m.model.empty()) std::cout << "(" << m.model << ") ";
+            if (!m.timestamp.empty()) std::cout << "@ " << m.timestamp;
+            std::cout << " " << repeatUtf8("─", 30) << "\033[0m\n";
+
+            std::stringstream ss(m.content);
+            std::string line;
+            while (std::getline(ss, line)) {
+                std::cout << "│ " << line << "\n";
+            }
+            std::cout << headerColor << "└──" << repeatUtf8("─", 50) << "\033[0m\n\n";
+        }
+    }
+
+    void printCliPing() {
+        std::string info;
+        std::cout << "Testing connection to " << client.getBaseUrl() << " ...\n";
+        if (client.ping(info)) {
+            std::cout << "\033[1;32m[PASS] MultiAI Gate Authenticated: " << info << "\033[0m\n";
+        } else {
+            std::cout << "\033[1;31m[FAIL] Ping failed: " << info << "\033[0m\n";
+        }
+    }
+
+    void cliDelete(const std::string& chatId) {
+        std::string err;
+        if (client.deleteChat(chatId, err)) {
+            std::cout << "\033[1;32m[SUCCESS] Deleted conversation " << chatId << "\033[0m\n";
+        } else {
+            std::cout << "\033[1;31m[FAIL] Delete error: " << err << "\033[0m\n";
+        }
+    }
+
+    void setDirectSupabaseMode(bool enable) {
+        client.setDirectSupabaseMode(enable);
     }
 };
 
 int main(int argc, char* argv[]) {
     std::string root = ".";
-    if (argc > 1) {
-        root = argv[1];
+    bool direct = false;
+    std::string action = "";
+    std::string targetId = "";
+
+    for (int i = 1; i < argc; ++i) {
+        std::string arg = argv[i];
+        if (arg == "--direct" || arg == "-d") {
+            direct = true;
+        } else if (arg == "--list" || arg == "-l") {
+            action = "list";
+        } else if (arg == "--ping" || arg == "-p") {
+            action = "ping";
+        } else if (arg == "--view" || arg == "-v") {
+            action = "view";
+            if (i + 1 < argc) targetId = argv[++i];
+        } else if (arg == "--delete") {
+            action = "delete";
+            if (i + 1 < argc) targetId = argv[++i];
+        } else if (arg == "--help" || arg == "-h") {
+            std::cout << "MultiAI Management Console\n"
+                      << "Usage: multiai-mgr [options]\n\n"
+                      << "Options:\n"
+                      << "  (no args)             Launch interactive Nano-style TUI\n"
+                      << "  -l, --list            List all conversations from database\n"
+                      << "  -v, --view <chat_id>  Print formatted conversation turns\n"
+                      << "  -p, --ping            Test connectivity & authentication gate\n"
+                      << "  -d, --direct          Use direct Supabase PostgREST mode\n"
+                      << "  --delete <chat_id>    Delete a conversation\n"
+                      << "  -h, --help            Show this help message\n";
+            return 0;
+        } else if (arg[0] != '-') {
+            root = arg;
+        }
     }
+
     MultiAIManagerApp app(root);
+    if (direct) {
+        app.setDirectSupabaseMode(true);
+    }
+
+    if (action == "list") {
+        app.printCliList();
+        return 0;
+    } else if (action == "view") {
+        if (targetId.empty()) {
+            std::cerr << "Error: --view requires a chat ID.\n";
+            return 1;
+        }
+        app.printCliView(targetId);
+        return 0;
+    } else if (action == "ping") {
+        app.printCliPing();
+        return 0;
+    } else if (action == "delete") {
+        if (targetId.empty()) {
+            std::cerr << "Error: --delete requires a chat ID.\n";
+            return 1;
+        }
+        app.cliDelete(targetId);
+        return 0;
+    }
+
     app.run();
     return 0;
 }

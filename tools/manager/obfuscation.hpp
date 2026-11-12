@@ -59,7 +59,10 @@ namespace Secrets {
     MANGLE_DEF(ENDPOINT_CHATS_SAVE, "/api/chats/save");
     MANGLE_DEF(RENDER_WORKSPACE_ID, "tea-d83blarrjlhs73ecn3ig");
     MANGLE_DEF(RENDER_SERVICE_ID, "srv-dbqt0ietlv9c73c7okl0");
+    MANGLE_DEF(SUPABASE_REST_URL, "https://qezwcxbngqpgwnvdpaju.supabase.co/rest/v1");
+    MANGLE_DEF(SUPABASE_ANON_KEY, "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFlendjeGJuZ3FwZ3dudmRwYWp1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ0ODIzMjUsImV4cCI6MjExMDA1ODMyNX0.O9zZ3g9o3nWHeyAeCyhuYac6oyVSyle9fHBluoMeqT8");
     MANGLE_DEF(ENV_FILE, ".env");
     MANGLE_DEF(CONFIG_FILE, "config.ini");
     MANGLE_DEF(MODELS_FILE, "models.yaml");
 }
+
