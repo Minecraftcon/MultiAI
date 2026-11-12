@@ -25,7 +25,7 @@ async function startServer() {
         console.warn("[VENDOR] Check error:", err.message);
     }
 
-    // 2. Start Python task server child process and setup termination handlers
+    // 2. Start task daemon child process and setup termination handlers
     initSupervisor();
 
     // 3. Initialize configured Model Context Protocol (MCP) servers

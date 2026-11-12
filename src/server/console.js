@@ -8,7 +8,7 @@ const { execSync } = require("child_process");
 const { cleanupAndExit } = require("./supervisor");
 
 function initConsole({ port = 8080, host = "localhost" } = {}) {
-    // If supervised by start.py, let Python supervisor handle the terminal console
+    // If supervised by start.js, let supervisor handle the terminal console
     if (process.env.MULTIAI_SUPERVISED) {
         return;
     }

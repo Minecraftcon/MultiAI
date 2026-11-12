@@ -107,8 +107,8 @@ console.log("Test: TaskServer and TaskDaemon aliases in [Agent]");
     const { mergeWithDefaults } = require("../src/core/config_manager");
     
     // Default check
-    assert.strictEqual(DEFAULT_CONFIG.Agent.TaskServer, "python");
-    assert.strictEqual(DEFAULT_CONFIG.Agent.TaskDaemon, "python");
+    assert.strictEqual(DEFAULT_CONFIG.Agent.TaskServer, "node");
+    assert.strictEqual(DEFAULT_CONFIG.Agent.TaskDaemon, "node");
 
     // Setting TaskServer = "go" should sync TaskDaemon
     const synced1 = mergeWithDefaults({ Agent: { TaskServer: "go" } });

@@ -56,20 +56,20 @@ async function handleTaskRoute(req, res) {
         }
     }
 
-    // Direct Python Execution Engine route: /api/python/run
-    if (req.method === "POST" && req.url === "/api/python/run") {
+    // Direct Code Execution Engine route: /api/code/run or /api/python/run
+    if (req.method === "POST" && (req.url === "/api/code/run" || req.url === "/api/python/run")) {
         try {
             let body = "";
             for await (const chunk of req) body += chunk;
             const args = JSON.parse(body || "{}");
-            const result = await postJSON(5000, "/api/python/run", args, 35000);
+            const result = await postJSON(5000, "/api/code/run", args, 35000);
             return sendJSON(res, 200, result);
         } catch (error) {
             return sendJSON(res, 500, { error: error.message });
         }
     }
 
-    // Proxy terminal tasks to the supervised Python backend with large-output scratch logging
+    // Proxy terminal tasks to the supervised Node backend with large-output scratch logging
     if (req.url.startsWith("/api/task/")) {
         let reqBody = "";
         try {
@@ -252,8 +252,8 @@ async function handleTaskRoute(req, res) {
         });
 
         proxyReq.on("error", (e) => {
-            console.error(`[PROXY ERROR] Python server unreachable: ${e.message}`);
-            sendJSON(res, 500, { error: "Python backend is not responding." });
+            console.error(`[PROXY ERROR] Task daemon unreachable: ${e.message}`);
+            sendJSON(res, 500, { error: "Task daemon is not responding." });
         });
 
         if (reqBody) {

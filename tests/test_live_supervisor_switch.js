@@ -92,11 +92,11 @@ async function runTest() {
         await new Promise(r => setTimeout(r, 600));
     }
 
-    // 2. Test MULTIAI_TASK_DAEMON=python
-    console.log("\n[2] Starting supervisor with MULTIAI_TASK_DAEMON=python...");
-    const pyProc = spawn("node", ["-e", `
+    // 2. Test MULTIAI_TASK_DAEMON=node
+    console.log("\n[2] Starting supervisor with MULTIAI_TASK_DAEMON=node...");
+    const nodeProc = spawn("node", ["-e", `
         process.env.TASK_PORT = "${testPort}";
-        process.env.MULTIAI_TASK_DAEMON = "python";
+        process.env.MULTIAI_TASK_DAEMON = "node";
         const { initSupervisor } = require("./src/server/supervisor");
         initSupervisor();
     `], {
@@ -105,30 +105,30 @@ async function runTest() {
         env: {
             ...process.env,
             TASK_PORT: String(testPort),
-            MULTIAI_TASK_DAEMON: "python",
+            MULTIAI_TASK_DAEMON: "node",
             MULTIAI_SANDBOX: "0",
             MULTIAI_IPC: "tcp"
         }
     });
 
-    pyProc.stdout.on("data", d => process.stdout.write(`  [PY-SUPERVISOR] ${d}`));
-    pyProc.stderr.on("data", d => process.stderr.write(`  [PY-SUPERVISOR ERR] ${d}`));
+    nodeProc.stdout.on("data", d => process.stdout.write(`  [NODE-SUPERVISOR] ${d}`));
+    nodeProc.stderr.on("data", d => process.stderr.write(`  [NODE-SUPERVISOR ERR] ${d}`));
 
     try {
-        const pyHealth = await waitForServer(testPort);
-        console.log("  Health response:", pyHealth);
-        if (pyHealth.engine !== "flask" && pyHealth.engine !== "http.server") {
-            throw new Error(`Expected Python engine (flask or http.server), got '${pyHealth.engine}'`);
+        const nodeHealth = await waitForServer(testPort);
+        console.log("  Health response:", nodeHealth);
+        if (nodeHealth.engine !== "node") {
+            throw new Error(`Expected Node engine, got '${nodeHealth.engine}'`);
         }
 
-        const runRes = await requestJSON(testPort, "POST", "/api/task/run", { command: "echo switch-to-python-works", timer: 2 });
-        console.log("  Python Task Run Output:", runRes.stdout?.trim());
-        if (!runRes.stdout?.includes("switch-to-python-works")) {
-            throw new Error("Python task execution failed");
+        const runRes = await requestJSON(testPort, "POST", "/api/task/run", { command: "echo switch-to-node-works", timer: 2 });
+        console.log("  Node Task Run Output:", runRes.stdout?.trim());
+        if (!runRes.stdout?.includes("switch-to-node-works")) {
+            throw new Error("Node task execution failed");
         }
-        console.log("✓ Python Server Test Successful!");
+        console.log("✓ Node Server Test Successful!");
     } finally {
-        pyProc.kill("SIGTERM");
+        nodeProc.kill("SIGTERM");
         await new Promise(r => setTimeout(r, 600));
     }
 

@@ -10,7 +10,7 @@ const DEFAULT_SANDBOX_CONFIG = {
     enabled: false,
     active_profile: "bwrap", // "bwrap" | "proot" | "docker"
     ipc_type: process.platform === "win32" ? "tcp" : "socket", // "socket" (default Unix sox) | "tcp"
-    task_daemon: "python", // "python" | "go"
+    task_daemon: "node", // "node" | "go"
     profiles: {
         bwrap: {
             id: "bwrap",
@@ -19,7 +19,7 @@ const DEFAULT_SANDBOX_CONFIG = {
             description: "Unprivileged user namespaces with read-only root and workspace binding.",
             icon: "shield",
             mode: "daemon",
-            startup: 'bwrap --ro-bind / / {SHIELD_MOUNTS} --bind {PROJECT_PATH} {PROJECT_PATH} --bind {DATA_DIR} {DATA_DIR} --tmpfs /tmp --proc /proc --dev /dev -- python3 {TASK_SERVER_SCRIPT} {IPC_ARGS}',
+            startup: 'bwrap --ro-bind / / {SHIELD_MOUNTS} --bind {PROJECT_PATH} {PROJECT_PATH} --bind {DATA_DIR} {DATA_DIR} --tmpfs /tmp --proc /proc --dev /dev -- node {TASK_SERVER_SCRIPT} {IPC_ARGS}',
             detect_cmd: "command -v bwrap"
         },
         proot: {
@@ -29,7 +29,7 @@ const DEFAULT_SANDBOX_CONFIG = {
             description: "Syscall emulation sandbox for non-root containers and Termux environments.",
             icon: "smartphone",
             mode: "daemon",
-            startup: 'pd sh debian-sandbox --bind {PROJECT_PATH}:/workspace --bind {DATA_DIR}:/data -- python3 /workspace/daemon/task_server.py {IPC_ARGS}',
+            startup: 'pd sh debian-sandbox --bind {PROJECT_PATH}:/workspace --bind {DATA_DIR}:/data -- node /workspace/daemon/node/server.js {IPC_ARGS}',
             detect_cmd: '(command -v pd || command -v proot-distro) && (pd login debian-sandbox -- true 2>/dev/null || proot-distro login debian-sandbox -- true 2>/dev/null || [ -d "${PREFIX:-/data/data/com.termux/files/usr}/var/lib/proot-distro/installed-rootfs/debian-sandbox" ])'
         },
         docker: {
@@ -52,7 +52,7 @@ const DIRECT_PROFILE = {
     description: "Executes directly on host operating system without any sandbox container boundaries.",
     icon: "terminal",
     mode: "direct",
-    startup: 'python3 {TASK_SERVER_SCRIPT} {IPC_ARGS}',
+    startup: 'node {TASK_SERVER_SCRIPT} {IPC_ARGS}',
     detect_cmd: "true"
 };
 
@@ -85,8 +85,8 @@ function loadSandboxConfig() {
             delete profiles.direct;
 
             if (profiles.proot) {
-                if (profiles.proot.startup && (profiles.proot.startup.includes("/workspace/task_server/server.py") || profiles.proot.startup.includes("pd sh debian "))) {
-                    profiles.proot.startup = 'pd sh debian-sandbox --bind {PROJECT_PATH}:/workspace --bind {DATA_DIR}:/data -- python3 /workspace/daemon/task_server.py --port {TASK_PORT}';
+                if (profiles.proot.startup && (profiles.proot.startup.includes("/workspace/task_server/server.py") || profiles.proot.startup.includes("pd sh debian ") || profiles.proot.startup.includes("python3"))) {
+                    profiles.proot.startup = 'pd sh debian-sandbox --bind {PROJECT_PATH}:/workspace --bind {DATA_DIR}:/data -- node /workspace/daemon/node/server.js --port {TASK_PORT}';
                 }
                 profiles.proot.detect_cmd = DEFAULT_SANDBOX_CONFIG.profiles.proot.detect_cmd;
             }

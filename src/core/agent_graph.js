@@ -10,7 +10,7 @@ try {
     END = lg.END;
     MemorySaver = lg.MemorySaver;
 } catch (e) {
-    // LangGraph packages will be auto-installed by start.py
+    // LangGraph packages will be auto-installed by start.js
 }
 
 const { resolveProvider } = require("../providers");
@@ -289,7 +289,7 @@ function routeNext(state) {
 // ---------------------------------------------------------
 function createAgentGraph() {
     if (!StateGraph) {
-        throw new Error("LangGraph is not installed. Please run 'npm install' or launch via './start.py'.");
+        throw new Error("LangGraph is not installed. Please run 'npm install' or launch via 'node start.js'.");
     }
     const workflow = new StateGraph(AgentState)
         .addNode("router", routerNode)

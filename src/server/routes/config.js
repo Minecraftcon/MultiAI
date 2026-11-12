@@ -215,7 +215,7 @@ const {
     loadSandboxConfig,
     saveSandboxConfig
 } = require("../../core/sandbox_manager");
-const { restartPythonTaskServer } = require("../supervisor");
+const { restartTaskServer } = require("../supervisor");
 
 async function handleSandboxProfiles(req, res) {
     if (req.method === "HEAD") {
@@ -249,7 +249,7 @@ async function handleSandboxSelect(req, res) {
         saveSandboxConfig(currentConfig);
 
         // Restart task server daemon with the new sandbox profile
-        restartPythonTaskServer();
+        restartTaskServer();
 
         return sendJSON(res, 200, {
             success: true,

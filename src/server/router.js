@@ -89,8 +89,8 @@ async function routeRequest(req, res) {
             return handleHistoryRoute(req, res);
         }
 
-        // Tasks & Python direct execution
-        if (req.url.startsWith("/api/task/") || reqUrl === "/api/python/run") {
+        // Tasks & Code direct execution
+        if (req.url.startsWith("/api/task/") || reqUrl === "/api/code/run" || reqUrl === "/api/python/run") {
             return handleTaskRoute(req, res);
         }
 

@@ -13,7 +13,7 @@ const {
     DIRECT_PROFILE
 } = require("../core/sandbox_manager");
 
-let pythonProcess = null;
+let taskProcess = null;
 let isShuttingDown = false;
 let isStarting = false;
 let respawnTimer = null;
@@ -80,13 +80,13 @@ function freePort(port) {
 }
 
 /**
- * Resolves the configured task daemon engine ('go' or 'python').
+ * Resolves the configured task daemon engine ('node' or 'go').
  * Precedence:
- * 1. CLI flags: --task-daemon=go|python, --daemon=go|python, --go-daemon, --python-daemon
- * 2. Environment variable: MULTIAI_TASK_DAEMON=go|python|golang
+ * 1. CLI flags: --task-daemon=node|go, --daemon=node|go, --node-daemon, --go-daemon
+ * 2. Environment variable: MULTIAI_TASK_DAEMON=node|go|golang
  * 3. Sandbox config (~/.MultiAI/vm_conf.json) task_daemon property
- * 4. User configuration file (config.ini) [Agent] TaskDaemon = go|python
- * 5. Default: "python"
+ * 4. User configuration file (config.ini) [Agent] TaskDaemon = node|go
+ * 5. Default: "node"
  */
 function getTaskDaemonEngine() {
     const argv = process.argv || [];
@@ -94,31 +94,32 @@ function getTaskDaemonEngine() {
         const arg = argv[i];
         if (arg === "--task-daemon" && argv[i + 1]) {
             const val = argv[i + 1].trim().toLowerCase();
-            return val === "golang" ? "go" : val;
+            return val === "golang" ? "go" : (val === "python" ? "node" : val);
         }
         if (arg.startsWith("--task-daemon=")) {
             const val = arg.split("=")[1].trim().toLowerCase();
-            return val === "golang" ? "go" : val;
+            return val === "golang" ? "go" : (val === "python" ? "node" : val);
         }
         if (arg === "--daemon" && argv[i + 1]) {
             const val = argv[i + 1].trim().toLowerCase();
-            return val === "golang" ? "go" : val;
+            return val === "golang" ? "go" : (val === "python" ? "node" : val);
         }
         if (arg.startsWith("--daemon=")) {
             const val = arg.split("=")[1].trim().toLowerCase();
-            return val === "golang" ? "go" : val;
+            return val === "golang" ? "go" : (val === "python" ? "node" : val);
         }
         if (arg === "--go-daemon" || arg === "--go") {
             return "go";
         }
-        if (arg === "--python-daemon" || arg === "--python") {
-            return "python";
+        if (arg === "--node-daemon" || arg === "--node") {
+            return "node";
         }
     }
 
     if (process.env.MULTIAI_TASK_DAEMON) {
         const envVal = process.env.MULTIAI_TASK_DAEMON.trim().toLowerCase();
         if (envVal === "golang") return "go";
+        if (envVal === "python") return "node";
         return envVal;
     }
 
@@ -127,7 +128,8 @@ function getTaskDaemonEngine() {
         if (sbConfig && sbConfig.task_daemon) {
             const val = String(sbConfig.task_daemon).trim().toLowerCase();
             if (val === "golang") return "go";
-            if (val === "go" || val === "python") return val;
+            if (val === "go") return "go";
+            return "node";
         }
     } catch (_) {}
 
@@ -140,36 +142,37 @@ function getTaskDaemonEngine() {
             if (raw) {
                 const cfgVal = String(raw).trim().toLowerCase();
                 if (cfgVal === "golang") return "go";
-                return cfgVal;
+                if (cfgVal === "go") return "go";
+                return "node";
             }
         }
     } catch (_) {}
 
-    return "python";
+    return "node";
 }
 
-function restartPythonTaskServer() {
+function restartTaskServer() {
     if (respawnTimer) {
         clearTimeout(respawnTimer);
         respawnTimer = null;
     }
 
-    if (pythonProcess && !pythonProcess.killed) {
-        console.log(`[PROCESS] Terminating running task daemon (PID: ${pythonProcess.pid}) for restart...`);
-        pythonProcess.removeAllListeners("close");
-        killProcessTree(pythonProcess, "SIGTERM");
-        pythonProcess = null;
+    if (taskProcess && !taskProcess.killed) {
+        console.log(`[PROCESS] Terminating running task daemon (PID: ${taskProcess.pid}) for restart...`);
+        taskProcess.removeAllListeners("close");
+        killProcessTree(taskProcess, "SIGTERM");
+        taskProcess = null;
     }
 
     // Allow process tree 250ms to exit gracefully, then clear port and start
     setTimeout(() => {
         const taskPort = process.env.TASK_PORT || 5000;
         freePort(taskPort);
-        startPythonTaskServer();
+        startTaskServer();
     }, 250);
 }
 
-function startPythonTaskServer() {
+function startTaskServer() {
     if (isShuttingDown || isStarting) return;
     isStarting = true;
 
@@ -183,11 +186,7 @@ function startPythonTaskServer() {
     freePort(taskPort);
 
     const repoRoot = path.join(__dirname, "../..");
-    const pythonCmd = process.platform === "win32" ? "python" : "python3";
-    const defaultTaskScript = path.join(repoRoot, "daemon", "task_server.py");
-    const legacyTaskScript = path.join(repoRoot, "task_server.py");
-    const taskScript = fs.existsSync(defaultTaskScript) ? defaultTaskScript : legacyTaskScript;
-
+    const taskScript = path.join(repoRoot, "daemon", "node", "server.js");
     const dataDir = getStorageDir();
 
     const config = loadSandboxConfig();
@@ -197,7 +196,7 @@ function startPythonTaskServer() {
     const ipcType = getTaskServerIpcType(config);
     const socketPath = getTaskServerSocketPath();
 
-    // Determine task daemon engine (go or python)
+    // Determine task daemon engine (node or go)
     let engine = getTaskDaemonEngine();
     let goBinaryName = process.platform === "win32" ? "task_daemon.exe" : "task_daemon";
     if (process.platform === "darwin") {
@@ -224,12 +223,12 @@ function startPythonTaskServer() {
     if (engine === "go") {
         if (!fs.existsSync(goBinaryPath)) {
             console.warn(`[TASK DAEMON WARNING] Go daemon binary not found at ${goBinaryPath}.`);
-            console.warn(`[TASK DAEMON WARNING] Run 'npm run build:daemon' to compile it. Falling back to Python task server.`);
-            engine = "python";
+            console.warn(`[TASK DAEMON WARNING] Run 'npm run build:daemon' to compile it. Falling back to Node.js task daemon.`);
+            engine = "node";
         }
     }
 
-    const daemonLabel = engine === "go" ? "Go task daemon" : "Python task server";
+    const daemonLabel = engine === "go" ? "Go task daemon" : "Node.js task daemon";
 
     // Fail immediately if sandboxing is enabled but container or binary is missing
     if (config.enabled && profile.mode !== "direct") {
@@ -257,11 +256,10 @@ function startPythonTaskServer() {
 
     console.log(`[SANDBOX] Launching ${daemonLabel} with profile '${resolvedId}' (${profile.name || "Default"}), IPC: ${ipcType}`);
 
-    const pyEnv = {
+    const taskEnv = {
         ...process.env,
         MULTIAI_REPO_DIR: repoRoot,
-        MULTIAI_WORKSPACE_DIR: process.cwd(),
-        PYTHONPATH: repoRoot + (process.env.PYTHONPATH ? (path.delimiter + process.env.PYTHONPATH) : "")
+        MULTIAI_WORKSPACE_DIR: process.cwd()
     };
 
     try {
@@ -274,9 +272,9 @@ function startPythonTaskServer() {
                     daemonArgs.push("--port", String(taskPort));
                 }
 
-                pythonProcess = spawn(goBinaryPath, daemonArgs, {
+                taskProcess = spawn(goBinaryPath, daemonArgs, {
                     cwd: process.cwd(),
-                    env: pyEnv,
+                    env: taskEnv,
                     detached: process.platform !== "win32",
                     stdio: ["pipe", "pipe", "pipe"]
                 });
@@ -288,9 +286,9 @@ function startPythonTaskServer() {
                     taskArgs.push("--port", String(taskPort));
                 }
 
-                pythonProcess = spawn(pythonCmd, taskArgs, {
+                taskProcess = spawn(process.execPath, taskArgs, {
                     cwd: process.cwd(),
-                    env: pyEnv,
+                    env: taskEnv,
                     detached: process.platform !== "win32",
                     stdio: ["pipe", "pipe", "pipe"]
                 });
@@ -300,11 +298,15 @@ function startPythonTaskServer() {
             let startupTemplate = profile.startup;
             if (engine === "go") {
                 startupTemplate = startupTemplate
+                    .replace(/node\s+\{TASK_SERVER_SCRIPT\}/g, goBinaryPath)
+                    .replace(/node\s+\/workspace\/(daemon\/)?server\.js/g, `/workspace/daemon/bin/${goBinaryName}`)
                     .replace(/python3?\s+\{TASK_SERVER_SCRIPT\}/g, goBinaryPath)
                     .replace(/python3?\s+\/workspace\/(daemon\/)?task_server\.py/g, `/workspace/daemon/bin/${goBinaryName}`);
             } else {
                 startupTemplate = startupTemplate
-                    .replace(/\/workspace\/task_server\.py/g, `/workspace/daemon/task_server.py`);
+                    .replace(/python3?\s+\/workspace\/(daemon\/)?task_server\.py/g, `/workspace/daemon/node/server.js`)
+                    .replace(/python3?\s+\{TASK_SERVER_SCRIPT\}/g, `node ${taskScript}`)
+                    .replace(/\{TASK_SERVER_SCRIPT\}/g, taskScript);
             }
 
             const fullCmd = resolveCommandTemplate(startupTemplate, {
@@ -319,9 +321,9 @@ function startPythonTaskServer() {
 
             console.log(`[SANDBOX EXEC] ${fullCmd}`);
 
-            pythonProcess = spawn("/bin/sh", ["-c", fullCmd], {
+            taskProcess = spawn("/bin/sh", ["-c", fullCmd], {
                 cwd: process.cwd(),
-                env: pyEnv,
+                env: taskEnv,
                 detached: process.platform !== "win32",
                 stdio: ["pipe", "pipe", "pipe"]
             });
@@ -333,33 +335,33 @@ function startPythonTaskServer() {
     }
 
     isStarting = false;
-    console.log(`[PROCESS] Started ${daemonLabel} with PID: ${pythonProcess.pid} (engine: ${engine}, workspace: ${process.cwd()})`);
+    console.log(`[PROCESS] Started ${daemonLabel} with PID: ${taskProcess.pid} (engine: ${engine}, workspace: ${process.cwd()})`);
 
-    const logPrefix = engine === "go" ? "GO DAEMON" : "PYTHON";
-    pythonProcess.stdout.on("data", (data) => {
+    const logPrefix = engine === "go" ? "GO DAEMON" : "NODE DAEMON";
+    taskProcess.stdout.on("data", (data) => {
         const text = data.toString().trim();
         if (text) console.log(`[${logPrefix} STDOUT] ${text}`);
     });
 
-    pythonProcess.stderr.on("data", (data) => {
+    taskProcess.stderr.on("data", (data) => {
         const text = data.toString().trim();
         if (text) console.error(`[${logPrefix} STDERR] ${text}`);
     });
 
-    pythonProcess.on("close", (code) => {
+    taskProcess.on("close", (code) => {
         console.log(`[PROCESS] ${daemonLabel} exited with code ${code}`);
-        pythonProcess = null;
+        taskProcess = null;
         if (!isShuttingDown) {
             if (respawnTimer) clearTimeout(respawnTimer);
             console.log(`[PROCESS] Respawning in 1s...`);
             respawnTimer = setTimeout(() => {
                 respawnTimer = null;
-                startPythonTaskServer();
+                startTaskServer();
             }, 1000);
         }
     });
 
-    pythonProcess.on("error", (err) => {
+    taskProcess.on("error", (err) => {
         console.error(`[PROCESS ERROR] Task daemon error: ${err.message}`);
     });
 }
@@ -370,11 +372,11 @@ function cleanupAndExit(exitCode = 0) {
         clearTimeout(respawnTimer);
         respawnTimer = null;
     }
-    if (pythonProcess && !pythonProcess.killed) {
-        console.log(`[PROCESS] Terminating task daemon (PID: ${pythonProcess.pid})...`);
-        pythonProcess.removeAllListeners("close");
-        killProcessTree(pythonProcess, "SIGTERM");
-        pythonProcess = null;
+    if (taskProcess && !taskProcess.killed) {
+        console.log(`[PROCESS] Terminating task daemon (PID: ${taskProcess.pid})...`);
+        taskProcess.removeAllListeners("close");
+        killProcessTree(taskProcess, "SIGTERM");
+        taskProcess = null;
     }
     const taskPort = process.env.TASK_PORT || 5000;
     freePort(taskPort);
@@ -386,7 +388,7 @@ function cleanupAndExit(exitCode = 0) {
 }
 
 function initSupervisor() {
-    startPythonTaskServer();
+    startTaskServer();
 
     process.on("SIGINT", () => {
         console.log("\n[PROCESS] Received SIGINT (Ctrl+C). Cleaning up...");
@@ -406,10 +408,10 @@ function initSupervisor() {
 
 module.exports = {
     initSupervisor,
-    startPythonTaskServer,
-    restartPythonTaskServer,
-    startTaskServer: startPythonTaskServer,
-    restartTaskServer: restartPythonTaskServer,
+    startTaskServer,
+    restartTaskServer,
+    startPythonTaskServer: startTaskServer,
+    restartPythonTaskServer: restartTaskServer,
     getTaskDaemonEngine,
     getActiveSandboxProfileId: () => activeSandboxProfileId,
     cleanupAndExit

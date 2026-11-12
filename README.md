@@ -1,12 +1,12 @@
 # MultiAI: Autonomous Multi-Model AI Orchestrator & Execution Subsystem
 
-[![Engine](https://img.shields.io/badge/Engine-Go%20%7C%20Python-00ADD8?style=flat-square&logo=go)](task_server_go/)
+[![Engine](https://img.shields.io/badge/Engine-Node.js%20%7C%20Go-339933?style=flat-square&logo=node.js)](daemon/node/)
 [![Runtime](https://img.shields.io/badge/Runtime-Node.js%2020%2B-339933?style=flat-square&logo=node.js)](package.json)
 [![Protocol](https://img.shields.io/badge/Protocol-Model%20Context%20Protocol%20(MCP)-FF5722?style=flat-square)](src/core/mcp_manager.js)
 [![Safety](https://img.shields.io/badge/Safety-Shadow%20Git%20%7C%20Bubblewrap-607D8B?style=flat-square)](src/core/shadow_git_manager.js)
 [![Platforms](https://img.shields.io/badge/Platforms-Linux%20%7C%20Windows%20%7C%20Android%20%7C%20macOS-4CAF50?style=flat-square)](#cross-platform-architecture)
 
-**MultiAI** (UI title: **MultiSearch AI**) is an open, modular, zero-cloud-lockin autonomous AI development environment. It unifies dozens of frontier LLMs and vision models behind a single responsive desktop and mobile interface, paired with an isolated dual-engine task execution subsystem (Go & Python) capable of running native shell commands, persistent process daemons, surgical code refactoring, and automated workspace versioning.
+**MultiAI** (UI title: **MultiSearch AI**) is an open, modular, zero-cloud-lockin autonomous AI development environment. It unifies dozens of frontier LLMs and vision models behind a single responsive desktop and mobile interface, paired with an isolated dual-engine task execution subsystem (Node.js & Go) capable of running native shell commands, persistent process daemons, surgical code refactoring, and automated workspace versioning.
 
 There is no mandatory cloud account, no telemetry, and no client-side bundling step. All configuration, chats, projects, and shadow revision histories live locally on your filesystem.
 
@@ -15,7 +15,7 @@ There is no mandatory cloud account, no telemetry, and no client-side bundling s
 ## Table of Contents
 
 1. [Architectural Overview](#architectural-overview)
-2. [Dual-Engine Execution Subsystem (Go & Python)](#dual-engine-execution-subsystem)
+2. [Dual-Engine Execution Subsystem (Node.js & Go)](#dual-engine-execution-subsystem)
 3. [Sandbox Isolation & Security Boundaries](#sandbox-isolation--security-boundaries)
 4. [Shadow Git File Revision Engine](#shadow-git-file-revision-engine)
 5. [Model Context Protocol (MCP) Integration](#model-context-protocol-mcp-integration)
@@ -58,12 +58,12 @@ MultiAI is built around a decoupled three-tier architecture:
 ┌────────────────────────────────────────────────────────────────────────┐
 │                 TASK EXECUTION SUBSYSTEM (Dual-Engine)                 │
 │                                                                        │
-│   [Engine A: Go Task Daemon]          [Engine B: Python Task Server]   │
-│   - Ultra-low latency binary          - Universal fallback engine      │
-│   - Linux, macOS, Win, Android ARM64  - POSIX PTY & Windows Job Mgr    │
-│   - Process tree supervision          - Flask / stdlib HTTP backend    │
-│   - Native memory-mapped grep         - Python code evaluation         │
-│   - IPC: TCP or Unix Domain Socket    - IPC: TCP loopback              │
+│   [Engine A: Go Task Daemon]          [Engine B: Node.js Task Daemon]  │
+│   - Ultra-low latency binary          - Pure JavaScript (zero deps)    │
+│   - Linux, macOS, Win, Android ARM64  - Built-in process supervision   │
+│   - Process tree supervision          - Fast in-memory VM code runner  │
+│   - Native memory-mapped grep         - Byte & regex scanner           │
+│   - IPC: TCP or Unix Domain Socket    - IPC: TCP or Unix Domain Socket │
 │                                                                        │
 │                   SECURITY BOUNDARY (Sandbox Profiles)                 │
 │              Direct Host  │  Bubblewrap (bwrap)  │  Docker              │
@@ -80,31 +80,31 @@ MultiAI is built around a decoupled three-tier architecture:
 
 ## Dual-Engine Execution Subsystem
 
-MultiAI provides two switchable task engines to execute terminal commands, run interactive scripts, conduct code searches, and manage background tasks.
+MultiAI provides two switchable task engines to execute terminal commands, run interactive scripts, conduct code searches, and manage background tasks with zero Python dependency.
 
 ### Engine Comparison
 
-| Feature | Go Task Daemon (`task_server_go/`) | Python Task Server (`task_server/`) |
+| Feature | Node.js Task Daemon (`daemon/node/`) | Go Task Daemon (`daemon/go/`) |
 | :--- | :--- | :--- |
-| **Runtime Dependency** | **None** (Statically linked binary) | Python 3.8+ (Flask or stdlib) |
-| **Startup Latency** | **< 2 ms** | ~150–300 ms (interpreter overhead) |
-| **Idle Memory Footprint**| **~6 MB** | ~35–50 MB |
-| **Android ARM64 Native** | **Yes** (Position-Independent Executable - PIE)| Requires Python environment in Termux |
-| **Windows Support** | Native `cmd.exe`/PowerShell + Process Groups | Native `WindowsTaskManager` |
-| **Transport** | TCP Loopback or **Unix Domain Socket** (`.sock`) | TCP Loopback |
-| **Concurrency** | Goroutine per connection & streaming task | Threading / greenlet worker pool |
+| **Runtime Dependency** | **None** (Uses host Node.js runtime) | None (Statically linked binary) |
+| **Startup Latency** | **~20 ms** | **< 2 ms** |
+| **Default Engine** | **Yes** (Default out of the box) | Optional high-performance engine |
+| **Android ARM64 Native** | **Yes** (Runs directly in Termux / Node) | **Yes** (Position-Independent Executable - PIE) |
+| **Windows Support** | Native Process Groups | Native `cmd.exe`/PowerShell + Process Groups |
+| **Transport** | TCP Loopback or **Unix Domain Socket** (`.sock`) | TCP Loopback or **Unix Domain Socket** (`.sock`) |
+| **Concurrency** | Asynchronous Node event loop + worker streams | Goroutine per connection & streaming task |
 
 ### How to Switch Engines
 
 The active engine is dynamically resolved at launch:
-1. **CLI Flag**: `multiai --task-server=go` or `multiai --task-daemon=go` (or `python`)
-2. **Environment Variable**: `MULTIAI_TASK_DAEMON=go` or `MULTIAI_TASK_DAEMON=python`
+1. **CLI Flag**: `node start.js --task-daemon=node` or `--task-daemon=go`
+2. **Environment Variable**: `MULTIAI_TASK_DAEMON=node` or `MULTIAI_TASK_DAEMON=go`
 3. **Configuration File**: In `~/.MultiAI/config.ini`:
    ```ini
    [Agent]
-   TaskServer = go   # Options: go | python (alias: TaskDaemon = go)
+   TaskServer = node   # Options: node | go (alias: TaskDaemon = node)
    ```
-4. **Auto-Fallback**: If `go` is requested but the compiled binary (`bin/task_daemon` or `bin/task_daemon.exe`) is missing, MultiAI logs a warning and automatically falls back to Python without crashing.
+4. **Auto-Fallback**: If `go` is requested but the compiled binary (`daemon/bin/task_daemon` or `bin/task_daemon`) is missing, MultiAI logs an informative notice and automatically falls back to the Node task daemon without crashing.
 
 ---
 
@@ -196,8 +196,8 @@ MultiAI features two dedicated operational workflows switchable via the sidebar 
 | `read_file` | Filesystem | Reads full or partial byte ranges, displays line numbers, inspects file metadata and images. |
 | `write_file` | Filesystem | Writes new files or overwrites existing files atomically. |
 | `search_and_replace` | Filesystem | 4-stage cascade editor: Exact match → Normal line endings → Indentation agnostic → Fuzzy Levenshtein match (≥ 85%). |
-| `grep_search` | Filesystem | Multithreaded search using Ripgrep, Go, Python regex, or Node fallback. |
-| `run_python` | Code Runner | Evaluates Python snippets in memory, captures print statements and last returned expressions. |
+| `grep_search` | Filesystem | Fast multithreaded and streaming search using Ripgrep, Go, or pure Node scanner. |
+| `run_node` / `run_code` | Code Runner | Evaluates JavaScript/Node.js snippets in a sandboxed VM context, capturing console output and return values. |
 | `web_search` | Research | Live multi-query web search engine powered by TinyFish. |
 | `fetch_web_content` | Research | Fetches arbitrary HTTP/HTTPS endpoints and converts HTML into sanitized Markdown. |
 | `generate_image` | Creative | Asynchronous text-to-image synthesis with Pollinations Flux, Turbo, or OpenAI DALL-E. |
@@ -228,7 +228,7 @@ LogLevel = info
 MaxToolRounds = 0              # 0 = uncapped continuous agent loop
 MaxToolsPerRound = 10
 TurnTimeoutSeconds = 120
-TaskDaemon = go                # Switchable: 'go' or 'python'
+TaskDaemon = node                # Switchable: 'node' or 'go'
 StreamReasoning = false
 
 [Tools]
@@ -256,7 +256,7 @@ All user state is strictly isolated under `~/.MultiAI`:
 ```
 ~/.MultiAI/
 ├── config.ini                     # Master user configuration
-├── task_server.sock               # Unix Domain Socket for Go/Python daemon IPC
+├── task_server.sock               # Unix Domain Socket for Node/Go daemon IPC
 ├── vm_conf.json                   # Sandbox container profile settings
 ├── shadow_git/                    # Local workspace micro-commits & diff timelines
 │   └── <project-slug-hash>/       # Isolated shadow git repository
@@ -274,25 +274,25 @@ All user state is strictly isolated under `~/.MultiAI`:
 
 * **Node.js**: v20.0.0 or higher
 * **npm**: v10.0.0 or higher
-* **Python**: v3.8+ *(Only required if using the Python task server engine)*
 * **Go**: v1.21+ *(Only required if compiling the Go task daemon from source)*
 
 ### 1. Launching MultiAI
 
-Start MultiAI using the native helper or Python launcher:
+Start MultiAI using the native supervisor launcher:
 
 ```bash
-# Recommended launcher
-multiai
+# Recommended launcher via npm
+npm start
+
+# Or directly with node:
+node start.js
 
 # With options:
-multiai --task-daemon=go --socket --port=4440
+node start.js --task-daemon=node --socket --port=4440
 ```
 
-Alternatively, launch via Python or Node:
+Alternatively, launch the server directly without supervisor:
 ```bash
-python3 start.py
-# or
 node src/index.js
 ```
 
@@ -316,8 +316,8 @@ EDITOR=nano multiai models
 
 | Flag | Description |
 | :--- | :--- |
-| `--task-daemon=go\|python` | Explicitly choose the task engine (`--go-daemon` or `--python-daemon`) |
-| `--socket` | Bind Go task daemon to Unix Domain Socket (`~/.MultiAI/task_server.sock`) |
+| `--task-daemon=node\|go` | Explicitly choose the task engine (`--task-daemon=node` or `--task-daemon=go`) |
+| `--socket` | Bind task daemon to Unix Domain Socket (`~/.MultiAI/task_server.sock`) |
 | `--port N` | Override HTTP port (default: 4440 or configured value in `config.ini`) |
 | `--host IP` | Override binding host address (default: `0.0.0.0` or `127.0.0.1`) |
 | `--no-browser` | Prevent auto-opening the browser window on launch |
@@ -362,7 +362,7 @@ npm run build:daemon:darwin
 npm run build:daemon:all
 ```
 
-> **Automatic Pre-Flight Download**: MultiAI's startup script (`start.py`) automatically detects your host architecture (`x86_64`, `arm64`, `armv7l`, `windows`, etc.) and downloads the appropriate static binary from GitHub Releases if missing. If offline or unavailable, it will automatically compile locally via `go build` if Go is installed, or seamlessly fall back to the Python Flask task server.
+> **Automatic Pre-Flight Download**: MultiAI's startup script (`start.js`) automatically detects your host architecture (`x86_64`, `arm64`, `armv7l`, `windows`, etc.) and verifies the static binary if installed. If offline or unavailable, it will automatically compile locally via `go build` if Go is installed, or seamlessly fall back to the built-in pure Node.js task server.
 
 ---
 
@@ -376,8 +376,11 @@ Run test modules individually or in sequence:
 # Test Config Manager resolution & migration
 node tests/test_config_manager.js
 
-# Test Supervisor live switching between Go and Python daemons
+# Test Supervisor live switching between Go and Node daemons
 node tests/test_live_supervisor_switch.js
+
+# Test Node.js Task Daemon endpoints & streaming
+node tests/test_node_daemon.js
 
 # Test Go Task Daemon (TCP + Unix Domain Socket IPC)
 node tests/test_go_daemon.js

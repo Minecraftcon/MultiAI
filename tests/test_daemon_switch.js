@@ -42,8 +42,8 @@ async function testResolution() {
 
     const defaultEngine = getTaskDaemonEngine();
     console.log("Default engine:", defaultEngine);
-    if (defaultEngine !== "python") {
-        throw new Error(`Expected default engine to be python, got ${defaultEngine}`);
+    if (defaultEngine !== "node") {
+        throw new Error(`Expected default engine to be node, got ${defaultEngine}`);
     }
 
     process.env.MULTIAI_TASK_DAEMON = "go";
@@ -53,11 +53,18 @@ async function testResolution() {
         throw new Error(`Expected engine to be go, got ${goEngine}`);
     }
 
+    process.env.MULTIAI_TASK_DAEMON = "node";
+    const nodeEngine = getTaskDaemonEngine();
+    console.log("With MULTIAI_TASK_DAEMON=node:", nodeEngine);
+    if (nodeEngine !== "node") {
+        throw new Error(`Expected engine to be node, got ${nodeEngine}`);
+    }
+
     process.env.MULTIAI_TASK_DAEMON = "python";
     const pyEngine = getTaskDaemonEngine();
-    console.log("With MULTIAI_TASK_DAEMON=python:", pyEngine);
-    if (pyEngine !== "python") {
-        throw new Error(`Expected engine to be python, got ${pyEngine}`);
+    console.log("With MULTIAI_TASK_DAEMON=python (fallback):", pyEngine);
+    if (pyEngine !== "node") {
+        throw new Error(`Expected engine to fall back to node, got ${pyEngine}`);
     }
 
     console.log("✓ Engine resolution tests passed!");

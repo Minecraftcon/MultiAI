@@ -27,8 +27,8 @@ const DEFAULT_CONFIG = {
         StreamReasoning: false,
         TurnTimeoutSeconds: 120,
         Temperature: 0.7,
-        TaskDaemon: "python",
-        TaskServer: "python"
+        TaskDaemon: "node",
+        TaskServer: "node"
     },
     Tools: {
         EnableTerminal: true,

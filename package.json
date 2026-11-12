@@ -1,9 +1,9 @@
 {
   "main": "src/index.js",
   "scripts": {
-    "start": "node src/index.js",
+    "start": "node start.js",
     "vendor": "node scripts/vendor_download.js",
-    "setup:sandbox": "python3 scripts/setup_sandbox.py",
+    "setup:sandbox": "node scripts/setup_sandbox.js",
     "build:daemon": "cd daemon/go && CGO_ENABLED=0 go build -ldflags=\"-s -w\" -o ../bin/task_daemon .",
     "build:daemon:arm64": "cd daemon/go && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags=\"-s -w\" -o ../bin/task_daemon_arm64 .",
     "build:daemon:armv7l": "cd daemon/go && CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -ldflags=\"-s -w\" -o ../bin/task_daemon_armv7l .",
