@@ -9,6 +9,112 @@
 export function initCloudTools() {
     setupUploadUI();
     setupGitCloneUI();
+    setupWorkdirSelector();
+}
+
+export async function setupWorkdirSelector() {
+    const btn = document.getElementById("heroWorkdirPickerBtn");
+    const label = document.getElementById("heroWorkdirLabel");
+    const dropdown = document.getElementById("heroWorkdirDropdown");
+
+    if (!btn || !dropdown) return;
+
+    let cachedWorkspaces = null;
+
+    async function fetchWorkspaces() {
+        try {
+            const res = await fetch("/api/cloud/workspaces");
+            const data = await res.json();
+            if (data.success) {
+                cachedWorkspaces = data;
+                renderWorkspacesDropdown();
+            }
+        } catch (_) {}
+    }
+
+    function renderWorkspacesDropdown() {
+        if (!cachedWorkspaces) return;
+        const currentPath = cachedWorkspaces.current || "/tmp/workspace";
+        const isDefaultActive = currentPath === cachedWorkspaces.default;
+
+        let html = `
+            <div class="workdir-menu-header">WORKSPACE DIRECTORY</div>
+            <div class="workdir-item ${isDefaultActive ? 'active' : ''}" data-path="${cachedWorkspaces.default}">
+                <i data-lucide="folder" class="workdir-item-icon"></i>
+                <div class="workdir-item-text">
+                    <span class="workdir-item-name">Default Workspace</span>
+                    <span class="workdir-item-path">${cachedWorkspaces.default}</span>
+                </div>
+                ${isDefaultActive ? '<i data-lucide="check" class="workdir-check"></i>' : ''}
+            </div>
+        `;
+
+        if (cachedWorkspaces.repos && cachedWorkspaces.repos.length > 0) {
+            html += `<div class="workdir-menu-divider">CLONED REPOSITORIES</div>`;
+            for (const repo of cachedWorkspaces.repos) {
+                const isActive = currentPath === repo.path;
+                html += `
+                    <div class="workdir-item ${isActive ? 'active' : ''}" data-path="${repo.path}">
+                        <i data-lucide="git-branch" class="workdir-item-icon"></i>
+                        <div class="workdir-item-text">
+                            <span class="workdir-item-name">${repo.name}</span>
+                            <span class="workdir-item-path">${repo.path}</span>
+                        </div>
+                        ${isActive ? '<i data-lucide="check" class="workdir-check"></i>' : ''}
+                    </div>
+                `;
+            }
+        } else {
+            html += `<div class="workdir-empty">No cloned repositories yet. Clone a repository to add it here.</div>`;
+        }
+
+        dropdown.innerHTML = html;
+        if (window.lucide) window.lucide.createIcons();
+
+        // Update button label
+        if (label) {
+            if (isDefaultActive) {
+                label.textContent = "Workdir: Default";
+            } else {
+                const matched = cachedWorkspaces.repos.find(r => r.path === currentPath);
+                label.textContent = `Workdir: ${matched ? matched.name : currentPath.split("/").pop()}`;
+            }
+        }
+
+        // Attach click handlers
+        dropdown.querySelectorAll(".workdir-item").forEach(item => {
+            item.addEventListener("click", async () => {
+                const targetPath = item.getAttribute("data-path");
+                dropdown.style.display = "none";
+                try {
+                    await fetch("/api/cloud/workspaces/select", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ path: targetPath })
+                    });
+                    await fetchWorkspaces();
+                } catch (_) {}
+            });
+        });
+    }
+
+    btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const isOpen = dropdown.style.display === "block";
+        dropdown.style.display = isOpen ? "none" : "block";
+        if (!isOpen) {
+            fetchWorkspaces();
+        }
+    });
+
+    document.addEventListener("click", (e) => {
+        if (!dropdown.contains(e.target) && !btn.contains(e.target)) {
+            dropdown.style.display = "none";
+        }
+    });
+
+    // Initial load
+    fetchWorkspaces();
 }
 
 function setupUploadUI() {

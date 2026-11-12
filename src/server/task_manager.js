@@ -120,9 +120,21 @@ class TaskManager {
             env.GIT_CONFIG_VALUE_0 = "https://github.com/";
         }
 
-        let targetCwd = cwd || process.env.MULTIAI_WORKSPACE_DIR || process.cwd();
+        let targetCwd = cwd;
+        if (!targetCwd && chatId) {
+            try {
+                const { getChatWorkdir } = require("./routes/cloud_tools");
+                targetCwd = getChatWorkdir(chatId);
+            } catch (_) {}
+        }
+        if (!targetCwd) {
+            targetCwd = process.env.MULTIAI_WORKSPACE_DIR || "/tmp/workspace";
+        }
+        if (!fs.existsSync(targetCwd)) {
+            try { fs.mkdirSync(targetCwd, { recursive: true }); } catch (_) {}
+        }
         if (!fs.existsSync(targetCwd) || !fs.statSync(targetCwd).isDirectory()) {
-            targetCwd = process.cwd();
+            targetCwd = "/tmp/workspace";
         }
 
         const isWin = process.platform === "win32";

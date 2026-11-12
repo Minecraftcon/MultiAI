@@ -1,809 +1,208 @@
-# ==============================================================================
-# MultiAI Model & Provider Configuration (models.yaml)
-# ==============================================================================
-# This file defines the LLM providers and model presets available in MultiAI.
-# Location precedence:
-#   1. ~/.MultiAI/models.yaml (user configuration directory, if present)
-#   2. ./models.yaml (repository workspace root fallback)
-#
-# Commands:
-#   multiai models  - Open this configuration in your terminal editor ($EDITOR or nano)
-#   multiai conf    - Open system presets and server configuration (config.ini)
-#
-# Key Concepts & Guidelines:
-# ------------------------------------------------------------------------------
-# 1. API Keys & Security:
-#    - API keys are NEVER hardcoded in this file.
-#    - Specify 'api_key_env' with the name of your environment variable (e.g. GEMINI_API_KEY).
-#    - Export keys in your shell (~/.bashrc, ~/.zshrc) or in a local .env file.
-#    - The server resolves keys securely in backend memory; keys are NEVER sent to the browser.
-#
-# 2. Default Model Selection:
-#    - Set 'default: true' on exactly ONE model preset to be the default on initial load.
-#    - Alternatively, set 'DefaultStartupLLM = <model-id>' in config.ini.
-#
-# 3. Model Capabilities:
-#    - 'supports_tools: true': Enables autonomous function calling (shell tasks, web search,
-#                              file editing, and MCP tool execution). Set to false for chat-only models.
-#    - 'supports_vision: true': Enables image & screenshot input for multimodal reasoning.
-#    - 'max_context_tokens: <N>': Custom context window ceiling. If omitted, MultiAI applies
-#                                 provider/model architecture defaults (e.g. 1M for Gemini, 128k for Llama).
-#
-# 4. Provider Types:
-#    - 'gemini': Google Generative Language API (v1beta).
-#    - 'zai': Z.AI GLM models via PaaS v4 API.
-#    - 'openai_compatible': Any OpenAI-compliant endpoint (Groq, OpenRouter, SambaNova, etc.).
-#    - 'cohere': Cohere v2 chat API.
-#    - 'puter': Puter.js serverless proxy (free, no API key needed).
-#    - 'local': Local models (Ollama, Kobold.cpp, LM Studio, vLLM) on localhost.
-#    - 'tokenharbor': Token Harbor community gateway.
-#    - 'omniroute': Local OmniRoute multi-model gateway.
-#    - 'opencode': OpenCode Zen free tier endpoints.
-# ==============================================================================
-
 providers:
-  # ----------------------------------------------------------------------------
-  # Google Gemini & Gemma
-  # API Key: export GEMINI_API_KEY="your-gemini-key" (https://aistudio.google.com)
-  # Features: 1M-2M token context, native tool calling, multimodal vision.
-  # ----------------------------------------------------------------------------
   gemini:
-    name: "Google Gemini & Gemma"
-    type: "gemini"
-    api_key_env: "GEMINI_API_KEY"
-    endpoint: "https://generativelanguage.googleapis.com/v1beta/models"
+    name: Google Gemini & Gemma
+    type: gemini
+    api_key_env: GEMINI_API_KEY
+    endpoint: https://generativelanguage.googleapis.com/v1beta/models
     models:
-      - id: "gemini-2.5-flash"
-        name: "Gemini 2.5 Flash (Fast & Capable)"
+      - id: gemini-2.5-flash
+        name: Gemini 2.5 Flash (Fast & Capable)
         default: true
         supports_tools: true
         supports_vision: true
-      - id: "gemini-flash-latest"
-        name: "Gemini Flash Latest"
+      - id: gemini-flash-lite-latest
+        name: Gemini Flash-Lite Latest (Ultra Fast & Efficient)
         supports_tools: true
         supports_vision: true
-      - id: "gemini-flash-lite-latest"
-        name: "Gemini Flash-Lite Latest (Ultra Fast & Efficient)"
+      - id: gemini-2.5-flash-lite
+        name: Gemini 2.5 Flash-Lite (High Speed)
         supports_tools: true
         supports_vision: true
-      - id: "gemini-2.5-flash-lite"
-        name: "Gemini 2.5 Flash-Lite (High Speed)"
+      - id: gemini-3.1-flash-lite
+        name: Gemini 3.1 Flash-Lite (Next-Gen Fast)
         supports_tools: true
         supports_vision: true
-      - id: "gemini-3.1-flash-lite"
-        name: "Gemini 3.1 Flash-Lite (Next-Gen Fast)"
+      - id: gemini-3.5-flash-lite
+        name: Gemini 3.5 Flash-Lite
         supports_tools: true
         supports_vision: true
-      - id: "gemini-3.1-flash-lite-preview"
-        name: "Gemini 3.1 Flash-Lite Preview"
+      - id: gemini-3.5-flash
+        name: Gemini 3.5 Flash
         supports_tools: true
         supports_vision: true
-      - id: "gemini-3.1-flash-lite-image"
-        name: "Gemini 3.1 Flash-Lite Image (Nano Banana 2 Lite)"
+      - id: gemini-3-flash-preview
+        name: Gemini 3 Flash Preview
         supports_tools: true
         supports_vision: true
-      - id: "gemini-3.5-flash-lite"
-        name: "Gemini 3.5 Flash-Lite"
+      - id: gemma-4-26b-a4b-it
+        name: Gemma 4 26B IT (Google Open Weights)
         supports_tools: true
         supports_vision: true
-      - id: "gemini-3.5-flash"
-        name: "Gemini 3.5 Flash"
-        supports_tools: true
-        supports_vision: true
-      - id: "gemini-3.7-flash"
-        name: "Gemini 3.7 Flash"
-        supports_tools: true
-        supports_vision: true
-      - id: "gemini-3.8-flash"
-        name: "Gemini 3.8 Flash"
-        supports_tools: true
-        supports_vision: true
-      - id: "gemini-3-flash-preview"
-        name: "Gemini 3 Flash Preview"
-        supports_tools: true
-        supports_vision: true
-      - id: "gemini-pro-latest"
-        name: "Gemini Pro Latest (Reasoning)"
-        supports_tools: true
-        supports_vision: true
-      - id: "gemma-4-26b-a4b-it"
-        name: "Gemma 4 26B IT (Google Open Weights)"
-        supports_tools: true
-        supports_vision: true
-      - id: "gemma-4-31b-it"
-        name: "Gemma 4 31B IT (Google Open Weights)"
-        supports_tools: true
-        supports_vision: false
-
-  # ----------------------------------------------------------------------------
-  # Z.AI (GLM Architecture)
-  # API Key: export Z_AI_API_KEY="your-key" (https://z.ai)
-  # Features: Advanced Chinese/English bilingual reasoning & fast tool calling.
-  # ----------------------------------------------------------------------------
   zai:
-    name: "Z.AI (GLM)"
-    type: "zai"
-    api_key_env: "Z_AI_API_KEY"
-    base_url: "https://api.z.ai/api/paas/v4"
+    name: Z.AI (GLM)
+    type: zai
+    api_key_env: Z_AI_API_KEY
+    base_url: https://api.z.ai/api/paas/v4
     default_max_tokens: 65536
     models:
-      - id: "glm-4.5-flash"
-        name: "GLM 4.5 Flash (Fast & Reasoning)"
+      - id: glm-4.5-flash
+        name: GLM 4.5 Flash (Fast & Reasoning)
         supports_tools: true
         supports_vision: false
         max_context_tokens: 55000
-      - id: "glm-4.7-flash"
-        name: "GLM 4.7 Flash"
-        supports_tools: true
-        supports_vision: false
-        max_context_tokens: 110000
-      - id: "glm-5.3-flash"
-        name: "GLM 5.3 Flash"
-        supports_tools: true
-        supports_vision: false
-        max_context_tokens: 110000
-      - id: "glm-4.5"
-        name: "GLM 4.5"
-        supports_tools: true
-        supports_vision: false
-        max_context_tokens: 110000
-      - id: "glm-4.7"
-        name: "GLM 4.7"
-        supports_tools: true
-        supports_vision: false
-        max_context_tokens: 110000
-
-  # ----------------------------------------------------------------------------
-  # LLM7.io High-Speed Gateway
-  # API Key: export LLM7_API_KEY="your-key" (https://llm7.io)
-  # Features: MiniMax, Codestral, DeepSeek V4 Flash & large context models.
-  # ----------------------------------------------------------------------------
-  llm7:
-    name: "LLM7.io"
-    type: "llm7"
-    api_key_env: "LLM7_API_KEY"
-    base_url: "https://api.llm7.io/v1"
-    default_max_tokens: 65536
-    models:
-      - id: "minimax-m2.7"
-        name: "MiniMax M2.7 (Reasoning & Tools)"
-        supports_tools: true
-        supports_vision: false
-        max_context_tokens: 180000
-      - id: "codestral-latest"
-        name: "Codestral Latest (Coding Specialist & Tools)"
-        supports_tools: true
-        supports_vision: false
-        max_context_tokens: 32000
-      - id: "DeepSeek-V4-Flash-0731"
-        name: "DeepSeek V4 Flash (Tools)"
-        supports_tools: true
-        supports_vision: false
-        max_context_tokens: 400000
-      - id: "GLM-5.3-Flash"
-        name: "GLM 5.3 Flash (Turbo & Tools)"
-        supports_tools: true
-        supports_vision: false
-        max_context_tokens: 400000
-      - id: "mistral-Nemo-Instruct-2407"
-        name: "Mistral NeMo 12B Instruct (Turbo)"
-        supports_tools: false
-        supports_vision: false
-        max_context_tokens: 128000
-      - id: "nemotron-3-nano:30b"
-        name: "Nemotron 3 Nano 30B (Turbo & 1M Context)"
-        supports_tools: true
-        supports_vision: false
-        max_context_tokens: 1000000
-
-  # ----------------------------------------------------------------------------
-  # Logfare AI
-  # API Key: export LOGFLARE_API_KEY="your-key" (https://logfare.ai)
-  # Features: Qwen, Gemma, and Moondream lightweight vision models.
-  # ----------------------------------------------------------------------------
-  logflare:
-    name: "Logfare AI"
-    type: "logflare"
-    api_key_env: "LOGFLARE_API_KEY"
-    base_url: "https://logfare.ai/v1"
-    default_max_tokens: 65536
-    models:
-      - id: "glm-5.3-flash"
-        name: "GLM 5.3 Flash (Logfare — Tools & Fast)"
-        supports_tools: true
-        supports_vision: false
-        max_context_tokens: 110000
-      - id: "qwen-3.8-27b"
-        name: "Qwen 3.8 27B (Logfare — Tools & Reasoning)"
-        supports_tools: true
-        supports_vision: false
-      - id: "gemma-4-26b"
-        name: "Gemma 4 26B (Logfare — Reasoning)"
-        supports_tools: true
-        supports_vision: false
-      - id: "logfare/auto"
-        name: "Logfare Auto (Smart Router)"
-        supports_tools: true
-        supports_vision: false
-        max_context_tokens: 100000
-      - id: "moondream3.1"
-        name: "Moondream 3.1 9B (Vision)"
-        supports_tools: false
-        supports_vision: true
-
-  # ----------------------------------------------------------------------------
-  # ArliAI (Uncensored / Derestricted Models)
-  # API Key: export ARLIAI_API_KEY="your-key" (https://arliai.com)
-  # Features: Unrestricted reasoning, creative writing, and fast trial models.
-  # ----------------------------------------------------------------------------
-  arliai:
-    name: "ArliAI"
-    type: "arliai"
-    api_key_env: "ARLIAI_API_KEY"
-    base_url: "https://api.arliai.com/v1"
-    default_max_tokens: 65536
-    models:
-      - id: "Qwen3.5-27B-Derestricted"
-        name: "Qwen 3.5 27B Derestricted (ArliAI — Reasoning)"
-        supports_tools: true
-        supports_vision: true
-      - id: "Fastest"
-        name: "ArliAI Fastest"
-        supports_tools: true
-        supports_vision: false
-      - id: "(TRIAL) GLM-4.7"
-        name: "GLM 4.7 (ArliAI Trial)"
-        supports_tools: true
-        supports_vision: false
-        max_context_tokens: 110000
-      - id: "(TRIAL) Gemma-4-31B-it"
-        name: "Gemma 4 31B IT (ArliAI Trial)"
-        supports_tools: true
-        supports_vision: false
-      - id: "(TRIAL) Qwen3.5-27B-Writer-V2-Derestricted"
-        name: "Qwen 3.5 27B Writer V2 (ArliAI Trial)"
-        supports_tools: true
-        supports_vision: false
-      - id: "(TRIAL) DeepSeek-V4-Flash-0731"
-        name: "DeepSeek V4 Flash (ArliAI Trial)"
-        supports_tools: true
-        supports_vision: false
-
-  # ----------------------------------------------------------------------------
-  # Groq Cloud (Ultra-Low Latency Inference)
-  # API Key: export API_KEY="your-groq-key" or GROQ_API_KEY (https://console.groq.com)
-  # Features: Blazing fast token generation on Groq LPUs.
-  # ----------------------------------------------------------------------------
   groq:
-    name: "Groq Cloud"
-    type: "openai_compatible"
-    api_key_env: "API_KEY"
-    base_url: "https://api.groq.com/openai/v1"
+    name: Groq Cloud
+    type: openai_compatible
+    api_key_env: API_KEY
+    base_url: https://api.groq.com/openai/v1
     default_max_tokens: 800
     models:
-      - id: "qwen/qwen3.8-27b"
-        name: "Qwen 3.8 27B (Groq Ultra-Fast)"
+      - id: qwen/qwen3.8-27b
+        name: Qwen 3.8 27B (Groq Ultra-Fast)
         supports_tools: true
         supports_vision: false
-      - id: "qwen/qwen3.6-27b"
-        name: "Qwen 3.6 27B (Groq Fast)"
+      - id: openai/gpt-oss-120b
+        name: GPT-OSS 120B (Groq)
         supports_tools: true
         supports_vision: false
-      - id: "openai/gpt-oss-120b"
-        name: "GPT-OSS 120B (Groq)"
+      - id: openai/gpt-oss-20b
+        name: GPT-OSS 20B (Groq)
         supports_tools: true
         supports_vision: false
-      - id: "openai/gpt-oss-20b"
-        name: "GPT-OSS 20B (Groq)"
-        supports_tools: true
-        supports_vision: false
-      - id: "groq/compound"
-        name: "Groq Compound (Multi-Agent)"
-        supports_tools: true
-        supports_vision: false
-      - id: "groq/compound-mini"
-        name: "Groq Compound Mini"
-        supports_tools: true
-        supports_vision: false
-
-  # ----------------------------------------------------------------------------
-  # OpenRouter (Multi-Provider Aggregator)
-  # API Key: export OPEN_ROUTER="your-key" (https://openrouter.ai)
-  # Features: Access to Claude 3.7, DeepSeek V4.1 (1M Context), Llama 3.3, and free models.
-  # ----------------------------------------------------------------------------
   openrouter:
-    name: "OpenRouter"
-    type: "openai_compatible"
-    api_key_env: "OPEN_ROUTER"
-    base_url: "https://openrouter.ai/api/v1"
+    name: OpenRouter
+    type: openai_compatible
+    api_key_env: OPEN_ROUTER
+    base_url: https://openrouter.ai/api/v1
     default_max_tokens: 2048
     models:
-      - id: "deepseek/deepseek-v4.1-flash"
-        name: "DeepSeek V4.1 Flash (1M Context)"
+      - id: qwen/qwen3.5-flash-02-23
+        name: Qwen 3.5 Flash 02-23
         supports_tools: true
         supports_vision: false
         max_context_tokens: 1000000
-      - id: "deepseek/deepseek-v4-pro-0813"
-        name: "DeepSeek V4 Pro"
+      - id: google/gemma-4-26b-a4b-it:free
+        name: Gemma 4 26B IT (Free)
         supports_tools: true
         supports_vision: false
-      - id: "qwen/qwen3.8-27b"
-        name: "Qwen 3.8 27B"
-        supports_tools: true
-        supports_vision: false
-      - id: "qwen/qwen3.8-2.4t-a95b"
-        name: "Qwen 3.8 2.4T A95B"
-        supports_tools: true
-        supports_vision: false
-        max_context_tokens: 1048576
-      - id: "qwen/qwen3.6-plus"
-        name: "Qwen 3.6 Plus"
-        supports_tools: true
-        supports_vision: false
-        max_context_tokens: 1000000
-      - id: "qwen/qwen3.7-plus"
-        name: "Qwen 3.7 Plus"
-        supports_tools: true
-        supports_vision: false
-        max_context_tokens: 1000000
-      - id: "qwen/qwen3.5-flash-02-23"
-        name: "Qwen 3.5 Flash 02-23"
-        supports_tools: true
-        supports_vision: false
-        max_context_tokens: 1000000
-      - id: "google/gemma-4-26b-a4b-it:free"
-        name: "Gemma 4 26B IT (Free)"
-        supports_tools: true
-        supports_vision: false
-      - id: "google/gemma-4-31b-it:free"
-        name: "Gemma 4 31B IT (Free)"
-        supports_tools: true
-        supports_vision: false
-      - id: "anthropic/claude-3.7-sonnet"
-        name: "Claude 3.7 Sonnet"
-        supports_tools: true
-        supports_vision: true
-      - id: "meta-llama/llama-3.3-70b-instruct"
-        name: "Llama 3.3 70B Instruct"
-        supports_tools: true
-        supports_vision: false
-
-  # ----------------------------------------------------------------------------
-  # Cohere
-  # API Key: export COHERE_API_KEY="your-key" (https://cohere.com)
-  # Features: Enterprise Command R / R+, multilingual Aya models, and multimodal vision.
-  # ----------------------------------------------------------------------------
   cohere:
-    name: "Cohere"
-    type: "cohere"
-    api_key_env: "COHERE_API_KEY"
-    base_url: "https://api.cohere.com/v2"
+    name: Cohere
+    type: cohere
+    api_key_env: COHERE_API_KEY
+    base_url: https://api.cohere.com/v2
     models:
-      - id: "command-a-plus-05-2026"
-        name: "Command A+ (05-2026)"
+      - id: command-a-plus-05-2026
+        name: Command A+ (05-2026)
         supports_tools: true
         supports_vision: false
-      - id: "command-a-03-2025"
-        name: "Command A (03-2025)"
+      - id: command-a-03-2025
+        name: Command A (03-2025)
         supports_tools: true
         supports_vision: false
-      - id: "command-a-reasoning-08-2025"
-        name: "Command A Reasoning"
+      - id: command-r-08-2024
+        name: Command R (Fast 35B)
         supports_tools: true
         supports_vision: false
-      - id: "command-r-08-2024"
-        name: "Command R (Fast 35B)"
+      - id: command-r-plus-08-2024
+        name: Command R+ (104B)
         supports_tools: true
         supports_vision: false
-      - id: "command-r-plus-08-2024"
-        name: "Command R+ (104B)"
+      - id: command-r7b-12-2024
+        name: Command R7B (Ultra-Fast)
         supports_tools: true
         supports_vision: false
-      - id: "command-r7b-12-2024"
-        name: "Command R7B (Ultra-Fast)"
-        supports_tools: true
-        supports_vision: false
-      - id: "command-a-vision-07-2025"
-        name: "Command A Vision"
+      - id: command-a-vision-07-2025
+        name: Command A Vision
         supports_tools: false
         supports_vision: true
-      - id: "c4ai-aya-vision-32b"
-        name: "Aya Vision 32B (Multimodal)"
+      - id: c4ai-aya-vision-32b
+        name: Aya Vision 32B (Multimodal)
         supports_tools: false
         supports_vision: true
-      - id: "c4ai-aya-expanse-32b"
-        name: "Aya Expanse 32B (Multilingual)"
-        supports_tools: false
-        supports_vision: false
-
-  # ----------------------------------------------------------------------------
-  # NVIDIA NIM (Inference Microservices)
-  # API Key: export NVIDIA_API_KEY="your-key" (https://build.nvidia.com)
-  # Features: High-throughput Nemotron and Llama Vision inference.
-  # ----------------------------------------------------------------------------
   nvidia:
-    name: "NVIDIA NIM"
-    type: "openai_compatible"
-    api_key_env: "NVIDIA_API_KEY"
-    base_url: "https://integrate.api.nvidia.com/v1"
+    name: NVIDIA NIM
+    type: openai_compatible
+    api_key_env: NVIDIA_API_KEY
+    base_url: https://integrate.api.nvidia.com/v1
     models:
-      - id: "nvidia/nemotron-3.5-lightning-30b-a3b"
-        name: "Nemotron 3.5 Lightning 30B"
+      - id: nvidia/nemotron-3.5-lightning-30b-a3b
+        name: Nemotron 3.5 Lightning 30B
         supports_tools: true
         supports_vision: false
-      - id: "nvidia/nemotron-3-super-120b-a12b"
-        name: "Nemotron 3 Super 120B"
-        supports_tools: true
-        supports_vision: false
-      - id: "meta/llama-3.2-11b-vision-instruct"
-        name: "Llama 3.2 11B Vision Instruct"
-        supports_tools: true
-        supports_vision: true
-
-  # ----------------------------------------------------------------------------
-  # Mistral AI
-  # API Key: export MISTRAL_API_KEY="your-key" (https://console.mistral.ai)
-  # Features: Frontier European reasoning, Codestral programming specialist.
-  # ----------------------------------------------------------------------------
-  mistral:
-    name: "Mistral AI"
-    type: "openai_compatible"
-    api_key_env: "MISTRAL_API_KEY"
-    base_url: "https://api.mistral.ai/v1"
+  opencode:
+    name: OpenCode Zen (Free Tier)
+    type: opencode
+    api_key_env: OPENCODE_API_KEY
+    base_url: https://opencode.ai/zen/v1
     models:
-      - id: "mistral-large-latest"
-        name: "Mistral Large Latest"
+      - id: nemotron-3.5-lightning-free
+        name: Nemotron 3.5 Lightning (Free)
         supports_tools: true
         supports_vision: false
-      - id: "codestral-latest"
-        name: "Codestral Latest (Coding Specialist)"
+      - id: mimo-v2.6-flash-free
+        name: MiMo V2.6 Flash (Free)
         supports_tools: true
         supports_vision: false
-      - id: "mistral-small-latest"
-        name: "Mistral Small Latest"
+      - id: glm-5.3-flash-free
+        name: GLM 5.3 Flash (Free)
         supports_tools: true
         supports_vision: false
-
-  # ----------------------------------------------------------------------------
-  # Puter Free Models
-  # API Key: Not required (free serverless access via Puter.js)
-  # Features: Free access to GPT-4o, Claude 3.7 Sonnet, DeepSeek R1 & V3.
-  # ----------------------------------------------------------------------------
-  puter:
-    name: "Puter Free Models"
-    type: "puter"
-    api_key_env: null
+        max_context_tokens: 110000
+      - id: deepseek-v4.1-flash-free
+        name: DeepSeek V4.1 Flash (Free)
+        supports_tools: true
+        supports_vision: false
+        max_context_tokens: 1000000
+      - id: big-pickle
+        name: Big Pickle (Free)
+        supports_tools: true
+        supports_vision: false
+      - id: beam-free
+        name: Beam (Free)
+        supports_tools: true
+        supports_vision: false
+      - id: flint-40b-free
+        name: Flint 40B (Free)
+        supports_tools: true
+        supports_vision: false
+  uncensoreddeepseek:
+    name: Uncensored DeepSeek
+    type: uncensoreddeepseek
+    api_key_env: UNCENSORED_DEEPSEEK_API_KEY
+    base_url: https://api.uncensoreddeepseek.com/v1
+    default_max_tokens: 8192
     models:
-      - id: "gpt-4o"
-        name: "GPT-4o"
+      - id: uncensored
+        name: DeepSeek Uncensored
         supports_tools: true
         supports_vision: true
-      - id: "gpt-4o-mini"
-        name: "GPT-4o Mini"
+        max_context_tokens: 65536
+  kilo:
+    name: Kilo AI Gateway
+    type: kilo
+    api_key_env: KILO_API_KEY
+    base_url: https://ai-gateway.kilo.ai/api/v1
+    default_max_tokens: 8192
+    models:
+      - id: kilo-auto/free
+        name: Auto Free (Kilo)
         supports_tools: true
         supports_vision: true
-      - id: "claude-3-7-sonnet"
-        name: "Claude 3.7 Sonnet"
-        supports_tools: true
-        supports_vision: true
-      - id: "claude-3-5-sonnet"
-        name: "Claude 3.5 Sonnet"
-        supports_tools: true
-        supports_vision: true
-      - id: "dots-studio/dots-3-note-preview:free"
-        name: "dots-3-note-preview (Free)"
+        max_context_tokens: 256000
+      - id: openrouter/free
+        name: OpenRouter Free Router (Kilo)
         supports_tools: true
         supports_vision: false
-      - id: "deepseek-reasoner"
-        name: "DeepSeek Reasoner R1"
-        supports_tools: true
-        supports_vision: false
-      - id: "deepseek-chat"
-        name: "DeepSeek Chat V3"
-        supports_tools: true
-        supports_vision: false
-
-  # ----------------------------------------------------------------------------
-  # Local Models (Kobold.cpp / Ollama / LM Studio / vLLM)
-  # API Key: Not required (runs entirely locally on your host machine)
-  # Features: Rolling detection auto-detects loaded model from your local server.
-  # ----------------------------------------------------------------------------
+        max_context_tokens: 200000
   local:
-    name: "Local"
-    type: "local"
-    # rolling: true — no hardcoded models. The UI prompts for a base URL and
-    # auto-detects the loaded model from the running local server.
-    # The base_url and settings are stored in server memory only; reset on restart.
+    name: Local
+    type: local
     rolling: true
     api_key_env: null
     base_url: null
-    # api_format: one of kobold | openai | llama | vllm | ollama
-    api_format: "kobold"
-    # Generation defaults (can be overridden in the connect modal per-session)
+    api_format: kobold
     temperature: null
     top_p: null
     top_k: null
     repetition_penalty: null
     models: []
-
-  # ----------------------------------------------------------------------------
-  # Token Harbor
-  # API Key: export TOKENHARBOUR_API_KEY="your-key" (https://tokenharbor.ai)
-  # Features: Free campaign access to DeepSeek V4.1, MiMo, and Qwen models.
-  # ----------------------------------------------------------------------------
-  tokenharbor:
-    name: "Token Harbor"
-    type: "tokenharbor"
-    api_key_env: "TOKENHARBOUR_API_KEY"
-    base_url: "https://tokenharbor.ai/v1"
-    models:
-      - id: "deepseek-v4.1-flash:free"
-        name: "DeepSeek V4.1 Flash (Free)"
-        supports_tools: true
-        supports_vision: false
-      - id: "deepseek-v4-flash:free"
-        name: "DeepSeek V4 Flash (Free)"
-        supports_tools: true
-        supports_vision: false
-      - id: "mimo-v2.5:free"
-        name: "MiMo V2.5 (Free)"
-        supports_tools: true
-        supports_vision: false
-      - id: "th-rudder:free"
-        name: "TH-Rudder (Free)"
-        supports_tools: true
-        supports_vision: false
-      - id: "qwen3.8-flash:free"
-        name: "Qwen 3.8 Flash (Free Campaign)"
-        supports_tools: true
-        supports_vision: false
-
-  # ----------------------------------------------------------------------------
-  # OmniRoute (Local Multi-Model Gateway)
-  # API Key: export OMNIROUTE_API_KEY="your-key" (http://localhost:20128/v1)
-  # Features: Smart fallback routing across Claude, GPT-4o, and DeepSeek backends.
-  # ----------------------------------------------------------------------------
-  omniroute:
-    name: "OmniRoute (Local Gateway)"
-    type: "omniroute"
-    api_key_env: "OMNIROUTE_API_KEY"
-    base_url: "http://localhost:20128/v1"
-    models:
-      - id: "auto"
-        name: "OmniRoute Auto (Smart Fallback)"
-        supports_tools: true
-        supports_vision: true
-      - id: "deepseek-chat"
-        name: "DeepSeek Chat (OmniRoute)"
-        supports_tools: true
-        supports_vision: false
-      - id: "claude-3-5-sonnet"
-        name: "Claude 3.5 Sonnet (OmniRoute)"
-        supports_tools: true
-        supports_vision: true
-      - id: "gpt-4o-mini"
-        name: "GPT-4o Mini (OmniRoute)"
-        supports_tools: true
-        supports_vision: true
-      - id: "gemini-2.0-flash"
-        name: "Gemini 2.0 Flash (OmniRoute)"
-        supports_tools: true
-        supports_vision: true
-      - id: "qwen-2.5-coder-32b"
-        name: "Qwen 2.5 Coder 32B (OmniRoute)"
-        supports_tools: true
-        supports_vision: false
-
-  # ------------------------------------------------------------------------------
-  # OpenCode Zen (Free Tier)
-  # API Key: export OPENCODE_API_KEY="your-key" (https://opencode.ai)
-  # Features: Free community models including Nemotron, MiMo, GLM, DeepSeek, and more.
-  # ------------------------------------------------------------------------------
-  opencode:
-    name: "OpenCode Zen (Free Tier)"
-    type: "opencode"
-    api_key_env: "OPENCODE_API_KEY"
-    base_url: "https://opencode.ai/zen/v1"
-    models:
-      # NVIDIA Free Models
-      - id: "nemotron-3.5-super-vl-free"
-        name: "Nemotron 3.5 Super VL (Free)"
-        supports_tools: true
-        supports_vision: false
-      - id: "nemotron-3.5-lightning-free"
-        name: "Nemotron 3.5 Lightning (Free)"
-        supports_tools: true
-        supports_vision: false
-      - id: "nemotron-3-ultra-free"
-        name: "Nemotron 3 Ultra (Free)"
-        supports_tools: true
-        supports_vision: false
-      
-      # MiMo Models
-      - id: "mimo-v2.6-flash-free"
-        name: "MiMo V2.6 Flash (Free)"
-        supports_tools: true
-        supports_vision: false
-      - id: "mimo-v2.5-free"
-        name: "MiMo V2.5 (Free — Vision)"
-        supports_tools: true
-        supports_vision: true
-      
-      # GLM Models
-      - id: "glm-5.3-flash-free"
-        name: "GLM 5.3 Flash (Free)"
-        supports_tools: true
-        supports_vision: false
-        max_context_tokens: 110000
-      
-      # DeepSeek Models
-      - id: "deepseek-v4.1-flash-free"
-        name: "DeepSeek V4.1 Flash (Free)"
-        supports_tools: true
-        supports_vision: false
-        max_context_tokens: 1000000
-      
-      # Ling Models
-      - id: "ling-3.0-flash-fin-free"
-        name: "Ling 3.0 Flash Fin (Free)"
-        supports_tools: true
-        supports_vision: false
-      
-      # Other Free Models
-      - id: "big-pickle"
-        name: "Big Pickle (Free)"
-        supports_tools: true
-        supports_vision: false
-      - id: "pulse-alpha-free"
-        name: "Pulse Alpha (Free)"
-        supports_tools: true
-        supports_vision: false
-      - id: "beam-free"
-        name: "Beam (Free)"
-        supports_tools: true
-        supports_vision: false
-      - id: "flint-40b-free"
-        name: "Flint 40B (Free)"
-        supports_tools: true
-        supports_vision: false
-      - id: "jev-1.13-free"
-        name: "Jev 1.13 (Free)"
-        supports_tools: true
-        supports_vision: false
-      
-      # Vision Models
-      - id: "space-bunny-free"
-        name: "Space Bunny (Free — Vision)"
-        supports_tools: true
-        supports_vision: true
-      - id: "muse-spark-1.3-contributor-free"
-        name: "Muse Spark 1.3 Contributor (Free)"
-        supports_tools: true
-        supports_vision: false
-
-  # ----------------------------------------------------------------------------
-  # ExperientialLabs AI (ExpressLabs)
-  # API Key: export EXPLABS_API_KEY="your-key" (https://api.experientiallabs.ai)
-  # Features: Frontier models (Claude Opus 5.5, Sonnet 5.5) and uncensored models
-  #           (DeepSeek V4.1 Flash Uncensored, GLM 5.3 Uncensored).
-  # ----------------------------------------------------------------------------
-  experientiallabs:
-    name: "ExperientialLabs (ExpressLabs)"
-    type: "experientiallabs"
-    api_key_env: "EXPLABS_API_KEY"
-    base_url: "https://api.experientiallabs.ai/v1"
-    default_max_tokens: 32768
-    models:
-      - id: "deepseek-v4.1-flash-uncensored"
-        name: "DeepSeek V4.1 Flash Uncensored (ExpLabs)"
-        supports_tools: true
-        supports_vision: false
-        max_context_tokens: 1048576
-      - id: "claude-opus-5.5"
-        name: "Claude Opus 5.5 (ExpLabs)"
-        supports_tools: true
-        supports_vision: true
-        max_context_tokens: 1000000
-      - id: "claude-sonnet-5.5"
-        name: "Claude Sonnet 5.5 (ExpLabs)"
-        supports_tools: true
-        supports_vision: true
-        max_context_tokens: 1000000
-      - id: "claude-haiku-5.5"
-        name: "Claude Haiku 5.5 (ExpLabs)"
-        supports_tools: true
-        supports_vision: true
-        max_context_tokens: 1000000
-      - id: "glm-5.3-uncensored"
-        name: "GLM 5.3 Uncensored (ExpLabs)"
-        supports_tools: true
-        supports_vision: false
-        max_context_tokens: 1048576
-      - id: "glm-5.3-flash-uncensored"
-        name: "GLM 5.3 Flash Uncensored (ExpLabs)"
-        supports_tools: true
-        supports_vision: false
-        max_context_tokens: 1048576
-      - id: "deepseek-v4.1-flash"
-        name: "DeepSeek V4.1 Flash (ExpLabs)"
-        supports_tools: true
-        supports_vision: false
-        max_context_tokens: 1048576
-      - id: "deepseek-r1-0528"
-        name: "DeepSeek R1 0528 (ExpLabs)"
-        supports_tools: true
-        supports_vision: false
-        max_context_tokens: 163840
-
-  # ----------------------------------------------------------------------------
-  # Uncensored DeepSeek
-  # API Key: export UNCENSORED_DEEPSEEK_API_KEY="your-key" (https://uncensoreddeepseek.com)
-  # Features: Completely uncensored instruct DeepSeek model with zero refusals.
-  # ----------------------------------------------------------------------------
-  uncensoreddeepseek:
-    name: "Uncensored DeepSeek"
-    type: "uncensoreddeepseek"
-    api_key_env: "UNCENSORED_DEEPSEEK_API_KEY"
-    base_url: "https://api.uncensoreddeepseek.com/v1"
-    default_max_tokens: 8192
-    models:
-      - id: "uncensored"
-        name: "DeepSeek Uncensored"
-        supports_tools: true
-        supports_vision: true
-        max_context_tokens: 65536
-
-  # ----------------------------------------------------------------------------
-  # Kilo AI Gateway
-  # API Key: export KILO_API_KEY="your-key" (https://kilo.ai - free tier works without key)
-  # Features: Unified multi-model gateway with smart auto-routing and free tier models.
-  # ----------------------------------------------------------------------------
-  kilo:
-    name: "Kilo AI Gateway"
-    type: "kilo"
-    api_key_env: "KILO_API_KEY"
-    base_url: "https://ai-gateway.kilo.ai/api/v1"
-    default_max_tokens: 8192
-    models:
-      - id: "kilo-auto/free"
-        name: "Auto Free (Kilo)"
-        supports_tools: true
-        supports_vision: true
-        max_context_tokens: 256000
-      - id: "kilo-auto/efficient"
-        name: "Auto Efficient (Kilo)"
-        supports_tools: true
-        supports_vision: true
-        max_context_tokens: 1000000
-      - id: "nvidia/nemotron-3.5-super-vl:free"
-        name: "Nemotron 3.5 Super VL Free (Kilo)"
-        supports_tools: true
-        supports_vision: true
-        max_context_tokens: 1000000
-      - id: "deepseek/deepseek-v4.1-flash-1017"
-        name: "DeepSeek V4.1 Flash (Kilo)"
-        supports_tools: true
-        supports_vision: false
-        max_context_tokens: 1048576
-      - id: "thinkingmachines/inkling-2-small:free"
-        name: "Inkling 2 Small Free (Kilo)"
-        supports_tools: true
-        supports_vision: false
-        max_context_tokens: 1048576
-      - id: "openrouter/free"
-        name: "OpenRouter Free Router (Kilo)"
-        supports_tools: true
-        supports_vision: false
-        max_context_tokens: 200000
-      - id: "z-ai/glm-5.3-flash"
-        name: "GLM 5.3 Flash (Kilo)"
-        supports_tools: true
-        supports_vision: false
-        max_context_tokens: 1048576
-
-
-
-
-
-
-

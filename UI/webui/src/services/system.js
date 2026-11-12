@@ -58,14 +58,22 @@ export function buildFullSystemPrompt(workspace = null, personaOverride = null) 
     }
 
     if (cachedSystemInfo) {
-        let envPrompt = `[HOST SYSTEM ENVIRONMENT]\n`;
+        let envPrompt = `[HOST SYSTEM & CLOUD WORKSPACE ARCHITECTURE]\n`;
         envPrompt += `- Operating System: ${cachedSystemInfo.osName} (${cachedSystemInfo.arch})\n`;
         envPrompt += `- Terminal Shell: ${cachedSystemInfo.shellName}\n`;
-        envPrompt += `- Working Directory: ${cachedSystemInfo.cwd}\n`;
+        
+        const effectiveWorkdir = (workspace && workspace.workdir) || cachedSystemInfo.cwd || "/tmp/workspace";
+        envPrompt += `- Active Workspace Directory: ${effectiveWorkdir}\n`;
+        envPrompt += `- User Uploads Directory: /tmp/user/files\n`;
         if (cachedSystemInfo.username) envPrompt += `- Current User: ${cachedSystemInfo.username}\n`;
 
+        envPrompt += `\n[WORKSPACE & UPLOAD AUTONOMY GUIDELINES]:\n`;
+        envPrompt += `1. ISOLATION: The MultiAI application source code is isolated. Your default working directory for all tasks, file creations, and git clones is '${effectiveWorkdir}'. Do NOT create or modify files inside MultiAI server directories unless explicitly instructed.\n`;
+        envPrompt += `2. USER UPLOAD AUTONOMY: When the user asks about uploaded files, documents, archives, or datasets, autonomously inspect '/tmp/user/files' using list_dir(DirectoryPath: "/tmp/user/files") or read_file. Files uploaded by the user via the cloud UI land directly in '/tmp/user/files'.\n`;
+        envPrompt += `3. WORKSPACE PATH RESOLUTION: Relative paths in read_file, write_file, and run_task resolve against the Active Workspace Directory ('${effectiveWorkdir}').`;
+
         if (Array.isArray(cachedSystemInfo.instructions) && cachedSystemInfo.instructions.length > 0) {
-            envPrompt += `\n[TERMINAL & SHELL INSTRUCTIONS FOR THIS SYSTEM]:\n`;
+            envPrompt += `\n\n[TERMINAL & SHELL INSTRUCTIONS FOR THIS SYSTEM]:\n`;
             cachedSystemInfo.instructions.forEach(ins => {
                 envPrompt += `- ${ins}\n`;
             });

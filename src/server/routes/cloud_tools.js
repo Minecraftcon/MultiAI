@@ -13,10 +13,95 @@ const { execSync, spawn } = require("child_process");
 const { sendJSON } = require("../utils");
 
 const UPLOAD_DIR = "/tmp/user/files";
+const WORKSPACE_DIR = "/tmp/workspace";
 
-function ensureUploadDir() {
+// In-memory or file-backed active workdir for chats
+let activeWorkdirs = {};
+const WORKDIRS_FILE = "/tmp/multiai_active_workdirs.json";
+
+function loadActiveWorkdirs() {
+    try {
+        if (fs.existsSync(WORKDIRS_FILE)) {
+            activeWorkdirs = JSON.parse(fs.readFileSync(WORKDIRS_FILE, "utf8"));
+        }
+    } catch (_) {}
+}
+
+function saveActiveWorkdirs() {
+    try {
+        fs.writeFileSync(WORKDIRS_FILE, JSON.stringify(activeWorkdirs, null, 2), "utf8");
+    } catch (_) {}
+}
+
+loadActiveWorkdirs();
+
+function getChatWorkdir(chatId) {
+    if (!chatId) return WORKSPACE_DIR;
+    return activeWorkdirs[chatId] || WORKSPACE_DIR;
+}
+
+function setChatWorkdir(chatId, workdir) {
+    if (!chatId) return;
+    activeWorkdirs[chatId] = workdir;
+    saveActiveWorkdirs();
+}
+
+function ensureDirs() {
     if (!fs.existsSync(UPLOAD_DIR)) {
         fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+    }
+    if (!fs.existsSync(WORKSPACE_DIR)) {
+        fs.mkdirSync(WORKSPACE_DIR, { recursive: true });
+    }
+}
+
+/**
+ * Lists all available workspaces: Default (/tmp/workspace) plus any cloned repos under /tmp/workspace/
+ */
+async function handleListWorkspaces(req, res) {
+    ensureDirs();
+    try {
+        const entries = await fs.promises.readdir(WORKSPACE_DIR, { withFileTypes: true });
+        const repos = entries
+            .filter(d => d.isDirectory() && !d.name.startsWith("."))
+            .map(d => ({
+                name: d.name,
+                path: path.join(WORKSPACE_DIR, d.name)
+            }));
+
+        const chatId = req.headers["x-chat-id"] || "";
+        const current = getChatWorkdir(chatId);
+
+        return sendJSON(res, 200, {
+            success: true,
+            default: WORKSPACE_DIR,
+            current,
+            repos
+        });
+    } catch (e) {
+        return sendJSON(res, 500, { error: e.message });
+    }
+}
+
+/**
+ * Sets active working directory for a chat session
+ */
+async function handleSelectWorkspace(req, res) {
+    try {
+        let body = "";
+        for await (const chunk of req) body += chunk;
+        const data = JSON.parse(body || "{}");
+        const chatId = data.chatId || req.headers["x-chat-id"] || "global";
+        const selectedPath = data.path || WORKSPACE_DIR;
+
+        if (!fs.existsSync(selectedPath)) {
+            fs.mkdirSync(selectedPath, { recursive: true });
+        }
+
+        setChatWorkdir(chatId, selectedPath);
+        return sendJSON(res, 200, { success: true, chatId, workdir: selectedPath });
+    } catch (e) {
+        return sendJSON(res, 500, { error: e.message });
     }
 }
 
@@ -248,11 +333,21 @@ async function handleCloudToolsRoute(req, res) {
     if (req.method === "POST" && reqUrl === "/api/cloud/git/clone") {
         return handleGitClone(req, res);
     }
+    if (req.method === "GET" && reqUrl === "/api/cloud/workspaces") {
+        return handleListWorkspaces(req, res);
+    }
+    if (req.method === "POST" && reqUrl === "/api/cloud/workspaces/select") {
+        return handleSelectWorkspace(req, res);
+    }
 
     sendJSON(res, 404, { error: "Cloud tools endpoint not found" });
 }
 
 module.exports = {
-    handleCloudToolsRoute
+    handleCloudToolsRoute,
+    getChatWorkdir,
+    setChatWorkdir,
+    UPLOAD_DIR,
+    WORKSPACE_DIR
 };
 

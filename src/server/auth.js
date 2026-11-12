@@ -94,56 +94,55 @@ function renderLockPage() {
     <title>MultiAI Cloud Security Gate</title>
     <style>
         :root {
-            --bg-color: #090a0f;
-            --surface: #12151f;
-            --border: rgba(255, 255, 255, 0.1);
-            --accent: #6366f1;
-            --accent-hover: #4f46e5;
-            --text-primary: #f8fafc;
-            --text-secondary: #94a3b8;
+            --bg-color: #0c0d10;
+            --surface: #14151a;
+            --surface-elevated: #1a1c23;
+            --border: #232630;
+            --text-primary: #f4f4f6;
+            --text-secondary: #9094a6;
+            --text-tertiary: #5e6375;
+            --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
             background-color: var(--bg-color);
             color: var(--text-primary);
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", sans-serif;
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 20px;
-            background-image: 
-                radial-gradient(circle at 50% 20%, rgba(99, 102, 241, 0.15) 0%, transparent 60%),
-                radial-gradient(circle at 80% 80%, rgba(14, 165, 233, 0.1) 0%, transparent 50%);
+            padding: 24px;
+            -webkit-font-smoothing: antialiased;
         }
         .lock-card {
             background: var(--surface);
             border: 1px solid var(--border);
-            border-radius: 20px;
+            border-radius: 12px;
             padding: 36px 32px;
             width: 100%;
-            max-width: 420px;
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6), 0 0 40px rgba(99, 102, 241, 0.1);
-            text-align: center;
-            backdrop-filter: blur(16px);
+            max-width: 380px;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+            text-align: left;
         }
         .lock-icon-wrap {
-            width: 64px;
-            height: 64px;
-            background: rgba(99, 102, 241, 0.12);
-            border: 1px solid rgba(99, 102, 241, 0.25);
-            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            background: var(--surface-elevated);
+            border: 1px solid var(--border);
+            border-radius: 8px;
             display: flex;
             align-items: center;
             justify-content: center;
-            margin: 0 auto 20px;
-            color: var(--accent);
+            margin-bottom: 20px;
+            color: var(--text-primary);
         }
         h1 {
-            font-size: 22px;
-            font-weight: 700;
-            margin-bottom: 8px;
-            letter-spacing: -0.5px;
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 6px;
+            letter-spacing: -0.02em;
+            color: var(--text-primary);
         }
         p {
             font-size: 13px;
@@ -157,65 +156,68 @@ function renderLockPage() {
         }
         label {
             display: block;
-            font-size: 12px;
+            font-size: 11px;
             font-weight: 600;
             margin-bottom: 8px;
             color: var(--text-secondary);
             text-transform: uppercase;
-            letter-spacing: 0.5px;
+            letter-spacing: 0.05em;
         }
         input[type="password"] {
             width: 100%;
-            padding: 13px 16px;
-            background: rgba(0, 0, 0, 0.4);
+            padding: 10px 14px;
+            background: var(--bg-color);
             border: 1px solid var(--border);
-            border-radius: 10px;
+            border-radius: 6px;
             color: var(--text-primary);
-            font-size: 15px;
+            font-size: 14px;
+            font-family: var(--font-mono);
             outline: none;
-            transition: all 0.2s ease;
+            transition: border-color 0.15s ease;
         }
         input[type="password"]:focus {
-            border-color: var(--accent);
-            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25);
+            border-color: #4f5365;
         }
         button {
             width: 100%;
-            padding: 13px;
-            background: var(--accent);
-            color: #fff;
+            padding: 11px 14px;
+            background: #ededed;
+            color: #0c0d10;
             border: none;
-            border-radius: 10px;
-            font-size: 14px;
+            border-radius: 6px;
+            font-size: 13px;
             font-weight: 600;
             cursor: pointer;
-            transition: all 0.2s ease;
-            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+            transition: background 0.15s ease, transform 0.05s ease;
         }
         button:hover {
-            background: var(--accent-hover);
-            transform: translateY(-1px);
+            background: #ffffff;
+        }
+        button:active {
+            transform: scale(0.99);
         }
         button:disabled {
-            opacity: 0.6;
+            opacity: 0.4;
             cursor: not-allowed;
             transform: none;
         }
         .error-msg {
-            color: #f87171;
-            font-size: 13px;
-            margin-top: 14px;
-            min-height: 20px;
+            color: #e06c75;
+            font-size: 12px;
+            margin-top: 12px;
+            min-height: 18px;
         }
         .badge {
             display: inline-block;
             font-size: 11px;
-            padding: 3px 8px;
-            background: rgba(99, 102, 241, 0.15);
-            color: #818cf8;
-            border-radius: 20px;
-            margin-bottom: 12px;
-            font-weight: 600;
+            padding: 2px 8px;
+            background: var(--surface-elevated);
+            color: var(--text-secondary);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            margin-bottom: 16px;
+            font-weight: 500;
+            font-family: var(--font-mono);
         }
     </style>
 </head>

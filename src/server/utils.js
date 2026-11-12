@@ -181,6 +181,11 @@ function getSystemInfo() {
         ];
     }
 
+    const defaultWorkdir = process.env.MULTIAI_WORKSPACE_DIR || "/tmp/workspace";
+    if (!fs.existsSync(defaultWorkdir)) {
+        try { fs.mkdirSync(defaultWorkdir, { recursive: true }); } catch (_) {}
+    }
+
     return {
         platform,
         osName,
@@ -189,8 +194,9 @@ function getSystemInfo() {
         hostname: os.hostname(),
         username: os.userInfo ? os.userInfo().username : "user",
         homedir: os.homedir(),
-        cwd: process.cwd(),
-        workspaceDir: process.cwd(),
+        cwd: defaultWorkdir,
+        workspaceDir: defaultWorkdir,
+        userUploadsDir: "/tmp/user/files",
         storageRoot: conversationsManager.getStorageRoot(),
         conversationsRoot: conversationsManager.getConversationsRoot(),
         isTermux,
@@ -416,12 +422,21 @@ function resolveSafePath(inputPath, chatId) {
         return rel ? path.resolve(artifactsDir, rel) : artifactsDir;
     }
 
-    let baseDir = process.cwd();
+    let baseDir = process.env.MULTIAI_WORKSPACE_DIR || "/tmp/workspace";
     if (chatId) {
+        try {
+            const { getChatWorkdir } = require("./routes/cloud_tools");
+            baseDir = getChatWorkdir(chatId) || baseDir;
+        } catch (_) {}
+
         const wsContext = getChatWorkspace(chatId);
         if (wsContext && wsContext.project && wsContext.project.rootPath) {
             baseDir = wsContext.project.rootPath;
         }
+    }
+
+    if (!fs.existsSync(baseDir)) {
+        try { fs.mkdirSync(baseDir, { recursive: true }); } catch (_) {}
     }
 
     return path.isAbsolute(processed) ? path.normalize(processed) : path.resolve(baseDir, processed);
