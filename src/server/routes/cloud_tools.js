@@ -9,7 +9,7 @@
 
 const fs = require("fs");
 const path = require("path");
-const { execSync, spawn } = require("child_process");
+const { spawn, execFile } = require("child_process");
 const { sendJSON } = require("../utils");
 
 const UPLOAD_DIR = "/tmp/user/files";
@@ -228,6 +228,44 @@ async function handleListUploadedFiles(req, res) {
 }
 
 /**
+ * Validate git repository URL to prevent command injection and ensure only safe protocols
+ */
+function isValidGitUrl(url) {
+    if (!url || typeof url !== "string") return false;
+    const trimmed = url.trim();
+    // Allow https://, http://, and git@ protocols only, reject control characters and shell metacharacters
+    if (/[;&|`$><\\!"]/.test(trimmed)) return false;
+    return /^https?:\/\/[a-zA-Z0-9_.-]+(:[0-9]+)?(\/[a-zA-Z0-9_.~%+-]+)+\/?(\.git)?$/.test(trimmed) ||
+           /^git@[a-zA-Z0-9_.-]+:[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+(\.git)?$/.test(trimmed);
+}
+
+/**
+ * Validate git branch name to prevent flag injection or shell metacharacters
+ */
+function isValidGitRef(ref) {
+    if (!ref || typeof ref !== "string") return false;
+    const trimmed = ref.trim();
+    if (trimmed.startsWith("-")) return false; // Prevent flag injection (e.g. --upload-pack)
+    if (/[;&|`$><\\!"'\s~^:?*[]/.test(trimmed)) return false;
+    return /^[a-zA-Z0-9_.\/-]+$/.test(trimmed);
+}
+
+/**
+ * Safe execFile helper that returns a Promise
+ */
+function runExecFile(bin, args, options = {}) {
+    return new Promise((resolve, reject) => {
+        execFile(bin, args, options, (error, stdout, stderr) => {
+            if (error) {
+                error.stderr = stderr;
+                return reject(error);
+            }
+            resolve(stdout);
+        });
+    });
+}
+
+/**
  * Inspect branches of a remote git repository without cloning full repo
  */
 async function handleGitInspectRepo(req, res) {
@@ -239,11 +277,17 @@ async function handleGitInspectRepo(req, res) {
         if (!url) {
             return sendJSON(res, 400, { error: "Git repository URL is required." });
         }
+        if (!isValidGitUrl(url)) {
+            return sendJSON(res, 400, { error: "Invalid or unsupported Git repository URL format." });
+        }
 
-        // Run git ls-remote to list branches
+        // Run git ls-remote safely with argument array (no shell concatenation)
         let out = "";
         try {
-            out = execSync(`git ls-remote --heads "${url}"`, { encoding: "utf8", timeout: 15000 });
+            out = await runExecFile("git", ["ls-remote", "--heads", url], {
+                encoding: "utf8",
+                timeout: 15000
+            });
         } catch (err) {
             return sendJSON(res, 400, { error: `Could not reach git repository: ${err.message}` });
         }
@@ -284,9 +328,22 @@ async function handleGitClone(req, res) {
         if (!url) {
             return sendJSON(res, 400, { error: "Git repository URL is required." });
         }
+        if (!isValidGitUrl(url)) {
+            return sendJSON(res, 400, { error: "Invalid or unsupported Git repository URL format." });
+        }
+        if (branch && branch !== "all" && !isValidGitRef(branch)) {
+            return sendJSON(res, 400, { error: "Invalid branch name format." });
+        }
 
         // Default workspace location
-        const targetDir = data.targetDir || path.join("/tmp", "workspace", path.basename(url, ".git"));
+        const repoName = path.basename(url, ".git").replace(/[^a-zA-Z0-9_.-]/g, "_");
+        const targetDir = path.resolve(WORKSPACE_DIR, repoName);
+
+        // Security check: ensure target directory stays within WORKSPACE_DIR
+        if (!targetDir.startsWith(WORKSPACE_DIR)) {
+            return sendJSON(res, 400, { error: "Target directory must be within workspace directory." });
+        }
+
         if (!fs.existsSync(path.dirname(targetDir))) {
             fs.mkdirSync(path.dirname(targetDir), { recursive: true });
         }
@@ -298,13 +355,13 @@ async function handleGitClone(req, res) {
             } catch (_) {}
         }
 
-        let cmd = ["git", "clone"];
+        const args = ["clone"];
         if (branch && branch !== "all" && !cloneAll) {
-            cmd.push("--branch", branch, "--single-branch");
+            args.push("--branch", branch, "--single-branch");
         }
-        cmd.push(url, targetDir);
+        args.push("--", url, targetDir);
 
-        const out = execSync(cmd.join(" "), { encoding: "utf8", timeout: 45000 });
+        const out = await runExecFile("git", args, { encoding: "utf8", timeout: 60000 });
 
         return sendJSON(res, 200, {
             success: true,

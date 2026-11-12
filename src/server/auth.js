@@ -2,21 +2,69 @@
  * MultiAI Cloud Security Gate & Session Authentication
  * ====================================================
  * Protects Web UI and API routes with password authentication.
- * Default password: REDACTED_PASSWORD (or configured via CLOUD_PASSWORD env var)
+ * Configured strictly via CLOUD_PASSWORD environment variable.
  */
 
 const crypto = require("crypto");
 const { sendJSON } = require("./utils");
 
-const PASSWORD = process.env.CLOUD_PASSWORD || "REDACTED_PASSWORD";
+// Do not fallback to any default password. Must be set via environment variable.
+const PASSWORD = (process.env.CLOUD_PASSWORD || "").trim();
+if (!PASSWORD) {
+    console.error("[SECURITY ALERT] CLOUD_PASSWORD environment variable is NOT set! Cloud access will be blocked until configured.");
+}
 
 // In-memory valid sessions (token -> expiry timestamp)
 const validSessions = new Map();
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
+// Rate limiting for login attempts (IP -> { count, resetTime, lockedUntil })
+const loginAttempts = new Map();
+const MAX_ATTEMPTS = 5;
+const WINDOW_MS = 60 * 1000;       // 1 minute window
+const LOCKOUT_MS = 5 * 60 * 1000;  // 5 minutes lockout if exceeded
+
+function getClientIp(req) {
+    return req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
+           req.socket?.remoteAddress ||
+           "unknown";
+}
+
+function checkRateLimit(ip) {
+    const now = Date.now();
+    let record = loginAttempts.get(ip);
+    if (!record || now > record.resetTime) {
+        record = { count: 0, resetTime: now + WINDOW_MS, lockedUntil: 0 };
+        loginAttempts.set(ip, record);
+    }
+    if (record.lockedUntil && now < record.lockedUntil) {
+        const remainingSec = Math.ceil((record.lockedUntil - now) / 1000);
+        return { allowed: false, remainingSec };
+    }
+    return { allowed: true, record };
+}
+
+function recordFailedAttempt(ip) {
+    const now = Date.now();
+    let record = loginAttempts.get(ip);
+    if (!record) {
+        record = { count: 1, resetTime: now + WINDOW_MS, lockedUntil: 0 };
+    } else {
+        record.count++;
+    }
+    if (record.count >= MAX_ATTEMPTS) {
+        record.lockedUntil = now + LOCKOUT_MS;
+    }
+    loginAttempts.set(ip, record);
+}
+
+function clearRateLimit(ip) {
+    loginAttempts.delete(ip);
+}
+
 // Constant-time string equality to prevent timing attacks
 function safeCompare(a, b) {
-    if (typeof a !== "string" || typeof b !== "string") return false;
+    if (!a || !b || typeof a !== "string" || typeof b !== "string") return false;
     const bufA = Buffer.from(a);
     const bufB = Buffer.from(b);
     if (bufA.length !== bufB.length) return false;
@@ -52,6 +100,15 @@ function isAuthenticated(req) {
 }
 
 function handleLogin(req, res) {
+    const ip = getClientIp(req);
+    const rateCheck = checkRateLimit(ip);
+
+    if (!rateCheck.allowed) {
+        return sendJSON(res, 429, {
+            error: `Too many failed login attempts. Locked for ${rateCheck.remainingSec} seconds.`
+        });
+    }
+
     let body = "";
     req.on("data", chunk => { body += chunk; });
     req.on("end", () => {
@@ -59,17 +116,28 @@ function handleLogin(req, res) {
             const data = JSON.parse(body || "{}");
             const submittedPass = String(data.password || "").trim();
 
+            if (!PASSWORD) {
+                return sendJSON(res, 503, {
+                    error: "Server configuration error: CLOUD_PASSWORD is not configured on this instance."
+                });
+            }
+
             if (safeCompare(submittedPass, PASSWORD)) {
+                clearRateLimit(ip);
                 const token = crypto.randomBytes(32).toString("hex");
                 validSessions.set(token, Date.now() + SESSION_TTL_MS);
 
-                const cookieHeader = `multiai_token=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${SESSION_TTL_MS / 1000}`;
+                const isHttps = req.headers["x-forwarded-proto"] === "https" || req.connection?.encrypted;
+                const secureFlag = isHttps ? "; Secure" : "";
+                const cookieHeader = `multiai_token=${token}; Path=/; HttpOnly; SameSite=Strict${secureFlag}; Max-Age=${SESSION_TTL_MS / 1000}`;
+
                 res.writeHead(200, {
                     "Set-Cookie": cookieHeader,
                     "Content-Type": "application/json"
                 });
                 return res.end(JSON.stringify({ success: true, token }));
             } else {
+                recordFailedAttempt(ip);
                 return sendJSON(res, 401, { error: "Invalid security key. Access denied." });
             }
         } catch (e) {

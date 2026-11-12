@@ -66,7 +66,17 @@ async function handleValidateDirRoute(req, res) {
         }
 
         const trimmed = queryPath.trim();
-        const resolved = conversationsManager.resolveHome(trimmed);
+        const home = getUserHome();
+        const resolved = path.resolve(conversationsManager.resolveHome(trimmed));
+
+        // Security check: restrict path checking strictly to the user home or /tmp directory
+        const isSafePath = resolved.startsWith(home) || resolved.startsWith("/tmp");
+        if (!isSafePath) {
+            return sendJSON(res, 403, {
+                valid: false,
+                error: "Access denied. Paths outside home or workspace directory are not permitted."
+            });
+        }
 
         if (!fs.existsSync(resolved)) {
             return sendJSON(res, 200, {
