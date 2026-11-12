@@ -268,6 +268,9 @@ export function renderTurn(turn, session, compactionRef, isLastTurn) {
             
             if (thoughtHtml) {
                 preSearchContent.innerHTML = thoughtHtml;
+                preSearchContent.querySelectorAll(".thought-box").forEach(tb => {
+                    tb.open = false;
+                });
                 wrapTablesForScroll(preSearchContent);
                 renderIcons(preSearchContent);
             }
@@ -693,9 +696,18 @@ export function updateAIStream(element, fullText, isDone, startTime, hasTools) {
             }
 
             const newDetails = preSearchContent.querySelector(".thought-box");
-            if (newDetails && wasUserClosed) {
-                newDetails.open = false;
-                newDetails.dataset.userToggled = "closed";
+            if (newDetails) {
+                const wasUserOpened = prevDetails && prevDetails.dataset.userToggled === "open";
+                const isThinkingActive = !isDone && !hasTools && (!content || !content.trim());
+                if (wasUserOpened) {
+                    newDetails.open = true;
+                    newDetails.dataset.userToggled = "open";
+                } else if (wasUserClosed || !isThinkingActive) {
+                    newDetails.open = false;
+                    if (wasUserClosed) newDetails.dataset.userToggled = "closed";
+                } else {
+                    newDetails.open = true;
+                }
             }
 
             const newCollapsible = preSearchContent.querySelector(".thought-collapsible");
@@ -715,6 +727,17 @@ export function updateAIStream(element, fullText, isDone, startTime, hasTools) {
         if (preSearchContent.innerHTML) {
             preSearchContent.innerHTML = "";
             element._lastRenderedThought = "";
+        }
+    }
+
+    // Auto-collapse thought box once thinking concludes or tools execute
+    if (sanitizedThought && (!isDone || hasTools || (content && content.trim()))) {
+        const details = preSearchContent.querySelector(".thought-box");
+        if (details && details.open && details.dataset.userToggled !== "open") {
+            const isThinkingActive = !isDone && !hasTools && (!content || !content.trim());
+            if (!isThinkingActive) {
+                details.open = false;
+            }
         }
     }
 
@@ -763,6 +786,9 @@ export function updateAIStream(element, fullText, isDone, startTime, hasTools) {
                 const lbl = tb.querySelector(".thought-label");
                 if (lbl && (lbl.textContent.includes("{}") || lbl.textContent.includes("a few seconds"))) {
                     lbl.textContent = `Thought for ${elapsed} seconds`;
+                }
+                if (tb.dataset.userToggled !== "open") {
+                    tb.open = false;
                 }
             });
 
@@ -817,6 +843,9 @@ export function updateAIStream(element, fullText, isDone, startTime, hasTools) {
                 const lbl = tb.querySelector(".thought-label");
                 if (lbl && (lbl.textContent.includes("{}") || lbl.textContent.includes("a few seconds"))) {
                     lbl.textContent = `Thought for ${elapsed} seconds`;
+                }
+                if (tb.dataset.userToggled !== "open") {
+                    tb.open = false;
                 }
             });
 

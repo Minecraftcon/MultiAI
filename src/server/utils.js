@@ -330,15 +330,33 @@ function resolveSafePath(inputPath, chatId) {
     const raw = String(inputPath || "").trim();
     if (!raw) throw new Error("Path parameter is empty or missing");
 
-    const isScratch = raw === "$SCRATCH" || 
-                      raw === "${SCRATCH}" || 
-                      raw.startsWith("$SCRATCH/") || 
-                      raw.startsWith("${SCRATCH}/") ||
-                      raw.startsWith("$SCRATCH\\") || 
-                      raw.startsWith("${SCRATCH}\\");
+    let processed = raw;
+    const homedir = os.homedir();
+
+    // Expand ~ / ~/... to home directory
+    if (processed === "~" || processed.startsWith("~/") || processed.startsWith("~\\")) {
+        processed = path.join(homedir, processed.slice(1));
+    }
+
+    // Expand sanitized [USER] placeholders back to actual user's home directory
+    // e.g. /home/[USER]/foo -> /home/<user>/foo, /Users/[USER]/foo -> /Users/<user>/foo, C:\Users\[USER]\foo -> C:\Users\<user>\foo
+    if (processed.includes("[USER]")) {
+        processed = processed
+            .replace(/^\/home\/\[USER\](?=[\\/]|$)/i, homedir)
+            .replace(/^\/Users\/\[USER\](?=[\\/]|$)/i, homedir)
+            .replace(/^[a-zA-Z]:\\Users\\\[USER\](?=[\\/]|$)/i, homedir)
+            .replace(/^\[USER\](?=[\\/]|$)/i, homedir);
+    }
+
+    const isScratch = processed === "$SCRATCH" || 
+                      processed === "${SCRATCH}" || 
+                      processed.startsWith("$SCRATCH/") || 
+                      processed.startsWith("${SCRATCH}/") ||
+                      processed.startsWith("$SCRATCH\\") || 
+                      processed.startsWith("${SCRATCH}\\");
 
     if (isScratch) {
-        let rel = raw;
+        let rel = processed;
         if (rel.startsWith("$SCRATCH/")) rel = rel.slice(9);
         else if (rel.startsWith("${SCRATCH}/")) rel = rel.slice(10);
         else if (rel.startsWith("$SCRATCH\\")) rel = rel.slice(9);
@@ -352,15 +370,15 @@ function resolveSafePath(inputPath, chatId) {
         return rel ? path.resolve(scratchDir, rel) : scratchDir;
     }
 
-    const isArtifacts = raw === "$ARTIFACTS" || 
-                        raw === "${ARTIFACTS}" || 
-                        raw.startsWith("$ARTIFACTS/") || 
-                        raw.startsWith("${ARTIFACTS}/") ||
-                        raw.startsWith("$ARTIFACTS\\") || 
-                        raw.startsWith("${ARTIFACTS}\\");
+    const isArtifacts = processed === "$ARTIFACTS" || 
+                        processed === "${ARTIFACTS}" || 
+                        processed.startsWith("$ARTIFACTS/") || 
+                        processed.startsWith("${ARTIFACTS}/") ||
+                        processed.startsWith("$ARTIFACTS\\") || 
+                        processed.startsWith("${ARTIFACTS}\\");
 
     if (isArtifacts) {
-        let rel = raw;
+        let rel = processed;
         if (rel.startsWith("$ARTIFACTS/")) rel = rel.slice(11);
         else if (rel.startsWith("${ARTIFACTS}/")) rel = rel.slice(12);
         else if (rel.startsWith("$ARTIFACTS\\")) rel = rel.slice(11);
@@ -375,9 +393,9 @@ function resolveSafePath(inputPath, chatId) {
     }
 
     // Also support 'scratch' or 'scratch/...' and 'artifacts' or 'artifacts/...' shorthand
-    const normLower = raw.replace(/\\/g, "/").toLowerCase();
+    const normLower = processed.replace(/\\/g, "/").toLowerCase();
     if (normLower === "scratch" || normLower.startsWith("scratch/") || normLower.startsWith("./scratch/")) {
-        let rel = raw.replace(/^\.\//, "");
+        let rel = processed.replace(/^\.\//, "");
         if (rel.toLowerCase() === "scratch") rel = "";
         else if (rel.toLowerCase().startsWith("scratch/")) rel = rel.slice(8);
         const scratchDir = getChatScratchDir(chatId);
@@ -388,7 +406,7 @@ function resolveSafePath(inputPath, chatId) {
     }
 
     if (normLower === "artifacts" || normLower.startsWith("artifacts/") || normLower.startsWith("./artifacts/")) {
-        let rel = raw.replace(/^\.\//, "");
+        let rel = processed.replace(/^\.\//, "");
         if (rel.toLowerCase() === "artifacts") rel = "";
         else if (rel.toLowerCase().startsWith("artifacts/")) rel = rel.slice(10);
         const artifactsDir = getChatArtifactsDir(chatId);
@@ -406,7 +424,7 @@ function resolveSafePath(inputPath, chatId) {
         }
     }
 
-    return path.isAbsolute(raw) ? path.normalize(raw) : path.resolve(baseDir, raw);
+    return path.isAbsolute(processed) ? path.normalize(processed) : path.resolve(baseDir, processed);
 }
 
 function postJSON(portOrUrl, reqPath, data, timeoutMs = 3000) {

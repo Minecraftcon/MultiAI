@@ -73,7 +73,7 @@ export const DEFAULT_FILTERS = [
         replacement: "/home/[USER]",
         action: "replace",
         scope: "all",
-        enabled: true
+        enabled: false
     }
 ];
 

@@ -149,6 +149,13 @@ export async function runAgent(userText, currentAIMessage, chatId, images = [], 
             }
 
             stageStatus = round === 0 ? "Thinking" : `Synthesizing (round ${round + 1})`;
+            if (round > 0 && currentAIMessage) {
+                currentAIMessage.querySelectorAll(".thought-box").forEach(tb => {
+                    if (tb.dataset.userToggled !== "open") {
+                        tb.open = false;
+                    }
+                });
+            }
             const activityLabel = currentAIMessage.querySelector(".activity-label");
             if (activityLabel) {
                 const sec = ((Date.now() - overallStartTime) / 1000).toFixed(1);
@@ -476,6 +483,15 @@ export async function runAgent(userText, currentAIMessage, chatId, images = [], 
             hasRunTools = true;
             emptyRetryUsed = false;
             emptyAfterToolsRetries = 0;
+
+            // Auto-collapse thought box when tools begin executing
+            if (currentAIMessage) {
+                currentAIMessage.querySelectorAll(".thought-box").forEach(tb => {
+                    if (tb.dataset.userToggled !== "open") {
+                        tb.open = false;
+                    }
+                });
+            }
 
             // Render live intermediate reasoning along the timeline line
             if (roundText && roundText.trim()) {

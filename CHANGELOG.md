@@ -44,6 +44,13 @@
   * Replaced `content-visibility: auto` on `.message` with stable CSS style containment (`contain: style;`). In chat layouts with highly variable message heights, `content-visibility: auto` dynamically swapped off-screen turns between placeholder sizes and rendered heights, creating an infinite scroll oscillation feedback loop against smooth auto-scrolling.
   * Increased subpixel landing threshold in `chat-scroll.js` from `0.8px` to `1.5px`, eliminating subpixel ping-pong oscillations on displays with non-integer scaling ratios (125%, 150%, Retina).
   * Replaced vertical `popIn` (`translateY(8px)`) animation on `.search-badge-item` with a clean opacity fade (`fadeIn 0.2s ease-out`), preventing tool call badges and status chips from hopping up and down as they render.
+* **Automatic Thought Box Collapse on Action / Content Output**:
+  * Configured `<details class="thought-box">` to automatically collapse as soon as the model finishes thinking (when user-facing response text starts streaming, tools begin executing, the next round starts, or generation completes).
+  * Streaming thoughts remain open live while thinking is actively in progress, allowing real-time inspection, but automatically fold into compact cards once the model moves to action without dominating the viewport.
+  * Preserved user manual toggle overrides (`data-user-toggled="open"`) and ensured historical messages rehydrate with thought boxes closed by default.
+* **Resolved `[USER]` and `~` Path Expansion in Filesystem Tools**:
+  * Enhanced `resolveSafePath()` in `src/server/utils.js` to automatically translate sanitized `[USER]` placeholders (e.g. `/home/[USER]`, `/Users/[USER]`, `C:\Users\[USER]`) and tilde (`~/...`) back to the user's actual home directory (`os.homedir()`).
+  * Disabled the default local path scrubbing filter (`flt_default_paths`) in `context-filter.js` so workspace project paths are not rewritten into synthetic `[USER]` strings that confuse coding LLMs into thinking file paths are broken.
 * **Inline Dynamic Streaming Cursor**:
   * Upgraded streaming mode in `StreamBatchRenderer` to attach the blinking cursor directly inline at the tip of the actively generating leaf element (paragraphs, lists, blockquotes, and code blocks), so the cursor moves naturally with the streaming words instead of sitting on a static line at the bottom.
   * Styled `.blinking-cursor` with proportional `1.15em` height and `-0.15em` baseline alignment to match font sizes seamlessly across prose, headings, and code snippets.
