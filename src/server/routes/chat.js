@@ -101,6 +101,12 @@ async function handleAgentStream(req, res) {
             "Connection": "keep-alive",
             "Access-Control-Allow-Origin": "*"
         });
+        if (res.socket) {
+            res.socket.setNoDelay(true);
+        }
+        if (typeof res.flushHeaders === "function") {
+            res.flushHeaders();
+        }
 
         const graph = createAgentGraph();
         const stream = await graph.stream({

@@ -37,4 +37,7 @@
   * Exposed dedicated **Stream Model Responses** (`StreamResponse`) switch under **Settings ➔ Models & AI ➔ Inference Tuning** to toggle real-time token streaming on or off.
   * Connected **Stream Reasoning & Thinking** (`StreamReasoning`) directly to SSE stream delta aggregation in `chat-client.js` so reasoning thoughts can stream or only render upon completion.
   * Added `StreamResponse` to system default configuration schemas across `config_manager.js`, `config.ini`, and UI settings auto-save.
+* **Reasoning Stream Continuity & TCP Low-Latency Streaming**:
+  * Removed premature active-stream collapsing in `formatThoughtHtml()`, allowing live reasoning thoughts to remain fully visible as they stream without disappearing into a 160px clamped overflow. Huge thoughts are now wrapped cleanly into collapsible cards once finalized.
+  * Enabled TCP `setNoDelay(true)` and immediate header flushing on SSE stream response sockets in `base.js` and `routes/chat.js` to eliminate OS-level Nagle packet buffering during real-time token delivery.
 

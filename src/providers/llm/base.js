@@ -814,6 +814,12 @@ class BaseProvider {
                 "Connection": "keep-alive",
                 "X-Accel-Buffering": "no"
             });
+            if (res.socket) {
+                res.socket.setNoDelay(true);
+            }
+            if (typeof res.flushHeaders === "function") {
+                res.flushHeaders();
+            }
 
             if (upstreamRes.body) {
                 if (typeof upstreamRes.body.getReader === "function") {
@@ -823,11 +829,13 @@ class BaseProvider {
                         if (done) break;
                         if (value) {
                             res.write(value);
+                            if (typeof res.flush === "function") res.flush();
                         }
                     }
                 } else {
                     for await (const chunk of upstreamRes.body) {
                         res.write(chunk);
+                        if (typeof res.flush === "function") res.flush();
                     }
                 }
             }

@@ -357,10 +357,7 @@ export function formatThoughtHtml(content, durationStr = "") {
         innerFormatted = escapeHTML(innerFormatted);
     }
 
-    const isHuge = content.length > 400 || content.split("\n").length > 6;
-    const bodyHtml = isHuge
-        ? `<div class="thought-content thought-collapsible"><div class="thought-collapsed-body">${innerFormatted}</div><button type="button" class="thought-expand-btn" aria-expanded="false"><span class="thought-expand-icon" aria-hidden="true">…</span> expand</button></div>`
-        : `<div class="thought-content">${innerFormatted}</div>`;
+    const bodyHtml = `<div class="thought-content">${innerFormatted}</div>`;
 
     return `<details class="thought-box" open${rawDur ? ` data-duration="${escapeHTML(rawDur)}"` : ''}><summary class="thought-summary"><span class="thought-header">${brainSvg}<span class="thought-label">Thought for ${escapeHTML(durLabel)}</span><span class="thought-chevron">›</span></span></summary><div class="thought-body">${bodyHtml}</div></details>`;
 }
