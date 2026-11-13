@@ -24,7 +24,7 @@ class GoogleProvider extends BaseProvider {
         return `${baseEndpoint}/${model}:streamGenerateContent?alt=sse&key=${apiKey}`;
     }
 
-    formatPayload({ model, messages, tools, tool_choice, config = {}, supportsTools = true, supportsVision = true }) {
+    formatPayload({ model, messages, tools, tool_choice, config = {}, supportsTools = true, supportsVision = true, options = {} }) {
         const normalized = this.normalizeMessages(messages, supportsTools, supportsVision);
         const systemParts = [];
         const contents = [];
@@ -132,11 +132,23 @@ class GoogleProvider extends BaseProvider {
             }];
         }
 
+        // Configure permissive safety settings to avoid false-positive stops on medical, anatomical, or technical queries
+        payload.safetySettings = config.safetySettings || [
+            { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+            { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+            { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+            { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" },
+            { category: "HARM_CATEGORY_CIVIC_INTEGRITY", threshold: "BLOCK_NONE" }
+        ];
+
         const generationConfig = {};
-        if (config.default_max_tokens) {
-            generationConfig.maxOutputTokens = config.default_max_tokens;
+        const maxTokens = options.max_tokens || options.maxTokens || options.maxOutputTokens || config.default_max_tokens;
+        if (maxTokens) {
+            generationConfig.maxOutputTokens = maxTokens;
         }
-        if (typeof config.temperature === "number") {
+        if (typeof options.temperature === "number") {
+            generationConfig.temperature = options.temperature;
+        } else if (typeof config.temperature === "number") {
             generationConfig.temperature = config.temperature;
         }
 
@@ -201,6 +213,17 @@ class GoogleProvider extends BaseProvider {
         let fullContent = text;
         if (thoughtText) {
             fullContent = `<think>\n${thoughtText}\n</think>\n\n${text}`.trimEnd();
+        }
+
+        if (candidate?.finishReason && candidate.finishReason !== "STOP") {
+            if (candidate.finishReason === "SAFETY") {
+                fullContent += `\n\n*[Response stopped: Gemini safety filter triggered]*`;
+            } else if (candidate.finishReason === "RECITATION") {
+                fullContent += `\n\n*[Response stopped: Gemini recitation filter triggered]*`;
+            }
+        }
+        if (data?.promptFeedback?.blockReason) {
+            fullContent += `\n\n*[Response blocked by Gemini safety filter: ${data.promptFeedback.blockReason}]*`;
         }
 
         return {
@@ -294,6 +317,15 @@ class GoogleProvider extends BaseProvider {
                     return;
                 }
 
+                // Check prompt-level blocks
+                if (data.promptFeedback?.blockReason) {
+                    const blockNotice = `\n\n*[Response blocked by Gemini safety filter: ${data.promptFeedback.blockReason}]*`;
+                    const sseChunk = { choices: [{ delta: { content: blockNotice }, finish_reason: "content_filter" }] };
+                    res.write(`data: ${JSON.stringify(sseChunk)}\n\n`);
+                    if (typeof res.flush === "function") res.flush();
+                    return;
+                }
+
                 const candidate = data.candidates?.[0];
                 if (!candidate) return;
 
@@ -348,6 +380,30 @@ class GoogleProvider extends BaseProvider {
                         res.write(`data: ${JSON.stringify(sseChunk)}\n\n`);
                         if (typeof res.flush === "function") res.flush();
                     }
+                }
+
+                // Check candidate-level finish reasons (e.g. SAFETY, RECITATION, MAX_TOKENS)
+                if (candidate.finishReason && candidate.finishReason !== "STOP") {
+                    let finishNotice = "";
+                    let finishReason = "stop";
+
+                    if (candidate.finishReason === "SAFETY") {
+                        finishNotice = `\n\n*[Response stopped: Gemini safety filter triggered]*`;
+                        finishReason = "content_filter";
+                    } else if (candidate.finishReason === "RECITATION") {
+                        finishNotice = `\n\n*[Response stopped: Gemini recitation filter triggered]*`;
+                        finishReason = "content_filter";
+                    } else if (candidate.finishReason === "MAX_TOKENS") {
+                        finishReason = "length";
+                    }
+
+                    if (finishNotice) {
+                        res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: finishNotice } }] })}\n\n`);
+                        if (typeof res.flush === "function") res.flush();
+                    }
+
+                    res.write(`data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: finishReason }] })}\n\n`);
+                    if (typeof res.flush === "function") res.flush();
                 }
             };
 
