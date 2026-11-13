@@ -63,25 +63,25 @@ export function buildFullSystemPrompt(workspace = null, personaOverride = null) 
         envPrompt += `- Terminal Shell: ${cachedSystemInfo.shellName}\n`;
         
         const effectiveWorkdir = (workspace && workspace.workdir) || cachedSystemInfo.cwd || "/tmp/workspace";
+        const effectiveScratch = (workspace && workspace.scratchDir) || `${effectiveWorkdir}/scratch`;
         envPrompt += `- Active Workspace Directory (CWD): ${effectiveWorkdir}\n`;
+        envPrompt += `- Workspace Scratch Directory (./scratch): ${effectiveScratch}\n`;
         envPrompt += `- User Uploads Directory: /tmp/user/files\n`;
         if (workspace && workspace.chatDir) {
             envPrompt += `- Active Session Storage Root: ${workspace.chatDir}\n`;
-            envPrompt += `- Session Scratch Directory ($SCRATCH): ${workspace.scratchDir || workspace.chatDir + '/scratch'}\n`;
             envPrompt += `- Session Artifacts Directory ($ARTIFACTS): ${workspace.artifactsDir || workspace.chatDir + '/artifacts'}\n`;
         }
         if (cachedSystemInfo.username) envPrompt += `- Current User: ${cachedSystemInfo.username}\n`;
 
         envPrompt += `\n[CLOUD SESSION PATH TOPOLOGY & DISAMBIGUATION GUIDELINES]:\n`;
-        envPrompt += `1. THREE-TIER PATH TOPOLOGY: The cloud environment separates working contexts into distinct directories:\n`;
-        envPrompt += `   - Project Workspace ('${effectiveWorkdir}'): Current working directory where user project files live and shell commands execute.\n`;
-        envPrompt += `   - Cloud Session Root ('${workspace?.chatDir || "/tmp/multiai_cloud/chats/<chat_id>"}'): Dedicated per-conversation storage containing '$SCRATCH' and '$ARTIFACTS'.\n`;
-        envPrompt += `   - User Uploads ('/tmp/user/files'): Ingestion folder for web UI uploads. They are NOT in './uploads' or '${effectiveWorkdir}'. Check '/tmp/user/files' directly when asked about user-uploaded documents.\n`;
-        envPrompt += `2. SHELL VS TOOL PATH TRAPS:\n`;
-        envPrompt += `   - In 'run_task', commands run in '${effectiveWorkdir}'. The conversation scratchpad does NOT exist at './scratch'. Never execute 'python scratch/script.py' or 'cd scratch'. Always use '$SCRATCH' or '$SCRATCH_DIR' (e.g. 'python3 "$SCRATCH/script.py"').\n`;
-        envPrompt += `   - In tool calls ('read_file', 'write_file', 'list_dir'), '$SCRATCH/' and '$ARTIFACTS/' prefixes automatically map to this chat session's storage.\n`;
+        envPrompt += `1. PATH TOPOLOGY: The environment organizes working files intuitively:\n`;
+        envPrompt += `   - Project Workspace ('${effectiveWorkdir}'): Current working directory where user project files live, shell commands execute, and './scratch' resides.\n`;
+        envPrompt += `   - Workspace Scratchpad ('./scratch'): Dedicated scratch space for one-off experiment scripts, temporary outputs, and notes. Accessible as './scratch/...' or '$SCRATCH/...'. In 'run_task', you can run 'python3 scratch/script.py' or 'ls scratch/' directly.\n`;
+        envPrompt += `   - Cloud Session Root ('${workspace?.chatDir || "/tmp/multiai_cloud/chats/<chat_id>"}'): Dedicated per-conversation storage containing '$ARTIFACTS'.\n`;
+        envPrompt += `   - User Uploads ('/tmp/user/files'): Ingestion folder for web UI uploads. They are NOT in './uploads'. Check '/tmp/user/files' directly when asked about user-uploaded documents.\n`;
+        envPrompt += `2. SHELL & TOOL HARMONY: In 'run_task', commands run in '${effectiveWorkdir}'. You can directly use 'scratch/<file>' or '$SCRATCH/<file>'. In tool calls ('read_file', 'write_file', 'list_dir'), paths starting with 'scratch/' or '$SCRATCH/' resolve safely to the workspace scratchpad.\n`;
         envPrompt += `3. ISOLATION: The MultiAI application source code is isolated. Do NOT modify files inside MultiAI server directories unless explicitly instructed.\n`;
-        envPrompt += `4. STORAGE DUAL-NATURE: Conversation messages, turns, and metadata are persistently stored in Supabase ('public.chats' & 'public.chat_messages'), while container storage under '/tmp' provides runtime scratchpads and artifacts for the active cloud session.`;
+        envPrompt += `4. STORAGE DUAL-NATURE: Conversation messages, turns, and metadata are persistently stored in Supabase ('public.chats' & 'public.chat_messages'), while workspace code and './scratch' live directly in '${effectiveWorkdir}'.`;
 
         if (Array.isArray(cachedSystemInfo.instructions) && cachedSystemInfo.instructions.length > 0) {
             envPrompt += `\n\n[TERMINAL & SHELL INSTRUCTIONS FOR THIS SYSTEM]:\n`;
@@ -95,18 +95,17 @@ export function buildFullSystemPrompt(workspace = null, personaOverride = null) 
     if (workspace && workspace.scratchDir) {
         const effectiveWorkdir = (workspace && workspace.workdir) || cachedSystemInfo?.cwd || "/tmp/workspace";
         const wsText = workspace.workspacePrompt || [
-            `[SCRATCHPAD, ARTIFACTS & CLOUD SESSION PATH ARCHITECTURE]:`,
+            `[WORKSPACE, SCRATCH & CLOUD PATH ARCHITECTURE]:`,
             `- Active Chat ID: ${workspace.chatId}`,
-            `- Conversation Root: ${workspace.chatDir}`,
-            `- Scratch Directory ($SCRATCH): ${workspace.scratchDir}`,
+            `- Active Execution Workspace (CWD): ${effectiveWorkdir}`,
+            `- Workspace Scratch Directory (./scratch): ${workspace.scratchDir}`,
             `- Artifacts Directory ($ARTIFACTS): ${workspace.artifactsDir || workspace.chatDir + '/artifacts'}`,
             `- Images Directory: ${workspace.imagesDir}`,
             `- User Uploads Directory: /tmp/user/files`,
-            `- Active Execution Workspace (CWD): ${effectiveWorkdir}`,
             `- CLOUD SESSION PATH AWARENESS:`,
-            `  1. In 'run_task', terminal commands run in '${effectiveWorkdir}'. Do not look for './scratch' or './uploads' here; use '$SCRATCH' and '/tmp/user/files'.`,
-            `  2. In tool calls ('read_file', 'write_file', 'list_dir'), '$SCRATCH/' and '$ARTIFACTS/' resolve automatically to this session.`,
-            `  3. Session messages & logs are persistently mirrored in Supabase, while working files are kept in this local session root.`
+            `  1. In 'run_task', terminal commands run in '${effectiveWorkdir}'. Your scratchpad lives at './scratch' (accessible as '$SCRATCH'). Run 'python3 scratch/script.py' directly.`,
+            `  2. In tool calls ('read_file', 'write_file', 'list_dir'), 'scratch/' and '$SCRATCH/' resolve to the workspace scratchpad, while '$ARTIFACTS/' resolves to session artifacts.`,
+            `  3. Session messages & logs are persistently mirrored in Supabase, while working files and './scratch' live in '${effectiveWorkdir}'.`
         ].join("\n");
         sections.push(wsText.trim());
     }

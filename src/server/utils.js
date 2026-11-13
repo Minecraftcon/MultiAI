@@ -317,11 +317,29 @@ function getChatWorkspace(chatId) {
 }
 
 function getChatScratchDir(chatId) {
-    const wsContext = getChatWorkspace(chatId);
-    if (wsContext && wsContext.workspace && wsContext.workspace.scratchDir) {
-        return wsContext.workspace.scratchDir;
+    let baseDir = process.env.MULTIAI_WORKSPACE_DIR || "/tmp/workspace";
+    if (chatId) {
+        try {
+            const { getChatWorkdir } = require("./routes/cloud_tools");
+            baseDir = getChatWorkdir(chatId) || baseDir;
+        } catch (_) {}
     }
-    return path.join(conversationsManager.getStorageRoot(), "scratch");
+    const scratchDir = path.join(baseDir, "scratch");
+    try {
+        if (!fs.existsSync(scratchDir)) {
+            fs.mkdirSync(scratchDir, { recursive: true });
+        }
+        // Auto-add scratch/ to .gitignore if in a git repo
+        const gitDir = path.join(baseDir, ".git");
+        const gitignoreFile = path.join(baseDir, ".gitignore");
+        if (fs.existsSync(gitDir)) {
+            const ignoreContent = fs.existsSync(gitignoreFile) ? fs.readFileSync(gitignoreFile, "utf8") : "";
+            if (!/^\s*scratch\/?\s*$/m.test(ignoreContent)) {
+                fs.appendFileSync(gitignoreFile, (ignoreContent && !ignoreContent.endsWith("\n") ? "\n" : "") + "scratch/\n");
+            }
+        }
+    } catch (_) {}
+    return scratchDir;
 }
 
 function getChatArtifactsDir(chatId) {
@@ -364,10 +382,11 @@ function resolveSafePath(inputPath, chatId) {
     if (isScratch) {
         let rel = processed;
         if (rel.startsWith("$SCRATCH/")) rel = rel.slice(9);
-        else if (rel.startsWith("${SCRATCH}/")) rel = rel.slice(10);
+        else if (rel.startsWith("${SCRATCH}/")) rel = rel.slice(11);
         else if (rel.startsWith("$SCRATCH\\")) rel = rel.slice(9);
-        else if (rel.startsWith("${SCRATCH}\\")) rel = rel.slice(10);
+        else if (rel.startsWith("${SCRATCH}\\")) rel = rel.slice(11);
         else if (rel === "$SCRATCH" || rel === "${SCRATCH}") rel = "";
+        rel = rel.replace(/^[/\\]+/, "");
 
         const scratchDir = getChatScratchDir(chatId);
         if (!fs.existsSync(scratchDir)) {
@@ -386,10 +405,11 @@ function resolveSafePath(inputPath, chatId) {
     if (isArtifacts) {
         let rel = processed;
         if (rel.startsWith("$ARTIFACTS/")) rel = rel.slice(11);
-        else if (rel.startsWith("${ARTIFACTS}/")) rel = rel.slice(12);
+        else if (rel.startsWith("${ARTIFACTS}/")) rel = rel.slice(13);
         else if (rel.startsWith("$ARTIFACTS\\")) rel = rel.slice(11);
-        else if (rel.startsWith("${ARTIFACTS}\\")) rel = rel.slice(12);
+        else if (rel.startsWith("${ARTIFACTS}\\")) rel = rel.slice(13);
         else if (rel === "$ARTIFACTS" || rel === "${ARTIFACTS}") rel = "";
+        rel = rel.replace(/^[/\\]+/, "");
 
         const artifactsDir = getChatArtifactsDir(chatId);
         if (!fs.existsSync(artifactsDir)) {

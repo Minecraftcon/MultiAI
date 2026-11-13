@@ -12,8 +12,8 @@ const path = require("path");
 const { spawn, execFile } = require("child_process");
 const { sendJSON } = require("../utils");
 
-const UPLOAD_DIR = "/tmp/user/files";
-const WORKSPACE_DIR = "/tmp/workspace";
+const UPLOAD_DIR = process.env.MULTIAI_UPLOAD_DIR || "/tmp/user/files";
+const WORKSPACE_DIR = process.env.MULTIAI_WORKSPACE_DIR || "/tmp/workspace";
 
 // In-memory or file-backed active workdir for chats
 let activeWorkdirs = {};
@@ -52,6 +52,10 @@ function ensureDirs() {
     }
     if (!fs.existsSync(WORKSPACE_DIR)) {
         fs.mkdirSync(WORKSPACE_DIR, { recursive: true });
+    }
+    const defaultScratch = path.join(WORKSPACE_DIR, "scratch");
+    if (!fs.existsSync(defaultScratch)) {
+        fs.mkdirSync(defaultScratch, { recursive: true });
     }
 }
 

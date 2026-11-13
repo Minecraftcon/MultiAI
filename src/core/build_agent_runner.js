@@ -36,7 +36,7 @@ const SERVER_BUILD_TOOLS = [
             parameters: {
                 type: "object",
                 properties: {
-                    path: { type: "string", description: "Path to file relative to project root or $SCRATCH/$ARTIFACTS" },
+                    path: { type: "string", description: "Path to file relative to project root (e.g. 'scratch/test.py' or 'src/app.js') or $ARTIFACTS" },
                     start_line: { type: "integer", description: "Optional starting line (1-indexed)" },
                     end_line: { type: "integer", description: "Optional ending line (inclusive)" }
                 },
@@ -52,7 +52,7 @@ const SERVER_BUILD_TOOLS = [
             parameters: {
                 type: "object",
                 properties: {
-                    path: { type: "string", description: "File path relative to project root or $SCRATCH/$ARTIFACTS" },
+                    path: { type: "string", description: "File path relative to project root (e.g. 'scratch/test.py') or $ARTIFACTS" },
                     content: { type: "string", description: "Full content to write" }
                 },
                 required: ["path", "content"]
@@ -83,7 +83,7 @@ const SERVER_BUILD_TOOLS = [
             parameters: {
                 type: "object",
                 properties: {
-                    DirectoryPath: { type: "string", description: "Directory path to list (use '.' for project root, or '$SCRATCH' / '$ARTIFACTS' for chat workspaces)" }
+                    DirectoryPath: { type: "string", description: "Directory path to list (use '.' for project root, 'scratch' for scratchpad, or '$ARTIFACTS' for artifacts)" }
                 },
                 required: ["DirectoryPath"]
             }

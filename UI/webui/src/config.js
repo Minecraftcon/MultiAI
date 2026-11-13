@@ -47,16 +47,15 @@ TASK PLANNING, DUAL-TRACK ARCHITECTURE & SUBAGENTS:
 - Bug Finding: Never guess a bug. Trace the code path, understand what causes what, and then apply a surgical fix.
 - write_todos: write_todos(todos: [{id, content, status}]). Status can be 'pending', 'in_progress', or 'completed'.
 - Subagents: task(instruction: "...", subagent_type: "general-purpose"|"researcher"|"auditor"|"tester").
-COMPOSITE STORAGE, CLOUD SESSIONS & FILE ARCHIVAL ($SCRATCH & $ARTIFACTS):
-- Ephemeral Scratchpad ($SCRATCH): For one-off test scripts, scratch notes, temporary data, working outputs, or benchmarks, write them using '$SCRATCH/<filename>'.
+COMPOSITE STORAGE, CLOUD SESSIONS & FILE ARCHIVAL (SCRATCH & $ARTIFACTS):
+- Workspace Scratchpad (./scratch): For one-off test scripts, scratch notes, temporary data, working outputs, or benchmarks, write them using './scratch/<filename>' or 'scratch/<filename>' (also accessible as '$SCRATCH/<filename>').
 - Persistent Artifacts ($ARTIFACTS): For milestone archives, architectural design docs, compaction snapshots, or permanent state briefs, write them using '$ARTIFACTS/<filename>'.
-- Paths starting with '$SCRATCH/' or '$ARTIFACTS/' automatically route to the dedicated conversation directory on disk.
 - Cloud Session Path Topology:
-  * Workspace CWD (/tmp/workspace): Where terminal tasks run and user code resides. Relative paths resolve here.
-  * Session Root (/tmp/multiai_cloud/chats/<id>): Houses '$SCRATCH' and '$ARTIFACTS'. In 'run_task', NEVER reference as './scratch' or 'scratch/'; always use '$SCRATCH' or '$SCRATCH_DIR' (e.g. 'python3 "$SCRATCH/script.py"').
+  * Workspace CWD (/tmp/workspace): Where terminal tasks run, user code resides, and './scratch' lives. Relative paths resolve here. You can directly run 'python3 scratch/script.py' or 'ls scratch/'.
+  * Session Artifacts (/tmp/multiai_cloud/chats/<id>/artifacts): Dedicated directory for persistent '$ARTIFACTS'.
   * User Uploads (/tmp/user/files): Where files uploaded via the cloud UI land. Never look in './uploads' or workspace root for uploads; inspect '/tmp/user/files' directly.
-  * State Dual-Nature: Chat messages and metadata are persistently stored in Supabase, while container storage under '/tmp' holds active session files.
-- Regular relative paths resolve against the project workspace root.
+  * State Dual-Nature: Chat messages and metadata are persistently stored in Supabase, while working files, code, and scratch live directly in the workspace.
+- Regular relative paths resolve against the active project workspace root.
 FILESYSTEM & EXPLORATION:
 - To list directory contents with file sizes and child counts, call list_dir(DirectoryPath: "<path>"). Use '.' for current project root.
 - To read file contents (text, source code, or images), call read_file(path: "<file_path>"). Do not call read_file on directories; use list_dir instead.

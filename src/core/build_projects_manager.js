@@ -168,7 +168,8 @@ function createBuildProjectsManager(optsOrFn, maybeResolveHome) {
 
         const chatsDir = path.join(projectDir, "chats");
         const chatDir = path.join(chatsDir, chatId);
-        const scratchDir = path.join(chatDir, "scratch");
+        const rootPath = project.rootPath || "";
+        const scratchDir = rootPath ? path.join(rootPath, "scratch") : path.join(chatDir, "scratch");
         const artifactsDir = path.join(chatDir, "artifacts");
         const imagesDir = path.join(chatDir, "images");
         const metaFile = path.join(chatDir, "meta.json");
@@ -178,17 +179,28 @@ function createBuildProjectsManager(optsOrFn, maybeResolveHome) {
             if (!fs.existsSync(scratchDir)) fs.mkdirSync(scratchDir, { recursive: true });
             if (!fs.existsSync(artifactsDir)) fs.mkdirSync(artifactsDir, { recursive: true });
             if (!fs.existsSync(imagesDir)) fs.mkdirSync(imagesDir, { recursive: true });
+
+            // Auto-add scratch/ to .gitignore if in a git repository
+            if (rootPath) {
+                const gitDir = path.join(rootPath, ".git");
+                const gitignoreFile = path.join(rootPath, ".gitignore");
+                if (fs.existsSync(gitDir)) {
+                    const ignoreContent = fs.existsSync(gitignoreFile) ? fs.readFileSync(gitignoreFile, "utf8") : "";
+                    if (!/^\s*scratch\/?\s*$/m.test(ignoreContent)) {
+                        fs.appendFileSync(gitignoreFile, (ignoreContent && !ignoreContent.endsWith("\n") ? "\n" : "") + "scratch/\n");
+                    }
+                }
+            }
         } catch (err) {
             console.error(`[BUILD] Error creating workspace for project chat ${chatId}:`, err.message);
         }
 
-        const rootPath = project.rootPath || "";
         const workspacePrompt = [
             `[BUILD WORKSPACE - PROJECT CONTEXT]:`,
             `- Mode: Autonomous State-Based Builder`,
             `- Active Project: ${project.name || projectId}`,
             `- Project Root Directory: ${rootPath}`,
-            `- Conversation Scratch Directory ($SCRATCH): ${scratchDir}`,
+            `- Workspace Scratchpad (./scratch): ${scratchDir}`,
             `- Conversation Artifacts Directory ($ARTIFACTS): ${artifactsDir}`,
             `- Images Directory: ${imagesDir}`,
             `- User Uploads Directory: /tmp/user/files`,

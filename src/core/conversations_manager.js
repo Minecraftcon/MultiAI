@@ -55,39 +55,54 @@ function ensureChatWorkspace(chatId, dateStr) {
 
     const date = dateStr && /^\d{4}-\d{2}-\d{2}$/.test(dateStr) ? dateStr : formatDate();
     const chatDir = path.join(getStorageRoot(), "chats", chatId);
-    const scratchDir = path.join(chatDir, "scratch");
     const artifactsDir = path.join(chatDir, "artifacts");
     const imagesDir = path.join(chatDir, "images");
 
+    let workdir = process.env.MULTIAI_WORKSPACE_DIR || "/tmp/workspace";
     try {
+        const { getChatWorkdir } = require("../server/routes/cloud_tools");
+        workdir = getChatWorkdir(chatId) || workdir;
+    } catch (_) {}
+
+    const scratchDir = path.join(workdir, "scratch");
+
+    try {
+        if (!fs.existsSync(workdir)) fs.mkdirSync(workdir, { recursive: true });
         if (!fs.existsSync(scratchDir)) fs.mkdirSync(scratchDir, { recursive: true });
         if (!fs.existsSync(artifactsDir)) fs.mkdirSync(artifactsDir, { recursive: true });
         if (!fs.existsSync(imagesDir)) fs.mkdirSync(imagesDir, { recursive: true });
+
+        // Auto-add scratch/ to .gitignore if in a git repository
+        const gitDir = path.join(workdir, ".git");
+        const gitignoreFile = path.join(workdir, ".gitignore");
+        if (fs.existsSync(gitDir)) {
+            const ignoreContent = fs.existsSync(gitignoreFile) ? fs.readFileSync(gitignoreFile, "utf8") : "";
+            if (!/^\s*scratch\/?\s*$/m.test(ignoreContent)) {
+                fs.appendFileSync(gitignoreFile, (ignoreContent && !ignoreContent.endsWith("\n") ? "\n" : "") + "scratch/\n");
+            }
+        }
     } catch (_) {}
 
     const workspacePrompt = [
-        `[SCRATCHPAD, ARTIFACTS & CLOUD SESSION PATH ARCHITECTURE]:`,
+        `[WORKSPACE, SCRATCH & CLOUD PATH ARCHITECTURE]:`,
         `- Active Chat ID: ${chatId}`,
-        `- Conversation Root: ${chatDir}`,
-        `- Scratch Directory ($SCRATCH): ${scratchDir}`,
-        `- Artifacts Directory ($ARTIFACTS): ${artifactsDir}`,
+        `- Active Execution Workspace (CWD): ${workdir}`,
+        `- Workspace Scratch Directory (./scratch): ${scratchDir}`,
+        `- Session Artifacts Directory ($ARTIFACTS): ${artifactsDir}`,
         `- Images Directory: ${imagesDir}`,
         `- User Uploads Directory: /tmp/user/files`,
-        `- Active Execution Workspace (CWD): /tmp/workspace`,
-        `- CLOUD SESSION PATH AWARENESS & ROUTING GUIDELINES:`,
-        `  1. THREE-TIER PATH TOPOLOGY:`,
-        `     - Project Workspace: '/tmp/workspace' is your current working directory (CWD). Relative paths in tool calls and terminal commands resolve here.`,
-        `     - Session Storage: '${chatDir}' is the dedicated storage for this conversation session, housing '$SCRATCH', '$ARTIFACTS', and generated images.`,
-        `     - User Uploads: '/tmp/user/files' is where files uploaded via the web UI arrive. They are NOT in './uploads' or './workspace'. When the user mentions an uploaded file, always check '/tmp/user/files'.`,
-        `  2. TERMINAL SHELL VS TOOL PATH TRAPS:`,
-        `     - In 'run_task', terminal commands execute with 'pwd=/tmp/workspace'. Conversation scratch is NOT at './scratch'. Never execute 'python scratch/script.py' or 'cd scratch'. Always use '$SCRATCH' or '$SCRATCH_DIR' (e.g. 'python3 "$SCRATCH/script.py"').`,
-        `     - In tool calls ('read_file', 'write_file', 'list_dir'), paths starting with '$SCRATCH/' or '$ARTIFACTS/' are automatically resolved to this chat's isolated directory.`,
-        `  3. PERSISTENT ARTIFACTS & SCRATCH:`,
-        `     - Write temporary test scripts, mock outputs, or one-off code into '$SCRATCH/<filename>'.`,
+        `- CLOUD PATH GUIDELINES:`,
+        `  1. WORKSPACE SCRATCHPAD (./scratch):`,
+        `     - Your scratchpad lives directly in the workspace at './scratch' (also accessible via '$SCRATCH').`,
+        `     - Write one-off test scripts, prototypes, temporary data, or scratch notes to './scratch/<filename>' or '$SCRATCH/<filename>'.`,
+        `     - In terminal commands ('run_task'), you execute with 'pwd=${workdir}'. You can directly run 'python3 scratch/script.py' or 'ls scratch/'.`,
+        `  2. PERSISTENT ARTIFACTS ($ARTIFACTS):`,
         `     - Write milestone briefs, task lists, architecture specs, or permanent documents into '$ARTIFACTS/<filename>'.`,
+        `  3. USER UPLOADS:`,
+        `     - Files uploaded via the cloud UI arrive in '/tmp/user/files'. Check '/tmp/user/files' directly when asked about user-uploaded documents.`,
         `  4. STORAGE DUAL-NATURE:`,
         `     - Conversation messages, turn histories, and session metadata are persistently mirrored in Supabase ('public.chats' & 'public.chat_messages').`,
-        `     - Disk storage under '/tmp/multiai_cloud' provides high-speed scratchpad and working files for the active cloud container session.`,
+        `     - Working files, user projects, and './scratch' live directly in '${workdir}'.`,
         `  5. SERVER APPLICATION ISOLATION:`,
         `     - MultiAI server source code is isolated. Do NOT modify server files or configs unless explicitly requested.`
     ].join("\n");
