@@ -54,6 +54,10 @@ export function openSettings(targetCategory = "general") {
     settingsScreen.setAttribute("aria-hidden", "false");
 
     try {
+        import("./saturn-webgl.js").then(m => m.pauseSaturnWebGL?.()).catch(() => {});
+    } catch (_) {}
+
+    try {
         switchSubScreen(targetCategory);
         renderIcons(settingsScreen);
     } catch (err) {
@@ -72,6 +76,12 @@ export function closeSettings() {
 
     appShell.classList.remove("in-settings");
     settingsScreen.setAttribute("aria-hidden", "true");
+
+    try {
+        if (appShell.classList.contains("is-start-page")) {
+            import("./saturn-webgl.js").then(m => m.resumeSaturnWebGL?.()).catch(() => {});
+        }
+    } catch (_) {}
 
     const input = document.getElementById("input");
     if (input && !isMobileDevice()) {
