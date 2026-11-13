@@ -261,33 +261,49 @@ export function renderTurn(turn, session, compactionRef, isLastTurn) {
 
         // Render final assistant message
         if (finalAssistantMsg) {
-            const rawText = finalAssistantMsg.content || "";
-            aiDiv.dataset.rawText = rawText;
+            if (finalAssistantMsg.isError || finalAssistantMsg.error) {
+                const errObj = finalAssistantMsg.error || {};
+                const cleanErr = errObj.message || (typeof finalAssistantMsg.content === "string" ? finalAssistantMsg.content.replace(/^\[Error:\s*/i, "").replace(/\]$/, "") : "Request could not be succeeded");
+                const codeLabel = errObj.statusCode ? ` [HTTP ${errObj.statusCode}]` : (errObj.code ? ` [${errObj.code}]` : "");
+                aiDiv.dataset.isError = "true";
+                aiDiv.dataset.rawText = finalAssistantMsg.content || cleanErr;
 
-            const { thoughtHtml, content, followups } = extractThoughtAndContent(rawText);
-            
-            if (thoughtHtml) {
-                preSearchContent.innerHTML = thoughtHtml;
-                preSearchContent.querySelectorAll(".thought-box").forEach(tb => {
-                    tb.open = false;
-                });
-                wrapTablesForScroll(preSearchContent);
-                renderIcons(preSearchContent);
-            }
-
-            if (content) {
-                finalContent.innerHTML = parseMarkdown(content);
-                wrapTablesForScroll(finalContent);
+                finalContent.innerHTML = `
+                    <div class="ai-error-notice">
+                        <span class="ai-error-badge"><i data-lucide="alert-circle"></i> Request could not be succeeded${codeLabel}</span>
+                        <span class="ai-error-text">${escapeHTML(cleanErr)}</span>
+                    </div>
+                `;
                 renderIcons(finalContent);
-                bindAIImageCards(finalContent);
-            } else if (totalToolCalls === 0) {
-                finalContent.innerHTML = "<em>(Empty response)</em>";
-            }
+            } else {
+                const rawText = finalAssistantMsg.content || "";
+                aiDiv.dataset.rawText = rawText;
 
-            if (Array.isArray(followups) && followups.length > 0) {
-                renderFollowupSuggestions(aiDiv, followups, true);
+                const { thoughtHtml, content, followups } = extractThoughtAndContent(rawText);
+                
+                if (thoughtHtml) {
+                    preSearchContent.innerHTML = thoughtHtml;
+                    preSearchContent.querySelectorAll(".thought-box").forEach(tb => {
+                        tb.open = false;
+                    });
+                    wrapTablesForScroll(preSearchContent);
+                    renderIcons(preSearchContent);
+                }
+
+                if (content) {
+                    finalContent.innerHTML = parseMarkdown(content);
+                    wrapTablesForScroll(finalContent);
+                    renderIcons(finalContent);
+                    bindAIImageCards(finalContent);
+                } else if (totalToolCalls === 0) {
+                    finalContent.innerHTML = "<em>(Empty response)</em>";
+                }
+
+                if (Array.isArray(followups) && followups.length > 0) {
+                    renderFollowupSuggestions(aiDiv, followups, true);
+                }
+                renderPlanApprovalActions(aiDiv, rawText, true, session);
             }
-            renderPlanApprovalActions(aiDiv, rawText, true, session);
         }
 
         if (searchContainer && searchContainer.children.length > 0) {
