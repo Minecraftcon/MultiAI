@@ -74,10 +74,10 @@ export async function setupWorkdirSelector() {
         // Update button label
         if (label) {
             if (isDefaultActive) {
-                label.textContent = "Workdir: Default";
+                label.textContent = "Workspace: Default";
             } else {
                 const matched = cachedWorkspaces.repos.find(r => r.path === currentPath);
-                label.textContent = `Workdir: ${matched ? matched.name : currentPath.split("/").pop()}`;
+                label.textContent = `Workspace: ${matched ? matched.name : currentPath.split("/").pop()}`;
             }
         }
 

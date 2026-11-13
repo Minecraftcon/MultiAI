@@ -471,16 +471,12 @@ export function getSettingsHTML() {
 
                         <div class="settings-row">
                             <div class="settings-item-info">
-                                <span class="settings-item-title">Start Page Aurora Theme</span>
-                                <span class="settings-item-desc">Celestial backdrop and aura glow on the welcome screen</span>
+                                <span class="settings-item-title">Start Page Backdrop</span>
+                                <span class="settings-item-desc">Minimalist ambient backdrop for the welcome screen</span>
                             </div>
                             <select id="cfgAuroraTheme" class="settings-select">
-                                <option value="saturn">🪐 Saturn (3D Rings & Nebula)</option>
-                                <option value="aurora">🌌 Northern Lights (Boreal Aurora)</option>
-                                <option value="clouds" selected>☁️ Lunar Mist (Monochromatic Cloud)</option>
-                                <option value="nebula">✨ Cosmic Nebula (Cyan & Magenta)</option>
-                                <option value="eclipse">🌑 Solar Eclipse (Amber Corona)</option>
-                                <option value="none">🚫 Off (No Glow)</option>
+                                <option value="none" selected>Off (Minimalist)</option>
+                                <option value="subtle">Subtle Ambient</option>
                             </select>
                         </div>
                     </div>

@@ -104,9 +104,9 @@ class ChatBoxComponent {
                 <i data-lucide="chevron-down" class="hero-model-chevron"></i>
             </button>
             <div class="hero-workdir-picker-wrap">
-                <button id="heroWorkdirPickerBtn" class="hero-workdir-picker-btn" type="button" title="Select Active Workspace Directory">
+                <button id="heroWorkdirPickerBtn" class="hero-workdir-picker-btn" type="button" title="Select Active Workspace">
                     <i data-lucide="folder-git-2" class="hero-workdir-icon"></i>
-                    <span id="heroWorkdirLabel" class="hero-workdir-label">Workdir: Default</span>
+                    <span id="heroWorkdirLabel" class="hero-workdir-label">Workspace: Default</span>
                     <i data-lucide="chevron-down" class="hero-workdir-chevron"></i>
                 </button>
                 <div id="heroWorkdirDropdown" class="hero-workdir-dropdown" style="display: none;"></div>

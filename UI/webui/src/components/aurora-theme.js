@@ -8,16 +8,12 @@ import { state } from "../state.js";
 import { startSaturnWebGL, pauseSaturnWebGL, resumeSaturnWebGL, destroySaturnWebGL } from "./saturn-webgl.js";
 
 export const AURORA_THEMES = {
-    saturn: "Saturn (3D Rings & Nebula)",
-    aurora: "Northern Lights (Boreal Aurora)",
-    clouds: "Lunar Mist (Monochromatic Cloud)",
-    nebula: "Cosmic Nebula (Cyan & Magenta)",
-    eclipse: "Solar Eclipse (Amber Corona)",
-    none: "Off (No Glow)"
+    none: "Off (Minimalist)",
+    subtle: "Subtle Ambient"
 };
 
 const STORAGE_KEY = "multiai_aurora_theme";
-export const DEFAULT_AURORA_THEME = "clouds";
+export const DEFAULT_AURORA_THEME = "none";
 
 let currentTheme = DEFAULT_AURORA_THEME;
 
@@ -45,53 +41,19 @@ export function getAuroraTheme() {
 }
 
 /**
- * Return HTML markup for the celestial backdrop of a given theme
+ * Return HTML markup for the subtle backdrop of a given theme
  */
 function getBackdropTemplate(theme) {
-    if (isAndroidOrMobile()) {
+    if (isAndroidOrMobile() || theme === "none") {
         return "";
     }
-    switch (theme) {
-        case "saturn":
-            return `
-            <div class="saturn-stage" id="saturnStage" aria-hidden="true">
-                <div class="saturn-ambient-glow"></div>
-            </div>`;
-
-        case "aurora":
-            return `
-            <div class="aurora-stage" aria-hidden="true">
-                <div class="boreal-curtain boreal-curtain-1"></div>
-                <div class="boreal-curtain boreal-curtain-2"></div>
-                <div class="boreal-horizon-glow"></div>
-            </div>`;
-
-        case "nebula":
-            return `
-            <div class="nebula-stage" aria-hidden="true">
-                <div class="nebula-cloud nebula-cyan"></div>
-                <div class="nebula-cloud nebula-magenta"></div>
-            </div>`;
-
-        case "eclipse":
-            return `
-            <div class="eclipse-stage" aria-hidden="true">
-                <div class="eclipse-corona-flare"></div>
-                <div class="eclipse-solar-ring">
-                    <div class="eclipse-moon-disk"></div>
-                </div>
-            </div>`;
-
-        case "clouds":
-            return `
-            <div class="clouds-stage" aria-hidden="true">
-                <div class="lunar-mist-ambient"></div>
-            </div>`;
-
-        case "none":
-        default:
-            return "";
+    if (theme === "subtle") {
+        return `
+        <div class="clouds-stage" aria-hidden="true">
+            <div class="lunar-mist-ambient"></div>
+        </div>`;
     }
+    return "";
 }
 
 /**
@@ -129,17 +91,7 @@ export function setAuroraTheme(theme, save = false) {
     if (backdropEl) {
         backdropEl.innerHTML = getBackdropTemplate(target);
         backdropEl.className = `start-page-backdrop theme-${target}`;
-
-        // If Saturn 3D theme is selected, mount the WebGL experience
-        if (target === "saturn") {
-            const shell = document.getElementById("appShell");
-            if (shell && shell.classList.contains("is-start-page")) {
-                const stage = document.getElementById("saturnStage") || backdropEl;
-                startSaturnWebGL(stage);
-            }
-        } else {
-            destroySaturnWebGL();
-        }
+        destroySaturnWebGL();
     }
 
     try {
@@ -164,24 +116,9 @@ export function setAuroraTheme(theme, save = false) {
 
 /**
  * Lifecycle hook called when switching between Start Page mode and Chat mode
- * Follows Modern Web Guidance: pauses 3D WebGL rendering when chatting
  */
 export function onStartPageModeChange(isStartPage) {
-    if (isAndroidOrMobile()) {
-        destroySaturnWebGL();
-        return;
-    }
-    if (currentTheme === "saturn") {
-        if (isStartPage) {
-            const backdropEl = document.getElementById("startPageBackdrop");
-            const stage = document.getElementById("saturnStage") || backdropEl;
-            if (stage) {
-                startSaturnWebGL(stage);
-            }
-        } else {
-            pauseSaturnWebGL();
-        }
-    }
+    destroySaturnWebGL();
 }
 
 /**

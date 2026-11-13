@@ -151,6 +151,9 @@
 
 #appShell.is-start-page .start-page-footer {
     display: flex !important;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
     width: min(800px, 100%);
     justify-content: flex-start;
     padding-left: 4px;
@@ -171,8 +174,19 @@
     font-weight: 500;
     cursor: pointer;
     user-select: none;
+    max-width: 100%;
+    box-sizing: border-box;
     transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease, transform 0.15s ease, box-shadow 0.18s ease;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+.hero-model-picker-btn .model-picker-name {
+    display: inline-block;
+    max-width: 240px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: middle;
 }
 
 .hero-model-picker-btn:hover {
@@ -208,12 +222,13 @@
 }
 
 /* =========================================================
-   HERO WORKDIR SELECTOR (MINIMALIST UTILITY)
+   HERO WORKSPACE SELECTOR (MINIMALIST UTILITY)
    ========================================================= */
 .hero-workdir-picker-wrap {
     position: relative;
     display: inline-flex;
-    margin-left: 10px;
+    margin-left: 0;
+    max-width: 100%;
 }
 
 .hero-workdir-picker-btn {
@@ -230,6 +245,8 @@
     font-weight: 500;
     cursor: pointer;
     user-select: none;
+    max-width: 100%;
+    box-sizing: border-box;
     transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease, transform 0.15s ease, box-shadow 0.18s ease;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
 }
@@ -254,7 +271,12 @@
 }
 
 .hero-workdir-label {
+    display: inline-block;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
     white-space: nowrap;
+    vertical-align: middle;
 }
 
 .hero-workdir-chevron {
@@ -267,8 +289,9 @@
     position: absolute;
     bottom: calc(100% + 8px);
     left: 0;
-    min-width: 280px;
-    max-width: 380px;
+    min-width: 260px;
+    max-width: min(360px, calc(100vw - 24px));
+    box-sizing: border-box;
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 12px;
@@ -627,24 +650,40 @@
         width: 100%;
         max-width: 100%;
         box-sizing: border-box;
+        display: flex !important;
+        flex-wrap: wrap;
+        gap: 6px;
+        padding: 0 4px;
     }
-}
 
-@keyframes mobileAuraPulse {
-    0% {
-        opacity: 0.72;
-        transform: scale(0.99);
+    .hero-model-picker-btn,
+    .hero-workdir-picker-btn {
+        font-size: 12.5px;
+        padding: 6px 12px;
+        max-width: 100%;
+        box-sizing: border-box;
     }
-    100% {
-        opacity: 0.95;
-        transform: scale(1.015);
+
+    .hero-model-picker-btn .model-picker-name {
+        max-width: min(170px, 42vw);
+    }
+
+    .hero-workdir-label {
+        max-width: min(150px, 40vw);
+    }
+
+    .hero-workdir-dropdown {
+        left: 0;
+        right: auto;
+        min-width: 240px;
+        max-width: calc(100vw - 20px);
+        box-sizing: border-box;
     }
 }
 
 /* =========================================================
-   START PAGE CELESTIAL BACKDROP & THEME SYSTEM
-   - Themes: Saturn, Northern Lights (Aurora), Lunar Mist,
-     Cosmic Nebula, Solar Eclipse, Off
+   START PAGE BACKDROP SYSTEM (TRIMMED & MINIMALIST)
+   - Clean, lightweight, low-contrast backdrop
    ========================================================= */
 .start-page-backdrop {
     position: absolute;
@@ -657,7 +696,7 @@
     z-index: 5;
     opacity: 0;
     visibility: hidden;
-    transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.6s;
+    transition: opacity 0.3s ease, visibility 0.3s;
 }
 
 #appShell.is-start-page .start-page-backdrop {
@@ -671,311 +710,30 @@
     opacity: 0 !important;
 }
 
-/* ---------------------------------------------------------
-   1. SATURN THEME: Photorealistic WebGL 3D Planet & Nebula
-   --------------------------------------------------------- */
-.saturn-stage {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    pointer-events: none;
-    overflow: hidden;
-}
-
-#saturnCanvas {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    pointer-events: none;
-    z-index: 2;
-}
-
-/* Ambient Amber Nebula Glow behind Saturn (anchored on left edge) */
-.saturn-ambient-glow {
-    position: absolute;
-    top: 15%;
-    left: -200px;
-    right: auto;
-    width: clamp(450px, 60vw, 900px);
-    height: clamp(450px, 60vw, 900px);
-    background: radial-gradient(circle at 20% 50%, rgba(235, 165, 70, 0.20) 0%, rgba(185, 110, 40, 0.10) 34%, rgba(95, 50, 120, 0.04) 60%, transparent 75%);
-    filter: blur(60px);
-    pointer-events: none;
-    z-index: 1;
-}
-
-/* Chatbox Glow Aura: Saturn Amber & Starlight Gold */
-[data-aurora-theme="saturn"] #appShell.is-start-page .glow-cloud-1 {
-    background: radial-gradient(circle at center, rgba(255, 210, 135, 0.45) 0%, rgba(230, 170, 85, 0.26) 38%, rgba(180, 120, 50, 0.1) 62%, transparent 76%);
-}
-[data-aurora-theme="saturn"] #appShell.is-start-page .glow-cloud-2 {
-    background: radial-gradient(circle at center, rgba(245, 195, 110, 0.38) 0%, rgba(210, 150, 70, 0.2) 42%, rgba(160, 100, 40, 0.06) 65%, transparent 78%);
-}
-[data-aurora-theme="saturn"] #appShell.is-start-page .glow-cloud-3 {
-    background: radial-gradient(circle at center, rgba(220, 160, 80, 0.32) 0%, rgba(175, 115, 55, 0.16) 45%, transparent 75%);
-}
-[data-aurora-theme="saturn"] #appShell.is-start-page .glow-cloud-4 {
-    background: radial-gradient(ellipse at center, rgba(255, 225, 160, 0.38) 0%, rgba(215, 155, 75, 0.18) 40%, transparent 72%);
-}
-[data-aurora-theme="saturn"] #appShell.is-start-page .glow-cloud-shimmer {
-    background: linear-gradient(135deg, rgba(255, 220, 150, 0.22) 0%, rgba(225, 165, 80, 0.12) 35%, rgba(255, 225, 160, 0.24) 68%, rgba(200, 140, 60, 0.1) 100%);
-}
-
-/* Mobile Saturn Aura */
-[data-aurora-theme="saturn"] #appShell.is-start-page .start-page-glow-aura {
-    background: 
-        radial-gradient(circle at 30% 35%, rgba(255, 215, 145, 0.48) 0%, rgba(235, 170, 85, 0.26) 40%, transparent 72%),
-        radial-gradient(circle at 70% 65%, rgba(245, 195, 115, 0.42) 0%, rgba(200, 140, 60, 0.20) 42%, transparent 75%) !important;
-    box-shadow: 0 0 26px rgba(255, 195, 100, 0.26), 0 0 52px rgba(220, 150, 60, 0.14) !important;
-}
-
-/* ---------------------------------------------------------
-   2. NORTHERN LIGHTS (AURORA BOREALIS) THEME
-   --------------------------------------------------------- */
-.aurora-stage {
+/* Subtle Ambient (Clean Monochromatic Mist) */
+[data-aurora-theme="subtle"] #appShell.is-start-page .clouds-stage {
     position: absolute;
     inset: 0;
     pointer-events: none;
     overflow: hidden;
 }
 
-.boreal-curtain {
-    position: absolute;
-    top: -10%;
-    left: -15%;
-    width: 130%;
-    height: 55%;
-    filter: blur(34px);
-    opacity: 0.65;
-    will-change: transform, opacity;
-}
-
-.boreal-curtain-1 {
-    background: linear-gradient(175deg, transparent 0%, rgba(0, 245, 160, 0.28) 35%, rgba(0, 217, 245, 0.18) 65%, transparent 100%);
-    animation: borealWave1 16s ease-in-out infinite alternate;
-}
-
-.boreal-curtain-2 {
-    background: linear-gradient(185deg, transparent 0%, rgba(121, 40, 202, 0.26) 30%, rgba(0, 245, 160, 0.22) 65%, transparent 100%);
-    animation: borealWave2 22s ease-in-out infinite alternate-reverse;
-    animation-delay: -5s;
-}
-
-.boreal-horizon-glow {
+[data-aurora-theme="subtle"] #appShell.is-start-page .lunar-mist-ambient {
     position: absolute;
     top: 25%;
-    left: 10%;
-    width: 80%;
-    height: 25%;
-    background: radial-gradient(ellipse at center, rgba(0, 245, 160, 0.18) 0%, rgba(0, 217, 245, 0.1) 45%, transparent 75%);
-    filter: blur(48px);
-}
-
-@keyframes borealWave1 {
-    0% { transform: translateY(0) skewX(-6deg) scaleY(0.95); opacity: 0.55; }
-    50% { transform: translateY(18px) skewX(8deg) scaleY(1.08); opacity: 0.85; }
-    100% { transform: translateY(-10px) skewX(-4deg) scaleY(1.02); opacity: 0.65; }
-}
-
-@keyframes borealWave2 {
-    0% { transform: translateY(15px) skewX(6deg) scaleY(1.05); opacity: 0.6; }
-    50% { transform: translateY(-15px) skewX(-8deg) scaleY(0.92); opacity: 0.88; }
-    100% { transform: translateY(8px) skewX(4deg) scaleY(1.04); opacity: 0.62; }
-}
-
-/* Chatbox Dock Aura: Emerald & Violet Aurora */
-[data-aurora-theme="aurora"] #appShell.is-start-page .glow-cloud-1 {
-    background: radial-gradient(circle at center, rgba(0, 245, 160, 0.42) 0%, rgba(0, 217, 245, 0.22) 40%, transparent 75%);
-}
-[data-aurora-theme="aurora"] #appShell.is-start-page .glow-cloud-2 {
-    background: radial-gradient(circle at center, rgba(121, 40, 202, 0.38) 0%, rgba(0, 245, 160, 0.18) 45%, transparent 78%);
-}
-[data-aurora-theme="aurora"] #appShell.is-start-page .glow-cloud-3 {
-    background: radial-gradient(circle at center, rgba(0, 217, 245, 0.32) 0%, rgba(121, 40, 202, 0.18) 45%, transparent 75%);
-}
-[data-aurora-theme="aurora"] #appShell.is-start-page .glow-cloud-4 {
-    background: radial-gradient(ellipse at center, rgba(0, 245, 160, 0.36) 0%, rgba(0, 217, 245, 0.16) 40%, transparent 70%);
-}
-[data-aurora-theme="aurora"] #appShell.is-start-page .glow-cloud-shimmer {
-    background: linear-gradient(135deg, rgba(0, 245, 160, 0.22) 0%, rgba(0, 217, 245, 0.12) 35%, rgba(121, 40, 202, 0.22) 68%, rgba(0, 245, 160, 0.1) 100%);
-}
-[data-aurora-theme="aurora"] #appShell.is-start-page .start-page-glow-aura {
-    background: 
-        radial-gradient(circle at 30% 35%, rgba(0, 245, 160, 0.46) 0%, rgba(0, 217, 245, 0.26) 40%, transparent 72%),
-        radial-gradient(circle at 70% 65%, rgba(135, 55, 225, 0.42) 0%, rgba(0, 245, 160, 0.20) 45%, transparent 75%) !important;
-    box-shadow: 0 0 26px rgba(0, 245, 160, 0.24), 0 0 52px rgba(121, 40, 202, 0.15) !important;
-}
-
-/* ---------------------------------------------------------
-   3. COSMIC NEBULA THEME (CYAN & MAGENTA)
-   --------------------------------------------------------- */
-.nebula-stage {
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    overflow: hidden;
-}
-
-.nebula-cloud {
-    position: absolute;
-    border-radius: 50%;
-    filter: blur(54px);
-    opacity: 0.6;
-    animation: nebulaDrift 24s ease-in-out infinite alternate;
-}
-
-.nebula-cyan {
-    top: 5%;
-    right: 8%;
-    width: clamp(320px, 45vw, 600px);
-    height: clamp(320px, 45vw, 600px);
-    background: radial-gradient(circle at center, rgba(0, 225, 255, 0.26) 0%, rgba(0, 140, 255, 0.14) 45%, transparent 75%);
-}
-
-.nebula-magenta {
-    top: 18%;
-    left: 8%;
-    width: clamp(340px, 48vw, 640px);
-    height: clamp(340px, 48vw, 640px);
-    background: radial-gradient(circle at center, rgba(255, 0, 128, 0.22) 0%, rgba(180, 0, 220, 0.12) 48%, transparent 75%);
-    animation-delay: -8s;
-}
-
-@keyframes nebulaDrift {
-    0% { transform: scale(0.94) translate3d(0, 0, 0); }
-    100% { transform: scale(1.08) translate3d(-15px, 12px, 0); }
-}
-
-[data-aurora-theme="nebula"] #appShell.is-start-page .glow-cloud-1 {
-    background: radial-gradient(circle at center, rgba(0, 225, 255, 0.42) 0%, rgba(0, 140, 255, 0.22) 40%, transparent 75%);
-}
-[data-aurora-theme="nebula"] #appShell.is-start-page .glow-cloud-2 {
-    background: radial-gradient(circle at center, rgba(255, 0, 128, 0.38) 0%, rgba(180, 0, 220, 0.18) 45%, transparent 78%);
-}
-[data-aurora-theme="nebula"] #appShell.is-start-page .glow-cloud-3 {
-    background: radial-gradient(circle at center, rgba(138, 43, 226, 0.35) 0%, transparent 75%);
-}
-[data-aurora-theme="nebula"] #appShell.is-start-page .glow-cloud-4 {
-    background: radial-gradient(ellipse at center, rgba(0, 225, 255, 0.35) 0%, rgba(255, 0, 128, 0.18) 40%, transparent 70%);
-}
-[data-aurora-theme="nebula"] #appShell.is-start-page .start-page-glow-aura {
-    background: 
-        radial-gradient(circle at 30% 35%, rgba(0, 225, 255, 0.46) 0%, rgba(0, 140, 255, 0.24) 40%, transparent 72%),
-        radial-gradient(circle at 70% 65%, rgba(255, 0, 130, 0.42) 0%, rgba(180, 0, 220, 0.20) 45%, transparent 75%) !important;
-    box-shadow: 0 0 26px rgba(0, 225, 255, 0.22), 0 0 52px rgba(255, 0, 130, 0.15) !important;
-}
-
-/* ---------------------------------------------------------
-   4. SOLAR ECLIPSE THEME (AMBER CORONA)
-   --------------------------------------------------------- */
-.eclipse-stage {
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    overflow: hidden;
-}
-
-.eclipse-corona-flare {
-    position: absolute;
-    top: -60px;
-    right: -40px;
-    width: clamp(360px, 48vw, 650px);
-    height: clamp(360px, 48vw, 650px);
-    border-radius: 50%;
-    background: radial-gradient(circle at 60% 40%, rgba(255, 170, 50, 0.3) 0%, rgba(255, 110, 20, 0.18) 35%, rgba(150, 40, 10, 0.06) 60%, transparent 78%);
-    filter: blur(44px);
-    animation: coronaPulse 8s ease-in-out infinite alternate;
-}
-
-.eclipse-solar-ring {
-    position: absolute;
-    top: 4%;
-    right: 8%;
-    width: clamp(180px, 24vw, 320px);
-    height: clamp(180px, 24vw, 320px);
-    border-radius: 50%;
-    box-shadow: 0 0 45px rgba(255, 160, 40, 0.55), 
-                0 0 90px rgba(255, 100, 20, 0.32),
-                inset 0 0 20px rgba(255, 200, 100, 0.25);
-}
-
-.eclipse-moon-disk {
-    position: absolute;
-    inset: 2px;
-    border-radius: 50%;
-    background: var(--bg);
-    box-shadow: inset -5px -5px 15px rgba(0, 0, 0, 0.95);
-}
-
-@keyframes coronaPulse {
-    0% { transform: scale(0.96); opacity: 0.7; }
-    100% { transform: scale(1.05); opacity: 0.95; }
-}
-
-[data-aurora-theme="eclipse"] #appShell.is-start-page .glow-cloud-1 {
-    background: radial-gradient(circle at center, rgba(255, 170, 50, 0.45) 0%, rgba(255, 110, 20, 0.24) 40%, transparent 75%);
-}
-[data-aurora-theme="eclipse"] #appShell.is-start-page .glow-cloud-2 {
-    background: radial-gradient(circle at center, rgba(255, 120, 30, 0.36) 0%, rgba(200, 60, 10, 0.18) 45%, transparent 78%);
-}
-[data-aurora-theme="eclipse"] #appShell.is-start-page .glow-cloud-4 {
-    background: radial-gradient(ellipse at center, rgba(255, 190, 80, 0.38) 0%, rgba(255, 130, 30, 0.18) 40%, transparent 70%);
-}
-[data-aurora-theme="eclipse"] #appShell.is-start-page .start-page-glow-aura {
-    background: 
-        radial-gradient(circle at 30% 35%, rgba(255, 175, 55, 0.48) 0%, rgba(255, 115, 25, 0.26) 40%, transparent 72%),
-        radial-gradient(circle at 70% 65%, rgba(255, 130, 30, 0.42) 0%, rgba(200, 65, 15, 0.20) 45%, transparent 75%) !important;
-    box-shadow: 0 0 26px rgba(255, 160, 45, 0.26), 0 0 52px rgba(230, 95, 25, 0.15) !important;
-}
-
-/* ---------------------------------------------------------
-   5. LUNAR MIST (MONOCHROMATIC CLOUD) THEME BACKDROP
-   --------------------------------------------------------- */
-.clouds-stage {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    pointer-events: none;
-    overflow: hidden;
-}
-
-.lunar-mist-ambient {
-    position: absolute;
-    top: 8%;
     left: 50%;
     transform: translateX(-50%);
-    width: min(850px, 94vw);
-    height: 420px;
+    width: min(800px, 90vw);
+    height: 380px;
     border-radius: 50%;
-    background: 
-        radial-gradient(ellipse at 40% 45%, rgba(255, 255, 255, 0.16) 0%, rgba(230, 235, 248, 0.08) 40%, transparent 75%),
-        radial-gradient(ellipse at 60% 55%, rgba(215, 225, 245, 0.14) 0%, rgba(185, 195, 220, 0.05) 45%, transparent 78%);
-    filter: blur(64px);
-    animation: lunarMistBreathe 14s ease-in-out infinite alternate;
+    background: radial-gradient(ellipse at center, rgba(255, 255, 255, 0.04) 0%, transparent 70%);
+    filter: blur(50px);
 }
 
-@keyframes lunarMistBreathe {
-    0% { transform: translateX(-50%) scale(0.96); opacity: 0.75; }
-    100% { transform: translateX(-50%) scale(1.05); opacity: 1; }
-}
-
-/* ---------------------------------------------------------
-   RESPONSIVE ADJUSTMENTS FOR CELESTIAL STAGES
-   --------------------------------------------------------- */
 .is-android #startPageBackdrop,
 .is-android .start-page-backdrop,
 .is-android #appShell.is-start-page .start-page-glow-aura,
-.is-android .start-page-glow-aura,
-.is-android .saturn-stage,
-.is-android .aurora-stage,
-.is-android .nebula-stage,
-.is-android .eclipse-stage,
-.is-android .clouds-stage,
-.is-android .glow-cloud,
-.is-android .glow-cloud-shimmer {
+.is-android .start-page-glow-aura {
     display: none !important;
     visibility: hidden !important;
     opacity: 0 !important;
@@ -986,19 +744,11 @@
     #startPageBackdrop,
     .start-page-backdrop,
     #appShell.is-start-page .start-page-glow-aura,
-    .start-page-glow-aura,
-    .saturn-stage,
-    .aurora-stage,
-    .nebula-stage,
-    .eclipse-stage,
-    .clouds-stage,
-    .glow-cloud,
-    .glow-cloud-shimmer {
+    .start-page-glow-aura {
         display: none !important;
         visibility: hidden !important;
         opacity: 0 !important;
         pointer-events: none !important;
     }
 }
-
 
