@@ -237,22 +237,36 @@ class TerminalDrawerManager {
 
         session.term = term;
 
-        // Load Addons
-        if (window.FitAddon) {
-            const fitAddon = new window.FitAddon();
-            term.loadAddon(fitAddon);
-            session.fitAddon = fitAddon;
+        // Load Addons safely (handle both function and UMD namespace exports)
+        const FitAddonClass = typeof window.FitAddon === "function" ? window.FitAddon : (window.FitAddon?.FitAddon || null);
+        if (FitAddonClass) {
+            try {
+                const fitAddon = new FitAddonClass();
+                term.loadAddon(fitAddon);
+                session.fitAddon = fitAddon;
+            } catch (err) {
+                console.warn("[PTY] FitAddon load error:", err);
+            }
         }
-        if (window.WebLinksAddon) {
-            const webLinksAddon = new window.WebLinksAddon();
-            term.loadAddon(webLinksAddon);
-            session.webLinksAddon = webLinksAddon;
+
+        const WebLinksAddonClass = typeof window.WebLinksAddon === "function" ? window.WebLinksAddon : (window.WebLinksAddon?.WebLinksAddon || null);
+        if (WebLinksAddonClass) {
+            try {
+                const webLinksAddon = new WebLinksAddonClass();
+                term.loadAddon(webLinksAddon);
+                session.webLinksAddon = webLinksAddon;
+            } catch (err) {
+                console.warn("[PTY] WebLinksAddon load error:", err);
+            }
         }
 
         term.open(session.mount);
+        term.focus();
 
         setTimeout(() => {
-            if (session.fitAddon) session.fitAddon.fit();
+            if (session.fitAddon) {
+                try { session.fitAddon.fit(); } catch (_) {}
+            }
             this.connectSessionStream(session, options);
         }, 50);
 
@@ -507,6 +521,12 @@ class TerminalDrawerManager {
 
 // Global Singleton
 export const terminalDrawer = new TerminalDrawerManager();
+if (typeof window !== "undefined") {
+    window.terminalDrawer = terminalDrawer;
+    window.openTerminal = openTerminal;
+    window.closeTerminal = closeTerminal;
+    window.toggleTerminal = toggleTerminal;
+}
 
 export function initTerminalDrawer() {
     terminalDrawer.init();
@@ -523,3 +543,4 @@ export function closeTerminal() {
 export function toggleTerminal() {
     terminalDrawer.toggle();
 }
+
