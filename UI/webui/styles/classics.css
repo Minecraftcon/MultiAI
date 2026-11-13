@@ -1,0 +1,83 @@
+/* =========================================================
+   CLASSICS UI STYLE (Clean, Crisp, Rectangular Aesthetics)
+   Active when [data-ui-style="classics"] or .ui-style-classics
+   ========================================================= */
+
+/* ── 1. Rectangular Chatbox & Composer Dock ── */
+[data-ui-style="classics"] .composer,
+[data-ui-style="classics"] .composer-dock,
+.ui-style-classics .composer,
+.ui-style-classics .composer-dock {
+    border-radius: 8px !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 0 0 1px var(--border) !important;
+}
+
+/* Start page composer dock */
+[data-ui-style="classics"] #appShell.is-start-page .composer-dock,
+.ui-style-classics #appShell.is-start-page .composer-dock {
+    border-radius: 8px !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35), 0 0 0 1px var(--border) !important;
+}
+
+/* Docked question prompt header inside rectangular composer */
+[data-ui-style="classics"] .docked-question-prompt,
+.ui-style-classics .docked-question-prompt {
+    border-radius: 8px 8px 0 0 !important;
+}
+
+/* ── 2. Rectangular Action Buttons Inside Composer ── */
+/* Attach (+) Button */
+[data-ui-style="classics"] .attach-btn,
+.ui-style-classics .attach-btn {
+    border-radius: 6px !important;
+}
+
+/* Send (Arrow) Button */
+[data-ui-style="classics"] .composer-send-btn,
+.ui-style-classics .composer-send-btn {
+    border-radius: 6px !important;
+}
+
+/* Clear / Discard Button */
+[data-ui-style="classics"] .composer-clear-btn,
+.ui-style-classics .composer-clear-btn {
+    border-radius: 4px !important;
+}
+
+/* Mode Pills (DeepSearch / Agent) */
+[data-ui-style="classics"] .composer-mode-pill,
+.ui-style-classics .composer-mode-pill {
+    border-radius: 4px !important;
+}
+
+/* Floating Scroll-to-Bottom Button */
+[data-ui-style="classics"] .chat-scroll-btn,
+.ui-style-classics .chat-scroll-btn {
+    border-radius: 6px !important;
+}
+
+/* ── 3. Rectangular Staged Attachment Items ── */
+[data-ui-style="classics"] .staged-img-thumb,
+.ui-style-classics .staged-img-thumb {
+    border-radius: 6px !important;
+}
+
+[data-ui-style="classics"] .staged-file-chip,
+.ui-style-classics .staged-file-chip {
+    border-radius: 6px !important;
+}
+
+[data-ui-style="classics"] .remove-staged-btn,
+.ui-style-classics .remove-staged-btn {
+    border-radius: 4px !important;
+}
+
+/* ── 4. Responsive & Mobile Viewports ── */
+@media (max-width: 768px) {
+    [data-ui-style="classics"] .composer,
+    [data-ui-style="classics"] .composer-dock,
+    .ui-style-classics .composer,
+    .ui-style-classics .composer-dock {
+        border-radius: 8px !important;
+    }
+}
