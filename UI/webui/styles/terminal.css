@@ -44,6 +44,15 @@ body.term-open-top #appShell {
         margin-right: 0;
         width: 100%;
     }
+    .terminal-drawer.dock-left,
+    .terminal-drawer.dock-right {
+        max-width: 100vw !important;
+        width: 100vw !important;
+    }
+    .terminal-drawer.dock-bottom,
+    .terminal-drawer.dock-top {
+        max-height: 85vh !important;
+    }
 }
 
 /* ── 2. Terminal Panel Base Container ── */
