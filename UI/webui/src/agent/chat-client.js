@@ -24,9 +24,24 @@ export async function callChatModel(messages, { model, tools, signal, onChunk } 
     const providerFromSelect = (selectedOption && selectedOption.value === model) ? selectedOption.dataset.provider : null;
     const currentSession = (state.currentChatId && state.chatSessions[state.currentChatId]) ? state.chatSessions[state.currentChatId] : null;
 
+    // 1. First priority: explicitly registered provider in modelProviderMap
     const mappedProvider = modelProviderMap[model] || modelProviderMap[effectiveModel];
-    const provider = providerFromSelect || currentSession?.provider || mappedProvider || (
-        (typeof model === "string" && (model.startsWith("claude-") || model.startsWith("gpt-") || model.startsWith("deepseek-"))) ? "puter" : null
+
+    // 2. Second priority: active provider from the modelSelect dropdown option
+    const providerFromSelect = (selectedOption && selectedOption.value === model) ? selectedOption.dataset.provider : null;
+
+    // 3. Fallback: currentSession provider only if it matches the active model's mapped provider or no mapped provider exists
+    const sessionProvider = (currentSession?.provider && (!mappedProvider || currentSession.provider === mappedProvider))
+        ? currentSession.provider
+        : null;
+
+    // Prioritize explicit model mappings over stale session or blind prefix heuristics
+    const provider = mappedProvider || providerFromSelect || sessionProvider || (
+        (typeof model === "string" && (
+            (model.startsWith("claude-") && !mappedProvider) ||
+            (model.startsWith("gpt-") && !mappedProvider && !model.includes("oss")) ||
+            (model.startsWith("deepseek-") && !mappedProvider && !model.includes("free") && !model.includes("v4"))
+        )) ? "puter" : null
     );
 
     const rawCleaned = Array.isArray(messages) ? messages.map(sanitizeMessage).filter(Boolean) : [];
@@ -111,8 +126,20 @@ export async function callChatModel(messages, { model, tools, signal, onChunk } 
 
     // Intercept ANY HTTP status code other than 200 OK (e.g. 429, 400, 401, 403, 404, 500, 502, 503)
     if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        const rawErr = errorData.error || `HTTP error ${res.status}: ${res.statusText || "Request failed"}`;
+        let rawErr = "";
+        try {
+            const errorText = await res.text();
+            try {
+                const parsed = JSON.parse(errorText);
+                rawErr = parsed.error || parsed.message || errorText;
+            } catch (_) {
+                rawErr = errorText;
+            }
+        } catch (_) {}
+
+        if (!rawErr || !rawErr.trim()) {
+            rawErr = `HTTP error ${res.status}: ${res.statusText || "Request failed"}`;
+        }
         const cleanErr = cleanErrorMessage(rawErr);
         const err = new Error(cleanErr);
         err.statusCode = res.status;
@@ -129,67 +156,76 @@ export async function callChatModel(messages, { model, tools, signal, onChunk } 
         const toolCallsMap = {};
         let buffer = "";
 
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split("\n");
-            buffer = lines.pop();
+        try {
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split("\n");
+                buffer = lines.pop();
 
-            for (const line of lines) {
-                const trimmed = line.trim();
-                if (!trimmed || !trimmed.startsWith("data:")) continue;
-                const dataStr = trimmed.replace(/^data:\s*/, "");
-                if (dataStr === "[DONE]") break;
-                try {
-                    const parsed = JSON.parse(dataStr);
-                    const choice = parsed.choices?.[0] || parsed;
-                    const delta = choice?.delta || choice;
-                    if (!delta) continue;
+                for (const line of lines) {
+                    const trimmed = line.trim();
+                    if (!trimmed || !trimmed.startsWith("data:")) continue;
+                    const dataStr = trimmed.replace(/^data:\s*/, "");
+                    if (dataStr === "[DONE]") break;
+                    try {
+                        const parsed = JSON.parse(dataStr);
+                        const choice = parsed.choices?.[0] || parsed;
+                        const delta = choice?.delta || choice;
+                        if (!delta) continue;
 
-                    // 1. Thinking / Reasoning delta (DeepSeek-R1, OpenRouter, Qwen, o1/o3, etc.)
-                    const reasoningDelta = delta.reasoning_content || delta.reasoning || "";
-                    if (reasoningDelta) {
-                        accumulatedReasoning += reasoningDelta;
-                        const isReasoningStreamEnabled = state.config?.Agent?.StreamReasoning !== false;
-                        if (isReasoningStreamEnabled && onChunk) {
-                            const fullDisplay = `<think>\n${accumulatedReasoning}\n</think>\n\n${accumulatedContent}`;
-                            onChunk(reasoningDelta, fullDisplay);
-                        }
-                    }
-
-                    // 2. Content delta
-                    const contentDelta = delta.content || (typeof delta.text === "string" ? delta.text : "");
-                    if (contentDelta) {
-                        accumulatedContent += contentDelta;
-                        const isReasoningStreamEnabled = state.config?.Agent?.StreamReasoning !== false;
-                        const fullDisplay = (accumulatedReasoning && isReasoningStreamEnabled)
-                            ? `<think>\n${accumulatedReasoning}\n</think>\n\n${accumulatedContent}`
-                            : accumulatedContent;
-                        if (onChunk) onChunk(contentDelta, fullDisplay);
-                    }
-
-                    // 3. Tool Calls streaming delta aggregation
-                    if (Array.isArray(delta.tool_calls)) {
-                        for (const tc of delta.tool_calls) {
-                            const idx = typeof tc.index === "number" ? tc.index : 0;
-                            if (!toolCallsMap[idx]) {
-                                toolCallsMap[idx] = {
-                                    id: tc.id || ("call_" + Math.random().toString(36).slice(2, 10)),
-                                    type: tc.type || "function",
-                                    function: {
-                                        name: tc.function?.name || "",
-                                        arguments: tc.function?.arguments || ""
-                                    }
-                                };
-                            } else {
-                                if (tc.id) toolCallsMap[idx].id = tc.id;
-                                if (tc.function?.name) toolCallsMap[idx].function.name += tc.function.name;
-                                if (tc.function?.arguments) toolCallsMap[idx].function.arguments += tc.function.arguments;
+                        // 1. Thinking / Reasoning delta (DeepSeek-R1, OpenRouter, Qwen, o1/o3, etc.)
+                        const reasoningDelta = delta.reasoning_content || delta.reasoning || "";
+                        if (reasoningDelta) {
+                            accumulatedReasoning += reasoningDelta;
+                            const isReasoningStreamEnabled = state.config?.Agent?.StreamReasoning !== false;
+                            if (isReasoningStreamEnabled && onChunk) {
+                                const fullDisplay = `<think>\n${accumulatedReasoning}\n</think>\n\n${accumulatedContent}`;
+                                onChunk(reasoningDelta, fullDisplay);
                             }
                         }
-                    }
-                } catch (_) {}
+
+                        // 2. Content delta
+                        const contentDelta = delta.content || (typeof delta.text === "string" ? delta.text : "");
+                        if (contentDelta) {
+                            accumulatedContent += contentDelta;
+                            const isReasoningStreamEnabled = state.config?.Agent?.StreamReasoning !== false;
+                            const fullDisplay = (accumulatedReasoning && isReasoningStreamEnabled)
+                                ? `<think>\n${accumulatedReasoning}\n</think>\n\n${accumulatedContent}`
+                                : accumulatedContent;
+                            if (onChunk) onChunk(contentDelta, fullDisplay);
+                        }
+
+                        // 3. Tool Calls streaming delta aggregation
+                        if (Array.isArray(delta.tool_calls)) {
+                            for (const tc of delta.tool_calls) {
+                                const idx = typeof tc.index === "number" ? tc.index : 0;
+                                if (!toolCallsMap[idx]) {
+                                    toolCallsMap[idx] = {
+                                        id: tc.id || ("call_" + Math.random().toString(36).slice(2, 10)),
+                                        type: tc.type || "function",
+                                        function: {
+                                            name: tc.function?.name || "",
+                                            arguments: tc.function?.arguments || ""
+                                        }
+                                    };
+                                } else {
+                                    if (tc.id) toolCallsMap[idx].id = tc.id;
+                                    if (tc.function?.name) toolCallsMap[idx].function.name += tc.function.name;
+                                    if (tc.function?.arguments) toolCallsMap[idx].function.arguments += tc.function.arguments;
+                                }
+                            }
+                        }
+                    } catch (_) {}
+                }
+            }
+        } catch (streamErr) {
+            if (accumulatedContent || Object.keys(toolCallsMap).length > 0) {
+                console.warn("[STREAM RECOVERY] Stream interrupted prematurely:", streamErr.message);
+                accumulatedContent += `\n\n*(Stream connection interrupted: ${streamErr.message})*`;
+            } else {
+                throw streamErr;
             }
         }
 

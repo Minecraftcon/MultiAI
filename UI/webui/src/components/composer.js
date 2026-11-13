@@ -186,8 +186,12 @@ export async function send() {
         const selectedModel = session?.model || (modelSelect ? modelSelect.value : "gemini-2.5-flash");
         const selectedOption = modelSelect?.selectedOptions?.[0];
         const providerFromSelect = (selectedOption && selectedOption.value === selectedModel) ? selectedOption.dataset.provider : null;
-        const resolvedProvider = session?.provider || providerFromSelect || (window.modelProviderMap && window.modelProviderMap[selectedModel]);
-        const isPuter = resolvedProvider === "puter" || (!resolvedProvider && (selectedModel.startsWith("claude-") || selectedModel.startsWith("gpt-")));
+        const mappedProvider = (window.modelProviderMap && window.modelProviderMap[selectedModel]) || null;
+        const resolvedProvider = mappedProvider || providerFromSelect || (session?.provider && (!mappedProvider || session.provider === mappedProvider) ? session.provider : null);
+        const isPuter = resolvedProvider === "puter" || (!resolvedProvider && (
+            (selectedModel.startsWith("claude-") && !mappedProvider) ||
+            (selectedModel.startsWith("gpt-") && !mappedProvider && !selectedModel.includes("oss"))
+        ));
 
         if (state.appMode === "build" && !isPuter) {
             await startServerAgent({

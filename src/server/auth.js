@@ -27,9 +27,49 @@ if (!PASSWORD) {
     console.error("[SECURITY ALERT] CLOUD_PASSWORD environment variable is NOT set! Cloud access will be blocked until configured.");
 }
 
-// In-memory valid sessions (token -> expiry timestamp)
+// In-memory valid sessions (token -> expiry timestamp) for backward compatibility
 const validSessions = new Map();
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+/**
+ * Generates a tamper-proof HMAC-signed session token.
+ * Stateless and resilient across server restarts, container cycling, and redeployments.
+ */
+function generateSessionToken() {
+    const expiresAt = Date.now() + SESSION_TTL_MS;
+    const entropy = crypto.randomBytes(16).toString("hex");
+    const payload = `${expiresAt}:${entropy}`;
+    const sig = crypto.createHmac("sha256", PASSWORD || "multiai-cloud-fallback").update(payload).digest("hex");
+    return `${payload}.${sig}`;
+}
+
+/**
+ * Validates session tokens against HMAC signature or legacy in-memory cache.
+ */
+function verifySessionToken(token) {
+    if (!token || typeof token !== "string") return false;
+    // 1. Backward-compatible check for legacy tokens
+    if (validSessions.has(token)) {
+        const expiry = validSessions.get(token);
+        if (Date.now() < expiry) {
+            return true;
+        }
+        validSessions.delete(token);
+        return false;
+    }
+    // 2. Stateless HMAC verification
+    if (!PASSWORD) return false;
+    const dotIndex = token.lastIndexOf(".");
+    if (dotIndex === -1) return false;
+    const payload = token.slice(0, dotIndex);
+    const sig = token.slice(dotIndex + 1);
+    const colonIndex = payload.indexOf(":");
+    if (colonIndex === -1) return false;
+    const expiresAt = parseInt(payload.slice(0, colonIndex), 10);
+    if (isNaN(expiresAt) || Date.now() > expiresAt) return false;
+    const expectedSig = crypto.createHmac("sha256", PASSWORD).update(payload).digest("hex");
+    return safeCompare(sig, expectedSig);
+}
 
 // Rate limiting for login attempts (IP -> { count, resetTime, lockedUntil })
 const loginAttempts = new Map();
@@ -185,14 +225,7 @@ function isAuthenticated(req) {
 
     if (!token) return false;
 
-    if (validSessions.has(token)) {
-        const expiry = validSessions.get(token);
-        if (Date.now() < expiry) {
-            return true;
-        }
-        validSessions.delete(token);
-    }
-    return false;
+    return verifySessionToken(token);
 }
 
 function handleLogin(req, res) {
@@ -242,7 +275,7 @@ function handleLogin(req, res) {
 
             if (safeCompare(submittedPass, PASSWORD)) {
                 clearRateLimit(ip);
-                const token = crypto.randomBytes(32).toString("hex");
+                const token = generateSessionToken();
                 validSessions.set(token, Date.now() + SESSION_TTL_MS);
 
                 const isHttps = req.headers["x-forwarded-proto"] === "https" || req.connection?.encrypted;

@@ -266,10 +266,12 @@ class GoogleProvider extends BaseProvider {
         const timeoutMs = chatOptions.timeoutMs || providerConfig.timeout_ms || 300000;
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), timeoutMs);
+        let keepaliveTimer = null;
 
         if (req) {
             req.on("close", () => {
                 clearTimeout(timeout);
+                if (keepaliveTimer) clearInterval(keepaliveTimer);
                 controller.abort();
             });
         }
@@ -299,6 +301,14 @@ class GoogleProvider extends BaseProvider {
             });
             if (res.socket) res.socket.setNoDelay(true);
             if (typeof res.flushHeaders === "function") res.flushHeaders();
+
+            // Periodic SSE keepalive comments prevent proxy/Cloudflare 524 timeouts on long reasoning turns
+            keepaliveTimer = setInterval(() => {
+                if (!res.writableEnded && res.socket && !res.socket.destroyed) {
+                    res.write(": keepalive\n\n");
+                    if (typeof res.flush === "function") res.flush();
+                }
+            }, 15000);
 
             const textDecoder = new TextDecoder("utf-8");
             let buffer = "";
@@ -434,10 +444,12 @@ class GoogleProvider extends BaseProvider {
             res.write("data: [DONE]\n\n");
             if (typeof res.flush === "function") res.flush();
             clearTimeout(timeout);
+            if (keepaliveTimer) clearInterval(keepaliveTimer);
             res.end();
             return { status: 200 };
         } catch (err) {
             clearTimeout(timeout);
+            if (keepaliveTimer) clearInterval(keepaliveTimer);
             if (err.name === "AbortError" && req?.destroyed) {
                 return { status: 499, error: "Client cancelled request" };
             }

@@ -8,6 +8,10 @@ export let availableModels = [];
 export let modelProviderMap = {};
 export let modelVisionMap = {};
 
+if (typeof window !== "undefined") {
+    window.modelProviderMap = modelProviderMap;
+}
+
 // Lazy import to avoid circular dependencies
 let _localConnect = null;
 async function getLocalConnect() {
@@ -55,6 +59,9 @@ export async function loadAvailableModels() {
 
         availableModels = [];
         modelProviderMap = {};
+        if (typeof window !== "undefined") {
+            window.modelProviderMap = modelProviderMap;
+        }
 
         const previousVal = modelSelect.value;
         modelSelect.innerHTML = "";
