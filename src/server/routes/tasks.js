@@ -105,6 +105,7 @@ async function handleTaskRoute(req, res) {
         const headers = { ...req.headers };
         if (reqBody) {
             headers["content-length"] = Buffer.byteLength(reqBody);
+            delete headers["transfer-encoding"];
         }
 
         const target = getTaskServerTarget();

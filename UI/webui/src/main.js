@@ -25,6 +25,7 @@ import { initAuroraTheme } from "./components/aurora-theme.js";
 import { initModeSwitcher } from "./components/mode-switcher.js";
 import { McpActiveTools } from "./tools/mcp/index.js";
 import { initTaskWatcher } from "./tools/terminal/task-watcher.js";
+import { initTerminalDrawer } from "./components/terminal-drawer.js";
 
 async function initChatSessions() {
     loadStoredChats();
@@ -102,6 +103,7 @@ async function bootstrap() {
     initErrorRecovery();
     initModelPicker();
     initPlanDock();
+    initTerminalDrawer();
 
     await initConfig();
     if (state.config?.Tools?.EnableMcp !== false) {

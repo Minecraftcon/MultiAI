@@ -13,6 +13,7 @@ const {
 const { handleMedia, handleImageGenerate, handleImageStatus } = require("./routes/media");
 const { handleFilesRoute } = require("./routes/files");
 const { handleTaskRoute } = require("./routes/tasks");
+const { handlePtyRoute } = require("./routes/pty");
 const { handleSearchRoute } = require("./routes/search");
 const { handleDeepSearchRoute } = require("./routes/deepsearch");
 const { handleChat, handleAgentStream } = require("./routes/chat");
@@ -87,6 +88,11 @@ async function routeRequest(req, res) {
         // History & Unaccepted Changes
         if (reqUrl.startsWith("/api/history/")) {
             return handleHistoryRoute(req, res);
+        }
+
+        // Pseudo-Terminal (PTY) routes
+        if (req.url.startsWith("/api/pty/")) {
+            return handlePtyRoute(req, res);
         }
 
         // Tasks & Code direct execution

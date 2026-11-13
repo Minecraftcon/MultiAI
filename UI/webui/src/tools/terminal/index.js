@@ -20,7 +20,8 @@ async function streamTaskExecution(args, { badgeEl, genState } = {}) {
         timeout: timerVal,
         background: isBg,
         task_name: args.task_name,
-        cwd: args.cwd
+        cwd: args.cwd,
+        pty: Boolean(args.pty)
     };
 
     const resEl = badgeEl?._collapseDiv?.querySelector(".command-output-res");
@@ -187,6 +188,10 @@ export const runTaskTool = {
                     cwd: {
                         type: "string",
                         description: "Optional working directory to run the command in."
+                    },
+                    pty: {
+                        type: "boolean",
+                        description: "Set to true to execute inside a real pseudo-terminal (PTY) with full TTY capabilities, ANSI escape codes, and terminal discipline."
                     }
                 },
                 required: ["command"]

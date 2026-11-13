@@ -293,6 +293,234 @@ class TaskManager {
     }
 }
 
+let ptyModule = null;
+try {
+    ptyModule = require("node-pty");
+} catch (e) {
+    console.warn("[NODE DAEMON] node-pty not available, using fallback:", e.message);
+}
+
+class PtyManager {
+    constructor() {
+        this.ptys = new Map();
+        this.counter = 0;
+    }
+
+    generateId() {
+        this.counter++;
+        return `pty_${Date.now().toString(36)}_${this.counter}`;
+    }
+
+    spawnPty(options = {}) {
+        const ptyId = this.generateId();
+        const {
+            command = "",
+            shell: shellOverride = null,
+            cwd = null,
+            cols = 80,
+            rows = 24,
+            scratchDir = null,
+            artifactsDir = null,
+            env: customEnv = {}
+        } = options;
+
+        const targetCwd = cwd || scratchDir || process.cwd();
+        const isWin = process.platform === "win32";
+        const defaultShell = isWin ? (process.env.COMSPEC || "cmd.exe") : (process.env.SHELL || "/bin/bash");
+        const shell = shellOverride || defaultShell;
+
+        const mergedEnv = {
+            ...process.env,
+            TERM: "xterm-256color",
+            COLORTERM: "truecolor",
+            ...(scratchDir ? { SCRATCH: scratchDir, SCRATCH_DIR: scratchDir } : {}),
+            ...(artifactsDir ? { ARTIFACTS: artifactsDir, ARTIFACTS_DIR: artifactsDir } : {}),
+            ...customEnv
+        };
+
+        const targetCols = Math.max(10, Math.min(500, parseInt(cols, 10) || 80));
+        const targetRows = Math.max(3, Math.min(200, parseInt(rows, 10) || 24));
+
+        let ptyProc = null;
+        let isNative = false;
+
+        let args = [];
+        if (command) {
+            args = isWin ? ["/c", command] : ["-c", command];
+        }
+
+        if (ptyModule) {
+            try {
+                ptyProc = ptyModule.spawn(shell, args, {
+                    name: "xterm-256color",
+                    cols: targetCols,
+                    rows: targetRows,
+                    cwd: targetCwd,
+                    env: mergedEnv
+                });
+                isNative = true;
+            } catch (err) {
+                console.warn(`[PTY] node-pty spawn failed: ${err.message}, falling back`);
+            }
+        }
+
+        if (!ptyProc) {
+            if (!isWin && fs.existsSync("/usr/bin/script")) {
+                const fullCmd = command ? `${shell} -c ${JSON.stringify(command)}` : shell;
+                ptyProc = spawn("/usr/bin/script", ["-qec", fullCmd, "/dev/null"], {
+                    cwd: targetCwd,
+                    env: mergedEnv,
+                    stdio: ["pipe", "pipe", "pipe"]
+                });
+            } else {
+                ptyProc = spawn(shell, args, {
+                    cwd: targetCwd,
+                    env: mergedEnv,
+                    stdio: ["pipe", "pipe", "pipe"]
+                });
+            }
+        }
+
+        const session = {
+            id: ptyId,
+            proc: ptyProc,
+            pid: ptyProc.pid,
+            isNative,
+            shell,
+            command: command || shell,
+            cwd: targetCwd,
+            cols: targetCols,
+            rows: targetRows,
+            startTime: Date.now(),
+            running: true,
+            exitCode: null,
+            ringBuffer: [],
+            ringBufferSize: 0,
+            maxRingBufferSize: 256 * 1024,
+            listeners: new Set()
+        };
+
+        const pushData = (chunk) => {
+            const str = typeof chunk === "string" ? chunk : chunk.toString("utf8");
+            session.ringBuffer.push(str);
+            session.ringBufferSize += str.length;
+            while (session.ringBufferSize > session.maxRingBufferSize && session.ringBuffer.length > 1) {
+                const popped = session.ringBuffer.shift();
+                session.ringBufferSize -= popped.length;
+            }
+            for (const l of session.listeners) {
+                try { l({ type: "data", data: str }); } catch (_) {}
+            }
+        };
+
+        if (isNative) {
+            ptyProc.onData(data => {
+                pushData(data);
+            });
+            ptyProc.onExit(e => {
+                session.running = false;
+                session.exitCode = e.exitCode !== undefined ? e.exitCode : 0;
+                for (const l of session.listeners) {
+                    try { l({ type: "exit", exitCode: session.exitCode }); } catch (_) {}
+                }
+            });
+        } else {
+            if (ptyProc.stdout) ptyProc.stdout.on("data", chunk => pushData(chunk));
+            if (ptyProc.stderr) ptyProc.stderr.on("data", chunk => pushData(chunk));
+            ptyProc.on("close", (code, signal) => {
+                session.running = false;
+                session.exitCode = code !== null ? code : (signal ? 128 : 0);
+                for (const l of session.listeners) {
+                    try { l({ type: "exit", exitCode: session.exitCode }); } catch (_) {}
+                }
+            });
+            ptyProc.on("error", err => {
+                session.running = false;
+                session.exitCode = 1;
+                pushData(`\n[PTY error: ${err.message}]\n`);
+                for (const l of session.listeners) {
+                    try { l({ type: "exit", exitCode: 1 }); } catch (_) {}
+                }
+            });
+        }
+
+        this.ptys.set(ptyId, session);
+        return session;
+    }
+
+    writeInput(ptyId, input) {
+        const session = this.ptys.get(ptyId);
+        if (!session) return { error: `PTY session ${ptyId} not found` };
+        if (!session.running) return { error: `PTY session ${ptyId} is not running` };
+
+        try {
+            if (session.isNative) {
+                session.proc.write(input);
+            } else if (session.proc.stdin && !session.proc.stdin.destroyed) {
+                session.proc.stdin.write(input);
+            }
+            return { status: "ok", pty_id: ptyId };
+        } catch (err) {
+            return { error: `Failed to write to PTY: ${err.message}` };
+        }
+    }
+
+    resize(ptyId, cols, rows) {
+        const session = this.ptys.get(ptyId);
+        if (!session) return { error: `PTY session ${ptyId} not found` };
+        session.cols = Math.max(10, Math.min(500, parseInt(cols, 10) || 80));
+        session.rows = Math.max(3, Math.min(200, parseInt(rows, 10) || 24));
+
+        if (session.running && session.isNative && typeof session.proc.resize === "function") {
+            try {
+                session.proc.resize(session.cols, session.rows);
+                return { status: "ok", cols: session.cols, rows: session.rows };
+            } catch (err) {
+                return { error: `Resize failed: ${err.message}` };
+            }
+        }
+        return { status: "ok", cols: session.cols, rows: session.rows, note: "non-native pty" };
+    }
+
+    kill(ptyId, signal = "SIGTERM") {
+        const session = this.ptys.get(ptyId);
+        if (!session) return { error: `PTY session ${ptyId} not found` };
+        if (session.running && session.proc) {
+            try {
+                session.proc.kill(signal);
+            } catch (_) {}
+            session.running = false;
+        }
+        return { status: "killed", pty_id: ptyId };
+    }
+
+    getHistory(ptyId) {
+        const session = this.ptys.get(ptyId);
+        if (!session) return "";
+        return session.ringBuffer.join("");
+    }
+
+    listPtys() {
+        const list = [];
+        for (const [id, s] of this.ptys.entries()) {
+            list.push({
+                pty_id: id,
+                pid: s.pid,
+                running: s.running,
+                exit_code: s.exitCode,
+                shell: s.shell,
+                command: s.command,
+                cwd: s.cwd,
+                cols: s.cols,
+                rows: s.rows,
+                is_native: s.isNative,
+                uptime_seconds: Math.floor((Date.now() - s.startTime) / 1000)
+            });
+        }
+        return list;
+    }
+}
+
 /**
  * High-performance file grep scanner
  */
@@ -483,8 +711,9 @@ function executeNodeCode(code, options = {}) {
     };
 }
 
-// Global Manager Instance
+// Global Manager Instances
 const manager = new TaskManager();
+const ptyManager = new PtyManager();
 
 function sendJSON(res, status, data) {
     const json = JSON.stringify(data);
@@ -536,6 +765,65 @@ const server = http.createServer(async (req, res) => {
         const command = body.command;
         if (!command) {
             return sendJSON(res, 400, { error: "No command provided" });
+        }
+
+        // Real PTY execution mode for run_task if requested
+        if (body.pty) {
+            const ptySession = ptyManager.spawnPty({
+                command,
+                cwd: body.cwd,
+                scratchDir: body.scratch_dir,
+                artifactsDir: body.artifacts_dir,
+                shell: body.shell,
+                cols: body.cols || 100,
+                rows: body.rows || 30
+            });
+
+            res.writeHead(200, {
+                "Content-Type": "text/event-stream; charset=utf-8",
+                "Cache-Control": "no-cache, no-transform",
+                "Connection": "keep-alive",
+                "Access-Control-Allow-Origin": "*",
+                "X-Accel-Buffering": "no"
+            });
+            if (res.socket) res.socket.setNoDelay(true);
+
+            const writeSSE = (dataObj) => {
+                res.write(`data: ${JSON.stringify(dataObj)}\n\n`);
+                if (typeof res.flush === "function") res.flush();
+            };
+
+            writeSSE({ type: "start", task_id: ptySession.id, pty: true });
+
+            let accStdout = "";
+            const listener = (event) => {
+                if (event.type === "data") {
+                    accStdout += event.data;
+                    writeSSE({ type: "chunk", stdout: event.data, stderr: "" });
+                } else if (event.type === "exit") {
+                    const elapsed = ((Date.now() - ptySession.startTime) / 1000).toFixed(2);
+                    writeSSE({
+                        type: "done",
+                        task_id: ptySession.id,
+                        done: true,
+                        status: `exited (code: ${event.exitCode})`,
+                        running: false,
+                        exit_code: event.exitCode,
+                        stdout: accStdout,
+                        stderr: "",
+                        ran_for: elapsed,
+                        pty: true
+                    });
+                    ptySession.listeners.delete(listener);
+                    res.end();
+                }
+            };
+
+            ptySession.listeners.add(listener);
+            req.on("close", () => {
+                ptySession.listeners.delete(listener);
+            });
+            return;
         }
 
         const task = manager.createTask(command, {
@@ -713,6 +1001,127 @@ const server = http.createServer(async (req, res) => {
         }
     }
 
+    // ==========================================
+    // PTY TERMINAL SUBSYSTEM ROUTES
+    // ==========================================
+
+    // 12. PTY Spawn: POST /api/pty/spawn
+    if (req.method === "POST" && pathname === "/api/pty/spawn") {
+        try {
+            const body = await parseJSONBody(req);
+            const session = ptyManager.spawnPty(body);
+            return sendJSON(res, 200, {
+                pty_id: session.id,
+                pid: session.pid,
+                shell: session.shell,
+                command: session.command,
+                cwd: session.cwd,
+                cols: session.cols,
+                rows: session.rows,
+                is_native: session.isNative,
+                status: "running"
+            });
+        } catch (err) {
+            return sendJSON(res, 500, { error: `Failed to spawn PTY: ${err.message}` });
+        }
+    }
+
+    // 13. PTY Stream: GET /api/pty/stream/:ptyId
+    if (req.method === "GET" && pathname.startsWith("/api/pty/stream/")) {
+        const ptyId = decodeURIComponent(pathname.replace("/api/pty/stream/", "")).trim();
+        const session = ptyManager.ptys.get(ptyId);
+        if (!session) {
+            return sendJSON(res, 404, { error: `PTY session '${ptyId}' not found` });
+        }
+
+        res.writeHead(200, {
+            "Content-Type": "text/event-stream; charset=utf-8",
+            "Cache-Control": "no-cache, no-transform",
+            "Connection": "keep-alive",
+            "Access-Control-Allow-Origin": "*",
+            "X-Accel-Buffering": "no"
+        });
+        if (res.socket) res.socket.setNoDelay(true);
+
+        const writeSSE = (dataObj) => {
+            res.write(`data: ${JSON.stringify(dataObj)}\n\n`);
+            if (typeof res.flush === "function") res.flush();
+        };
+
+        // Send initialization state and existing scrollback history
+        writeSSE({
+            type: "init",
+            pty_id: session.id,
+            pid: session.pid,
+            cols: session.cols,
+            rows: session.rows,
+            cwd: session.cwd,
+            shell: session.shell,
+            is_native: session.isNative,
+            running: session.running,
+            exit_code: session.exitCode,
+            history: ptyManager.getHistory(session.id)
+        });
+
+        if (!session.running) {
+            writeSSE({ type: "exit", exit_code: session.exitCode });
+            return res.end();
+        }
+
+        const listener = (event) => {
+            if (event.type === "data") {
+                writeSSE({ type: "data", data: event.data });
+            } else if (event.type === "exit") {
+                writeSSE({ type: "exit", exit_code: event.exitCode });
+                session.listeners.delete(listener);
+                res.end();
+            }
+        };
+
+        session.listeners.add(listener);
+        req.on("close", () => {
+            session.listeners.delete(listener);
+        });
+        return;
+    }
+
+    // 14. PTY Input: POST /api/pty/input/:ptyId
+    if (req.method === "POST" && pathname.startsWith("/api/pty/input/")) {
+        const ptyId = decodeURIComponent(pathname.replace("/api/pty/input/", "")).trim();
+        try {
+            const body = await parseJSONBody(req);
+            const inputData = body.input !== undefined ? body.input : (body.data !== undefined ? body.data : "");
+            const result = ptyManager.writeInput(ptyId, inputData);
+            return sendJSON(res, result.error ? 400 : 200, result);
+        } catch (err) {
+            return sendJSON(res, 500, { error: err.message });
+        }
+    }
+
+    // 15. PTY Resize: POST /api/pty/resize/:ptyId
+    if (req.method === "POST" && pathname.startsWith("/api/pty/resize/")) {
+        const ptyId = decodeURIComponent(pathname.replace("/api/pty/resize/", "")).trim();
+        try {
+            const body = await parseJSONBody(req);
+            const result = ptyManager.resize(ptyId, body.cols, body.rows);
+            return sendJSON(res, result.error ? 400 : 200, result);
+        } catch (err) {
+            return sendJSON(res, 500, { error: err.message });
+        }
+    }
+
+    // 16. PTY Kill: POST /api/pty/kill/:ptyId
+    if (req.method === "POST" && pathname.startsWith("/api/pty/kill/")) {
+        const ptyId = decodeURIComponent(pathname.replace("/api/pty/kill/", "")).trim();
+        const result = ptyManager.kill(ptyId);
+        return sendJSON(res, result.error ? 404 : 200, result);
+    }
+
+    // 17. PTY List: GET /api/pty/list
+    if (req.method === "GET" && pathname === "/api/pty/list") {
+        return sendJSON(res, 200, ptyManager.listPtys());
+    }
+
     return sendJSON(res, 404, { error: `Not found: ${req.method} ${pathname}` });
 });
 
@@ -779,6 +1188,11 @@ function handleShutdown() {
     for (const [tid, task] of manager.tasks.entries()) {
         if (task.running) {
             manager.killTask(tid);
+        }
+    }
+    for (const [pid, pty] of ptyManager.ptys.entries()) {
+        if (pty.running) {
+            ptyManager.kill(pid);
         }
     }
     if (socketPath && fs.existsSync(socketPath)) {

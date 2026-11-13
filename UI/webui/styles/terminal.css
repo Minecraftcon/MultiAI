@@ -1,0 +1,278 @@
+/* =========================================================
+   MULTIAI REAL PTY INTERACTIVE TERMINAL DRAWER
+   Aesthetic, Minimalist, Warm Monochrome Theme
+   ========================================================= */
+
+.terminal-drawer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 340px;
+    min-height: 160px;
+    max-height: 90vh;
+    background: var(--card-bg, #111113);
+    border-top: 1px solid var(--border, rgba(255, 255, 255, 0.09));
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.35);
+    transition: transform 0.24s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease;
+    transform: translateY(105%);
+    opacity: 0;
+    pointer-events: none;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.terminal-drawer.open {
+    transform: translateY(0);
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.terminal-drawer.fullscreen {
+    height: 100vh !important;
+    max-height: 100vh;
+    border-top: none;
+}
+
+/* Resize / Drag handle at top edge */
+.terminal-resizer {
+    position: absolute;
+    top: -4px;
+    left: 0;
+    right: 0;
+    height: 8px;
+    cursor: row-resize;
+    z-index: 10;
+    background: transparent;
+}
+
+.terminal-resizer:hover::after,
+.terminal-resizer.resizing::after {
+    content: "";
+    position: absolute;
+    top: 3px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 48px;
+    height: 2px;
+    background: var(--border-strong, rgba(255, 255, 255, 0.2));
+    border-radius: 2px;
+}
+
+/* Terminal Drawer Header */
+.terminal-header {
+    height: 38px;
+    min-height: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 12px;
+    background: var(--bg-alt, #0c0c0e);
+    border-bottom: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+    user-select: none;
+}
+
+.terminal-header-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    overflow: hidden;
+}
+
+.terminal-title-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--text-primary, #f2f2f2);
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+}
+
+.terminal-title-badge svg {
+    width: 14px;
+    height: 14px;
+    stroke: var(--text-secondary, #9ca3af);
+}
+
+.terminal-status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #346538; /* Desaturated muted pastel green */
+    display: inline-block;
+    transition: background 0.2s ease;
+}
+
+.terminal-status-dot.disconnected {
+    background: #9f2f2d; /* Pale red */
+}
+
+/* Terminal Tabs */
+.terminal-tabs {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: 8px;
+}
+
+.terminal-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 8px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-secondary, #9ca3af);
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    font-family: inherit;
+}
+
+.terminal-tab:hover {
+    color: var(--text-primary, #ffffff);
+    background: var(--hover, rgba(255, 255, 255, 0.05));
+}
+
+.terminal-tab.active {
+    color: var(--text-primary, #ffffff);
+    background: var(--surface-2, #1f1f23);
+    border-color: var(--border, rgba(255, 255, 255, 0.08));
+}
+
+.terminal-tab-close {
+    font-size: 11px;
+    color: var(--text-tertiary, #6b7280);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    display: inline-flex;
+    line-height: 1;
+}
+
+.terminal-tab-close:hover {
+    color: #e06c75;
+}
+
+.terminal-new-tab-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    background: transparent;
+    border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.05));
+    border-radius: 4px;
+    color: var(--text-secondary, #9ca3af);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.terminal-new-tab-btn:hover {
+    color: var(--text-primary, #ffffff);
+    background: var(--hover, rgba(255, 255, 255, 0.06));
+    border-color: var(--border, rgba(255, 255, 255, 0.12));
+}
+
+.terminal-new-tab-btn svg {
+    width: 12px;
+    height: 12px;
+}
+
+/* Terminal Actions Right */
+.terminal-header-right {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.terminal-action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    color: var(--text-secondary, #9ca3af);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.terminal-action-btn:hover {
+    color: var(--text-primary, #ffffff);
+    background: var(--hover, rgba(255, 255, 255, 0.08));
+}
+
+.terminal-action-btn svg {
+    width: 14px;
+    height: 14px;
+}
+
+/* Terminal Body / Screen Container */
+.terminal-body {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    background: #09090b;
+    padding: 6px 8px;
+}
+
+.terminal-container {
+    width: 100%;
+    height: 100%;
+}
+
+/* Custom xterm viewport scrollbar to fit MultiAI design */
+.terminal-container .xterm-viewport::-webkit-scrollbar {
+    width: 6px;
+}
+
+.terminal-container .xterm-viewport::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.terminal-container .xterm-viewport::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.14);
+    border-radius: 3px;
+}
+
+.terminal-container .xterm-viewport::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.26);
+}
+
+/* Open in PTY button on task badges in chat */
+.badge-open-pty-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin-left: auto;
+    padding: 3px 7px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-secondary, #9ca3af);
+    background: var(--surface-2, rgba(255, 255, 255, 0.04));
+    border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    font-family: inherit;
+}
+
+.badge-open-pty-btn:hover {
+    color: var(--text-primary, #ffffff);
+    background: var(--hover, rgba(255, 255, 255, 0.08));
+}
+
+.badge-open-pty-btn svg {
+    width: 12px;
+    height: 12px;
+}
