@@ -114,6 +114,10 @@ async function saveChat(chatSession) {
     const chatId = chatSession.id;
     const ws = ensureChatWorkspace(chatId, chatSession.date);
 
+    const messageCount = Array.isArray(chatSession.messages)
+        ? chatSession.messages.length
+        : (chatSession.messageCount || 0);
+
     await supabaseStorage.saveChat({
         id: chatId,
         title: chatSession.title || "Conversation",
@@ -128,6 +132,7 @@ async function saveChat(chatSession) {
             createdAt: chatSession.createdAt || Date.now(),
             updatedAt: Date.now(),
             compactionState: chatSession.compactionState || null,
+            messageCount,
             ...(chatSession.meta || {})
         },
         messages: Array.isArray(chatSession.messages) ? chatSession.messages : []

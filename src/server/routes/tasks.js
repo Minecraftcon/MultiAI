@@ -73,15 +73,16 @@ async function handleTaskRoute(req, res) {
 
     // Native Node.js Task Execution and Management Routes
     if (req.url.startsWith("/api/task/")) {
-        let reqBody = "";
         try {
-            for await (const chunk of req) reqBody += chunk;
-        } catch (_) {}
+            let reqBody = "";
+            try {
+                for await (const chunk of req) reqBody += chunk;
+            } catch (_) {}
 
-        let parsedBody = {};
-        try {
-            parsedBody = reqBody ? JSON.parse(reqBody) : {};
-        } catch (_) {}
+            let parsedBody = {};
+            try {
+                parsedBody = reqBody ? JSON.parse(reqBody) : {};
+            } catch (_) {}
 
         const chatId = req.headers["x-chat-id"] || parsedBody.chatId || parsedBody.chat_id || "";
         let scratchDir = "";
@@ -163,7 +164,8 @@ async function handleTaskRoute(req, res) {
                 shellOverride,
                 scratchDir,
                 artifactsDir,
-                cwd
+                cwd,
+                chatId
             });
 
             json = await taskManager.waitForTask(taskId, timeoutSecs);
@@ -265,6 +267,10 @@ async function handleTaskRoute(req, res) {
         }
 
         return sendJSON(res, 404, { error: "Endpoint not found" });
+        } catch (err) {
+            console.error("[TASK ROUTE ERROR]", err);
+            return sendJSON(res, 500, { error: err.message, status: "failed" });
+        }
     }
 }
 

@@ -39,6 +39,11 @@ async function initChatSessions() {
     let hasCleaned = false;
     for (const id of Object.keys(state.chatSessions)) {
         const sess = state.chatSessions[id];
+        if (!sess) continue;
+        // Never prune sessions that originate from cloud / backend
+        if (sess.source === "supabase" || sess.source === "disk" || sess.persisted || sess.fromBackend) {
+            continue;
+        }
         // Session has no user messages and is not backed by disk — prune it
         const hasUserMsg = sess.messages
             ? sess.messages.some(m => m.role === "user")

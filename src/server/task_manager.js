@@ -93,7 +93,7 @@ class TaskManager {
         };
     }
 
-    runTask({ command, shellOverride, scratchDir, artifactsDir, cwd }) {
+    runTask({ command, shellOverride, scratchDir, artifactsDir, cwd, chatId = "" } = {}) {
         const taskId = crypto.randomBytes(4).toString("hex");
 
         const env = { ...process.env };

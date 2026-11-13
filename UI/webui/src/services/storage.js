@@ -100,11 +100,18 @@ export async function syncFromBackendDisk() {
             let changed = false;
             for (const diskChat of data.chats) {
                 if (!diskChat || !diskChat.id) continue;
+                diskChat.source = diskChat.source || "supabase";
+                diskChat.fromBackend = true;
                 const existing = state.chatSessions[diskChat.id];
                 if (!existing) {
                     state.chatSessions[diskChat.id] = diskChat;
                     changed = true;
                 } else {
+                    existing.source = existing.source || "supabase";
+                    existing.fromBackend = true;
+                    if (diskChat.messageCount && (!existing.messageCount || diskChat.messageCount > existing.messageCount)) {
+                        existing.messageCount = diskChat.messageCount;
+                    }
                     if (!existing.workspace && diskChat.workspace) {
                         existing.workspace = diskChat.workspace;
                         changed = true;
@@ -120,7 +127,7 @@ export async function syncFromBackendDisk() {
                         if (existing.compactionState && !diskChat.compactionState) {
                             diskChat.compactionState = existing.compactionState;
                         }
-                        state.chatSessions[diskChat.id] = diskChat;
+                        state.chatSessions[diskChat.id] = { ...existing, ...diskChat };
                         changed = true;
                     } else if ((!existing.messages || existing.messages.length === 0) && diskChat.messages && diskChat.messages.length > 0) {
                         existing.messages = diskChat.messages;

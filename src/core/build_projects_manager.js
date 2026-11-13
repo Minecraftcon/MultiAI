@@ -14,7 +14,37 @@ const {
 /**
  * Creates BuildProjectsManager bound to storage resolution helpers.
  */
-function createBuildProjectsManager(getBuildProjectsRoot, resolveHome) {
+function createBuildProjectsManager(optsOrFn, maybeResolveHome) {
+    let getBuildProjectsRoot;
+    let resolveHome;
+
+    if (typeof optsOrFn === "function") {
+        getBuildProjectsRoot = optsOrFn;
+        resolveHome = maybeResolveHome;
+    } else if (optsOrFn && typeof optsOrFn === "object") {
+        getBuildProjectsRoot = optsOrFn.getBuildProjectsRoot;
+        resolveHome = optsOrFn.resolveHome;
+    }
+
+    if (typeof getBuildProjectsRoot !== "function") {
+        getBuildProjectsRoot = () => {
+            const os = require("os");
+            const p = path.join(os.homedir(), ".MultiAI", "build", "projects");
+            try { fs.mkdirSync(p, { recursive: true }); } catch (_) {}
+            return p;
+        };
+    }
+
+    if (typeof resolveHome !== "function") {
+        resolveHome = (filepath) => {
+            if (!filepath) return "";
+            if (filepath.startsWith("~")) {
+                const os = require("os");
+                return path.join(os.homedir(), filepath.slice(1));
+            }
+            return path.resolve(filepath);
+        };
+    }
     /**
      * Generates a clean URL/filesystem-safe ID for a project.
      */

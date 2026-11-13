@@ -80,6 +80,9 @@ async function saveChat(chatSession) {
     const type = chatSession.type || "chat";
     const projectId = chatSession.projectId || null;
     const dateFolder = chatSession.date || new Date().toISOString().slice(0, 10);
+    const msgCount = Array.isArray(chatSession.messages)
+        ? chatSession.messages.length
+        : (chatSession.messageCount || chatSession.meta?.messageCount || 0);
     const meta = {
         title,
         createdAt: chatSession.createdAt || new Date().toISOString(),
@@ -87,6 +90,7 @@ async function saveChat(chatSession) {
         date: dateFolder,
         type,
         projectId,
+        messageCount: msgCount,
         ...(chatSession.meta || {})
     };
 
@@ -207,23 +211,35 @@ async function listChats() {
     if (!p) return null;
 
     const res = await p.query(`
-        SELECT id, title, type, project_id, date_folder, updated_at, created_at, meta
-        FROM public.chats
-        ORDER BY updated_at DESC
+        SELECT c.id, c.title, c.type, c.project_id, c.date_folder, c.updated_at, c.created_at, c.meta,
+               COUNT(m.id)::int AS msg_count
+        FROM public.chats c
+        LEFT JOIN public.chat_messages m ON m.chat_id = c.id
+        GROUP BY c.id, c.title, c.type, c.project_id, c.date_folder, c.updated_at, c.created_at, c.meta
+        ORDER BY c.updated_at DESC
         LIMIT 100;
     `);
 
-    return res.rows.map(row => ({
-        id: row.id,
-        title: row.title,
-        date: row.date_folder,
-        type: row.type,
-        projectId: row.project_id,
-        updatedAt: row.updated_at,
-        createdAt: row.created_at,
-        messageCount: row.meta?.messageCount || 0,
-        meta: row.meta
-    }));
+    return res.rows.map(row => {
+        const count = (row.msg_count !== undefined && row.msg_count !== null && row.msg_count > 0)
+            ? row.msg_count
+            : (row.meta?.messageCount || 0);
+        return {
+            id: row.id,
+            title: row.title,
+            date: row.date_folder,
+            type: row.type,
+            projectId: row.project_id,
+            updatedAt: row.updated_at,
+            createdAt: row.created_at,
+            messageCount: count,
+            source: "supabase",
+            meta: {
+                ...(row.meta || {}),
+                messageCount: count
+            }
+        };
+    });
 }
 
 /**

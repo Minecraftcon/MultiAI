@@ -227,7 +227,7 @@ export function renderChatList(filterQuery = "") {
  * Activates and displays a selected conversation session.
  */
 export async function switchToChat(id) {
-    if (!state.chatSessions[id]) return;
+    if (!id) return;
     hideMobileActions();
     hideChatItemMenu();
 
@@ -239,16 +239,18 @@ export async function switchToChat(id) {
     try {
         localStorage.setItem(ACTIVE_CHAT_KEY, id);
     } catch (_) {}
-    let session = state.chatSessions[id];
+    let session = state.chatSessions[id] || { id, title: "Conversation", messages: [] };
+    state.chatSessions[id] = session;
 
     // Fetch full session from backend if messages are not yet loaded or disk has more complete history
     try {
         const res = await fetch("/api/chats/" + encodeURIComponent(id));
         if (res.ok) {
             const data = await res.json();
-            if (data?.session?.messages && Array.isArray(data.session.messages)) {
-                if (!session.messages || data.session.messages.length >= session.messages.length) {
-                    session = { ...session, ...data.session };
+            const fetched = data?.session || data;
+            if (fetched?.messages && Array.isArray(fetched.messages)) {
+                if (!session.messages || fetched.messages.length >= session.messages.length) {
+                    session = { ...session, ...fetched, messages: fetched.messages };
                     state.chatSessions[id] = session;
                     if (data.workspace) session.workspace = data.workspace;
                 }
@@ -261,13 +263,13 @@ export async function switchToChat(id) {
     const chat = document.getElementById("chat");
     const modelSelect = document.getElementById("modelSelect");
 
-    if (session.workspace) {
+    if (session?.workspace) {
         syncActiveWorkspacePrompt(session.workspace);
     } else {
-        initChatWorkspace(id, session.createdAt);
+        initChatWorkspace(id, session?.createdAt);
     }
 
-    state.messages = (session.messages && session.messages.length > 0)
+    state.messages = (session?.messages && session.messages.length > 0)
         ? structuredClone(session.messages)
         : [{ role: "system", content: state.activeSystemPrompt }];
 
@@ -275,7 +277,7 @@ export async function switchToChat(id) {
         state.messages[0].content = state.activeSystemPrompt;
     }
 
-    if (session.model && modelSelect) {
+    if (session?.model && modelSelect) {
         modelSelect.value = session.model;
         updateModelPickerDisplay();
     }
