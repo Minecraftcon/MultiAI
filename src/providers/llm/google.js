@@ -19,7 +19,12 @@ class GoogleProvider extends BaseProvider {
         return `${baseEndpoint}/${model}:generateContent?key=${apiKey}`;
     }
 
-    formatPayload({ model, messages, tools, tool_choice, config = {}, supportsTools = true, supportsVision = true }) {
+    getStreamEndpoint(config, model, apiKey) {
+        const baseEndpoint = (config.endpoint || "https://generativelanguage.googleapis.com/v1beta/models").replace(/\/+$/, "");
+        return `${baseEndpoint}/${model}:streamGenerateContent?alt=sse&key=${apiKey}`;
+    }
+
+    formatPayload({ model, messages, tools, tool_choice, config = {}, supportsTools = true, supportsVision = true, options = {} }) {
         const normalized = this.normalizeMessages(messages, supportsTools, supportsVision);
         const systemParts = [];
         const contents = [];
@@ -127,11 +132,23 @@ class GoogleProvider extends BaseProvider {
             }];
         }
 
+        // Configure permissive safety settings to avoid false-positive stops on medical, anatomical, or technical queries
+        payload.safetySettings = config.safetySettings || [
+            { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+            { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+            { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+            { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" },
+            { category: "HARM_CATEGORY_CIVIC_INTEGRITY", threshold: "BLOCK_NONE" }
+        ];
+
         const generationConfig = {};
-        if (config.default_max_tokens) {
-            generationConfig.maxOutputTokens = config.default_max_tokens;
+        const maxTokens = options.max_tokens || options.maxTokens || options.maxOutputTokens || config.default_max_tokens;
+        if (maxTokens) {
+            generationConfig.maxOutputTokens = maxTokens;
         }
-        if (typeof config.temperature === "number") {
+        if (typeof options.temperature === "number") {
+            generationConfig.temperature = options.temperature;
+        } else if (typeof config.temperature === "number") {
             generationConfig.temperature = config.temperature;
         }
 
@@ -198,12 +215,241 @@ class GoogleProvider extends BaseProvider {
             fullContent = `<think>\n${thoughtText}\n</think>\n\n${text}`.trimEnd();
         }
 
+        if (candidate?.finishReason && candidate.finishReason !== "STOP") {
+            if (candidate.finishReason === "SAFETY") {
+                fullContent += `\n\n*[Response stopped: Gemini safety filter triggered]*`;
+            } else if (candidate.finishReason === "RECITATION") {
+                fullContent += `\n\n*[Response stopped: Gemini recitation filter triggered]*`;
+            }
+        }
+        if (data?.promptFeedback?.blockReason) {
+            fullContent += `\n\n*[Response blocked by Gemini safety filter: ${data.promptFeedback.blockReason}]*`;
+        }
+
         return {
             message: this.formatAssistantResponse({
                 content: fullContent,
                 tool_calls: toolCalls
             })
         };
+    }
+
+    /**
+     * Google Gemini SSE streaming handler.
+     * Gemini uses :streamGenerateContent?alt=sse and does not accept `stream: true` in the JSON body.
+     * Transforms incoming Gemini SSE chunks into standard OpenAI SSE delta format expected by the WebUI.
+     */
+    async handleChatStream({ model, apiKey, providerConfig = {}, messages, tools, tool_choice, options = {}, req, res }) {
+        const modelMeta = (providerConfig.models || []).find(m => m.id === model);
+        const supportsTools = modelMeta ? (modelMeta.supports_tools !== false) : true;
+        const supportsVision = modelMeta ? Boolean(modelMeta.supports_vision) : false;
+
+        const maxContextTokens = options.maxContextTokens || modelMeta?.max_context_tokens || providerConfig.max_context_tokens;
+        const chatOptions = maxContextTokens ? { ...options, maxContextTokens } : options;
+
+        const endpoint = this.getStreamEndpoint(providerConfig, model, apiKey);
+        const headers = this.getHeaders(apiKey, { model, providerConfig, ...chatOptions });
+        headers["Accept"] = "text/event-stream";
+
+        const payload = this.formatPayload({
+            model,
+            messages,
+            tools,
+            tool_choice,
+            config: providerConfig,
+            supportsTools,
+            supportsVision,
+            options: chatOptions
+        });
+        // Note: Do NOT add payload.stream = true! Gemini REST API rejects "stream" field with HTTP 400.
+
+        const timeoutMs = chatOptions.timeoutMs || providerConfig.timeout_ms || 300000;
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+        if (req) {
+            req.on("close", () => {
+                clearTimeout(timeout);
+                controller.abort();
+            });
+        }
+
+        try {
+            const upstreamRes = await fetch(endpoint, {
+                method: "POST",
+                headers,
+                body: JSON.stringify(payload),
+                signal: controller.signal
+            });
+
+            if (!upstreamRes.ok) {
+                clearTimeout(timeout);
+                const resText = await upstreamRes.text();
+                return {
+                    status: upstreamRes.status,
+                    error: `Google Gemini API error (${upstreamRes.status}): ${resText.slice(0, 500)}`
+                };
+            }
+
+            res.writeHead(200, {
+                "Content-Type": "text/event-stream; charset=utf-8",
+                "Cache-Control": "no-cache, no-transform",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no"
+            });
+            if (res.socket) res.socket.setNoDelay(true);
+            if (typeof res.flushHeaders === "function") res.flushHeaders();
+
+            const textDecoder = new TextDecoder("utf-8");
+            let buffer = "";
+            let toolCallIndex = 0;
+
+            const processLine = (line) => {
+                const trimmed = line.trim();
+                if (!trimmed || !trimmed.startsWith("data:")) return;
+                const dataStr = trimmed.replace(/^data:\s*/, "");
+                if (dataStr === "[DONE]") return;
+
+                let data;
+                try {
+                    data = JSON.parse(dataStr);
+                } catch (_) {
+                    return;
+                }
+
+                // Check prompt-level blocks
+                if (data.promptFeedback?.blockReason) {
+                    const blockNotice = `\n\n*[Response blocked by Gemini safety filter: ${data.promptFeedback.blockReason}]*`;
+                    const sseChunk = { choices: [{ delta: { content: blockNotice }, finish_reason: "content_filter" }] };
+                    res.write(`data: ${JSON.stringify(sseChunk)}\n\n`);
+                    if (typeof res.flush === "function") res.flush();
+                    return;
+                }
+
+                const candidate = data.candidates?.[0];
+                if (!candidate) return;
+
+                const parts = candidate.content?.parts || [];
+                for (const part of parts) {
+                    // 1. Thoughts / reasoning delta
+                    if (part.text && part.thought) {
+                        const sseChunk = {
+                            choices: [{
+                                delta: {
+                                    reasoning_content: part.text
+                                }
+                            }]
+                        };
+                        res.write(`data: ${JSON.stringify(sseChunk)}\n\n`);
+                        if (typeof res.flush === "function") res.flush();
+                    }
+                    // 2. Standard content delta
+                    else if (part.text && !part.thought) {
+                        const sseChunk = {
+                            choices: [{
+                                delta: {
+                                    content: part.text
+                                }
+                            }]
+                        };
+                        res.write(`data: ${JSON.stringify(sseChunk)}\n\n`);
+                        if (typeof res.flush === "function") res.flush();
+                    }
+                    // 3. Tool call / function call delta
+                    if (part.functionCall) {
+                        const thoughtSig = part.thoughtSignature || part.thought_signature || part.functionCall?.thoughtSignature || null;
+                        const toolCallChunk = {
+                            index: toolCallIndex++,
+                            id: part.functionCall.id || ("call_" + Math.random().toString(36).slice(2, 10)),
+                            type: "function",
+                            function: {
+                                name: part.functionCall.name,
+                                arguments: JSON.stringify(part.functionCall.args || {})
+                            }
+                        };
+                        if (thoughtSig) {
+                            toolCallChunk.thoughtSignature = thoughtSig;
+                        }
+                        const sseChunk = {
+                            choices: [{
+                                delta: {
+                                    tool_calls: [toolCallChunk]
+                                }
+                            }]
+                        };
+                        res.write(`data: ${JSON.stringify(sseChunk)}\n\n`);
+                        if (typeof res.flush === "function") res.flush();
+                    }
+                }
+
+                // Check candidate-level finish reasons (e.g. SAFETY, RECITATION, MAX_TOKENS)
+                if (candidate.finishReason && candidate.finishReason !== "STOP") {
+                    let finishNotice = "";
+                    let finishReason = "stop";
+
+                    if (candidate.finishReason === "SAFETY") {
+                        finishNotice = `\n\n*[Response stopped: Gemini safety filter triggered]*`;
+                        finishReason = "content_filter";
+                    } else if (candidate.finishReason === "RECITATION") {
+                        finishNotice = `\n\n*[Response stopped: Gemini recitation filter triggered]*`;
+                        finishReason = "content_filter";
+                    } else if (candidate.finishReason === "MAX_TOKENS") {
+                        finishReason = "length";
+                    }
+
+                    if (finishNotice) {
+                        res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: finishNotice } }] })}\n\n`);
+                        if (typeof res.flush === "function") res.flush();
+                    }
+
+                    res.write(`data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: finishReason }] })}\n\n`);
+                    if (typeof res.flush === "function") res.flush();
+                }
+            };
+
+            if (upstreamRes.body) {
+                if (typeof upstreamRes.body.getReader === "function") {
+                    const reader = upstreamRes.body.getReader();
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        buffer += textDecoder.decode(value, { stream: true });
+                        const lines = buffer.split("\n");
+                        buffer = lines.pop();
+                        for (const line of lines) processLine(line);
+                    }
+                } else {
+                    for await (const chunk of upstreamRes.body) {
+                        buffer += textDecoder.decode(chunk, { stream: true });
+                        const lines = buffer.split("\n");
+                        buffer = lines.pop();
+                        for (const line of lines) processLine(line);
+                    }
+                }
+                if (buffer.trim()) {
+                    processLine(buffer);
+                }
+            }
+
+            res.write("data: [DONE]\n\n");
+            if (typeof res.flush === "function") res.flush();
+            clearTimeout(timeout);
+            res.end();
+            return { status: 200 };
+        } catch (err) {
+            clearTimeout(timeout);
+            if (err.name === "AbortError" && req?.destroyed) {
+                return { status: 499, error: "Client cancelled request" };
+            }
+            if (!res.headersSent) {
+                return {
+                    status: 502,
+                    error: `Google Gemini streaming connection failed: ${err.message}`
+                };
+            }
+            try { res.end(); } catch (_) {}
+            return { status: 502, error: err.message };
+        }
     }
 }
 
