@@ -211,6 +211,30 @@ function selectModel(modelValue) {
     closeModelPicker();
 }
 
+function positionDropdownAboveChatbox(dropdown) {
+    const chatboxDock = document.getElementById("chatboxDock");
+    const chatboxBtn = document.getElementById("chatboxModelPickerBtn");
+    const targetEl = chatboxDock || chatboxBtn;
+    if (!targetEl || !dropdown) return;
+
+    const rect = targetEl.getBoundingClientRect();
+    const spaceAbove = rect.top;
+
+    if (spaceAbove >= 200) {
+        dropdown.style.top = "auto";
+        dropdown.style.bottom = `${Math.max(10, Math.round(window.innerHeight - rect.top + 10))}px`;
+    } else {
+        dropdown.style.bottom = "auto";
+        dropdown.style.top = `${Math.round(rect.bottom + 10)}px`;
+    }
+}
+
+function resetDropdownPosition(dropdown) {
+    if (!dropdown) return;
+    dropdown.style.top = "";
+    dropdown.style.bottom = "";
+}
+
 export function openModelPicker(source = "header") {
     const dropdown = document.getElementById("modelPickerDropdown");
     const backdrop = document.getElementById("modelPickerBackdrop");
@@ -232,8 +256,10 @@ export function openModelPicker(source = "header") {
     const isFromChatbox = (source === "chatbox") || (!btn || btn.offsetParent === null);
     if (isFromChatbox) {
         dropdown.classList.add("docked-bottom");
+        positionDropdownAboveChatbox(dropdown);
     } else {
         dropdown.classList.remove("docked-bottom");
+        resetDropdownPosition(dropdown);
     }
 
     dropdown.classList.add("is-open");
@@ -274,6 +300,7 @@ export function closeModelPicker() {
     if (dropdown) {
         dropdown.classList.remove("is-open");
         dropdown.classList.remove("docked-bottom");
+        resetDropdownPosition(dropdown);
     }
     if (backdrop) backdrop.classList.remove("is-open");
     if (btn) {
@@ -299,34 +326,49 @@ export function toggleModelPicker(source = "header") {
 }
 
 export function initModelPicker() {
-    const btn = document.getElementById("modelPickerBtn");
-    const heroBtn = document.getElementById("heroModelPickerBtn");
-    const chatboxBtn = document.getElementById("chatboxModelPickerBtn");
     const backdrop = document.getElementById("modelPickerBackdrop");
     const searchInput = document.getElementById("modelSearchInput");
     const searchClear = document.getElementById("modelSearchClear");
     const modelSelect = document.getElementById("modelSelect");
 
-    if (btn) {
-        btn.addEventListener("click", (e) => {
-            e.stopPropagation();
-            toggleModelPicker("header");
-        });
-    }
-
-    if (heroBtn) {
-        heroBtn.addEventListener("click", (e) => {
-            e.stopPropagation();
-            toggleModelPicker("hero");
-        });
-    }
-
-    if (chatboxBtn) {
-        chatboxBtn.addEventListener("click", (e) => {
+    // Unified click delegation for all model picker buttons and outside-click dismiss
+    document.addEventListener("click", (e) => {
+        const chatboxTrigger = e.target.closest("#chatboxModelPickerBtn");
+        if (chatboxTrigger) {
             e.stopPropagation();
             toggleModelPicker("chatbox");
-        });
-    }
+            return;
+        }
+
+        const heroTrigger = e.target.closest("#heroModelPickerBtn");
+        if (heroTrigger) {
+            e.stopPropagation();
+            toggleModelPicker("hero");
+            return;
+        }
+
+        const headerTrigger = e.target.closest("#modelPickerBtn");
+        if (headerTrigger) {
+            e.stopPropagation();
+            toggleModelPicker("header");
+            return;
+        }
+
+        if (!isPickerOpen) return;
+        const dropdown = document.getElementById("modelPickerDropdown");
+        if (dropdown && !dropdown.contains(e.target)) {
+            closeModelPicker();
+        }
+    });
+
+    window.addEventListener("resize", () => {
+        if (isPickerOpen) {
+            const dropdown = document.getElementById("modelPickerDropdown");
+            if (dropdown && dropdown.classList.contains("docked-bottom")) {
+                positionDropdownAboveChatbox(dropdown);
+            }
+        }
+    });
 
     if (backdrop) {
         backdrop.addEventListener("click", () => {
@@ -362,17 +404,6 @@ export function initModelPicker() {
             renderModelPickerList("");
         });
     }
-
-    // Close when clicking outside
-    document.addEventListener("click", (e) => {
-        if (!isPickerOpen) return;
-        const dropdown = document.getElementById("modelPickerDropdown");
-        const currentHeroBtn = document.getElementById("heroModelPickerBtn");
-        const currentChatboxBtn = document.getElementById("chatboxModelPickerBtn");
-        if (dropdown && !dropdown.contains(e.target) && !btn?.contains(e.target) && !currentHeroBtn?.contains(e.target) && !currentChatboxBtn?.contains(e.target)) {
-            closeModelPicker();
-        }
-    });
 
     // Close on Escape
     document.addEventListener("keydown", (e) => {

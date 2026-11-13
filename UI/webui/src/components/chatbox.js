@@ -132,15 +132,6 @@ class ChatBoxComponent {
         this.heroModelPickerBtn = this.container.querySelector("#heroModelPickerBtn");
         this.chatboxModelPickerBtn = this.container.querySelector("#chatboxModelPickerBtn");
 
-        if (this.chatboxModelPickerBtn) {
-            this.chatboxModelPickerBtn.addEventListener("click", (e) => {
-                e.stopPropagation();
-                import("./model-picker.js").then(mp => {
-                    mp.toggleModelPicker("chatbox");
-                });
-            });
-        }
-
         this.bindEvents();
         this.updateLayoutMode();
         updateStartPageHeroTitle();
