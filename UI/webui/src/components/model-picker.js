@@ -211,30 +211,6 @@ function selectModel(modelValue) {
     closeModelPicker();
 }
 
-function positionDropdownAboveChatbox(dropdown) {
-    const chatboxDock = document.getElementById("chatboxDock");
-    const chatboxBtn = document.getElementById("chatboxModelPickerBtn");
-    const targetEl = chatboxDock || chatboxBtn;
-    if (!targetEl || !dropdown) return;
-
-    const rect = targetEl.getBoundingClientRect();
-    const spaceAbove = rect.top;
-
-    if (spaceAbove >= 200) {
-        dropdown.style.top = "auto";
-        dropdown.style.bottom = `${Math.max(10, Math.round(window.innerHeight - rect.top + 10))}px`;
-    } else {
-        dropdown.style.bottom = "auto";
-        dropdown.style.top = `${Math.round(rect.bottom + 10)}px`;
-    }
-}
-
-function resetDropdownPosition(dropdown) {
-    if (!dropdown) return;
-    dropdown.style.top = "";
-    dropdown.style.bottom = "";
-}
-
 export function openModelPicker(source = "header") {
     const dropdown = document.getElementById("modelPickerDropdown");
     const backdrop = document.getElementById("modelPickerBackdrop");
@@ -251,16 +227,6 @@ export function openModelPicker(source = "header") {
     expandedGroups.clear();
 
     renderModelPickerList("");
-
-    // Bottom-docked positioning when triggered from chatbox or when header picker is hidden
-    const isFromChatbox = (source === "chatbox") || (!btn || btn.offsetParent === null);
-    if (isFromChatbox) {
-        dropdown.classList.add("docked-bottom");
-        positionDropdownAboveChatbox(dropdown);
-    } else {
-        dropdown.classList.remove("docked-bottom");
-        resetDropdownPosition(dropdown);
-    }
 
     dropdown.classList.add("is-open");
     if (backdrop) backdrop.classList.add("is-open");
@@ -299,8 +265,6 @@ export function closeModelPicker() {
     isPickerOpen = false;
     if (dropdown) {
         dropdown.classList.remove("is-open");
-        dropdown.classList.remove("docked-bottom");
-        resetDropdownPosition(dropdown);
     }
     if (backdrop) backdrop.classList.remove("is-open");
     if (btn) {
@@ -358,15 +322,6 @@ export function initModelPicker() {
         const dropdown = document.getElementById("modelPickerDropdown");
         if (dropdown && !dropdown.contains(e.target)) {
             closeModelPicker();
-        }
-    });
-
-    window.addEventListener("resize", () => {
-        if (isPickerOpen) {
-            const dropdown = document.getElementById("modelPickerDropdown");
-            if (dropdown && dropdown.classList.contains("docked-bottom")) {
-                positionDropdownAboveChatbox(dropdown);
-            }
         }
     });
 

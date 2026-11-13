@@ -238,7 +238,7 @@ header::after {
     transform: translateX(-50%) translateY(-8px) scale(0.97);
     width: calc(100vw - 28px);
     max-width: 370px;
-    max-height: calc(80vh - 60px);
+    max-height: calc(100dvh - 120px);
     background: var(--bg-alt);
     border: 1px solid var(--border);
     border-radius: 14px;
@@ -256,17 +256,6 @@ header::after {
 .model-picker-dropdown.is-open {
     opacity: 1;
     pointer-events: auto;
-    transform: translateX(-50%) translateY(0) scale(1);
-}
-
-/* Bottom-docked when opened from chatbox */
-.model-picker-dropdown.docked-bottom {
-    top: auto;
-    bottom: calc(var(--composer-height, 90px) + 20px + env(safe-area-inset-bottom, 0px));
-    transform: translateX(-50%) translateY(8px) scale(0.97);
-}
-
-.model-picker-dropdown.docked-bottom.is-open {
     transform: translateX(-50%) translateY(0) scale(1);
 }
 
