@@ -5,31 +5,50 @@ providers:
     api_key_env: GEMINI_API_KEY
     endpoint: https://generativelanguage.googleapis.com/v1beta/models
     models:
-      - id: gemini-2.5-flash
-        name: Gemini 2.5 Flash (Fast & Capable)
-        default: true
-        supports_tools: true
-        supports_vision: true
       - id: gemini-flash-lite-latest
-        name: Gemini Flash-Lite Latest (Ultra Fast & Efficient)
-        supports_tools: true
-        supports_vision: true
+        name: Gemini Flash-Lite Latest
+        description: Latest release of Gemini Flash-Lite
+        context_length: 1048576
+        cost:
+          prompt: 0
+          completion: 0
+        capabilities:
+          streaming: true
+          vision: true
+          function_calling: true
       - id: gemini-2.5-flash-lite
-        name: Gemini 2.5 Flash-Lite (High Speed)
-        supports_tools: true
-        supports_vision: true
-      - id: gemini-3.1-flash-lite
-        name: Gemini 3.1 Flash-Lite (Next-Gen Fast)
-        supports_tools: true
-        supports_vision: true
+        name: Gemini 2.5 Flash-Lite
+        description: Stable version of Gemini 2.5 Flash-Lite, released in July of 2025
+        context_length: 1048576
+        cost:
+          prompt: 0
+          completion: 0
+        capabilities:
+          streaming: true
+          vision: true
+          function_calling: true
       - id: gemini-3.1-flash-lite-preview
-        name: Gemini 3.1 Flash-Lite Preview
-        supports_tools: true
-        supports_vision: true
+        name: Gemini 3.1 Flash Lite Preview
+        description: Gemini 3.1 Flash Lite Preview
+        context_length: 1048576
+        cost:
+          prompt: 0
+          completion: 0
+        capabilities:
+          streaming: true
+          vision: true
+          function_calling: true
       - id: gemini-3.5-flash-lite
-        name: Gemini 3.5 Flash-Lite
-        supports_tools: true
-        supports_vision: true
+        name: Gemini 3.5 Flash Lite
+        description: Gemini 3.5 Flash Lite
+        context_length: 1048576
+        cost:
+          prompt: 0
+          completion: 0
+        capabilities:
+          streaming: true
+          vision: true
+          function_calling: true
   zai:
     name: Z.AI (GLM)
     type: zai
@@ -161,16 +180,59 @@ providers:
     base_url: https://openrouter.ai/api/v1
     default_max_tokens: 2048
     models:
+      - id: baidu/ernie-5.5-flash-preview:free
+        name: "Baidu: ERNIE-5.5-Flash-Preview (free)"
+        description: ERNIE 5.5 Flash Preview is the latest foundation model in the ERNIE
+          family, with comprehensive impro
+        context_length: 1024000
+        cost:
+          prompt: 0
+          completion: 0
+        capabilities:
+          streaming: true
+          vision: false
+          function_calling: false
+      - id: particle-ai/particle-1:free
+        name: "Particle AI: Particle-1 (free)"
+        description: Particle-1 is a token-efficient agentic coding model from Particle
+          AI, post-trained on DeepSeek V4.1
+        context_length: 1048576
+        cost:
+          prompt: 0
+          completion: 0
+        capabilities:
+          streaming: true
+          vision: true
+          function_calling: false
+      - id: qwen/qwen3.8-2.4t-a95b
+        name: Qwen 3.8 2.4T A95B
+        description: Next-generation ultra-dense coding and reasoning flagship
+        context_length: 1048576
+        max_context_tokens: 1048576
+        supports_tools: true
+        supports_vision: false
+      - id: qwen/qwen3.6-plus
+        name: Qwen 3.6 Plus
+        description: High-throughput balanced instruct model
+        context_length: 1000000
+        max_context_tokens: 1000000
+        supports_tools: true
+        supports_vision: false
+      - id: qwen/qwen3.7-plus
+        name: Qwen 3.7 Plus
+        description: Enterprise grade flagship multi-turn reasoning model
+        context_length: 1000000
+        max_context_tokens: 1000000
+        supports_tools: true
+        supports_vision: false
       - id: qwen/qwen3.5-flash-02-23
         name: Qwen 3.5 Flash 02-23
-        supports_tools: true
-        supports_vision: false
+        description: High-speed latency-optimized instruction model
+        context_length: 1000000
         max_context_tokens: 1000000
-        default: true
-      - id: google/gemma-4-31b-it:free
-        name: Gemma 4 31B IT (Free)
         supports_tools: true
         supports_vision: false
+        default: true
   cohere:
     name: Cohere
     type: cohere
@@ -220,11 +282,40 @@ providers:
     api_key_env: NVIDIA_API_KEY
     base_url: https://integrate.api.nvidia.com/v1
     models:
-      - id: nvidia/nemotron-3.5-lightning-30b-a3b
-        name: Nemotron 3.5 Lightning 30B
-        supports_tools: true
-        supports_vision: false
-        default: true
+      - id: nvidia/nemotron-3.5-bolt-e4b
+        name: Nemotron 3.5 Bolt E4b
+        description: NVIDIA NIM accelerated inference for nvidia/nemotron-3.5-bolt-e4b
+        context_length: 32768
+        cost:
+          prompt: 0
+          completion: 0
+        capabilities:
+          streaming: true
+          vision: false
+          function_calling: false
+      - id: nvidia/riva-translate-4b-instruct-v2
+        name: Riva Translate 4b Instruct V2
+        description: NVIDIA NIM accelerated inference for
+          nvidia/riva-translate-4b-instruct-v2
+        context_length: 32768
+        cost:
+          prompt: 0
+          completion: 0
+        capabilities:
+          streaming: true
+          vision: false
+          function_calling: false
+      - id: poolside/laguna-xs-2.1
+        name: Laguna Xs 2.1
+        description: NVIDIA NIM accelerated inference for poolside/laguna-xs-2.1
+        context_length: 32768
+        cost:
+          prompt: 0
+          completion: 0
+        capabilities:
+          streaming: true
+          vision: false
+          function_calling: false
   mistral:
     name: Mistral AI
     type: openai_compatible
