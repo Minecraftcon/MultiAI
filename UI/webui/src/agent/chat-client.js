@@ -21,7 +21,6 @@ export async function callChatModel(messages, { model, tools, signal, onChunk } 
 
     const modelSelect = typeof document !== "undefined" ? document.getElementById("modelSelect") : null;
     const selectedOption = modelSelect?.selectedOptions?.[0];
-    const providerFromSelect = (selectedOption && selectedOption.value === model) ? selectedOption.dataset.provider : null;
     const currentSession = (state.currentChatId && state.chatSessions[state.currentChatId]) ? state.chatSessions[state.currentChatId] : null;
 
     // 1. First priority: explicitly registered provider in modelProviderMap
