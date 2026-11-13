@@ -34,6 +34,11 @@ export function updateModelPickerDisplay() {
         heroNameEl.textContent = cleanText;
         heroNameEl.title = fullText;
     }
+    const chatboxNameEl = document.getElementById("chatboxModelPickerName");
+    if (chatboxNameEl && cleanText) {
+        chatboxNameEl.textContent = cleanText;
+        chatboxNameEl.title = fullText;
+    }
 }
 
 export function renderModelPickerList(filter = "") {
@@ -206,10 +211,12 @@ function selectModel(modelValue) {
     closeModelPicker();
 }
 
-export function openModelPicker() {
+export function openModelPicker(source = "header") {
     const dropdown = document.getElementById("modelPickerDropdown");
     const backdrop = document.getElementById("modelPickerBackdrop");
     const btn = document.getElementById("modelPickerBtn");
+    const heroBtn = document.getElementById("heroModelPickerBtn");
+    const chatboxBtn = document.getElementById("chatboxModelPickerBtn");
     const searchInput = document.getElementById("modelSearchInput");
 
     if (!dropdown) return;
@@ -227,10 +234,13 @@ export function openModelPicker() {
         btn.classList.add("is-open");
         btn.setAttribute("aria-expanded", "true");
     }
-    const heroBtn = document.getElementById("heroModelPickerBtn");
     if (heroBtn) {
         heroBtn.classList.add("is-open");
         heroBtn.setAttribute("aria-expanded", "true");
+    }
+    if (chatboxBtn) {
+        chatboxBtn.classList.add("is-open");
+        chatboxBtn.setAttribute("aria-expanded", "true");
     }
 
     // Scroll active item into view
@@ -250,9 +260,12 @@ export function closeModelPicker() {
     const backdrop = document.getElementById("modelPickerBackdrop");
     const btn = document.getElementById("modelPickerBtn");
     const heroBtn = document.getElementById("heroModelPickerBtn");
+    const chatboxBtn = document.getElementById("chatboxModelPickerBtn");
 
     isPickerOpen = false;
-    if (dropdown) dropdown.classList.remove("is-open");
+    if (dropdown) {
+        dropdown.classList.remove("is-open");
+    }
     if (backdrop) backdrop.classList.remove("is-open");
     if (btn) {
         btn.classList.remove("is-open");
@@ -262,37 +275,55 @@ export function closeModelPicker() {
         heroBtn.classList.remove("is-open");
         heroBtn.setAttribute("aria-expanded", "false");
     }
+    if (chatboxBtn) {
+        chatboxBtn.classList.remove("is-open");
+        chatboxBtn.setAttribute("aria-expanded", "false");
+    }
 }
 
-export function toggleModelPicker() {
+export function toggleModelPicker(source = "header") {
     if (isPickerOpen) {
         closeModelPicker();
     } else {
-        openModelPicker();
+        openModelPicker(source);
     }
 }
 
 export function initModelPicker() {
-    const btn = document.getElementById("modelPickerBtn");
-    const heroBtn = document.getElementById("heroModelPickerBtn");
     const backdrop = document.getElementById("modelPickerBackdrop");
     const searchInput = document.getElementById("modelSearchInput");
     const searchClear = document.getElementById("modelSearchClear");
     const modelSelect = document.getElementById("modelSelect");
 
-    if (btn) {
-        btn.addEventListener("click", (e) => {
+    // Unified click delegation for all model picker buttons and outside-click dismiss
+    document.addEventListener("click", (e) => {
+        const chatboxTrigger = e.target.closest("#chatboxModelPickerBtn");
+        if (chatboxTrigger) {
             e.stopPropagation();
-            toggleModelPicker();
-        });
-    }
+            toggleModelPicker("chatbox");
+            return;
+        }
 
-    if (heroBtn) {
-        heroBtn.addEventListener("click", (e) => {
+        const heroTrigger = e.target.closest("#heroModelPickerBtn");
+        if (heroTrigger) {
             e.stopPropagation();
-            toggleModelPicker();
-        });
-    }
+            toggleModelPicker("hero");
+            return;
+        }
+
+        const headerTrigger = e.target.closest("#modelPickerBtn");
+        if (headerTrigger) {
+            e.stopPropagation();
+            toggleModelPicker("header");
+            return;
+        }
+
+        if (!isPickerOpen) return;
+        const dropdown = document.getElementById("modelPickerDropdown");
+        if (dropdown && !dropdown.contains(e.target)) {
+            closeModelPicker();
+        }
+    });
 
     if (backdrop) {
         backdrop.addEventListener("click", () => {
@@ -328,16 +359,6 @@ export function initModelPicker() {
             renderModelPickerList("");
         });
     }
-
-    // Close when clicking outside
-    document.addEventListener("click", (e) => {
-        if (!isPickerOpen) return;
-        const dropdown = document.getElementById("modelPickerDropdown");
-        const currentHeroBtn = document.getElementById("heroModelPickerBtn");
-        if (dropdown && !dropdown.contains(e.target) && !btn?.contains(e.target) && !currentHeroBtn?.contains(e.target)) {
-            closeModelPicker();
-        }
-    });
 
     // Close on Escape
     document.addEventListener("keydown", (e) => {

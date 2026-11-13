@@ -53,7 +53,12 @@ function getVendorList() {
         // Mermaid
         { url: "https://cdn.jsdelivr.net/npm/mermaid@10.9.3/dist/mermaid.min.js", dest: "mermaid/mermaid.min.js" },
         // Three.js
-        { url: "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js", dest: "three/three.min.js" }
+        { url: "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js", dest: "three/three.min.js" },
+        // xterm.js & addons
+        { url: "https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.min.js", dest: "xterm/xterm.js", local: "node_modules/@xterm/xterm/lib/xterm.js" },
+        { url: "https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.css", dest: "xterm/xterm.css", local: "node_modules/@xterm/xterm/css/xterm.css" },
+        { url: "https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.min.js", dest: "xterm/addon-fit.js", local: "node_modules/@xterm/addon-fit/lib/addon-fit.js" },
+        { url: "https://cdn.jsdelivr.net/npm/@xterm/addon-web-links@0.11.0/lib/addon-web-links.min.js", dest: "xterm/addon-web-links.js", local: "node_modules/@xterm/addon-web-links/lib/addon-web-links.js" }
     ];
 
     // KaTeX fonts
@@ -135,6 +140,16 @@ async function ensureVendorFiles({ force = false, quiet = false } = {}) {
     for (const item of missing) {
         const fullDest = path.join(VENDOR_ROOT, item.dest);
         try {
+            if (item.local) {
+                const localPath = path.resolve(__dirname, "..", item.local);
+                if (fs.existsSync(localPath)) {
+                    fs.mkdirSync(path.dirname(fullDest), { recursive: true });
+                    fs.copyFileSync(localPath, fullDest);
+                    if (!quiet) console.log(`[VENDOR] Copied local ${item.dest}`);
+                    successCount++;
+                    continue;
+                }
+            }
             if (!quiet) process.stdout.write(`[VENDOR] Downloading ${item.dest}... `);
             await downloadFile(item.url, fullDest);
             const stat = fs.statSync(fullDest);

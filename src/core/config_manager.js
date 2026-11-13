@@ -17,7 +17,8 @@ const DEFAULT_CONFIG = {
         Host: "0.0.0.0",
         LogLevel: "info",
         LogFile: "./logs.txt",
-        SystemPreset: "default"
+        SystemPreset: "default",
+        UIStyle: "multiai"
     },
     Agent: {
         MaxToolRounds: 0,
@@ -27,8 +28,8 @@ const DEFAULT_CONFIG = {
         StreamReasoning: false,
         TurnTimeoutSeconds: 120,
         Temperature: 0.7,
-        TaskDaemon: "python",
-        TaskServer: "python"
+        TaskDaemon: "node",
+        TaskServer: "node"
     },
     Tools: {
         EnableTerminal: true,

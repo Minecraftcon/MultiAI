@@ -48,6 +48,7 @@ export function smoothPullToBottom(chat) {
     if (!chat) chat = document.getElementById("chat");
     if (!chat || isUserDetached) return;
 
+    if (typeof requestAnimationFrame !== "function") return;
     if (!animRafId) {
         lastPullTime = performance.now();
         animRafId = requestAnimationFrame(pullTick);

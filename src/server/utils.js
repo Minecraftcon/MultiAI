@@ -181,7 +181,7 @@ function getSystemInfo() {
         ];
     }
 
-    const defaultWorkdir = process.env.MULTIAI_WORKSPACE_DIR || "/tmp/workspace";
+    const defaultWorkdir = process.env.MULTIAI_WORKSPACE_DIR || process.cwd();
     if (!fs.existsSync(defaultWorkdir)) {
         try { fs.mkdirSync(defaultWorkdir, { recursive: true }); } catch (_) {}
     }
@@ -317,7 +317,7 @@ function getChatWorkspace(chatId) {
 }
 
 function getChatScratchDir(chatId) {
-    let baseDir = process.env.MULTIAI_WORKSPACE_DIR || "/tmp/workspace";
+    let baseDir = process.env.MULTIAI_WORKSPACE_DIR || process.cwd();
     if (chatId) {
         try {
             const { getChatWorkdir } = require("./routes/cloud_tools");
@@ -442,7 +442,7 @@ function resolveSafePath(inputPath, chatId) {
         return rel ? path.resolve(artifactsDir, rel) : artifactsDir;
     }
 
-    let baseDir = process.env.MULTIAI_WORKSPACE_DIR || "/tmp/workspace";
+    let baseDir = process.env.MULTIAI_WORKSPACE_DIR || process.cwd();
     if (chatId) {
         try {
             const { getChatWorkdir } = require("./routes/cloud_tools");

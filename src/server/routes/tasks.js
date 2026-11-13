@@ -58,14 +58,21 @@ async function handleTaskRoute(req, res) {
         }
     }
 
-    // Direct Python Execution Engine route: /api/python/run
-    if (req.method === "POST" && req.url === "/api/python/run") {
+    // Direct Code Execution Engine route: /api/code/run or /api/python/run
+    if (req.method === "POST" && (req.url === "/api/code/run" || req.url === "/api/python/run")) {
         try {
             let body = "";
             for await (const chunk of req) body += chunk;
             const args = JSON.parse(body || "{}");
-            const result = await executePythonCode(args);
-            return sendJSON(res, 200, result);
+            try {
+                const { postJSON } = require("../utils");
+                const result = await postJSON(5000, "/api/code/run", args, 35000);
+                return sendJSON(res, 200, result);
+            } catch (daemonErr) {
+                // In-process fallback if daemon not responding
+                const result = await executePythonCode(args);
+                return sendJSON(res, 200, result);
+            }
         } catch (error) {
             return sendJSON(res, 500, { error: error.message });
         }

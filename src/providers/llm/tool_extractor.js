@@ -258,7 +258,7 @@ function extractToolCallsFromText(text, parseArgs = parseToolCallArgs) {
     }
 
     // 5. Raw known tool invocation: (run_task|read_file|...)(...) or (run_task|read_file|...){...}
-    const knownToolsRegex = /(?:^|[\n.\s])(run_task|read_file|write_file|grep_search|search_and_replace|fetch_web_content|web_search|idle|run_python|generate_image|task_send_input|task_stdout|task_kill)\s*(?:\(\s*([\s\S]*?)\s*\)|(\{[\s\S]*?\}))(?:\s*\1)?/gi;
+    const knownToolsRegex = /(?:^|[\n.\s])(run_task|read_file|write_file|grep_search|search_and_replace|fetch_web_content|web_search|idle|run_node|run_code|run_python|generate_image|task_send_input|task_stdout|task_kill)\s*(?:\(\s*([\s\S]*?)\s*\)|(\{[\s\S]*?\}))(?:\s*\1)?/gi;
     while ((m = knownToolsRegex.exec(cleaned)) !== null) {
         const name = m[1];
         const rawArgs = m[2] || m[3];

@@ -15,7 +15,7 @@ import { initContextMenu } from "./components/context-menu.js";
 import { initBottomSheet } from "./components/bottom-sheet.js";
 import { initErrorRecovery } from "./components/error-recovery.js";
 import { initModelPicker } from "./components/model-picker.js";
-import { initSettingsView, applyTheme } from "./components/settings-view.js";
+import { initSettingsView, applyTheme, applyUIStyle } from "./components/settings-view.js";
 import { initPlanDock } from "./components/chat-plan-dock.js";
 
 import { renderIcons } from "./utils/dom.js";
@@ -26,6 +26,7 @@ import { initModeSwitcher } from "./components/mode-switcher.js";
 import { initCloudTools } from "./components/cloud-tools.js";
 import { McpActiveTools } from "./tools/mcp/index.js";
 import { initTaskWatcher } from "./tools/terminal/task-watcher.js";
+import { initTerminalDrawer } from "./components/terminal-drawer.js";
 
 async function initChatSessions() {
     loadStoredChats();
@@ -81,6 +82,10 @@ async function initConfig() {
             const theme = state.config.UI?.Theme || localStorage.getItem("multiai_theme") || "dark";
             applyTheme(theme);
 
+            // Apply UI style if configured
+            const uiStyle = state.config.General?.UIStyle || localStorage.getItem("multiai_ui_style") || "multiai";
+            applyUIStyle(uiStyle);
+
             // Sync configured Aurora theme
             initAuroraTheme();
         }
@@ -94,6 +99,7 @@ async function bootstrap() {
     if (typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent)) {
         document.documentElement.classList.add("is-android");
     }
+    applyUIStyle(localStorage.getItem("multiai_ui_style") || "multiai");
     renderIcons();
     initUiScale();
     initAuroraTheme();
@@ -109,6 +115,7 @@ async function bootstrap() {
     initErrorRecovery();
     initModelPicker();
     initPlanDock();
+    initTerminalDrawer();
 
     await initConfig();
     if (state.config?.Tools?.EnableMcp !== false) {

@@ -85,6 +85,11 @@ export function renderTransform(x, withAnimation = false) {
         backdrop.classList.remove("animate-transition");
     }
 
+    const isTermDocked = document.body.classList.contains("term-open-left") ||
+                         document.body.classList.contains("term-open-right") ||
+                         document.body.classList.contains("term-open-bottom") ||
+                         document.body.classList.contains("term-open-top");
+
     if (clampedX === 0) {
         sidePanel.style.transform = "";
         appShell.style.transform = "";
@@ -95,14 +100,14 @@ export function renderTransform(x, withAnimation = false) {
 
     if (clampedX === width) {
         sidePanel.style.transform = "translate3d(0, 0, 0)";
-        appShell.style.transform = `translate3d(${width}px, 0, 0)`;
+        appShell.style.transform = isTermDocked ? "" : `translate3d(${width}px, 0, 0)`;
         backdrop.style.opacity = "1";
         backdrop.style.pointerEvents = "auto";
         return;
     }
 
     sidePanel.style.transform = `translate3d(${clampedX - width}px, 0, 0)`;
-    appShell.style.transform = `translate3d(${clampedX}px, 0, 0)`;
+    appShell.style.transform = isTermDocked ? "" : `translate3d(${clampedX}px, 0, 0)`;
     backdrop.style.opacity = progress.toString();
     backdrop.style.pointerEvents = progress > 0.05 ? "auto" : "none";
 }

@@ -8,6 +8,7 @@ const supabaseStorage = require("./core/supabase_storage");
 
 const { initConsole } = require("./server/console");
 const { ensureVendorFiles } = require("../scripts/vendor_download");
+const { initPtyWebSocket } = require("./server/routes/pty");
 
 // If MULTIAI_WORKSPACE_DIR is set, anchor runtime process.cwd() to it
 if (process.env.MULTIAI_WORKSPACE_DIR && fs.existsSync(process.env.MULTIAI_WORKSPACE_DIR)) {
@@ -46,6 +47,7 @@ async function startServer() {
     const HOST = process.env.HOST || appConfig.General?.Host || "0.0.0.0";
 
     const server = http.createServer(routeRequest);
+    initPtyWebSocket(server);
 
     server.listen(PORT, HOST, () => {
         const hostDisplay = HOST === "0.0.0.0" ? "localhost" : HOST;

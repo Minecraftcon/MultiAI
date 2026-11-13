@@ -326,6 +326,8 @@ module.exports = {
     handleLogin,
     handleAuthCheck,
     handleCaptchaEndpoint,
-    renderLockPage
+    renderLockPage,
+    generateSessionToken,
+    verifySessionToken
 };
 

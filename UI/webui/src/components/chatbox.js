@@ -60,29 +60,39 @@ class ChatBoxComponent {
             <!-- Top: Staged Attachments Strip -->
             <div id="stagedAttachments" class="staged-attachments-strip" style="display: none;"></div>
 
-            <!-- Main input row -->
-            <div class="composer-input-row">
-                <!-- Left: Plus Attachment Button (Original 36x36 size, bottom-aligned) -->
-                <button id="attachSheetBtn" type="button" class="icon-btn attach-btn" aria-label="Add attachments" title="Add attachments">
-                    <i data-lucide="plus"></i>
-                </button>
+            <!-- Top: Main textarea column -->
+            <div class="composer-main-col">
+                <textarea 
+                    id="input" 
+                    class="composer-textarea" 
+                    placeholder="Message AI…" 
+                    rows="1" 
+                    aria-label="Message AI"
+                    enterkeyhint="enter"
+                    autocomplete="off"
+                    autocorrect="on"
+                    spellcheck="true"></textarea>
+            </div>
 
-                <!-- Center: Main column with auto-expanding textarea -->
-                <div class="composer-main-col">
-                    <textarea 
-                        id="input" 
-                        class="composer-textarea" 
-                        placeholder="Message AI…" 
-                        rows="1" 
-                        aria-label="Message AI"
-                        enterkeyhint="enter"
-                        autocomplete="off"
-                        autocorrect="on"
-                        spellcheck="true"></textarea>
+            <!-- Bottom: Action Toolbar with Plus, Model Picker & Send -->
+            <div class="composer-toolbar">
+                <div class="composer-toolbar-left">
+                    <!-- Smaller Plus Attachment Button -->
+                    <button id="attachSheetBtn" type="button" class="icon-btn attach-btn" aria-label="Add attachments" title="Add attachments">
+                        <i data-lucide="plus"></i>
+                    </button>
+
+                    <!-- Model Picker Button inside Chatbox -->
+                    <button id="chatboxModelPickerBtn" class="chatbox-model-btn" type="button" aria-haspopup="dialog" aria-expanded="false" title="Select AI Model">
+                        <span id="chatboxModelPickerName" class="model-picker-name">Select Model</span>
+                        <i data-lucide="chevron-down" class="model-picker-chevron"></i>
+                    </button>
+
+                    <!-- Mode Pills / Tags Strip (Deep Search, etc.) -->
+                    <div id="composerModePills" class="composer-mode-pills" style="display: none;"></div>
                 </div>
 
-                <!-- Right: Actions with Clear and Send Button (Original 36x36 size, bottom-aligned) -->
-                <div class="composer-actions">
+                <div class="composer-toolbar-right">
                     <button type="button" class="composer-clear-btn" id="composerClearBtn" title="Clear text" aria-label="Clear text" style="display: none;">
                         <i data-lucide="x"></i>
                     </button>
@@ -91,9 +101,6 @@ class ChatBoxComponent {
                     </button>
                 </div>
             </div>
-
-            <!-- Bottom: Mode Pills / Tags Strip (Deep Search, etc.) -->
-            <div id="composerModePills" class="composer-mode-pills" style="display: none;"></div>
         </div>
 
         <!-- Start Page Footer (Visible only when in start page mode, positioned under left corner of chatbox) -->
@@ -131,6 +138,7 @@ class ChatBoxComponent {
         this.modePills = this.container.querySelector("#composerModePills");
         this.clearBtn = this.container.querySelector("#composerClearBtn");
         this.heroModelPickerBtn = this.container.querySelector("#heroModelPickerBtn");
+        this.chatboxModelPickerBtn = this.container.querySelector("#chatboxModelPickerBtn");
 
         this.bindEvents();
         this.updateLayoutMode();

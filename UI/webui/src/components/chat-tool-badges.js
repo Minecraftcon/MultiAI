@@ -8,6 +8,7 @@ import { parseMarkdown, extractThoughtAndContent, bindInteractiveCodeBlocks, ren
 import { saveCurrentChatState } from "../services/storage.js";
 import { requestScrollToBottom } from "./chat-ui.js";
 import { getTool } from "../tools/registry.js";
+import { openTerminal } from "./terminal-drawer.js";
 
 
 /**
@@ -513,7 +514,7 @@ export function addToolBadge(element, toolName, args) {
         collapseDiv.innerHTML = `
             <div class="badge-collapse-inner">
                 <div class="command-output-box">
-                    <pre><div class="command-output-cmd ${isCmdMulti ? 'is-compact' : ''}" data-full="${escapeHTML(displayCmd)}" data-compact="${escapeHTML(compactCmd)}"><div class="command-cmd-text">${escapeHTML(compactCmd)}</div>${isCmdMulti ? `<div class="cmd-toggle-row"><button type="button" class="cmd-compact-toggle" aria-expanded="false"><span class="cmd-toggle-label">Expand</span> <span class="cmd-toggle-lines">(${cmdLines.length} lines)</span></button></div>` : ''}</div><hr class="command-output-sep"><div class="command-output-res"></div></pre>
+                    <pre><div class="command-output-cmd ${isCmdMulti ? 'is-compact' : ''}" data-full="${escapeHTML(displayCmd)}" data-compact="${escapeHTML(compactCmd)}"><div class="command-cmd-text">${escapeHTML(compactCmd)}</div><button type="button" class="badge-open-pty-btn" title="Open Interactive Terminal (Ctrl+\`)"><i data-lucide="terminal"></i><span>Terminal</span></button>${isCmdMulti ? `<div class="cmd-toggle-row"><button type="button" class="cmd-compact-toggle" aria-expanded="false"><span class="cmd-toggle-label">Expand</span> <span class="cmd-toggle-lines">(${cmdLines.length} lines)</span></button></div>` : ''}</div><hr class="command-output-sep"><div class="command-output-res"></div></pre>
                 </div>
             </div>
         `;
@@ -529,6 +530,14 @@ export function addToolBadge(element, toolName, args) {
                 </button>
             `;
             collapseDiv.querySelector(".badge-collapse-inner pre")?.appendChild(noteEl);
+        }
+
+        const ptyBtn = collapseDiv.querySelector(".badge-open-pty-btn");
+        if (ptyBtn && typeof ptyBtn.addEventListener === "function") {
+            ptyBtn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                openTerminal({ command: displayCmd });
+            });
         }
 
         searchContainer.appendChild(collapseDiv);

@@ -206,6 +206,20 @@ const SERVER_BUILD_TOOLS = [
     {
         type: "function",
         function: {
+            name: "run_node",
+            description: "Execute a JavaScript/Node.js script or expression and return stdout/stderr.",
+            parameters: {
+                type: "object",
+                properties: {
+                    code: { type: "string", description: "JavaScript/Node.js code to execute" }
+                },
+                required: ["code"]
+            }
+        }
+    },
+    {
+        type: "function",
+        function: {
             name: "run_python",
             description: "Execute a Python script or expression and return stdout/stderr.",
             parameters: {
@@ -378,11 +392,11 @@ async function executeServerTool(name, args, { chatId, projectId, abortSignal, j
             return { error: `Web fetch failed: ${err.message}` };
         }
     }
-    if (name === "run_python") {
+    if (name === "run_node" || name === "run_code" || name === "run_python") {
         try {
-            return await postJSON(5000, "/api/python/run", args, 35000);
+            return await postJSON(5000, "/api/code/run", args, 35000);
         } catch (err) {
-            return { error: `Python execution failed: ${err.message}` };
+            return { error: `Code execution failed: ${err.message}` };
         }
     }
     if (name === "schedule" || name === "sleep") {

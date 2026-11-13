@@ -81,6 +81,16 @@ export function getSettingsHTML() {
                             </div>
                             <select id="cfgStartupLLM" class="settings-select"></select>
                         </div>
+                        <div class="settings-row">
+                            <div class="settings-item-info">
+                                <span class="settings-item-title">UI Style</span>
+                                <span class="settings-item-desc">Choose between the modern Multi AI experience and the classic interface</span>
+                            </div>
+                            <select id="cfgUIStyle" class="settings-select">
+                                <option value="multiai" selected>Multi AI</option>
+                                <option value="classics">Classics</option>
+                            </select>
+                        </div>
                     </div>
 
                     <div class="settings-card">

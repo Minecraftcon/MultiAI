@@ -40,6 +40,11 @@
                     else if (t === "midnight") meta.setAttribute("content", "#000000");
                     else meta.setAttribute("content", "#0f0f0f");
                 }
+                var s = localStorage.getItem("multiai_ui_style") || "multiai";
+                document.documentElement.setAttribute("data-ui-style", s);
+                if (s === "classics") {
+                    document.documentElement.classList.add("ui-style-classics");
+                }
             } catch (e) {}
         })();
     </script>
@@ -77,6 +82,9 @@
     <link rel="stylesheet" href="./styles/context-menu.css">
     <link rel="stylesheet" href="./styles/settings.css">
     <link rel="stylesheet" href="./styles/responsive.css">
+    <link rel="stylesheet" href="/vendor/xterm/xterm.css">
+    <link rel="stylesheet" href="./styles/terminal.css">
+    <link rel="stylesheet" href="./styles/classics.css">
 </head>
 <body>
 
@@ -144,6 +152,10 @@
             <button id="newImageBtn" class="panel-nav-btn" type="button" title="Generate an image">
                 <i data-lucide="image"></i>
                 <span>New Image</span>
+            </button>
+            <button id="panelTerminalBtn" class="panel-nav-btn" type="button" title="Interactive Terminal (Ctrl+`)">
+                <i data-lucide="terminal"></i>
+                <span>Terminal</span>
             </button>
         </div>
 
@@ -519,6 +531,11 @@
     })();
 </script>
 <script type="module" src="./src/utils/icons.js"></script>
+
+<!-- xterm.js & Addons for Real PTY Terminal -->
+<script src="/vendor/xterm/xterm.js"></script>
+<script src="/vendor/xterm/addon-fit.js"></script>
+<script src="/vendor/xterm/addon-web-links.js"></script>
 
 <!-- Modular Application Entry Point -->
 <script type="module" src="./src/main.js"></script>

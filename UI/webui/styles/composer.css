@@ -66,10 +66,10 @@
     align-items: flex-end;
 }
 
-/* Plus Attachment Button on the Left - Original fixed 36x36 size */
+/* Plus Attachment Button on the Left - Compact 28x28 size */
 .attach-btn {
-    width: 36px;
-    height: 36px;
+    width: 28px;
+    height: 28px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -94,9 +94,90 @@
 }
 
 .attach-btn svg {
-    width: 19px;
-    height: 19px;
+    width: 15px;
+    height: 15px;
     stroke-width: 2.2;
+}
+
+/* Chatbox Model Picker Button */
+.chatbox-model-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 28px;
+    padding: 0 10px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 9999px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    user-select: none;
+    max-width: min(240px, 45vw);
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
+}
+
+.chatbox-model-btn:hover {
+    background: var(--hover-3);
+    border-color: var(--border-strong);
+    color: var(--text-primary);
+}
+
+.chatbox-model-btn:active {
+    transform: scale(0.97);
+}
+
+.chatbox-model-btn.is-open {
+    background: var(--hover-3);
+    border-color: var(--border-strong);
+    color: var(--text-primary);
+}
+
+.chatbox-model-btn .model-picker-name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+}
+
+.chatbox-model-btn .model-picker-chevron {
+    width: 12px;
+    height: 12px;
+    color: var(--text-secondary);
+    flex-shrink: 0;
+    transition: transform 0.2s ease, color 0.15s ease;
+}
+
+.chatbox-model-btn.is-open .model-picker-chevron {
+    transform: rotate(180deg);
+    color: var(--text-primary);
+}
+
+/* Action Toolbar inside Composer */
+.composer-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    margin-top: 6px;
+    gap: 8px;
+}
+
+.composer-toolbar-left {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    flex-wrap: wrap;
+}
+
+.composer-toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
 }
 
 /* Center column with staged files strip and input - expands upwards */
