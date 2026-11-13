@@ -5,8 +5,8 @@
    ========================================================= */
 
 :root {
-    --term-panel-width: 440px;
-    --term-panel-height: 340px;
+    --term-panel-width: 360px;
+    --term-panel-height: 320px;
 }
 
 /* App shell layout responds smoothly when terminal docks */
@@ -17,49 +17,52 @@
 }
 
 /* ── 1. Body Dock Classes (Pushing Chat Aside / Up / Down) ── */
-body.term-open-left #appShell {
-    margin-left: var(--term-panel-width);
-    width: calc(100% - var(--term-panel-width));
+/* On desktop viewports (>= 901px): push chat aside cleanly, max 40vw to never squash chatbox */
+@media (min-width: 901px) {
+    body.term-open-left #appShell {
+        margin-left: min(var(--term-panel-width), 40vw);
+        width: calc(100% - min(var(--term-panel-width), 40vw));
+    }
+
+    body.term-open-right #appShell {
+        margin-right: min(var(--term-panel-width), 40vw);
+        width: calc(100% - min(var(--term-panel-width), 40vw));
+    }
 }
 
-body.term-open-right #appShell {
-    margin-right: var(--term-panel-width);
-    width: calc(100% - var(--term-panel-width));
+/* Mobile & Tablet viewports (<= 900px): do NOT push chatbox off-screen; overlay gracefully */
+@media (max-width: 900px) {
+    body.term-open-left #appShell,
+    body.term-open-right #appShell {
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+        width: 100% !important;
+    }
+    .terminal-drawer.dock-left,
+    .terminal-drawer.dock-right {
+        max-width: min(88vw, 380px) !important;
+    }
+    .terminal-drawer.dock-bottom,
+    .terminal-drawer.dock-top {
+        max-height: 80vh !important;
+    }
 }
 
 body.term-open-bottom #appShell {
-    height: calc(100dvh - var(--term-panel-height));
+    height: calc((100dvh / var(--ui-scale, 1)) - var(--term-panel-height));
 }
 
 body.term-open-top #appShell {
     margin-top: var(--term-panel-height);
-    height: calc(100dvh - var(--term-panel-height));
-}
-
-/* Mobile responsive fallback: overlay full screen on narrow phones */
-@media (max-width: 768px) {
-    body.term-open-left #appShell,
-    body.term-open-right #appShell {
-        margin-left: 0;
-        margin-right: 0;
-        width: 100%;
-    }
-    .terminal-drawer.dock-left,
-    .terminal-drawer.dock-right {
-        max-width: 100vw !important;
-        width: 100vw !important;
-    }
-    .terminal-drawer.dock-bottom,
-    .terminal-drawer.dock-top {
-        max-height: 85vh !important;
-    }
+    height: calc((100dvh / var(--ui-scale, 1)) - var(--term-panel-height));
 }
 
 /* ── 2. Terminal Panel Base Container ── */
+/* z-index: 30 places the terminal UNDER the left panel (z-index: 40) & backdrop (z-index: 35) */
 .terminal-drawer {
     position: fixed;
     background: var(--card-bg, #111113);
-    z-index: 1000;
+    z-index: 30;
     display: flex;
     flex-direction: column;
     box-shadow: 0 0 24px rgba(0, 0, 0, 0.35);

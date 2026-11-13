@@ -26,8 +26,10 @@ class TerminalDrawerManager {
 
         // Dock position defaults to 'left' as requested
         this.dockPosition = localStorage.getItem("multiai_term_dock_pos") || "left";
-        this.width = parseInt(localStorage.getItem("multiai_term_dock_width"), 10) || 440;
-        this.height = parseInt(localStorage.getItem("multiai_term_dock_height"), 10) || 340;
+        const savedW = parseInt(localStorage.getItem("multiai_term_dock_width"), 10);
+        this.width = (savedW && savedW <= 520 && savedW >= 260) ? savedW : 360;
+        const savedH = parseInt(localStorage.getItem("multiai_term_dock_height"), 10);
+        this.height = (savedH && savedH <= 500 && savedH >= 180) ? savedH : 320;
     }
 
     init() {
@@ -209,22 +211,26 @@ class TerminalDrawerManager {
             if (!isResizing) return;
 
             if (this.dockPosition === "left") {
-                const newW = Math.max(260, Math.min(window.innerWidth * 0.85, e.clientX));
+                const maxAllowedW = Math.max(300, Math.min(window.innerWidth * 0.45, 520));
+                const newW = Math.max(260, Math.min(maxAllowedW, e.clientX));
                 this.width = newW;
                 document.documentElement.style.setProperty("--term-panel-width", `${newW}px`);
                 this.drawerEl.style.width = `${newW}px`;
             } else if (this.dockPosition === "right") {
-                const newW = Math.max(260, Math.min(window.innerWidth * 0.85, window.innerWidth - e.clientX));
+                const maxAllowedW = Math.max(300, Math.min(window.innerWidth * 0.45, 520));
+                const newW = Math.max(260, Math.min(maxAllowedW, window.innerWidth - e.clientX));
                 this.width = newW;
                 document.documentElement.style.setProperty("--term-panel-width", `${newW}px`);
                 this.drawerEl.style.width = `${newW}px`;
             } else if (this.dockPosition === "bottom") {
-                const newH = Math.max(160, Math.min(window.innerHeight * 0.85, window.innerHeight - e.clientY));
+                const maxAllowedH = Math.max(200, Math.min(window.innerHeight * 0.65, 600));
+                const newH = Math.max(160, Math.min(maxAllowedH, window.innerHeight - e.clientY));
                 this.height = newH;
                 document.documentElement.style.setProperty("--term-panel-height", `${newH}px`);
                 this.drawerEl.style.height = `${newH}px`;
             } else if (this.dockPosition === "top") {
-                const newH = Math.max(160, Math.min(window.innerHeight * 0.85, e.clientY));
+                const maxAllowedH = Math.max(200, Math.min(window.innerHeight * 0.65, 600));
+                const newH = Math.max(160, Math.min(maxAllowedH, e.clientY));
                 this.height = newH;
                 document.documentElement.style.setProperty("--term-panel-height", `${newH}px`);
                 this.drawerEl.style.height = `${newH}px`;
