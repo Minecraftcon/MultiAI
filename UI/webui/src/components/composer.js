@@ -223,6 +223,32 @@ export async function send() {
             }
             const cursor = currentAIMessage.querySelector(".blinking-cursor");
             if (cursor) cursor.remove();
+
+            // Crash persistence: record failure into session history and JSONL storage
+            const session = state.chatSessions[targetChatId];
+            if (session && Array.isArray(session.messages)) {
+                const fullErrorPayload = {
+                    message: cleanErr,
+                    statusCode: error.statusCode || null,
+                    code: error.code || null,
+                    stack: error.stack || null,
+                    raw: typeof error === "object" ? (error.raw || error.details || error.message || String(error)) : String(error),
+                    timestamp: Date.now()
+                };
+
+                const errAssistantMsg = {
+                    role: "assistant",
+                    content: `[Error: Request could not be succeeded${codeLabel} - ${cleanErr}]`,
+                    isError: true,
+                    error: fullErrorPayload
+                };
+
+                session.messages.push(errAssistantMsg);
+                state.messages = session.messages;
+                currentAIMessage.dataset.rawText = errAssistantMsg.content;
+                currentAIMessage.dataset.isError = "true";
+            }
+
             showErrorRecoveryPopup({
                 targetChatId,
                 promptText: promptText || text,

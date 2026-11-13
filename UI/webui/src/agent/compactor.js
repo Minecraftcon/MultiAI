@@ -185,6 +185,15 @@ export function sanitizeWorkingTurn(m) {
         return m;
     }
 
+    if (m.isError || m.error) {
+        const errObj = m.error || {};
+        const cleanErr = errObj.message || (typeof m.content === "string" ? m.content : "Previous generation encountered an error");
+        return {
+            role: "assistant",
+            content: `[Previous attempt failed: ${cleanErr}]`
+        };
+    }
+
     if (m.role === "assistant" && typeof m.content === "string" && m.content.includes("</think>")) {
         const stripped = m.content.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
         return {
