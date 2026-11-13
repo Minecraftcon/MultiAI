@@ -141,6 +141,12 @@ export function populateSettingsValues() {
         startupLLM.value = gen.DefaultStartupLLM;
     }
 
+    const uiStyleSelect = document.getElementById("cfgUIStyle");
+    const storedUIStyle = gen.UIStyle || localStorage.getItem("multiai_ui_style") || "multiai";
+    if (uiStyleSelect) {
+        uiStyleSelect.value = storedUIStyle;
+    }
+
     const presetSelect = document.getElementById("cfgSystemPreset");
     const customPromptText = document.getElementById("cfgCustomSystemPrompt");
     const storedPreset = localStorage.getItem("multiai_system_preset") || gen.SystemPreset || "default";
@@ -496,6 +502,15 @@ export function initSettingsView() {
         });
     }
 
+    const uiStyleSelect = document.getElementById("cfgUIStyle");
+    if (uiStyleSelect) {
+        uiStyleSelect.addEventListener("change", (e) => {
+            const val = e.target.value;
+            applyUIStyle(val);
+            saveSetting("General", "UIStyle", val);
+        });
+    }
+
     const presetSelect = document.getElementById("cfgSystemPreset");
     const customPromptText = document.getElementById("cfgCustomSystemPrompt");
     const customPromptRow = document.getElementById("cfgCustomPromptRow");
@@ -819,6 +834,8 @@ export function initSettingsView() {
                 localStorage.removeItem("multiai_custom_system_prompt");
                 localStorage.removeItem("multiai_temperature");
                 localStorage.removeItem("multiai_send_key");
+                localStorage.removeItem("multiai_ui_style");
+                applyUIStyle("multiai");
 
                 const defaults = {
                     General: {
@@ -828,7 +845,8 @@ export function initSettingsView() {
                         DefaultImageAspectRatio: "3:2",
                         RecordDate: true,
                         RecordChatHistory: true,
-                        MaxChatHistory: 100
+                        MaxChatHistory: 100,
+                        UIStyle: "multiai"
                     },
                     Agent: {
                         MaxToolRounds: 0,
@@ -1222,6 +1240,25 @@ function renderContextFilterRules() {
     });
 
     renderIcons(listEl);
+}
+
+/* =========================================================
+   GLOBAL UI STYLE APPLICATION HELPER (TOP-LEVEL EXPORT)
+   ========================================================= */
+export function applyUIStyle(val) {
+    const style = (val === "classics") ? "classics" : "multiai";
+    document.documentElement.setAttribute("data-ui-style", style);
+    if (document.body) {
+        document.body.classList.toggle("ui-style-classics", style === "classics");
+        document.body.classList.toggle("ui-style-multiai", style === "multiai");
+    }
+    try {
+        localStorage.setItem("multiai_ui_style", style);
+    } catch (_) {}
+
+    if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("ui-style-changed", { detail: { style } }));
+    }
 }
 
 /* =========================================================

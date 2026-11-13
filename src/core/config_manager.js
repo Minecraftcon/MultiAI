@@ -17,7 +17,8 @@ const DEFAULT_CONFIG = {
         Host: "0.0.0.0",
         LogLevel: "info",
         LogFile: "./logs.txt",
-        SystemPreset: "default"
+        SystemPreset: "default",
+        UIStyle: "multiai"
     },
     Agent: {
         MaxToolRounds: 0,

@@ -40,6 +40,11 @@
                     else if (t === "midnight") meta.setAttribute("content", "#000000");
                     else meta.setAttribute("content", "#0f0f0f");
                 }
+                var s = localStorage.getItem("multiai_ui_style") || "multiai";
+                document.documentElement.setAttribute("data-ui-style", s);
+                if (s === "classics") {
+                    document.documentElement.classList.add("ui-style-classics");
+                }
             } catch (e) {}
         })();
     </script>
