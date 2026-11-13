@@ -1,4 +1,4 @@
-const { getConfig, saveConfig } = require("../../core/config_manager");
+const { getConfig, saveConfig, saveConfigAsync } = require("../../core/config_manager");
 const { getEnvKey, loadModelsConfig, getModelDefaultContext, getSystemInfo, sendJSON } = require("../utils");
 
 // In-memory session state for the rolling local provider (resets on server restart)
@@ -40,7 +40,7 @@ async function handleConfig(req, res) {
             let body = "";
             for await (const chunk of req) body += chunk;
             const updates = JSON.parse(body || "{}");
-            const updated = saveConfig(updates);
+            const updated = await saveConfigAsync(updates);
             return sendJSON(res, 200, { success: true, config: updated });
         } catch (err) {
             return sendJSON(res, 500, { error: err.message });

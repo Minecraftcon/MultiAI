@@ -327,6 +327,45 @@ async function loadSecretsIntoEnv() {
     }
 }
 
+/**
+ * Save or update global application configuration in Supabase
+ */
+async function saveAppConfig(config) {
+    const p = getPool();
+    if (!p || !config) return null;
+
+    try {
+        await p.query(`
+            INSERT INTO public.app_config (id, config, updated_at)
+            VALUES ('default', $1, NOW())
+            ON CONFLICT (id) DO UPDATE SET
+                config = EXCLUDED.config,
+                updated_at = NOW();
+        `, [JSON.stringify(config)]);
+        return { success: true, cloud: true };
+    } catch (err) {
+        console.warn("[SUPABASE SAVE CONFIG ERROR]", err.message);
+        return null;
+    }
+}
+
+/**
+ * Retrieve global application configuration from Supabase
+ */
+async function getAppConfig() {
+    const p = getPool();
+    if (!p) return null;
+
+    try {
+        const res = await p.query("SELECT config FROM public.app_config WHERE id = 'default';");
+        if (res.rows.length === 0 || !res.rows[0].config) return null;
+        return typeof res.rows[0].config === "object" ? res.rows[0].config : JSON.parse(res.rows[0].config);
+    } catch (err) {
+        console.warn("[SUPABASE GET CONFIG ERROR]", err.message);
+        return null;
+    }
+}
+
 module.exports = {
     getSupabaseConfig,
     isConnected,
@@ -338,5 +377,7 @@ module.exports = {
     deleteChat,
     deleteAllChats,
     saveArtifact,
-    getArtifact
+    getArtifact,
+    saveAppConfig,
+    getAppConfig
 };

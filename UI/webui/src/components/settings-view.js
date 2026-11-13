@@ -70,6 +70,7 @@ export function openSettings(targetCategory = "general") {
 }
 
 export function closeSettings() {
+    flushPendingSettings().catch(() => {});
     const appShell = document.getElementById("appShell");
     const settingsScreen = document.getElementById("settingsScreen");
     if (!appShell || !settingsScreen) return;
@@ -159,8 +160,8 @@ export function populateSettingsValues() {
 
     const presetSelect = document.getElementById("cfgSystemPreset");
     const customPromptText = document.getElementById("cfgCustomSystemPrompt");
-    const storedPreset = localStorage.getItem("multiai_system_preset") || gen.SystemPreset || "default";
-    const storedCustom = localStorage.getItem("multiai_custom_system_prompt") || "";
+    const storedPreset = gen.SystemPreset || localStorage.getItem("multiai_system_preset") || "default";
+    const storedCustom = gen.CustomSystemPrompt || localStorage.getItem("multiai_custom_system_prompt") || "";
 
     if (presetSelect) presetSelect.value = storedPreset;
     if (customPromptText) {
@@ -180,13 +181,16 @@ export function populateSettingsValues() {
 
     const sendKey = document.getElementById("cfgSendKey");
     if (sendKey) {
-        sendKey.value = localStorage.getItem("multiai_send_key") || "enter";
+        sendKey.value = gen.SendKey || localStorage.getItem("multiai_send_key") || "enter";
+        state.sendKey = sendKey.value;
     }
 
     // 2. Models & AI
     const tempSlider = document.getElementById("cfgTemperature");
     const tempVal = document.getElementById("cfgTemperatureVal");
-    const storedTemp = localStorage.getItem("multiai_temperature") || "0.7";
+    const storedTemp = (agent.Temperature !== undefined && agent.Temperature !== null)
+        ? String(agent.Temperature)
+        : (localStorage.getItem("multiai_temperature") || "0.7");
     if (tempSlider) tempSlider.value = storedTemp;
     if (tempVal) tempVal.textContent = parseFloat(storedTemp).toFixed(2);
 
@@ -400,6 +404,31 @@ function updateAboutDiagnostics() {
 }
 
 /**
+ * Flushes any pending debounced config updates immediately to the server
+ */
+export async function flushPendingSettings() {
+    if (saveTimeout) {
+        clearTimeout(saveTimeout);
+        saveTimeout = null;
+    }
+    if (!pendingConfigUpdates || Object.keys(pendingConfigUpdates).length === 0) return true;
+    const payload = pendingConfigUpdates;
+    pendingConfigUpdates = {};
+    try {
+        const res = await fetch("/api/config", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+            keepalive: true
+        });
+        return res.ok;
+    } catch (err) {
+        console.warn("[SETTINGS] Failed to flush config to server:", err.message);
+        return false;
+    }
+}
+
+/**
  * Dispatches an asynchronous update to the backend config and updates live state
  */
 export async function saveSetting(section, key, value) {
@@ -433,7 +462,7 @@ export async function saveSetting(section, key, value) {
             if (res.ok) {
                 if (statusEl) {
                     statusEl.className = "settings-save-status saved";
-                    statusEl.innerHTML = '<i data-lucide="check"></i><span>Saved</span>';
+                    statusEl.innerHTML = '<i data-lucide="check"></i><span>Saved to cloud</span>';
                     renderIcons(statusEl);
                     setTimeout(() => {
                         if (statusEl) {
@@ -442,6 +471,15 @@ export async function saveSetting(section, key, value) {
                             renderIcons(statusEl);
                         }
                     }, 1400);
+                }
+            } else {
+                console.warn("[SETTINGS] Server returned status:", res.status);
+                if (statusEl) {
+                    statusEl.className = "settings-save-status error";
+                    statusEl.innerHTML = res.status === 401
+                        ? '<i data-lucide="alert-triangle"></i><span>Session expired</span>'
+                        : '<i data-lucide="alert-triangle"></i><span>Save failed (' + res.status + ')</span>';
+                    renderIcons(statusEl);
                 }
             }
         } catch (err) {
@@ -499,6 +537,10 @@ export function initSettingsView() {
         }
     });
 
+    window.addEventListener("beforeunload", () => {
+        flushPendingSettings().catch(() => {});
+    });
+
     // 1. General Controls
     const startupLLM = document.getElementById("cfgStartupLLM");
     if (startupLLM) {
@@ -547,6 +589,7 @@ export function initSettingsView() {
         customPromptText.addEventListener("input", (e) => {
             const val = e.target.value;
             localStorage.setItem("multiai_custom_system_prompt", val);
+            saveSetting("General", "CustomSystemPrompt", val);
             if (presetSelect?.value === "custom") {
                 state.activePersonaPrompt = val.trim() || SYSTEM_PROMPT_PRESETS.default;
                 rebuildActiveSystemPrompt();
@@ -558,6 +601,8 @@ export function initSettingsView() {
     if (sendKey) {
         sendKey.addEventListener("change", (e) => {
             localStorage.setItem("multiai_send_key", e.target.value);
+            state.sendKey = e.target.value;
+            saveSetting("General", "SendKey", e.target.value);
         });
     }
 
@@ -729,6 +774,10 @@ export function initSettingsView() {
             uiScaleVal.textContent = `${val}%`;
             setUiScale(val / 100, true);
         });
+        uiScaleSlider.addEventListener("change", (e) => {
+            const val = parseInt(e.target.value, 10);
+            saveSetting("UI", "Scale", val / 100);
+        });
     }
 
     if (uiScaleResetBtn) {
@@ -736,6 +785,7 @@ export function initSettingsView() {
             resetZoom(true);
             if (uiScaleSlider) uiScaleSlider.value = 100;
             if (uiScaleVal) uiScaleVal.textContent = "100%";
+            saveSetting("UI", "Scale", 1.0);
         });
     }
 

@@ -18,6 +18,8 @@ const DEFAULT_CONFIG = {
         LogLevel: "info",
         LogFile: "./logs.txt",
         SystemPreset: "default",
+        CustomSystemPrompt: "",
+        SendKey: "enter",
         UIStyle: "multiai"
     },
     Agent: {
@@ -50,7 +52,8 @@ const DEFAULT_CONFIG = {
         Theme: "dark",
         AuroraTheme: "saturn",
         ShowLineNumbers: true,
-        CompactMobileView: true
+        CompactMobileView: true,
+        Scale: 1.0
     },
     Mobile: {
         LimitVisibleTurns: true,
@@ -323,7 +326,72 @@ function saveConfig(updates, filePath) {
     try {
         lastMtime = fs.statSync(targetPath).mtimeMs;
     } catch (_) {}
+
+    // Asynchronously synchronize with Supabase Cloud
+    try {
+        const supabaseStorage = require("./supabase_storage");
+        if (supabaseStorage && typeof supabaseStorage.saveAppConfig === "function") {
+            supabaseStorage.saveAppConfig(updated).catch(err => {
+                console.warn("[CONFIG] Background cloud sync error:", err.message);
+            });
+        }
+    } catch (_) {}
+
     return updated;
+}
+
+/**
+ * Saves an updated config to config.ini and awaits Supabase cloud synchronization.
+ */
+async function saveConfigAsync(updates, filePath) {
+    const updated = saveConfig(updates, filePath);
+    try {
+        const supabaseStorage = require("./supabase_storage");
+        if (supabaseStorage && typeof supabaseStorage.saveAppConfig === "function") {
+            await supabaseStorage.saveAppConfig(updated);
+        }
+    } catch (err) {
+        console.warn("[CONFIG] Await cloud sync error:", err.message);
+    }
+    return updated;
+}
+
+/**
+ * Synchronizes configuration from Supabase Cloud on server startup.
+ */
+async function initCloudConfig() {
+    try {
+        let supabaseStorage = null;
+        try {
+            supabaseStorage = require("./supabase_storage");
+        } catch (_) {}
+
+        if (!supabaseStorage || typeof supabaseStorage.isConnected !== "function") return;
+        const connected = await supabaseStorage.isConnected();
+        if (!connected) return;
+
+        const cloudConfig = await supabaseStorage.getAppConfig();
+        const targetPath = getDefaultConfigPath();
+
+        if (cloudConfig && typeof cloudConfig === "object" && Object.keys(cloudConfig).length > 0) {
+            const merged = mergeWithDefaults(cloudConfig);
+            cachedConfig = merged;
+
+            try {
+                const dir = path.dirname(targetPath);
+                if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+                fs.writeFileSync(targetPath, serializeINI(merged), "utf8");
+                lastMtime = fs.statSync(targetPath).mtimeMs;
+            } catch (_) {}
+            console.log("[CONFIG] Successfully synchronized configuration from Supabase cloud.");
+        } else {
+            const current = loadConfig(targetPath);
+            await supabaseStorage.saveAppConfig(current);
+            console.log("[CONFIG] Seeded Supabase cloud configuration from local configuration.");
+        }
+    } catch (err) {
+        console.warn("[CONFIG] Cloud config sync error:", err.message);
+    }
 }
 
 module.exports = {
@@ -331,6 +399,8 @@ module.exports = {
     loadConfig,
     getConfig: () => loadConfig(),
     saveConfig,
+    saveConfigAsync,
+    initCloudConfig,
     getDefaultConfigPath,
     parseINI,
     serializeINI,

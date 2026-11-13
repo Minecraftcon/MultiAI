@@ -1,6 +1,6 @@
 const http = require("http");
 const fs = require("fs");
-const { getConfig } = require("./core/config_manager");
+const { getConfig, initCloudConfig } = require("./core/config_manager");
 const { initSupervisor } = require("./server/supervisor");
 const { routeRequest } = require("./server/router");
 const { mcpManager } = require("./core/mcp_manager");
@@ -25,6 +25,13 @@ async function startServer() {
         await supabaseStorage.loadSecretsIntoEnv();
     } catch (err) {
         console.warn("[SECRETS] Error loading cloud secrets:", err.message);
+    }
+
+    // 1.1 Synchronize cloud configuration from Supabase into config manager
+    try {
+        await initCloudConfig();
+    } catch (err) {
+        console.warn("[CONFIG] Error initializing cloud config:", err.message);
     }
 
     // 2. Ensure frontend vendor libraries (marked, highlight, katex, lucide, etc.) are present

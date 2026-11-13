@@ -2,6 +2,7 @@ const { loadModelsConfig, getEnvKey, sendJSON } = require("../utils");
 const { resolveProvider } = require("../../providers");
 const { createAgentGraph } = require("../../core/agent_graph");
 const { getKoboldBaseUrl, getLocalSession } = require("./config");
+const { getConfig } = require("../../core/config_manager");
 
 async function handleChat(req, res) {
     try {
@@ -35,6 +36,12 @@ async function handleChat(req, res) {
 
         // For rolling providers (local / koboldcpp), inject the full session state
         const effectiveProviderConfig = { ...provider };
+        const appConfig = getConfig();
+        if (typeof data.temperature === "number") {
+            effectiveProviderConfig.temperature = data.temperature;
+        } else if (typeof appConfig.Agent?.Temperature === "number" && effectiveProviderConfig.temperature === undefined) {
+            effectiveProviderConfig.temperature = appConfig.Agent.Temperature;
+        }
         const isLocalProvider = providerKey === "local" || providerKey === "koboldcpp";
         if (isLocalProvider) {
             const localSession = getLocalSession();
