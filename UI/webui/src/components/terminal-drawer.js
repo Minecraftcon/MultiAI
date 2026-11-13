@@ -1,8 +1,14 @@
 /**
- * MultiAI Real Pseudo-Terminal (PTY) Drawer Component
- * ====================================================
+ * MultiAI Real Pseudo-Terminal (PTY) Drawer & Panel Component
+ * ============================================================
  * Provides full interactive PTY terminal emulation using xterm.js
  * over real-time WebSocket with HTTP SSE fallback.
+ * 
+ * Supports 4 Dock Positions:
+ * - Left (Default: starts as a left panel pushing chat to the right)
+ * - Right (settles on right pushing chat to the left)
+ * - Down / Bottom (settles at the bottom pushing chat up)
+ * - Up / Top (settles at the top pushing chat down)
  */
 
 class TerminalDrawerManager {
@@ -12,22 +18,29 @@ class TerminalDrawerManager {
         this.drawerEl = null;
         this.tabsEl = null;
         this.bodyEl = null;
+        this.dockPickerEl = null;
+        this.dockPopoverEl = null;
         this.sessions = [];
         this.activeSessionId = null;
         this.sessionCounter = 0;
-        this.height = 340;
+
+        // Dock position defaults to 'left' as requested
+        this.dockPosition = localStorage.getItem("multiai_term_dock_pos") || "left";
+        this.width = parseInt(localStorage.getItem("multiai_term_dock_width"), 10) || 440;
+        this.height = parseInt(localStorage.getItem("multiai_term_dock_height"), 10) || 340;
     }
 
     init() {
         if (this.drawerEl) return;
         this.renderDrawerDOM();
         this.bindGlobalEvents();
+        this.applyDockStyles();
     }
 
     renderDrawerDOM() {
         const drawer = document.createElement("div");
         drawer.id = "terminalDrawer";
-        drawer.className = "terminal-drawer";
+        drawer.className = `terminal-drawer dock-${this.dockPosition}`;
         drawer.innerHTML = `
             <div class="terminal-resizer" id="terminalResizer" title="Drag to resize terminal"></div>
             <div class="terminal-header">
@@ -42,6 +55,36 @@ class TerminalDrawerManager {
                     </button>
                 </div>
                 <div class="terminal-header-right">
+                    <!-- 4-Square Switcher Icon (2 on top, 2 on bottom) -->
+                    <div class="terminal-dock-picker" id="terminalDockPicker">
+                        <button type="button" class="terminal-action-btn" id="terminalDockBtn" title="Change Dock Position (Left, Right, Down, Up)" aria-label="Dock Position" aria-haspopup="true" aria-expanded="false">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="3" y="3" width="7" height="7" rx="1.5"></rect>
+                                <rect x="14" y="3" width="7" height="7" rx="1.5"></rect>
+                                <rect x="14" y="14" width="7" height="7" rx="1.5"></rect>
+                                <rect x="3" y="14" width="7" height="7" rx="1.5"></rect>
+                            </svg>
+                        </button>
+                        <div class="terminal-dock-popover" id="terminalDockPopover" role="menu" aria-label="Dock Position">
+                            <button type="button" class="dock-option-btn ${this.dockPosition === 'left' ? 'active' : ''}" data-dock="left" role="menuitem">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"></rect><rect x="3" y="3" width="7" height="18" rx="1" fill="currentColor" opacity="0.3"></rect></svg>
+                                <span>Left</span>
+                            </button>
+                            <button type="button" class="dock-option-btn ${this.dockPosition === 'right' ? 'active' : ''}" data-dock="right" role="menuitem">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"></rect><rect x="14" y="3" width="7" height="18" rx="1" fill="currentColor" opacity="0.3"></rect></svg>
+                                <span>Right</span>
+                            </button>
+                            <button type="button" class="dock-option-btn ${this.dockPosition === 'bottom' ? 'active' : ''}" data-dock="bottom" role="menuitem">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"></rect><rect x="3" y="14" width="18" height="7" rx="1" fill="currentColor" opacity="0.3"></rect></svg>
+                                <span>Down</span>
+                            </button>
+                            <button type="button" class="dock-option-btn ${this.dockPosition === 'top' ? 'active' : ''}" data-dock="top" role="menuitem">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"></rect><rect x="3" y="3" width="18" height="7" rx="1" fill="currentColor" opacity="0.3"></rect></svg>
+                                <span>Up</span>
+                            </button>
+                        </div>
+                    </div>
+
                     <button type="button" class="terminal-action-btn" id="terminalClearBtn" title="Clear Terminal (Ctrl+L)" aria-label="Clear">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path></svg>
                     </button>
@@ -60,27 +103,133 @@ class TerminalDrawerManager {
         this.drawerEl = drawer;
         this.tabsEl = drawer.querySelector("#terminalTabs");
         this.bodyEl = drawer.querySelector("#terminalBody");
+        this.dockPickerEl = drawer.querySelector("#terminalDockPicker");
+        this.dockPopoverEl = drawer.querySelector("#terminalDockPopover");
 
-        // Event listeners
+        // Action listeners
         drawer.querySelector("#terminalCloseBtn").addEventListener("click", () => this.close());
         drawer.querySelector("#terminalExpandBtn").addEventListener("click", () => this.toggleFullscreen());
         drawer.querySelector("#terminalClearBtn").addEventListener("click", () => this.clearActiveTerminal());
         drawer.querySelector("#terminalNewTabBtn").addEventListener("click", () => this.createSession());
 
+        // Dock picker dropdown listeners
+        const dockBtn = drawer.querySelector("#terminalDockBtn");
+        dockBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            this.toggleDockPopover();
+        });
+
+        this.dockPopoverEl.querySelectorAll(".dock-option-btn").forEach(btn => {
+            btn.addEventListener("click", (e) => {
+                const targetDock = btn.getAttribute("data-dock");
+                if (targetDock) {
+                    this.setDockPosition(targetDock);
+                    this.closeDockPopover();
+                }
+            });
+        });
+
+        document.addEventListener("click", (e) => {
+            if (this.dockPopoverEl && !this.dockPickerEl.contains(e.target)) {
+                this.closeDockPopover();
+            }
+        });
+
         this.initResizer(drawer.querySelector("#terminalResizer"));
+    }
+
+    toggleDockPopover() {
+        if (!this.dockPopoverEl) return;
+        const isOpen = this.dockPopoverEl.classList.contains("is-open");
+        if (isOpen) {
+            this.closeDockPopover();
+        } else {
+            this.dockPopoverEl.classList.add("is-open");
+            this.drawerEl.querySelector("#terminalDockBtn")?.setAttribute("aria-expanded", "true");
+        }
+    }
+
+    closeDockPopover() {
+        if (!this.dockPopoverEl) return;
+        this.dockPopoverEl.classList.remove("is-open");
+        this.drawerEl.querySelector("#terminalDockBtn")?.setAttribute("aria-expanded", "false");
+    }
+
+    setDockPosition(pos) {
+        if (!["left", "right", "bottom", "top"].includes(pos)) return;
+        this.dockPosition = pos;
+        localStorage.setItem("multiai_term_dock_pos", pos);
+
+        // Update drawer classes
+        this.drawerEl.classList.remove("dock-left", "dock-right", "dock-bottom", "dock-top");
+        this.drawerEl.classList.add(`dock-${pos}`);
+
+        // Update popover active buttons
+        this.dockPopoverEl?.querySelectorAll(".dock-option-btn").forEach(btn => {
+            btn.classList.toggle("active", btn.getAttribute("data-dock") === pos);
+        });
+
+        // Update body pushing classes if open
+        if (this.isOpen) {
+            document.body.classList.remove("term-open-left", "term-open-right", "term-open-bottom", "term-open-top");
+            document.body.classList.add(`term-open-${pos}`);
+        }
+
+        this.applyDockStyles();
+
+        setTimeout(() => {
+            this.fitActiveTerminal();
+            this.focusActiveTerminal();
+        }, 60);
+    }
+
+    applyDockStyles() {
+        if (!this.drawerEl) return;
+
+        document.documentElement.style.setProperty("--term-panel-width", `${this.width}px`);
+        document.documentElement.style.setProperty("--term-panel-height", `${this.height}px`);
+
+        if (this.dockPosition === "left" || this.dockPosition === "right") {
+            this.drawerEl.style.width = `${this.width}px`;
+            this.drawerEl.style.height = "100vh";
+        } else {
+            this.drawerEl.style.width = "100%";
+            this.drawerEl.style.height = `${this.height}px`;
+        }
     }
 
     initResizer(resizerEl) {
         let isResizing = false;
+        let startX = 0;
         let startY = 0;
+        let startW = 0;
         let startH = 0;
 
         const onMouseMove = (e) => {
             if (!isResizing) return;
-            const dy = startY - e.clientY;
-            const newH = Math.max(160, Math.min(window.innerHeight * 0.9, startH + dy));
-            this.height = newH;
-            this.drawerEl.style.height = `${newH}px`;
+
+            if (this.dockPosition === "left") {
+                const newW = Math.max(260, Math.min(window.innerWidth * 0.85, e.clientX));
+                this.width = newW;
+                document.documentElement.style.setProperty("--term-panel-width", `${newW}px`);
+                this.drawerEl.style.width = `${newW}px`;
+            } else if (this.dockPosition === "right") {
+                const newW = Math.max(260, Math.min(window.innerWidth * 0.85, window.innerWidth - e.clientX));
+                this.width = newW;
+                document.documentElement.style.setProperty("--term-panel-width", `${newW}px`);
+                this.drawerEl.style.width = `${newW}px`;
+            } else if (this.dockPosition === "bottom") {
+                const newH = Math.max(160, Math.min(window.innerHeight * 0.85, window.innerHeight - e.clientY));
+                this.height = newH;
+                document.documentElement.style.setProperty("--term-panel-height", `${newH}px`);
+                this.drawerEl.style.height = `${newH}px`;
+            } else if (this.dockPosition === "top") {
+                const newH = Math.max(160, Math.min(window.innerHeight * 0.85, e.clientY));
+                this.height = newH;
+                document.documentElement.style.setProperty("--term-panel-height", `${newH}px`);
+                this.drawerEl.style.height = `${newH}px`;
+            }
+
             this.fitActiveTerminal();
         };
 
@@ -90,12 +239,21 @@ class TerminalDrawerManager {
             resizerEl.classList.remove("resizing");
             document.removeEventListener("mousemove", onMouseMove);
             document.removeEventListener("mouseup", onMouseUp);
+
+            if (this.dockPosition === "left" || this.dockPosition === "right") {
+                localStorage.setItem("multiai_term_dock_width", String(this.width));
+            } else {
+                localStorage.setItem("multiai_term_dock_height", String(this.height));
+            }
+
             this.fitActiveTerminal();
         };
 
         resizerEl.addEventListener("mousedown", (e) => {
             isResizing = true;
+            startX = e.clientX;
             startY = e.clientY;
+            startW = this.drawerEl.getBoundingClientRect().width;
             startH = this.drawerEl.getBoundingClientRect().height;
             resizerEl.classList.add("resizing");
             document.addEventListener("mousemove", onMouseMove);
@@ -126,6 +284,10 @@ class TerminalDrawerManager {
         this.isOpen = true;
         this.drawerEl.classList.add("open");
 
+        // Push chat in the active dock direction
+        document.body.classList.remove("term-open-left", "term-open-right", "term-open-bottom", "term-open-top");
+        document.body.classList.add(`term-open-${this.dockPosition}`);
+
         // If no active session, spawn one
         if (this.sessions.length === 0) {
             this.createSession(options);
@@ -141,6 +303,7 @@ class TerminalDrawerManager {
         if (!this.drawerEl) return;
         this.isOpen = false;
         this.drawerEl.classList.remove("open");
+        document.body.classList.remove("term-open-left", "term-open-right", "term-open-bottom", "term-open-top");
     }
 
     toggle() {
@@ -155,7 +318,7 @@ class TerminalDrawerManager {
         this.isFullscreen = !this.isFullscreen;
         this.drawerEl.classList.toggle("fullscreen", this.isFullscreen);
         if (!this.isFullscreen) {
-            this.drawerEl.style.height = `${this.height}px`;
+            this.applyDockStyles();
         }
         setTimeout(() => this.fitActiveTerminal(), 50);
     }
@@ -543,4 +706,3 @@ export function closeTerminal() {
 export function toggleTerminal() {
     terminalDrawer.toggle();
 }
-
