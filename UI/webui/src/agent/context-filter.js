@@ -129,7 +129,15 @@ export class ContextFilterer {
         let result = text;
 
         for (const f of this.filters) {
-            if (f.scope !== "all" && f.scope !== role) continue;
+            // General scopes ("all", "user", "assistant", "tool") apply strictly to conversational text.
+            // Structured tool call arguments ("tool_call_args") are protected to prevent path corruption
+            // and are only filtered if a rule explicitly targets 'tool_call_args'.
+            if (role === "tool_call_args") {
+                if (f.scope !== "tool_call_args") continue;
+            } else if (f.scope !== "all" && f.scope !== role) {
+                continue;
+            }
+
             if (!f.compiledRegex) continue;
 
             // Reset regex lastIndex
@@ -169,13 +177,16 @@ export class ContextFilterer {
                 });
             }
 
-            // Sanitize tool call arguments if model generated them or if assistant message
+            // Protect tool call arguments from general conversational text filters.
+            // Tool call arguments are functional RPC instructions (paths, commands, code).
+            // Blindly applying text redaction corrupts file paths (e.g. src/providers -> sr[C-related]roviders)
+            // or breaks JSON syntax. Only filter if explicitly scoped to 'tool_call_args'.
             if (Array.isArray(copy.tool_calls)) {
                 copy.tool_calls = copy.tool_calls.map(tc => {
                     if (!tc || !tc.function) return tc;
                     let args = tc.function.arguments;
                     if (typeof args === "string") {
-                        args = this.filterText(args, role);
+                        args = this.filterText(args, "tool_call_args");
                     }
                     return {
                         ...tc,

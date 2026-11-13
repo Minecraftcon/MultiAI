@@ -51,7 +51,7 @@ assert.strictEqual(
 
 // 3. Builtin Presets
 console.log("Test: Built-in presets (API Keys & Local Paths)");
-const presetFilter = new ContextFilterer(DEFAULT_FILTERS);
+const presetFilter = new ContextFilterer(DEFAULT_FILTERS.map(f => ({ ...f, enabled: true })));
 
 const sampleText = "Here is my secret sk-abcdef1234567890abcdef1234 and home directory is /home/johndoe/projects.";
 const scrubbed = presetFilter.filterText(sampleText);
@@ -77,28 +77,37 @@ assert.throws(() => {
 }, /Context Filter Blocked/);
 
 // 5. Message Structure Filtering
-console.log("Test: Message array structure filtering (content and tool calls)");
+console.log("Test: Message array structure filtering (content preserved vs tool calls protected)");
 const msgFilter = new ContextFilterer([
     {
         id: "m1",
         type: "keyword",
         pattern: "database_password_999",
         replacement: "[DB_PASSWORD]",
+        scope: "all",
+        enabled: true
+    },
+    {
+        id: "m2",
+        type: "keyword",
+        pattern: "cp",
+        replacement: "[C-related]",
+        scope: "all",
         enabled: true
     }
 ]);
 
 const rawMessages = [
-    { role: "user", content: "Connection string has database_password_999 inside." },
+    { role: "user", content: "Connection string has database_password_999 inside and mentions cp." },
     {
         role: "assistant",
-        content: null,
+        content: "Here is cp in assistant text",
         tool_calls: [
             {
                 id: "call_1",
                 function: {
-                    name: "run_command",
-                    arguments: '{"command":"psql database_password_999"}'
+                    name: "list_dir",
+                    arguments: '{"DirectoryPath":"src/providers/llm"}'
                 }
             }
         ]
@@ -106,8 +115,41 @@ const rawMessages = [
 ];
 
 const cleaned = msgFilter.filterMessages(rawMessages);
-assert.strictEqual(cleaned[0].content, "Connection string has [DB_PASSWORD] inside.");
-assert.strictEqual(cleaned[1].tool_calls[0].function.arguments, '{"command":"psql [DB_PASSWORD]"}');
+// User and assistant content are filtered
+assert.strictEqual(cleaned[0].content, "Connection string has [DB_PASSWORD] inside and mentions [C-related].");
+assert.strictEqual(cleaned[1].content, "Here is [C-related] in assistant text");
+// Tool call arguments are NOT corrupted by general filters (src/providers must stay intact!)
+assert.strictEqual(cleaned[1].tool_calls[0].function.arguments, '{"DirectoryPath":"src/providers/llm"}');
+
+// 5b. Explicit tool_call_args scoping
+const explicitToolFilter = new ContextFilterer([
+    {
+        id: "t1",
+        type: "keyword",
+        pattern: "secret_token_123",
+        replacement: "[SECRET]",
+        scope: "tool_call_args",
+        enabled: true
+    }
+]);
+const explicitCleaned = explicitToolFilter.filterMessages([
+    {
+        role: "assistant",
+        content: "secret_token_123",
+        tool_calls: [
+            {
+                id: "call_2",
+                function: {
+                    name: "run_task",
+                    arguments: '{"command":"curl secret_token_123"}'
+                }
+            }
+        ]
+    }
+]);
+// Content untouched because filter was scoped strictly to tool_call_args
+assert.strictEqual(explicitCleaned[0].content, "secret_token_123");
+assert.strictEqual(explicitCleaned[0].tool_calls[0].function.arguments, '{"command":"curl [SECRET]"}');
 
 // 6. Scope scoping (user vs tool vs assistant)
 console.log("Test: Scope-restricted filtering");
