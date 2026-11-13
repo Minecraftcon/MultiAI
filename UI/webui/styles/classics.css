@@ -29,13 +29,58 @@
 /* Attach (+) Button */
 [data-ui-style="classics"] .attach-btn,
 .ui-style-classics .attach-btn {
+    width: 28px !important;
+    height: 28px !important;
     border-radius: 6px !important;
+}
+
+[data-ui-style="classics"] .attach-btn svg,
+.ui-style-classics .attach-btn svg {
+    width: 15px !important;
+    height: 15px !important;
+    stroke-width: 2.2 !important;
+}
+
+/* Chatbox Model Picker Button */
+[data-ui-style="classics"] .chatbox-model-btn,
+.ui-style-classics .chatbox-model-btn {
+    border-radius: 6px !important;
+    height: 28px !important;
+    padding: 0 10px !important;
+    font-size: 12px !important;
 }
 
 /* Send (Arrow) Button */
 [data-ui-style="classics"] .composer-send-btn,
 .ui-style-classics .composer-send-btn {
     border-radius: 6px !important;
+}
+
+/* Header & Footer Cleanup (model picker is now inside chatbox) */
+[data-ui-style="classics"] header .header-center,
+.ui-style-classics header .header-center {
+    opacity: 0;
+    pointer-events: none;
+}
+
+[data-ui-style="classics"] #startPageFooter,
+.ui-style-classics #startPageFooter {
+    display: none !important;
+}
+
+/* Rectangular Model Picker Dropdown */
+[data-ui-style="classics"] .model-picker-dropdown,
+.ui-style-classics .model-picker-dropdown {
+    border-radius: 8px !important;
+}
+
+[data-ui-style="classics"] .model-group-header,
+.ui-style-classics .model-group-header,
+[data-ui-style="classics"] .model-item,
+.ui-style-classics .model-item,
+[data-ui-style="classics"] .model-picker-search,
+.ui-style-classics .model-picker-search {
+    border-radius: 4px !important;
 }
 
 /* Clear / Discard Button */
@@ -81,3 +126,4 @@
         border-radius: 8px !important;
     }
 }
+

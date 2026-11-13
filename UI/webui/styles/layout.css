@@ -259,6 +259,17 @@ header::after {
     transform: translateX(-50%) translateY(0) scale(1);
 }
 
+/* Bottom-docked when opened from chatbox */
+.model-picker-dropdown.docked-bottom {
+    top: auto;
+    bottom: calc(var(--composer-height, 90px) + 20px + env(safe-area-inset-bottom, 0px));
+    transform: translateX(-50%) translateY(8px) scale(0.97);
+}
+
+.model-picker-dropdown.docked-bottom.is-open {
+    transform: translateX(-50%) translateY(0) scale(1);
+}
+
 .model-picker-header {
     padding: 10px 10px 8px;
     border-bottom: 1px solid var(--border);
