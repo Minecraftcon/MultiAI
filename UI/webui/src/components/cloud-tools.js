@@ -101,8 +101,19 @@ export async function setupWorkdirSelector() {
     btn.addEventListener("click", (e) => {
         e.stopPropagation();
         const isOpen = dropdown.style.display === "block";
-        dropdown.style.display = isOpen ? "none" : "block";
-        if (!isOpen) {
+        if (isOpen) {
+            dropdown.style.display = "none";
+        } else {
+            const rect = btn.getBoundingClientRect();
+            const spaceBelow = window.innerHeight - rect.bottom;
+            if (spaceBelow < 220 && rect.top > 220) {
+                dropdown.style.top = "auto";
+                dropdown.style.bottom = "calc(100% + 8px)";
+            } else {
+                dropdown.style.top = "calc(100% + 8px)";
+                dropdown.style.bottom = "auto";
+            }
+            dropdown.style.display = "block";
             fetchWorkspaces();
         }
     });

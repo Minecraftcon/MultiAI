@@ -150,6 +150,8 @@
 }
 
 #appShell.is-start-page .start-page-footer {
+    position: relative;
+    z-index: 100;
     display: flex !important;
     flex-wrap: wrap;
     align-items: center;
@@ -226,6 +228,7 @@
    ========================================================= */
 .hero-workdir-picker-wrap {
     position: relative;
+    z-index: 101;
     display: inline-flex;
     margin-left: 0;
     max-width: 100%;
@@ -287,17 +290,20 @@
 
 .hero-workdir-dropdown {
     position: absolute;
-    bottom: calc(100% + 8px);
+    top: calc(100% + 8px);
+    bottom: auto;
     left: 0;
     min-width: 260px;
     max-width: min(360px, calc(100vw - 24px));
+    max-height: 280px;
+    overflow-y: auto;
     box-sizing: border-box;
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 12px;
     box-shadow: 0 16px 36px rgba(0, 0, 0, 0.6);
     padding: 6px;
-    z-index: 100;
+    z-index: 1000;
     pointer-events: auto;
 }
 
