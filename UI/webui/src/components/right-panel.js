@@ -359,6 +359,9 @@ class RightPanelManager {
         }
 
         this.isOpen = true;
+        if (this.panelEl) {
+            this.panelEl.classList.add("animate-transition");
+        }
         document.body.classList.add("right-panel-open");
         if (this.backdropEl) {
             this.backdropEl.setAttribute("aria-hidden", "false");
@@ -376,6 +379,9 @@ class RightPanelManager {
 
     close() {
         this.isOpen = false;
+        if (this.panelEl) {
+            this.panelEl.classList.add("animate-transition");
+        }
         document.body.classList.remove("right-panel-open");
         if (this.backdropEl) {
             this.backdropEl.setAttribute("aria-hidden", "true");
