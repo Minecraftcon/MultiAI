@@ -22,6 +22,7 @@ const { handleBuildProjectsRoute, handleValidateDirRoute } = require("./routes/b
 const { handleBuildAgentRoute } = require("./routes/build_agent");
 const { handleMcpRoute } = require("./routes/mcp");
 const { handleHistoryRoute } = require("./routes/history");
+const { handleSkillsRoute } = require("./routes/skills");
 const { sendJSON } = require("./utils");
 
 async function routeRequest(req, res) {
@@ -137,6 +138,11 @@ async function routeRequest(req, res) {
         // MCP (Model Context Protocol) Endpoints
         if (reqUrl.startsWith("/api/mcp")) {
             return handleMcpRoute(req, res);
+        }
+
+        // Skills Catalog & Content
+        if (reqUrl.startsWith("/api/skills")) {
+            return handleSkillsRoute(req, res);
         }
 
         // Static assets

@@ -25,11 +25,12 @@ class TerminalDrawerManager {
         this.sessionCounter = 0;
 
         // Dock position defaults to 'left' as requested
-        this.dockPosition = localStorage.getItem("multiai_term_dock_pos") || "left";
-        const savedW = parseInt(localStorage.getItem("multiai_term_dock_width"), 10);
-        this.width = (savedW && savedW <= 520 && savedW >= 260) ? savedW : 360;
-        const savedH = parseInt(localStorage.getItem("multiai_term_dock_height"), 10);
-        this.height = (savedH && savedH <= 500 && savedH >= 180) ? savedH : 320;
+        const getStorage = (key) => (typeof localStorage !== "undefined" ? localStorage.getItem(key) : null);
+        this.dockPosition = getStorage("multiai_term_dock_pos") || "left";
+        const savedW = parseInt(getStorage("multiai_term_dock_width"), 10);
+        this.width = (savedW && savedW <= 2000 && savedW >= 160) ? savedW : 360;
+        const savedH = parseInt(getStorage("multiai_term_dock_height"), 10);
+        this.height = (savedH && savedH <= 1500 && savedH >= 120) ? savedH : 320;
     }
 
     init() {
@@ -37,6 +38,13 @@ class TerminalDrawerManager {
         this.renderDrawerDOM();
         this.bindGlobalEvents();
         this.applyDockStyles();
+
+        const headerPill = document.getElementById("headerTerminalPill");
+        if (headerPill) {
+            headerPill.addEventListener("click", () => {
+                this.open();
+            });
+        }
     }
 
     renderDrawerDOM() {
@@ -47,6 +55,10 @@ class TerminalDrawerManager {
             <div class="terminal-resizer" id="terminalResizer" title="Drag to resize terminal"></div>
             <div class="terminal-header">
                 <div class="terminal-header-left">
+                    <button type="button" class="terminal-chat-switch-btn" id="terminalChatSwitchBtn" title="Switch back to Chat (Session preserved in background)" aria-label="Switch to Chat">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 12px; height: 12px;"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                        <span>Chat</span>
+                    </button>
                     <div class="terminal-title-badge">
                         <span class="terminal-status-dot" id="terminalStatusDot" title="Terminal Connected"></span>
                         <span>Terminal</span>
@@ -109,6 +121,7 @@ class TerminalDrawerManager {
         this.dockPopoverEl = drawer.querySelector("#terminalDockPopover");
 
         // Action listeners
+        drawer.querySelector("#terminalChatSwitchBtn")?.addEventListener("click", () => this.close());
         drawer.querySelector("#terminalCloseBtn").addEventListener("click", () => this.close());
         drawer.querySelector("#terminalExpandBtn").addEventListener("click", () => this.toggleFullscreen());
         drawer.querySelector("#terminalClearBtn").addEventListener("click", () => this.clearActiveTerminal());
@@ -136,6 +149,15 @@ class TerminalDrawerManager {
                 this.closeDockPopover();
             }
         });
+
+        // Header Terminal persistence pill in Chat view
+        const headerPill = document.getElementById("headerTerminalPill");
+        if (headerPill && !headerPill.dataset.bound) {
+            headerPill.dataset.bound = "true";
+            headerPill.addEventListener("click", () => {
+                this.open();
+            });
+        }
 
         this.initResizer(drawer.querySelector("#terminalResizer"));
     }
@@ -202,35 +224,35 @@ class TerminalDrawerManager {
 
     initResizer(resizerEl) {
         let isResizing = false;
-        let startX = 0;
-        let startY = 0;
-        let startW = 0;
-        let startH = 0;
 
         const onMouseMove = (e) => {
             if (!isResizing) return;
 
             if (this.dockPosition === "left") {
-                const maxAllowedW = Math.max(300, Math.min(window.innerWidth * 0.45, 520));
-                const newW = Math.max(260, Math.min(maxAllowedW, e.clientX));
+                const minAllowedW = 160;
+                const maxAllowedW = Math.max(minAllowedW, window.innerWidth - 220);
+                const newW = Math.max(minAllowedW, Math.min(maxAllowedW, e.clientX));
                 this.width = newW;
                 document.documentElement.style.setProperty("--term-panel-width", `${newW}px`);
                 this.drawerEl.style.width = `${newW}px`;
             } else if (this.dockPosition === "right") {
-                const maxAllowedW = Math.max(300, Math.min(window.innerWidth * 0.45, 520));
-                const newW = Math.max(260, Math.min(maxAllowedW, window.innerWidth - e.clientX));
+                const minAllowedW = 160;
+                const maxAllowedW = Math.max(minAllowedW, window.innerWidth - 220);
+                const newW = Math.max(minAllowedW, Math.min(maxAllowedW, window.innerWidth - e.clientX));
                 this.width = newW;
                 document.documentElement.style.setProperty("--term-panel-width", `${newW}px`);
                 this.drawerEl.style.width = `${newW}px`;
             } else if (this.dockPosition === "bottom") {
-                const maxAllowedH = Math.max(200, Math.min(window.innerHeight * 0.65, 600));
-                const newH = Math.max(160, Math.min(maxAllowedH, window.innerHeight - e.clientY));
+                const minAllowedH = 120;
+                const maxAllowedH = Math.max(minAllowedH, window.innerHeight - 100);
+                const newH = Math.max(minAllowedH, Math.min(maxAllowedH, window.innerHeight - e.clientY));
                 this.height = newH;
                 document.documentElement.style.setProperty("--term-panel-height", `${newH}px`);
                 this.drawerEl.style.height = `${newH}px`;
             } else if (this.dockPosition === "top") {
-                const maxAllowedH = Math.max(200, Math.min(window.innerHeight * 0.65, 600));
-                const newH = Math.max(160, Math.min(maxAllowedH, e.clientY));
+                const minAllowedH = 120;
+                const maxAllowedH = Math.max(minAllowedH, window.innerHeight - 100);
+                const newH = Math.max(minAllowedH, Math.min(maxAllowedH, e.clientY));
                 this.height = newH;
                 document.documentElement.style.setProperty("--term-panel-height", `${newH}px`);
                 this.drawerEl.style.height = `${newH}px`;
@@ -243,6 +265,11 @@ class TerminalDrawerManager {
             if (!isResizing) return;
             isResizing = false;
             resizerEl.classList.remove("resizing");
+            document.body.style.cursor = "";
+            document.body.style.userSelect = "";
+            const contentEl = this.drawerEl.querySelector(".terminal-content");
+            if (contentEl) contentEl.style.pointerEvents = "";
+
             document.removeEventListener("mousemove", onMouseMove);
             document.removeEventListener("mouseup", onMouseUp);
 
@@ -257,11 +284,12 @@ class TerminalDrawerManager {
 
         resizerEl.addEventListener("mousedown", (e) => {
             isResizing = true;
-            startX = e.clientX;
-            startY = e.clientY;
-            startW = this.drawerEl.getBoundingClientRect().width;
-            startH = this.drawerEl.getBoundingClientRect().height;
             resizerEl.classList.add("resizing");
+            document.body.style.cursor = (this.dockPosition === "left" || this.dockPosition === "right") ? "col-resize" : "row-resize";
+            document.body.style.userSelect = "none";
+            const contentEl = this.drawerEl.querySelector(".terminal-content");
+            if (contentEl) contentEl.style.pointerEvents = "none";
+
             document.addEventListener("mousemove", onMouseMove);
             document.addEventListener("mouseup", onMouseUp);
             e.preventDefault();
@@ -280,6 +308,12 @@ class TerminalDrawerManager {
         // Window resize refits terminal
         window.addEventListener("resize", () => {
             if (this.isOpen) {
+                const isMobile = window.innerWidth <= 768 || document.documentElement.classList.contains("is-android");
+                if (isMobile) {
+                    this.isFullscreen = true;
+                    this.drawerEl.classList.add("fullscreen");
+                    document.body.classList.remove("term-open-left", "term-open-right", "term-open-bottom", "term-open-top");
+                }
                 this.fitActiveTerminal();
             }
         });
@@ -290,9 +324,22 @@ class TerminalDrawerManager {
         this.isOpen = true;
         this.drawerEl.classList.add("open");
 
-        // Push chat in the active dock direction
-        document.body.classList.remove("term-open-left", "term-open-right", "term-open-bottom", "term-open-top");
-        document.body.classList.add(`term-open-${this.dockPosition}`);
+        const isMobile = window.innerWidth <= 768 || document.documentElement.classList.contains("is-android");
+        if (isMobile) {
+            this.isFullscreen = true;
+            this.drawerEl.classList.add("fullscreen");
+            document.body.classList.remove("term-open-left", "term-open-right", "term-open-bottom", "term-open-top");
+        } else {
+            this.drawerEl.classList.toggle("fullscreen", !!this.isFullscreen);
+            if (!this.isFullscreen) {
+                document.body.classList.remove("term-open-left", "term-open-right", "term-open-bottom", "term-open-top");
+                document.body.classList.add(`term-open-${this.dockPosition}`);
+            } else {
+                document.body.classList.remove("term-open-left", "term-open-right", "term-open-bottom", "term-open-top");
+            }
+        }
+
+        this.updatePersistenceIndicators();
 
         // If no active session, spawn one
         if (this.sessions.length === 0) {
@@ -310,6 +357,7 @@ class TerminalDrawerManager {
         this.isOpen = false;
         this.drawerEl.classList.remove("open");
         document.body.classList.remove("term-open-left", "term-open-right", "term-open-bottom", "term-open-top");
+        this.updatePersistenceIndicators();
     }
 
     toggle() {
@@ -323,8 +371,16 @@ class TerminalDrawerManager {
     toggleFullscreen() {
         this.isFullscreen = !this.isFullscreen;
         this.drawerEl.classList.toggle("fullscreen", this.isFullscreen);
-        if (!this.isFullscreen) {
-            this.applyDockStyles();
+        if (this.isFullscreen) {
+            document.body.classList.remove("term-open-left", "term-open-right", "term-open-bottom", "term-open-top");
+        } else {
+            const isMobile = window.innerWidth <= 768 || document.documentElement.classList.contains("is-android");
+            if (!isMobile) {
+                this.applyDockStyles();
+                if (this.isOpen) {
+                    document.body.classList.add(`term-open-${this.dockPosition}`);
+                }
+            }
         }
         setTimeout(() => this.fitActiveTerminal(), 50);
     }
@@ -357,6 +413,7 @@ class TerminalDrawerManager {
         this.sessions.push(session);
         this.renderTabs();
         this.switchSession(sessionId);
+        this.updatePersistenceIndicators();
 
         // Initialize xterm instance
         this.setupXterm(session, options);
@@ -492,6 +549,20 @@ class TerminalDrawerManager {
                         session.term.write(`\r\n\x1b[33m[Process exited with code ${msg.exit_code}]\x1b[0m\r\n`);
                     } else if (msg.type === "error") {
                         session.term.write(`\r\n\x1b[31m[PTY Error: ${msg.error}]\x1b[0m\r\n`);
+                        if (msg.error && (msg.error.includes("ENOENT") || msg.error.includes("ECONNREFUSED") || msg.error.includes("daemon"))) {
+                            session.term.write(`\x1b[33m[PTY] Auto-reconnecting to task daemon...\x1b[0m\r\n`);
+                            setTimeout(() => {
+                                if (session.ws && session.ws.readyState === WebSocket.OPEN) {
+                                    session.ws.send(JSON.stringify({
+                                        action: "spawn",
+                                        shell: options.shell || "bash",
+                                        cwd: options.cwd || "",
+                                        cols: session.term?.cols || 80,
+                                        rows: session.term?.rows || 24
+                                    }));
+                                }
+                            }, 1000);
+                        }
                     }
                 } catch (_) {
                     session.term.write(event.data);
@@ -643,12 +714,34 @@ class TerminalDrawerManager {
         }
 
         this.sessions.splice(idx, 1);
+        this.updatePersistenceIndicators();
 
         if (this.sessions.length > 0) {
             const nextActive = this.sessions[Math.max(0, idx - 1)];
             this.switchSession(nextActive.id);
         } else {
             this.close();
+        }
+    }
+
+    updatePersistenceIndicators() {
+        const count = this.sessions.length;
+        const panelBtn = document.getElementById("panelTerminalBtn");
+        if (panelBtn) {
+            panelBtn.classList.toggle("has-active-session", count > 0);
+        }
+
+        const headerPill = document.getElementById("headerTerminalPill");
+        if (headerPill) {
+            if (count > 0 && !this.isOpen) {
+                headerPill.style.display = "inline-flex";
+                const labelSpan = headerPill.querySelector("span:not(.terminal-pulsing-dot)");
+                if (labelSpan) {
+                    labelSpan.textContent = count > 1 ? `Terminal (${count})` : "Terminal";
+                }
+            } else {
+                headerPill.style.display = "none";
+            }
         }
     }
 

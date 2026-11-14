@@ -17,6 +17,7 @@ import { initErrorRecovery } from "./components/error-recovery.js";
 import { initModelPicker } from "./components/model-picker.js";
 import { initSettingsView, applyTheme, applyUIStyle } from "./components/settings-view.js";
 import { initPlanDock } from "./components/chat-plan-dock.js";
+import { initSkillsMenu } from "./components/skills-menu.js";
 
 import { renderIcons } from "./utils/dom.js";
 import { setStartPageMode } from "./components/chatbox.js";
@@ -108,6 +109,7 @@ async function bootstrap() {
     initErrorRecovery();
     initModelPicker();
     initPlanDock();
+    initSkillsMenu();
     initTerminalDrawer();
 
     await initConfig();

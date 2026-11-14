@@ -437,13 +437,15 @@ export function initSidePanel() {
         syncActiveModeConversation(mode);
     });
 
-    // Scroll gradient listener on panel body
+    // Scroll gradient listener on panel body and sidePanel
     const panelBody = sidePanel?.querySelector(".panel-body");
-    if (panelBody) {
+    if (panelBody && sidePanel) {
         const updateScrollState = () => {
-            panelBody.classList.toggle("scrolled-top", panelBody.scrollTop > 2);
+            const isScrolled = (panelBody.scrollTop > 2) || (sidePanel.scrollTop > 2);
+            panelBody.classList.toggle("scrolled-top", isScrolled);
         };
         panelBody.addEventListener("scroll", updateScrollState, { passive: true });
+        sidePanel.addEventListener("scroll", updateScrollState, { passive: true });
         updateScrollState();
     }
 

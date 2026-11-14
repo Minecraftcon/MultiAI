@@ -10,6 +10,25 @@
 .ui-style-classics .composer-dock {
     border-radius: 8px !important;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 0 0 1px var(--border) !important;
+    padding: 6px 10px !important;
+}
+
+[data-ui-style="classics"] .composer-toolbar,
+.ui-style-classics .composer-toolbar {
+    margin-top: 4px !important;
+}
+
+[data-ui-style="classics"] .composer-textarea,
+.ui-style-classics .composer-textarea {
+    min-height: 22px !important;
+    line-height: 22px !important;
+}
+
+[data-ui-style="classics"] .composer-top-resizer:hover::after,
+[data-ui-style="classics"] .composer-top-resizer.is-resizing::after,
+.ui-style-classics .composer-top-resizer:hover::after,
+.ui-style-classics .composer-top-resizer.is-resizing::after {
+    background: var(--border-strong, rgba(255, 255, 255, 0.4)) !important;
 }
 
 /* Start page composer dock */

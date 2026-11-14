@@ -1,0 +1,245 @@
+/* =========================================================
+   SKILLS POPUP MENU & PILL (MINIMALIST & EDITORIAL)
+   Mounts over composer in #inputArea, directly above #chatboxDock.
+   ========================================================= */
+
+.skills-menu-container {
+    width: min(900px, 100%);
+    margin: 0 auto 6px auto;
+    background: var(--surface-2, #18181b);
+    border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+    border-radius: 8px;
+    box-shadow: 0 10px 32px rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    z-index: 60;
+    will-change: transform, opacity;
+    animation: skillsMenuEnter 0.18s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes skillsMenuEnter {
+    from {
+        opacity: 0;
+        transform: translateY(6px) scale(0.99);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.skills-menu-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 7px 12px;
+    background: var(--hover, rgba(255, 255, 255, 0.03));
+    border-bottom: 1px solid var(--border, rgba(255, 255, 255, 0.06));
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-tertiary, #a1a1aa);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.skills-menu-header-left {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-primary, #f4f4f5);
+}
+
+.skills-menu-header-left svg {
+    width: 13px;
+    height: 13px;
+}
+
+.skills-menu-header-right {
+    font-size: 10.5px;
+    font-weight: 400;
+    color: var(--text-tertiary, #71717a);
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+.skills-menu-list {
+    max-height: 240px;
+    overflow-y: auto;
+    padding: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    overscroll-behavior-y: contain;
+}
+
+.skills-menu-list::-webkit-scrollbar {
+    width: 5px;
+}
+
+.skills-menu-list::-webkit-scrollbar-thumb {
+    background: var(--surface-3, #3f3f46);
+    border-radius: 6px;
+}
+
+.skills-menu-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 7px 10px;
+    border-radius: 6px;
+    background: transparent;
+    border: 1px solid transparent;
+    cursor: pointer;
+    font-family: inherit;
+    text-align: left;
+    transition: background 0.12s ease, border-color 0.12s ease;
+    user-select: none;
+}
+
+.skills-menu-item:hover,
+.skills-menu-item.is-selected {
+    background: var(--hover-2, rgba(255, 255, 255, 0.08));
+    border-color: var(--border, rgba(255, 255, 255, 0.1));
+}
+
+.skills-menu-item-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.skills-menu-item-name {
+    font-family: var(--font-mono, 'JetBrains Mono', monospace);
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text-primary, #f4f4f5);
+}
+
+.skills-menu-item-badge {
+    font-size: 9.5px;
+    font-weight: 500;
+    padding: 1px 5px;
+    border-radius: 4px;
+    background: var(--hover-3, rgba(255, 255, 255, 0.06));
+    border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+    color: var(--text-tertiary, #a1a1aa);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    flex-shrink: 0;
+}
+
+.skills-menu-item-desc {
+    font-size: 11.5px;
+    color: var(--text-secondary, #a1a1aa);
+    line-height: 1.35;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.skills-menu-empty {
+    padding: 20px 12px;
+    text-align: center;
+    font-size: 12px;
+    color: var(--text-tertiary, #71717a);
+}
+
+/* User Message Skill Badge & On-Text Skill Tag */
+.user-skill-badges {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 6px;
+}
+
+.user-skill-badge,
+.on-text-skill-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-size: 11.5px;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 500;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--text-primary, #f4f4f5);
+    user-select: none;
+    line-height: 1.4;
+}
+
+.on-text-skill-prefix {
+    color: #60a5fa;
+    font-weight: 700;
+    font-size: 11px;
+}
+
+.user-skill-badge svg,
+.on-text-skill-tag svg {
+    width: 12px;
+    height: 12px;
+    color: #34d399;
+}
+
+.on-text-skill-name {
+    color: var(--text-primary, #ffffff);
+    font-weight: 600;
+}
+
+/* Minimalist Inline Skill Highlight on Chat */
+.skill-highlight {
+    display: inline-flex;
+    align-items: center;
+    gap: 1px;
+    padding: 1px 5px;
+    margin: 0 2px;
+    border-radius: 4px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.9em;
+    font-weight: 550;
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #e4e4e7;
+    vertical-align: baseline;
+    user-select: all;
+    line-height: 1.35;
+    transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.skill-highlight:hover {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.22);
+}
+
+.skill-highlight-prefix {
+    color: #38bdf8;
+    font-weight: 700;
+    margin-right: 2px;
+}
+
+/* ── Classics Theme Overrides ── */
+[data-ui-style="classics"] .skills-menu-container,
+.ui-style-classics .skills-menu-container {
+    border-radius: 8px !important;
+    border-color: var(--border) !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35), 0 0 0 1px var(--border) !important;
+}
+
+[data-ui-style="classics"] .skills-menu-item,
+.ui-style-classics .skills-menu-item {
+    border-radius: 4px !important;
+}
+
+[data-ui-style="classics"] .skills-menu-item-badge,
+.ui-style-classics .skills-menu-item-badge {
+    border-radius: 3px !important;
+}
+

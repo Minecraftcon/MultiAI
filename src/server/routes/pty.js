@@ -1,12 +1,42 @@
 const http = require("http");
+const fs = require("fs");
 const { WebSocketServer } = require("ws");
 const { sendJSON, getChatWorkspace, getChatScratchDir, getChatArtifactsDir } = require("../utils");
-const { getTaskServerTarget } = require("../../core/sandbox_manager");
+const { getTaskServerTarget, getTaskServerSocketPath, getTaskServerIpcType } = require("../../core/sandbox_manager");
+
+let isRecoveringDaemon = false;
+
+async function ensureTaskDaemonReady() {
+    const ipcType = getTaskServerIpcType();
+    if (ipcType === "socket" && process.platform !== "win32") {
+        const sockPath = getTaskServerSocketPath();
+        if (!fs.existsSync(sockPath) && !isRecoveringDaemon) {
+            isRecoveringDaemon = true;
+            try {
+                console.log(`[PTY] Task daemon socket missing at ${sockPath}. Triggering daemon restart...`);
+                const { restartTaskServer } = require("../supervisor");
+                restartTaskServer();
+            } catch (err) {
+                console.error("[PTY] Failed to restart task server:", err);
+            }
+
+            for (let i = 0; i < 25; i++) {
+                await new Promise(r => setTimeout(r, 100));
+                if (fs.existsSync(sockPath)) {
+                    console.log(`[PTY] Task daemon socket restored at ${sockPath}`);
+                    break;
+                }
+            }
+            isRecoveringDaemon = false;
+        }
+    }
+}
 
 /**
  * Handles HTTP requests for /api/pty/* by proxying to the supervised task daemon.
  */
 async function handlePtyRoute(req, res) {
+    await ensureTaskDaemonReady();
     let reqBody = "";
     try {
         for await (const chunk of req) reqBody += chunk;
@@ -96,7 +126,8 @@ async function handlePtyRoute(req, res) {
 /**
  * Dispatches an HTTP request to the task daemon (supports Unix socket or HTTP).
  */
-function requestDaemon(path, method = "GET", body = null) {
+async function requestDaemon(path, method = "GET", body = null) {
+    await ensureTaskDaemonReady();
     return new Promise((resolve, reject) => {
         const target = getTaskServerTarget();
         const payload = body ? (typeof body === "string" ? body : JSON.stringify(body)) : null;
@@ -150,7 +181,8 @@ function initPtyWebSocket(server) {
         let activePtyId = queryPtyId || "";
         let streamReq = null;
 
-        const attachStream = (ptyId) => {
+        const attachStream = async (ptyId) => {
+            await ensureTaskDaemonReady();
             if (streamReq) {
                 try { streamReq.destroy(); } catch (_) {}
             }

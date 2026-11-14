@@ -53,11 +53,11 @@ replace_file_content / write_file                  Over Chatbox Composer
   - `POST /api/history/revert`
   - `GET /api/history/diff`
   - `GET /api/history/timeline`
-- **Dual-Dock Frontend**: [`client/src/components/chat-plan-dock.js`](file:///home/shado/Documents/Web-projects/MultiAI/client/src/components/chat-plan-dock.js) & [`client/styles/plan-dock.css`](file:///home/shado/Documents/Web-projects/MultiAI/client/styles/plan-dock.css)
+- **Dual-Dock Frontend**: [`UI/webui/src/components/chat-plan-dock.js`](file:///home/shado/Documents/Web-projects/MultiAI/UI/webui/src/components/chat-plan-dock.js) & [`UI/webui/styles/plan-dock.css`](file:///home/shado/Documents/Web-projects/MultiAI/UI/webui/styles/plan-dock.css)
   - **Zero-Background Floating Icons (Idle)**: Clean, transparent icons floating directly over the composer (`[📄]` file changes, `[📋]` active plan).
   - **Stacked Layout on Open**:
     - **Top (Has BG)**:
-      - *Changes View*: Sleek dark container (`#18181b`, rounded border) displaying each modified file with status icon `[⊡]`, diff stats (`+32 -59`), basename (`chat-plan-dock.js`), and relative directory path (`client/src/components/chat-plan-dock.js`).
+      - *Changes View*: Sleek dark container (`#18181b`, rounded border) displaying each modified file with status icon `[⊡]`, diff stats (`+32 -59`), basename (`chat-plan-dock.js`), and relative directory path (`UI/webui/src/components/chat-plan-dock.js`).
       - *Planning View*: Sleek dark container (`#18181b`, rounded border) displaying the active checklist (`[✓]`, `[◌]`, `[spinner]`).
     - **Bottom (No BG / Transparent)**: The navigation bar sitting flush above composer:
       - *Changes Bar*: `← 📄 {N} Files With Changes                                Reject all [Accept all]`
@@ -173,7 +173,7 @@ Modern reasoning models (DeepSeek-R1, OpenAI o1/o3/o4-mini, Claude 3.7 Sonnet Ex
    - `event: done` -> Final message, duration, token usage
 
 2. **Frontend Dual-Buffer Engine**:
-   - [`client/src/components/chat-ui.js`](file:///home/shado/Documents/Web-projects/MultiAI/client/src/components/chat-ui.js) maintains two distinct in-memory buffers: `thoughtBuffer` and `contentBuffer`.
+   - [`UI/webui/src/components/chat-ui.js`](file:///home/shado/Documents/Web-projects/MultiAI/UI/webui/src/components/chat-ui.js) maintains two distinct in-memory buffers: `thoughtBuffer` and `contentBuffer`.
    - `thoughtBuffer` streams directly into `.thought-box .thought-content` with a live stopwatch (`Thinking... 12s`).
    - When the first `event: text` arrives, `.thought-box` collapses (or marks duration: `Thought for 12.4s`) and `contentBuffer` streams into `.final-content`.
 
@@ -193,7 +193,7 @@ The DeepSearch subsystem remains fully intact across the codebase. The composer 
 
 ### Quick Restoration Guide
 To re-enable the DeepSearch card in the `+` menu:
-1. Open [`client/index.html`](file:///home/shado/Documents/Web-projects/MultiAI/client/index.html).
+1. Open [`UI/webui/index.html`](file:///home/shado/Documents/Web-projects/MultiAI/UI/webui/index.html).
 2. Inside `<div class="sheet-actions-grid">` (after `pickDocBtn`), insert:
    ```html
    <button id="pickDeepSearchBtn" type="button" class="sheet-action-card">
@@ -209,13 +209,13 @@ To re-enable the DeepSearch card in the `+` menu:
        </div>
    </button>
    ```
-3. [`client/src/components/bottom-sheet.js`](file:///home/shado/Documents/Web-projects/MultiAI/client/src/components/bottom-sheet.js) automatically binds to `#pickDeepSearchBtn` on load. No JS changes are needed.
+3. [`UI/webui/src/components/bottom-sheet.js`](file:///home/shado/Documents/Web-projects/MultiAI/UI/webui/src/components/bottom-sheet.js) automatically binds to `#pickDeepSearchBtn` on load. No JS changes are needed.
 
 ### DeepSearch Architecture & File Map
 - **Route Handler**: [`src/server/routes/deepsearch.js`](file:///home/shado/Documents/Web-projects/MultiAI/src/server/routes/deepsearch.js) (`/api/deepsearch/*`)
 - **Research Graph**: [`src/services/deepsearch/graph.js`](file:///home/shado/Documents/Web-projects/MultiAI/src/services/deepsearch/graph.js) (Planner -> Researcher -> Synthesizer)
 - **Lifecycle Manager**: [`src/services/deepsearch/manager.js`](file:///home/shado/Documents/Web-projects/MultiAI/src/services/deepsearch/manager.js)
 - **Search Engines**: [`src/services/deepsearch/engines/`](file:///home/shado/Documents/Web-projects/MultiAI/src/services/deepsearch/engines/) (DuckDuckGo, Google, Google Grounding, Fetch Page)
-- **UI Progress Bar**: [`client/src/components/deepsearch-bar.js`](file:///home/shado/Documents/Web-projects/MultiAI/client/src/components/deepsearch-bar.js)
-- **Stepper Renderer**: [`client/src/components/renderer.js`](file:///home/shado/Documents/Web-projects/MultiAI/client/src/components/renderer.js) (`renderDeepSearchStepper`)
+- **UI Progress Bar**: [`UI/webui/src/components/deepsearch-bar.js`](file:///home/shado/Documents/Web-projects/MultiAI/UI/webui/src/components/deepsearch-bar.js)
+- **Stepper Renderer**: [`UI/webui/src/components/renderer.js`](file:///home/shado/Documents/Web-projects/MultiAI/UI/webui/src/components/renderer.js) (`renderDeepSearchStepper`)
 - **Tests**: [`tests/test_live_deepsearch.js`](file:///home/shado/Documents/Web-projects/MultiAI/tests/test_live_deepsearch.js), [`tests/test_deepsearch_isolated_tools.js`](file:///home/shado/Documents/Web-projects/MultiAI/tests/test_deepsearch_isolated_tools.js)

@@ -15,6 +15,13 @@ import { showErrorRecoveryPopup } from "./error-recovery.js";
 import { escapeHTML } from "../utils/dom.js";
 import { chatbox, setStartPageMode } from "./chatbox.js";
 import { updateModelPickerDisplay } from "./model-picker.js";
+import { 
+    getActiveSkills, 
+    clearActiveSkills, 
+    parseOnTextSkills, 
+    formatMessageWithSkillHighlights, 
+    buildSkillsSystemPrompt 
+} from "./skills-menu.js";
 import {
     stagedAttachments,
     isImageFile,
@@ -83,9 +90,9 @@ export async function send() {
     const chat = document.getElementById("chat");
     if (!input || !chat) return;
 
-    const text = input.value.trim();
+    const rawText = input.value.trim();
     const hasAttachments = stagedAttachments.length > 0;
-    if (!text && !hasAttachments) return;
+    if (!rawText && !hasAttachments) return;
 
     setStartPageMode(false);
 
@@ -93,6 +100,20 @@ export async function send() {
     renderStagedAttachments();
 
     chatbox.clearInput();
+
+    // Parse on-text skills from the message (e.g. "/android-cli hello")
+    const { skills: onTextSkills, cleanText } = parseOnTextSkills(rawText);
+
+    // Merge on-text skills with any persistent active skills
+    const skillsMap = new Map();
+    for (const s of getActiveSkills()) {
+        skillsMap.set(s.id, s);
+    }
+    for (const s of onTextSkills) {
+        skillsMap.set(s.id, s);
+    }
+    const mergedSkills = Array.from(skillsMap.values());
+    clearActiveSkills();
 
     // -------------------------------------------------------------
     // RENDER USER MESSAGE BUBBLE:
@@ -126,7 +147,9 @@ export async function send() {
         `).join("") + `</div>`;
     }
 
-    const textHtml = text ? `<div class="msg-bubble-text">${text}</div>` : "";
+    // Format message text with minimized inline skill highlighting
+    const formattedText = formatMessageWithSkillHighlights(rawText, mergedSkills);
+    const textHtml = formattedText ? `<div class="msg-bubble-text">${formattedText}</div>` : "";
 
     userDiv.innerHTML = `
         <div class="user-bubble-content">
@@ -136,7 +159,7 @@ export async function send() {
         </div>
     `;
 
-    userDiv.dataset.rawText = text || (images.length > 0 ? "Attached image" : "Attached document");
+    userDiv.dataset.rawText = rawText || (images.length > 0 ? "Attached image" : "Attached document");
     chat.appendChild(userDiv);
     renderIcons(userDiv);
     forceReengageAutoScroll(chat);
@@ -151,9 +174,22 @@ export async function send() {
 
     let targetChatId = state.currentChatId;
     if (!targetChatId || !state.chatSessions[targetChatId]) {
-        targetChatId = createNewChatSession(text || "New chat with attachments");
+        targetChatId = createNewChatSession(cleanText || rawText || "New chat with attachments");
     } else {
         saveCurrentChatState();
+    }
+
+    const session = state.chatSessions[targetChatId];
+    const baseSysPrompt = state.activeSystemPrompt || "";
+
+    // OPTION C: Inject instructed skills with full disk paths directly into the system prompt context
+    if (session && Array.isArray(session.messages) && session.messages[0]?.role === "system") {
+        if (mergedSkills.length > 0) {
+            const skillsSysText = buildSkillsSystemPrompt(mergedSkills);
+            session.messages[0].content = baseSysPrompt + skillsSysText;
+        } else {
+            session.messages[0].content = baseSysPrompt;
+        }
     }
 
     state.activeGenerations[targetChatId] = {
@@ -170,7 +206,8 @@ export async function send() {
 
     try {
         // Build multimodal payload or doc-augmented text
-        let promptText = text;
+        let promptText = cleanText || rawText;
+
         if (docs.length > 0) {
             const docContexts = docs.map(d => {
                 if (d.textContent) {
@@ -206,7 +243,7 @@ export async function send() {
         const genState = state.activeGenerations[targetChatId];
         if (!genState?.abortRequested && error.message !== "Generation stopped by user") {
             console.error(error);
-            logEvent("SEND_FATAL_ERROR", { userText: text, error: String(error && error.message || error) });
+            logEvent("SEND_FATAL_ERROR", { userText: rawText, error: String(error && error.message || error) });
             
             const cleanErr = error.message || "Request could not be succeeded";
             const codeLabel = error.statusCode ? ` [HTTP ${error.statusCode}]` : "";
@@ -251,7 +288,7 @@ export async function send() {
 
             showErrorRecoveryPopup({
                 targetChatId,
-                promptText: promptText || text,
+                promptText: promptText || rawText,
                 images,
                 failedAIMessage: currentAIMessage,
                 error

@@ -30,9 +30,9 @@ work is (1) landing uncommitted work, (2) Layer‑2 sandbox, (3) `browser_subage
 tree. A crash or a bad `git checkout` loses it. This is a *durability* task, not a feature task.
 
 ### 1a. Plan Dock UI (feature-complete, needs review + commit)
-- New: `client/src/components/chat-plan-dock.js` (315 lines)
-- New: `client/styles/plan-dock.css` (383 lines)
-- Wired: `client/index.html:73` (stylesheet), `client/src/main.js:19` (`initPlanDock`)
+- New: `UI/webui/src/components/chat-plan-dock.js` (315 lines)
+- New: `UI/webui/styles/plan-dock.css` (383 lines)
+- Wired: `UI/webui/index.html:73` (stylesheet), `UI/webui/src/main.js:19` (`initPlanDock`)
 - Touched: `chat-ui.js`, `chat-history-list.js`, `chat-tool-badges.js`, `side-panel.js`,
   `orchestrator.js`, `compactor.js`, `badge-sync.js`
 
@@ -127,7 +127,7 @@ Browser primitives exist but are trapped in a test harness. Promote to a real to
     one shared instance per build session.
 17. Add route `src/server/routes/browser.js` (`/api/browser/*`) and wire into `router.js`.
 18. Define the tool schema in `TOOLS_PLAN.md:246` and implement dispatch in
-    `client/src/tools/` alongside the terminal/filesystem tools.
+    `UI/webui/src/tools/` alongside the terminal/filesystem tools.
 19. Surface progress as `dispatchEvent({type:"tool_start"/"tool_complete"})` so the existing
     badge pipeline renders it — no new UI needed.
 20. **Security:** a browser subagent is a full network client. It must respect the same
@@ -145,9 +145,9 @@ the difference between a 60-second spinner and a live-typing answer for reasonin
     Only `local.js` and `opencode.js` currently pass `stream: true` — **audit the other
     ~18 providers** and add streaming support or explicitly document them as non-streaming.
 22. Client: add a `textBuffer` alongside the existing thought handling in
-    `client/src/agent/agent-bridge.js` (currently branches on 7 event types; add `text`).
+    `UI/webui/src/agent/agent-bridge.js` (currently branches on 7 event types; add `text`).
 23. Client: add the RAF-batched flush loop (~30 FPS). Precedent exists in
-    `client/src/components/chat-scroll.js:20` — reuse that pattern rather than inventing one.
+    `UI/webui/src/components/chat-scroll.js:20` — reuse that pattern rather than inventing one.
 24. Client: stream-tolerant markdown — close unterminated ``` fences before parsing to
     stop layout thrash mid-stream. Defer Prism/Mermaid/KaTeX to `done`.
 
