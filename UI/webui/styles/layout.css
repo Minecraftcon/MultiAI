@@ -5,23 +5,16 @@
     width: 100%;
     max-width: 100%;
     margin: 0;
-    margin-left: 0;
-    margin-right: 0;
     height: calc(100dvh / var(--ui-scale, 1));
     display: flex;
     flex-direction: column;
     position: relative;
     overflow-x: hidden;
     background: var(--bg);
-    transition: transform var(--panel-speed) var(--panel-ease),
-                width var(--panel-speed) var(--panel-ease),
-                margin-right var(--panel-speed) var(--panel-ease);
 }
 
 #appShell.animate-transition {
-    transition: transform var(--panel-speed) var(--panel-ease),
-                width var(--panel-speed) var(--panel-ease),
-                margin-right var(--panel-speed) var(--panel-ease);
+    transition: transform var(--panel-speed) var(--panel-ease);
 }
 
 header {

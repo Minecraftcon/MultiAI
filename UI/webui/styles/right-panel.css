@@ -61,21 +61,18 @@ body.right-panel-open #rightPanel {
     }
 }
 
-/* Desktop AppShell Resizing:
-   Pinned strictly to left (margin-left: 0), right side docks seamlessly without moving <header> or jumping #panelToggle!
-   Width and margin-right transition in perfect lockstep with #rightPanel's transform.
-   #chat and #inputArea naturally auto-scale within #appShell without scroll reflow jitter. */
-#appShell {
-    transition: width var(--panel-speed) var(--panel-ease),
-                margin-right var(--panel-speed) var(--panel-ease);
+/* Desktop Chat Push:
+   #rightPanel is position:fixed — it overlays #appShell. Zero layout change.
+   Only shift the composer (#inputArea) right edge so it stays clear of the panel.
+   No #appShell resize, no #chat padding change → zero text reflow, zero scroll jump. */
+
+#inputArea {
+    transition: right var(--panel-speed) var(--panel-ease);
 }
 
 @media (min-width: 900px) {
-    body.right-panel-open #appShell {
-        width: calc(100% - var(--right-panel-width)) !important;
-        max-width: calc(100% - var(--right-panel-width)) !important;
-        margin-left: 0 !important;
-        margin-right: var(--right-panel-width) !important;
+    body.right-panel-open #inputArea {
+        right: var(--right-panel-width) !important;
     }
 }
 
@@ -85,8 +82,8 @@ body.right-panel-resizing * {
     user-select: none !important;
 }
 
-body.right-panel-resizing #appShell,
-body.right-panel-resizing #rightPanel {
+body.right-panel-resizing #rightPanel,
+body.right-panel-resizing #inputArea {
     transition: none !important;
 }
 
