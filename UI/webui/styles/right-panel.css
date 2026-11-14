@@ -1,0 +1,1234 @@
+/* =========================================================
+   RIGHT WORKSPACE PANEL (TABS, EDITOR, DIFFS, TERMINAL, SEARCH, TASKS)
+   Minimalist Warm Monochrome Aesthetic (Rule 2 / Minimalist UI)
+   ========================================================= */
+
+:root {
+    --right-panel-width: 500px;
+}
+
+/* ── Panel Container ─────────────────────────────────────── */
+#rightPanel {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: var(--right-panel-width);
+    max-width: 92vw;
+    background: var(--bg);
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    z-index: 75;
+    transform: translateX(100%);
+    transition: transform 0.24s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: -4px 0 20px rgba(0, 0, 0, 0.14);
+    user-select: none;
+}
+
+body.right-panel-open #rightPanel {
+    transform: translateX(0);
+}
+
+/* ── Mobile/Tablet Backdrop (Below 900px) ─────────────────── */
+.right-panel-backdrop {
+    position: fixed;
+    inset: 0;
+    background: var(--scrim, rgba(0, 0, 0, 0.45));
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+    z-index: 70;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.24s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (max-width: 899px) {
+    body.right-panel-open .right-panel-backdrop {
+        opacity: 1;
+        pointer-events: auto;
+    }
+}
+
+@media (min-width: 900px) {
+    #appShell {
+        transition: width 0.24s cubic-bezier(0.16, 1, 0.3, 1),
+                    max-width 0.24s cubic-bezier(0.16, 1, 0.3, 1),
+                    margin 0.24s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    /* Pinned strictly to left (margin-left: 0), right side docks seamlessly */
+    body.right-panel-open #appShell {
+        width: calc(100% - var(--right-panel-width)) !important;
+        max-width: calc(100% - var(--right-panel-width)) !important;
+        margin-left: 0 !important;
+        margin-right: var(--right-panel-width) !important;
+    }
+}
+
+/* Live drag tracking without transition lag */
+body.right-panel-resizing,
+body.right-panel-resizing * {
+    user-select: none !important;
+}
+
+body.right-panel-resizing #appShell,
+body.right-panel-resizing #rightPanel {
+    transition: none !important;
+}
+
+#headerRightPanelBtn.active {
+    background: var(--hover-2);
+    border-color: var(--border);
+    color: var(--text-primary);
+}
+
+/* ── Drag Resizer ────────────────────────────────────────── */
+.right-panel-resizer {
+    position: absolute;
+    top: 0;
+    left: -4px;
+    bottom: 0;
+    width: 8px;
+    cursor: col-resize;
+    z-index: 80;
+    transition: background 0.15s ease;
+}
+
+.right-panel-resizer:hover,
+.right-panel-resizer.is-dragging {
+    background: rgba(255, 255, 255, 0.18);
+}
+
+:root[data-theme="light"] .right-panel-resizer:hover,
+:root[data-theme="light"] .right-panel-resizer.is-dragging {
+    background: rgba(0, 0, 0, 0.12);
+}
+
+/* ── Panel Header (Top row matching chat background color) ── */
+.right-panel-header {
+    height: 42px;
+    padding: 0 8px 0 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg) !important; /* User: same colour as chat background */
+    flex-shrink: 0;
+    overflow: hidden;
+}
+
+/* VS Code-like Multi-Tab Strip */
+.right-panel-tab-strip {
+    display: flex;
+    align-items: center;
+    height: 100%;
+    overflow-x: auto;
+    flex: 1;
+    min-width: 0;
+    scrollbar-width: none;
+}
+
+.right-panel-tab-strip::-webkit-scrollbar {
+    display: none;
+}
+
+.tab-strip-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    height: 100%;
+    padding: 0 12px;
+    font-size: 12px;
+    font-weight: 500;
+    font-family: inherit;
+    color: var(--text-secondary);
+    background: transparent;
+    border-right: 1px solid var(--border);
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+    white-space: nowrap;
+    max-width: 190px;
+    user-select: none;
+    box-sizing: border-box;
+}
+
+.tab-strip-item:hover {
+    background: var(--hover);
+    color: var(--text-primary);
+}
+
+.tab-strip-item.active {
+    background: var(--surface);
+    color: var(--text-primary);
+    border-bottom-color: var(--accent, #ffffff);
+}
+
+.tab-strip-item i {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+}
+
+.tab-strip-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+    letter-spacing: -0.01em;
+}
+
+.tab-ext-badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 1px 4px;
+    border-radius: 3px;
+    line-height: 1;
+    text-transform: lowercase;
+    flex-shrink: 0;
+    color: var(--text-secondary);
+    background: var(--hover-2, rgba(255, 255, 255, 0.08));
+    border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.05));
+}
+
+.tab-ext-badge.js,
+.tab-ext-badge.ts,
+.tab-ext-badge.css,
+.tab-ext-badge.html,
+.tab-ext-badge.json,
+.tab-ext-badge.py,
+.tab-ext-badge.sh,
+.tab-ext-badge.md {
+    color: var(--text-secondary);
+    background: var(--hover-2, rgba(255, 255, 255, 0.08));
+    border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.05));
+}
+
+.tab-strip-badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 1px 5px;
+    border-radius: 4px;
+    background: var(--accent-subtle);
+    color: var(--accent);
+    border: 1px solid var(--border-subtle);
+    flex-shrink: 0;
+}
+
+.tab-strip-badge.del {
+    background: var(--hover-2);
+    color: var(--stat-del, rgba(255, 255, 255, 0.45));
+    border: 1px solid var(--border-subtle);
+}
+
+.tab-strip-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    border-radius: 3px;
+    background: transparent;
+    border: none;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    margin-left: 2px;
+    padding: 0;
+    opacity: 0.75;
+    transition: opacity 0.1s ease, background 0.1s ease, color 0.1s ease;
+}
+
+.tab-strip-close:hover {
+    opacity: 1;
+    background: var(--hover-2);
+    color: var(--text-primary);
+}
+
+.tab-strip-close i {
+    width: 11px;
+    height: 11px;
+}
+
+/* New Tab "+" Button */
+.tab-strip-new-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    margin: 0 4px;
+    border-radius: 5px;
+    color: var(--text-tertiary);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: all 0.12s ease;
+}
+
+.tab-strip-new-btn:hover {
+    background: var(--hover);
+    color: var(--text-primary);
+}
+
+.tab-strip-new-btn i {
+    width: 14px;
+    height: 14px;
+}
+
+/* Header Right Actions */
+.right-panel-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    flex-shrink: 0;
+    margin-left: 6px;
+}
+
+.right-panel-action-btn {
+    width: 30px;
+    height: 30px;
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    transition: all 0.14s ease;
+}
+
+.right-panel-action-btn:hover {
+    color: var(--text-primary);
+    background: var(--hover);
+}
+
+.right-panel-action-btn:active {
+    transform: scale(0.95);
+}
+
+.right-panel-action-btn i {
+    width: 15px;
+    height: 15px;
+    stroke-width: 2;
+}
+
+/* ── Panel Body ──────────────────────────────────────────── */
+.right-panel-body {
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    background: var(--bg);
+}
+
+/* ── 1. Launcher / Empty View (Matching User Screenshot) ── */
+.right-panel-launcher-view {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    background: var(--bg);
+}
+
+/* Search & URL Pill Row */
+.launcher-search-row {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+}
+
+.launcher-search-pill {
+    flex: 1;
+    height: 38px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 9999px; /* Pill shape */
+    box-sizing: border-box;
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.launcher-search-pill:focus-within {
+    border-color: var(--border-strong);
+    background: var(--hover-2);
+}
+
+.launcher-search-icon {
+    width: 15px;
+    height: 15px;
+    color: var(--text-tertiary);
+    flex-shrink: 0;
+}
+
+.launcher-search-input {
+    flex: 1;
+    min-width: 0;
+    border: none;
+    background: transparent;
+    outline: none;
+    font-size: 13px;
+    color: var(--text-primary);
+    font-family: inherit;
+}
+
+.launcher-search-input::placeholder {
+    color: var(--text-tertiary);
+}
+
+.launcher-search-clear {
+    width: 18px;
+    height: 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    padding: 0;
+}
+
+.launcher-search-clear:hover {
+    color: var(--text-primary);
+}
+
+.launcher-search-clear i {
+    width: 13px;
+    height: 13px;
+}
+
+.launcher-more-btn {
+    width: 32px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background 0.12s ease, color 0.12s ease;
+}
+
+.launcher-more-btn:hover {
+    background: var(--hover);
+    color: var(--text-primary);
+}
+
+.launcher-more-btn i {
+    width: 16px;
+    height: 16px;
+}
+
+/* Autocomplete / Directory Explorer Dropdown */
+.launcher-search-results {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    right: 40px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+    max-height: 280px;
+    overflow-y: auto;
+    z-index: 100;
+    padding: 5px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.search-result-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 7px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12.5px;
+    color: var(--text-secondary);
+    transition: background 0.1s ease, color 0.1s ease;
+}
+
+.search-result-item:hover,
+.search-result-item.selected {
+    background: var(--hover);
+    color: var(--text-primary);
+}
+
+.search-result-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+
+.search-result-left i {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+}
+
+.search-result-badge {
+    font-size: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: var(--hover);
+    color: var(--text-tertiary);
+    flex-shrink: 0;
+}
+
+/* Primary Navigation Menu List (Clean Vertical List) */
+.launcher-menu-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.launcher-menu-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    color: var(--text-primary);
+    font-size: 13.5px;
+    font-weight: 400;
+    transition: background 0.1s ease, color 0.1s ease;
+    user-select: none;
+}
+
+.launcher-menu-item:hover {
+    background: var(--hover);
+}
+
+.launcher-item-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.launcher-item-left i {
+    width: 17px;
+    height: 17px;
+    color: var(--text-secondary);
+    stroke-width: 1.75px;
+    flex-shrink: 0;
+}
+
+.launcher-item-badge {
+    font-size: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: rgba(56, 189, 248, 0.18);
+    color: #7dd3fc;
+}
+
+.launcher-item-chevron {
+    width: 14px;
+    height: 14px;
+    color: var(--text-tertiary);
+    flex-shrink: 0;
+}
+
+/* Background Tasks Section */
+.launcher-tasks-section {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 10px;
+}
+
+.launcher-section-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 10px;
+}
+
+.launcher-section-title {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.launcher-count-pill {
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    padding: 1px 6px;
+    border-radius: 9999px;
+    background: var(--hover);
+    color: var(--text-secondary);
+}
+
+.launcher-tasks-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.launcher-tasks-empty {
+    font-size: 12px;
+    color: var(--text-tertiary);
+    padding: 10px;
+}
+
+.launcher-task-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 7px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--text-primary);
+    transition: background 0.1s ease;
+}
+
+.launcher-task-row:hover {
+    background: var(--hover);
+}
+
+.launcher-task-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+
+.launcher-task-left i {
+    width: 16px;
+    height: 16px;
+    color: var(--text-secondary);
+    stroke-width: 1.75px;
+    flex-shrink: 0;
+}
+
+.launcher-task-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12.5px;
+}
+
+.launcher-task-meta {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--text-tertiary);
+    flex-shrink: 0;
+}
+
+.launcher-see-all-btn {
+    align-self: flex-start;
+    padding: 6px 10px;
+    font-size: 12.5px;
+    color: var(--text-tertiary);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    transition: color 0.1s ease;
+}
+
+.launcher-see-all-btn:hover {
+    color: var(--text-primary);
+}
+
+/* Extensions Tab View */
+.extensions-view-container {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    overflow-y: auto;
+}
+
+.extensions-header-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+
+.extension-card-item {
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.extension-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.extension-card-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.extension-card-desc {
+    font-size: 11.5px;
+    color: var(--text-secondary);
+    line-height: 1.4;
+}
+
+/* ── 2. Active Tab Content Containers ────────────────────── */
+.right-panel-tab-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+}
+
+/* File / Diff Viewer Mount */
+.right-panel-viewer-mount {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--bg);
+}
+
+/* ── Breadcrumb Bar (Matches Antigravity Image 1 & 2) ─────── */
+.right-panel-breadcrumb-bar {
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 10px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    position: relative;
+    user-select: none;
+    z-index: 15;
+}
+
+.breadcrumb-path {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11.5px;
+    color: var(--text-tertiary);
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    min-width: 0;
+}
+
+.crumb-segment {
+    color: var(--text-secondary);
+    transition: color 0.1s ease;
+    cursor: default;
+}
+
+.crumb-segment:hover {
+    color: var(--text-primary);
+}
+
+.crumb-separator {
+    color: var(--text-tertiary);
+    opacity: 0.6;
+    font-size: 10px;
+}
+
+.crumb-file {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.crumb-ext-badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9.5px;
+    font-weight: 600;
+    padding: 1px 4px;
+    border-radius: 3px;
+    line-height: 1;
+    text-transform: lowercase;
+    color: var(--text-secondary);
+    background: var(--hover-2, rgba(255, 255, 255, 0.08));
+    border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.05));
+}
+
+.crumb-ext-badge.js,
+.crumb-ext-badge.ts,
+.crumb-ext-badge.css,
+.crumb-ext-badge.html,
+.crumb-ext-badge.json,
+.crumb-ext-badge.py,
+.crumb-ext-badge.sh,
+.crumb-ext-badge.md {
+    color: var(--text-secondary);
+    background: var(--hover-2, rgba(255, 255, 255, 0.08));
+    border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.05));
+}
+
+.crumb-suffix {
+    color: var(--text-tertiary);
+    font-size: 11px;
+    font-weight: 400;
+}
+
+.breadcrumb-actions {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    flex-shrink: 0;
+    margin-left: 8px;
+}
+
+.breadcrumb-btn {
+    width: 26px;
+    height: 26px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: background 0.12s ease, color 0.12s ease;
+}
+
+.breadcrumb-btn:hover {
+    background: var(--hover);
+    color: var(--text-primary);
+}
+
+.breadcrumb-btn i {
+    width: 14px;
+    height: 14px;
+}
+
+/* Floating Context Menu Dropdown (Matches Image 1) */
+.breadcrumb-dropdown-menu {
+    position: absolute;
+    top: 36px;
+    right: 10px;
+    min-width: 210px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.38);
+    padding: 5px;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    animation: fadeInMenu 0.12s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes fadeInMenu {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.breadcrumb-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 6px 10px;
+    border-radius: 5px;
+    font-size: 12px;
+    color: var(--text-primary);
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.1s ease;
+}
+
+.breadcrumb-menu-item:hover {
+    background: var(--hover);
+}
+
+.breadcrumb-menu-item i {
+    width: 14px;
+    height: 14px;
+    color: var(--text-secondary);
+    flex-shrink: 0;
+}
+
+.breadcrumb-menu-item .check-icon {
+    width: 14px;
+    height: 14px;
+    color: #4ade80;
+    opacity: 0;
+}
+
+.breadcrumb-menu-item.active .check-icon {
+    opacity: 1;
+}
+
+.breadcrumb-menu-divider {
+    height: 1px;
+    background: var(--border);
+    margin: 4px 0;
+}
+
+/* ── Split Layout: Editor on left, File Sidebar on right ──── */
+.viewer-split-container {
+    display: flex;
+    flex: 1;
+    height: calc(100% - 34px);
+    min-height: 0;
+    overflow: hidden;
+    position: relative;
+}
+
+.viewer-editor-pane {
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+    display: flex;
+    flex-direction: column;
+    padding: 8px 10px 16px 10px;
+}
+
+.viewer-editor-pane .modern-viewer-window {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin: 0;
+    flex: 1;
+}
+
+/* File list sidebar inside viewer */
+.viewer-sidebar-pane {
+    width: 200px;
+    flex-shrink: 0;
+    height: 100%;
+    border-left: 1px solid var(--border);
+    background: var(--bg);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    transition: width 0.18s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.18s ease;
+}
+
+.viewer-split-container.sidebar-collapsed .viewer-sidebar-pane {
+    width: 0 !important;
+    border-left: none !important;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.viewer-sidebar-header {
+    height: 30px;
+    display: flex;
+    align-items: center;
+    padding: 0 10px;
+    border-bottom: 1px solid var(--border);
+    font-size: 11px;
+    color: var(--text-tertiary);
+    font-family: 'JetBrains Mono', monospace;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex-shrink: 0;
+    background: var(--surface);
+}
+
+.viewer-sidebar-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.viewer-sidebar-item {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 5px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.1s ease, color 0.1s ease;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.viewer-sidebar-item:hover {
+    background: var(--hover);
+    color: var(--text-primary);
+}
+
+.viewer-sidebar-item.active {
+    background: var(--surface);
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.file-ext-badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9.5px;
+    font-weight: 600;
+    padding: 1px 4px;
+    border-radius: 3px;
+    line-height: 1;
+    text-transform: lowercase;
+    flex-shrink: 0;
+    color: var(--text-secondary);
+    background: var(--hover-2, rgba(255, 255, 255, 0.08));
+    border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.05));
+}
+
+.file-ext-badge.js,
+.file-ext-badge.ts,
+.file-ext-badge.css,
+.file-ext-badge.html,
+.file-ext-badge.json,
+.file-ext-badge.py,
+.file-ext-badge.sh,
+.file-ext-badge.md {
+    color: var(--text-secondary);
+    background: var(--hover-2, rgba(255, 255, 255, 0.08));
+    border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.05));
+}
+
+.viewer-sidebar-filename {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+    font-size: 11.5px;
+}
+
+.diff-toolbar-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+}
+
+.diff-toolbar-title {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.diff-toolbar-btns {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.diff-action-btn {
+    padding: 4px 10px;
+    border-radius: 5px;
+    font-size: 11.5px;
+    font-weight: 500;
+    color: #ffffff;
+    background: #18181b;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    transition: all 0.12s ease;
+}
+
+.diff-action-btn.secondary {
+    background: transparent;
+    color: var(--text-secondary);
+}
+
+.diff-action-btn:hover {
+    background: var(--hover-2);
+}
+
+/* Fused Terminal Mount */
+.right-panel-terminal-mount {
+    flex: 1;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+    position: relative;
+    background: #09090b;
+    display: flex;
+    flex-direction: column;
+}
+
+.fused-terminal-container {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    flex: 1;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+}
+
+.terminal-drawer.fused-mode {
+    position: relative !important;
+    inset: auto !important;
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    max-width: none !important;
+    max-height: none !important;
+    transform: none !important;
+    box-shadow: none !important;
+    border: none !important;
+    border-radius: 0 !important;
+    z-index: 1 !important;
+    background: #09090b !important;
+    display: flex !important;
+    flex-direction: column !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+    visibility: visible !important;
+}
+
+.terminal-drawer.fused-mode #terminalResizer,
+.terminal-drawer.fused-mode #terminalDockPicker,
+.terminal-drawer.fused-mode #terminalCloseBtn,
+.terminal-drawer.fused-mode #terminalChatSwitchBtn {
+    display: none !important;
+}
+
+.terminal-drawer.fused-mode .terminal-header {
+    border-bottom: 1px solid var(--border-subtle);
+    padding: 0 10px;
+    height: 36px;
+    min-height: 36px;
+    flex-shrink: 0;
+    background: #0c0c0e !important;
+}
+
+.terminal-drawer.fused-mode .terminal-body {
+    flex: 1 !important;
+    height: calc(100% - 36px) !important;
+    min-height: 0 !important;
+    width: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+    position: relative !important;
+    overflow: hidden !important;
+    background: #09090b !important;
+    padding: 6px 8px !important;
+    box-sizing: border-box !important;
+}
+
+.terminal-drawer.fused-mode .terminal-container {
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    flex: 1 !important;
+    position: relative !important;
+}
+
+.terminal-drawer.fused-mode .xterm {
+    width: 100% !important;
+    height: 100% !important;
+    padding: 2px !important;
+}
+
+/* Embedded Web Browser Mount */
+.right-panel-browser-mount {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: #ffffff;
+}
+
+.browser-omnibox-bar {
+    height: 38px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 8px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+}
+
+.browser-nav-btn {
+    width: 26px;
+    height: 26px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 5px;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.12s ease;
+}
+
+.browser-nav-btn:hover {
+    background: var(--hover);
+    color: var(--text-primary);
+}
+
+.browser-nav-btn i {
+    width: 13px;
+    height: 13px;
+}
+
+.browser-url-input {
+    flex: 1;
+    height: 26px;
+    padding: 0 8px;
+    border-radius: 5px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text-primary);
+    font-size: 11.5px;
+    font-family: 'JetBrains Mono', monospace;
+    outline: none;
+}
+
+.browser-url-input:focus {
+    border-color: var(--border-strong);
+}
+
+.browser-iframe {
+    flex: 1;
+    width: 100%;
+    border: none;
+    background: #ffffff;
+}

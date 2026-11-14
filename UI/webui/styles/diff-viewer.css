@@ -230,6 +230,21 @@
     opacity: 0.75;
 }
 
+.mv-gutter.dual {
+    min-width: 82px;
+    gap: 12px;
+    padding: 0 12px 0 6px;
+}
+
+.mv-old-num, .mv-new-num {
+    font-size: 11.5px;
+    font-family: 'JetBrains Mono', monospace;
+    width: 32px;
+    text-align: right;
+    display: inline-block;
+    color: var(--text-muted);
+}
+
 .mv-num {
     font-size: 12px;
 }
@@ -240,6 +255,79 @@
     width: 10px;
     text-align: center;
     opacity: 0.9;
+}
+
+/* Collapsible Chunk Banner (+X more lines) */
+.mv-chunk-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 5px 14px;
+    margin: 4px 0;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    color: var(--text-tertiary);
+    font-size: 11.5px;
+    font-family: 'JetBrains Mono', monospace;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.12s ease, color 0.12s ease;
+}
+
+.mv-chunk-banner:hover {
+    background: var(--hover);
+    color: var(--text-primary);
+}
+
+.mv-chunk-tag {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 500;
+}
+
+.mv-chunk-tag i {
+    width: 13px;
+    height: 13px;
+}
+
+.mv-chunk-range {
+    font-size: 10.5px;
+    color: var(--text-tertiary);
+    opacity: 0.8;
+}
+
+/* Minimap Overview Bar */
+.mv-body {
+    position: relative;
+}
+
+.mv-minimap-bar {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 5px;
+    pointer-events: none;
+    z-index: 5;
+    background: rgba(0, 0, 0, 0.08);
+}
+
+.mv-minimap-tick {
+    position: absolute;
+    left: 0;
+    width: 100%;
+    height: 2px;
+    border-radius: 1px;
+}
+
+.mv-minimap-tick.add {
+    background: #3fb950;
+}
+
+.mv-minimap-tick.del {
+    background: #f85149;
 }
 
 /* Code Line */
@@ -337,13 +425,13 @@
 }
 
 .badge-diff-stat.add {
-    color: #3fb950;
+    color: var(--stat-add, var(--accent, #3b82f6));
     background: transparent;
     border: none;
 }
 
 .badge-diff-stat.del {
-    color: #f85149;
+    color: var(--stat-del, rgba(255, 255, 255, 0.45));
     background: transparent;
     border: none;
 }

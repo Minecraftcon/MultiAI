@@ -83,9 +83,9 @@ const SERVER_BUILD_TOOLS = [
             parameters: {
                 type: "object",
                 properties: {
-                    DirectoryPath: { type: "string", description: "Directory path to list (use '.' for project root, or '$SCRATCH' / '$ARTIFACTS' for chat workspaces)" }
+                    path: { type: "string", description: "Directory path to list (use '.' for project root, or '$SCRATCH' / '$ARTIFACTS' for chat workspaces)" }
                 },
-                required: ["DirectoryPath"]
+                required: ["path"]
             }
         }
     },
@@ -97,10 +97,14 @@ const SERVER_BUILD_TOOLS = [
             parameters: {
                 type: "object",
                 properties: {
-                    SearchPath: { type: "string", description: "Path to search within" },
-                    Query: { type: "string", description: "Search query or regex pattern" }
+                    path: { type: "string", description: "Path to search within (e.g. '.')" },
+                    query: { type: "string", description: "Search query or regex pattern" },
+                    is_regex: { type: "boolean", description: "If true, treats query as a regex pattern (default false)" },
+                    case_sensitive: { type: "boolean", description: "If true, case-sensitive matching (default false)" },
+                    match_per_line: { type: "boolean", description: "If true, returns matching lines with line numbers (default true)" },
+                    includes: { type: "array", items: { type: "string" }, description: "Glob patterns to filter files (e.g. ['*.js'])" }
                 },
-                required: ["SearchPath", "Query"]
+                required: ["path", "query"]
             }
         }
     },
@@ -117,6 +121,22 @@ const SERVER_BUILD_TOOLS = [
                     timer: { type: "integer", description: "Seconds to wait before returning output (default 5)" }
                 },
                 required: ["command"]
+            }
+        }
+    },
+    {
+        type: "function",
+        function: {
+            name: "manage_tasks",
+            description: "Manage background shell tasks: check status, inspect stdout, send interactive input, or terminate tasks.",
+            parameters: {
+                type: "object",
+                properties: {
+                    action: { type: "string", enum: ["status", "stdout", "send_input", "kill_task"], description: "Action to execute" },
+                    task_id: { type: "string", description: "Target task ID" },
+                    input: { type: "string", description: "Input for send_input" }
+                },
+                required: ["action", "task_id"]
             }
         }
     },
@@ -179,11 +199,12 @@ const SERVER_BUILD_TOOLS = [
         type: "function",
         function: {
             name: "web_search",
-            description: "Search the web for up-to-date information, documentation, news, or articles.",
+            description: "Search the web or fetch webpage text using TinyFish.",
             parameters: {
                 type: "object",
                 properties: {
-                    query: { type: "string", description: "Search query string" }
+                    query: { type: "string", description: "Search query keywords or webpage URL to fetch" },
+                    type: { type: "string", enum: ["search", "fetch"], description: "Action type: 'search' to query the web, or 'fetch' to read full page content (default auto-detects URLs as fetch)" }
                 },
                 required: ["query"]
             }
@@ -192,69 +213,14 @@ const SERVER_BUILD_TOOLS = [
     {
         type: "function",
         function: {
-            name: "fetch_web_content",
-            description: "Fetch and extract text content from one or more web URLs.",
-            parameters: {
-                type: "object",
-                properties: {
-                    url: { type: "string", description: "Single URL to fetch" },
-                    urls: { type: "array", items: { type: "string" }, description: "List of URLs to fetch in parallel" }
-                }
-            }
-        }
-    },
-    {
-        type: "function",
-        function: {
-            name: "run_node",
-            description: "Execute a JavaScript/Node.js script or expression and return stdout/stderr.",
-            parameters: {
-                type: "object",
-                properties: {
-                    code: { type: "string", description: "JavaScript/Node.js code to execute" }
-                },
-                required: ["code"]
-            }
-        }
-    },
-    {
-        type: "function",
-        function: {
             name: "schedule",
-            description: "Wait or sleep for a specified number of seconds before continuing.",
+            description: "Wait or sleep for a specified number of seconds before continuing (e.g. waiting for dev server or async jobs).",
             parameters: {
                 type: "object",
                 properties: {
-                    seconds: { type: "number", description: "Seconds to pause (max 30)" }
+                    time: { type: "number", description: "Duration in seconds to pause or wait. Also accepts 'seconds'." }
                 },
-                required: ["seconds"]
-            }
-        }
-    },
-    {
-        type: "function",
-        function: {
-            name: "ask_question",
-            description: "Ask the user clarifying multiple-choice or open-ended questions with an interactive questionnaire directly in the composer. Execution pauses until the user answers or skips.",
-            parameters: {
-                type: "object",
-                properties: {
-                    questions: {
-                        type: "array",
-                        description: "List of questions to ask the user.",
-                        items: {
-                            type: "object",
-                            properties: {
-                                question: { type: "string", description: "The question prompt or title" },
-                                options: { type: "array", items: { type: "string" }, description: "List of 2-5 selectable choices" },
-                                is_multi_select: { type: "boolean", description: "Whether multiple choices can be selected" },
-                                allow_custom: { type: "boolean", description: "Whether to allow custom write-in answers (default true)" }
-                            },
-                            required: ["question", "options"]
-                        }
-                    }
-                },
-                required: ["questions"]
+                required: ["time"]
             }
         }
     },
@@ -262,7 +228,7 @@ const SERVER_BUILD_TOOLS = [
         type: "function",
         function: {
             name: "ask_questions",
-            description: "Alias for ask_question. Ask the user clarifying multiple-choice or open-ended questions with an interactive questionnaire directly in the composer. Execution pauses until the user answers or skips.",
+            description: "Ask the user clarifying multiple-choice or open-ended questions with an interactive questionnaire directly in the composer. Execution pauses until the user answers or skips. Supports asking one question or an array of multiple questions.",
             parameters: {
                 type: "object",
                 properties: {
@@ -279,9 +245,12 @@ const SERVER_BUILD_TOOLS = [
                             },
                             required: ["question", "options"]
                         }
-                    }
-                },
-                required: ["questions"]
+                    },
+                    question: { type: "string", description: "Single question convenience shortcut prompt if asking only one question" },
+                    options: { type: "array", items: { type: "string" }, description: "Selectable choices when asking a single question" },
+                    is_multi_select: { type: "boolean", description: "Whether multiple choices can be selected for a single question" },
+                    allow_custom: { type: "boolean", description: "Whether to allow custom write-in answers (default true)" }
+                }
             }
         }
     }
@@ -362,33 +331,39 @@ async function executeServerTool(name, args, { chatId, projectId, abortSignal, j
             return { error: `Image generation failed: ${err.message}` };
         }
     }
-    if (name === "web_search") {
+    if (name === "web_search" || name === "fetch_web_content") {
         try {
-            const { tinyfishSearch } = require("../server/routes/search");
-            return await tinyfishSearch(args);
+            const { tinyfishSearch, tinyfishFetch } = require("../server/routes/search");
+            const q = String(args.query || args.url || "").trim();
+            const isUrl = /^https?:\/\//i.test(q);
+            if (args.type === "fetch" || (!args.type && isUrl) || name === "fetch_web_content") {
+                return await tinyfishFetch({ url: q || args.url });
+            }
+            return await tinyfishSearch({ query: q, ...args });
         } catch (err) {
-            return { error: `Web search failed: ${err.message}` };
+            return { error: `Web search/fetch failed: ${err.message}` };
         }
     }
-    if (name === "fetch_web_content" || name === "web_fetch") {
+    if (name === "manage_tasks") {
+        const action = (args.action || "").toLowerCase().trim();
+        const taskId = args.task_id || args.taskId;
+        if (!taskId) return { error: "Missing 'task_id'" };
         try {
-            const { tinyfishFetch } = require("../server/routes/search");
-            return await tinyfishFetch(args);
+            if (action === "kill_task" || action === "kill") {
+                return await postJSON(5000, `/api/task/kill/${encodeURIComponent(taskId)}`, {});
+            }
+            if (action === "send_input") {
+                return await postJSON(5000, `/api/task/input/${encodeURIComponent(taskId)}`, { input_string: args.input });
+            }
+            return await postJSON(5000, `/api/task/stdout/${encodeURIComponent(taskId)}`, {});
         } catch (err) {
-            return { error: `Web fetch failed: ${err.message}` };
-        }
-    }
-    if (name === "run_node" || name === "run_code" || name === "run_python") {
-        try {
-            return await postJSON(5000, "/api/code/run", args, 35000);
-        } catch (err) {
-            return { error: `Code execution failed: ${err.message}` };
+            return { error: `manage_tasks failed: ${err.message}` };
         }
     }
     if (name === "schedule" || name === "sleep") {
-        const secs = Math.min(30, Math.max(1, parseFloat(args.seconds || args.time || 5) || 5));
+        const secs = Math.min(300, Math.max(0.1, parseFloat(args.time || args.seconds || 5) || 5));
         await new Promise(r => setTimeout(r, secs * 1000));
-        return { status: "completed", elapsed_seconds: secs };
+        return { status: "timer_expired", elapsed_seconds: secs };
     }
     if (name === "ask_question" || name === "ask_questions") {
         const rawQuestions = Array.isArray(args.questions)

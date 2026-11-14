@@ -35,8 +35,8 @@
 }
 
 .plan-proceed-btn {
-    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-    color: #ffffff;
+    background: var(--accent);
+    color: var(--card-bg, #09090b);
     font-size: 13px;
     font-weight: 600;
     font-family: inherit;
@@ -47,15 +47,15 @@
     display: inline-flex;
     align-items: center;
     gap: 7px;
-    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.28);
+    box-shadow: 0 2px 8px var(--accent-subtle);
     transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
     user-select: none;
 }
 
 .plan-proceed-btn:hover {
-    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    background: var(--accent-hover, var(--accent));
     transform: translateY(-1px);
-    box-shadow: 0 4px 14px rgba(37, 99, 235, 0.42);
+    box-shadow: 0 4px 14px var(--accent-muted, var(--accent-subtle));
 }
 
 .plan-proceed-btn:active {

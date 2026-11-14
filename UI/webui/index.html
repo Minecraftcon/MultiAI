@@ -86,10 +86,12 @@
     <link rel="stylesheet" href="./styles/terminal.css">
     <link rel="stylesheet" href="./styles/skills-menu.css">
     <link rel="stylesheet" href="./styles/classics.css">
+    <link rel="stylesheet" href="./styles/right-panel.css">
 </head>
 <body>
 
 <div id="backdrop"></div>
+<div id="rightPanelBackdrop" class="right-panel-backdrop" aria-hidden="true"></div>
 
 <!-- ================= SIDE PANEL ================= -->
 <aside id="sidePanel" class="side-panel" aria-hidden="true">
@@ -145,10 +147,6 @@
             <button id="newImageBtn" class="panel-nav-btn" type="button" title="Generate an image">
                 <i data-lucide="image"></i>
                 <span>New Image</span>
-            </button>
-            <button id="panelTerminalBtn" class="panel-nav-btn" type="button" title="Interactive Terminal (Ctrl+`)">
-                <i data-lucide="terminal"></i>
-                <span>Terminal</span>
             </button>
         </div>
 
@@ -223,6 +221,9 @@
             <button id="headerNewChatBtn" class="icon-btn" type="button" aria-label="New chat" title="New chat">
                 <i data-lucide="square-pen"></i>
             </button>
+            <button id="headerRightPanelBtn" class="icon-btn" type="button" aria-label="Toggle Side Panel" title="Toggle Workspace & Tasks Panel (Ctrl+.)">
+                <i data-lucide="panel-right"></i>
+            </button>
         </div>
     </header>
 
@@ -243,6 +244,118 @@
     <!-- ================= SETTINGS SCREEN CONTAINER ================= -->
     <div id="settingsContainer"></div>
 </div>
+
+<!-- ================= RIGHT WORKSPACE PANEL (TABS, EDITOR, DIFFS, TERMINAL, SEARCH, TASKS) ================= -->
+<aside id="rightPanel" class="right-panel" aria-label="Workspace & Tasks Panel">
+    <div id="rightPanelResizer" class="right-panel-resizer" title="Drag to resize"></div>
+    <div class="right-panel-header">
+        <!-- VS Code-like multi-tab strip on the left -->
+        <div id="rightPanelTabStrip" class="right-panel-tab-strip" role="tablist">
+            <!-- Dynamic tabs inserted here: [icon file.js x] [+] -->
+        </div>
+        <!-- Right side actions: Terminal, Toggle sidebar, and Close panel -->
+        <div class="right-panel-header-actions">
+            <button type="button" class="right-panel-action-btn" id="rightPanelHeaderTermBtn" title="Interactive Terminal">
+                <i data-lucide="terminal"></i>
+            </button>
+            <button type="button" class="right-panel-action-btn" id="rightPanelToggleSidebarBtn" title="Toggle sidebar">
+                <i data-lucide="panel-right"></i>
+            </button>
+            <button type="button" class="right-panel-action-btn" id="rightPanelCloseBtn" title="Close Panel (Ctrl+.)">
+                <i data-lucide="panel-right-close"></i>
+            </button>
+        </div>
+    </div>
+
+    <div class="right-panel-body" id="rightPanelBody">
+        <!-- 1. Launcher / Empty View (Visible when no file/tab is open, or on New Tab) -->
+        <div id="rightPanelLauncherView" class="right-panel-launcher-view">
+            <!-- Search & URL Pill Row with More Options Button -->
+            <div class="launcher-search-row">
+                <div class="launcher-search-pill" id="launcherSearchPill">
+                    <i data-lucide="search" class="launcher-search-icon"></i>
+                    <input type="text" id="launcherSearchInput" class="launcher-search-input" placeholder="Search or enter a URL" autocomplete="off" spellcheck="false" />
+                    <button type="button" id="launcherSearchClear" class="launcher-search-clear" style="display: none;" title="Clear">
+                        <i data-lucide="x"></i>
+                    </button>
+                </div>
+                <button type="button" class="launcher-more-btn" id="launcherMoreBtn" title="More options">
+                    <i data-lucide="more-vertical"></i>
+                </button>
+                <!-- Autocomplete & Directory Explorer Results -->
+                <div id="launcherSearchResults" class="launcher-search-results" style="display: none;"></div>
+            </div>
+
+            <!-- Primary Navigation Menu List (Clean Vertical List matching reference) -->
+            <div class="launcher-menu-list">
+                <div class="launcher-menu-item" id="launcherItemReview" role="button" tabindex="0">
+                    <div class="launcher-item-left">
+                        <i data-lucide="file-diff"></i>
+                        <span>Review</span>
+                    </div>
+                    <span id="launcherReviewBadge" class="launcher-item-badge" style="display: none;">0</span>
+                </div>
+                <div class="launcher-menu-item" id="launcherItemOpenFile" role="button" tabindex="0">
+                    <div class="launcher-item-left">
+                        <i data-lucide="file"></i>
+                        <span>Open File</span>
+                    </div>
+                </div>
+                <div class="launcher-menu-item" id="launcherItemTerminal" role="button" tabindex="0">
+                    <div class="launcher-item-left">
+                        <i data-lucide="square-terminal"></i>
+                        <span>Terminal</span>
+                    </div>
+                </div>
+                <div class="launcher-menu-item" id="launcherItemBrowser" role="button" tabindex="0">
+                    <div class="launcher-item-left">
+                        <i data-lucide="globe"></i>
+                        <span>Browser</span>
+                    </div>
+                </div>
+                <div class="launcher-menu-item" id="launcherItemExtensions" role="button" tabindex="0">
+                    <div class="launcher-item-left">
+                        <i data-lucide="puzzle"></i>
+                        <span>Extensions</span>
+                    </div>
+                    <i data-lucide="chevron-right" class="launcher-item-chevron"></i>
+                </div>
+            </div>
+
+            <!-- Background Tasks Section -->
+            <div class="launcher-section launcher-tasks-section">
+                <div class="launcher-section-header">
+                    <span class="launcher-section-title">Background Tasks</span>
+                    <span id="launcherTasksCountBadge" class="launcher-count-pill" style="display: none;">0</span>
+                </div>
+                <div id="launcherTasksList" class="launcher-tasks-list">
+                    <div class="launcher-tasks-empty">No active background tasks.</div>
+                </div>
+                <button type="button" id="launcherTasksSeeAllBtn" class="launcher-see-all-btn" style="display: none;">See all</button>
+            </div>
+        </div>
+
+        <!-- 2. Active Tab Content Containers -->
+        <div id="rightPanelTabContent" class="right-panel-tab-content" style="display: none;">
+            <!-- File / Diff Viewer Mount -->
+            <div id="rightPanelViewerMount" class="right-panel-viewer-mount"></div>
+            <!-- Fused Terminal Mount -->
+            <div id="rightPanelTerminalMount" class="right-panel-terminal-mount" style="display: none;">
+                <div id="fusedTerminalContainer" class="fused-terminal-container"></div>
+            </div>
+            <!-- Embedded Web Browser Mount -->
+            <div id="rightPanelBrowserMount" class="right-panel-browser-mount" style="display: none;">
+                <div class="browser-omnibox-bar">
+                    <button type="button" id="browserBackBtn" class="browser-nav-btn" title="Back"><i data-lucide="arrow-left"></i></button>
+                    <button type="button" id="browserReloadBtn" class="browser-nav-btn" title="Reload"><i data-lucide="rotate-cw"></i></button>
+                    <input type="text" id="browserUrlInput" class="browser-url-input" spellcheck="false" />
+                    <button type="button" id="browserOpenExternalBtn" class="browser-nav-btn" title="Open in new window"><i data-lucide="external-link"></i></button>
+                </div>
+                <iframe id="rightPanelBrowserFrame" class="browser-iframe" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
+            </div>
+        </div>
+    </div>
+</aside>
 
 <!-- ================= ATTACHMENT BOTTOM SHEET DRAWER ================= -->
 <div id="attachBackdrop" class="attach-backdrop" style="display: none;"></div>

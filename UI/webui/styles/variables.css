@@ -298,3 +298,103 @@
         transform: translateY(0) scale(1);
     }
 }
+
+/* =========================================================
+   ACCENT SYSTEM (3 Clean Palettes: Blue, Sage, Warm)
+   Controls --accent, --accent-hover, --accent-subtle, etc.
+   ========================================================= */
+
+/* 1. Ocean Blue (Default) */
+:root[data-accent="blue"],
+:root:not([data-accent]) {
+    --accent: #3b82f6;
+    --accent-hover: #60a5fa;
+    --accent-subtle: rgba(59, 130, 246, 0.12);
+    --accent-muted: rgba(59, 130, 246, 0.22);
+    --accent-mid: rgba(59, 130, 246, 0.38);
+    --stat-add: #60a5fa;
+    --stat-del: rgba(255, 255, 255, 0.45);
+}
+
+:root[data-theme="midnight"][data-accent="blue"],
+:root[data-theme="midnight"]:not([data-accent]) {
+    --accent: #38bdf8;
+    --accent-hover: #7dd3fc;
+    --accent-subtle: rgba(56, 189, 248, 0.10);
+    --accent-muted: rgba(56, 189, 248, 0.20);
+    --accent-mid: rgba(56, 189, 248, 0.35);
+    --stat-add: #38bdf8;
+    --stat-del: rgba(255, 255, 255, 0.4);
+}
+
+:root[data-theme="light"][data-accent="blue"] {
+    --accent: #2563eb;
+    --accent-hover: #1d4ed8;
+    --accent-subtle: rgba(37, 99, 235, 0.08);
+    --accent-muted: rgba(37, 99, 235, 0.16);
+    --accent-mid: rgba(37, 99, 235, 0.30);
+    --stat-add: #2563eb;
+    --stat-del: rgba(0, 0, 0, 0.45);
+}
+
+/* 2. Sage Green (Botanical / Forest Sage) */
+:root[data-accent="sage"] {
+    --accent: #4ade80;
+    --accent-hover: #86efac;
+    --accent-subtle: rgba(74, 222, 128, 0.12);
+    --accent-muted: rgba(74, 222, 128, 0.22);
+    --accent-mid: rgba(74, 222, 128, 0.38);
+    --stat-add: #4ade80;
+    --stat-del: rgba(255, 255, 255, 0.45);
+}
+
+:root[data-theme="midnight"][data-accent="sage"] {
+    --accent: #4ade80;
+    --accent-hover: #86efac;
+    --accent-subtle: rgba(74, 222, 128, 0.10);
+    --accent-muted: rgba(74, 222, 128, 0.20);
+    --accent-mid: rgba(74, 222, 128, 0.35);
+    --stat-add: #4ade80;
+    --stat-del: rgba(255, 255, 255, 0.4);
+}
+
+:root[data-theme="light"][data-accent="sage"] {
+    --accent: #16a34a;
+    --accent-hover: #15803d;
+    --accent-subtle: rgba(22, 163, 74, 0.08);
+    --accent-muted: rgba(22, 163, 74, 0.16);
+    --accent-mid: rgba(22, 163, 74, 0.30);
+    --stat-add: #16a34a;
+    --stat-del: rgba(0, 0, 0, 0.45);
+}
+
+/* 3. Monochrome Warm (Zinc / Warm Neutral) */
+:root[data-accent="warm"] {
+    --accent: #e4e4e7;
+    --accent-hover: #ffffff;
+    --accent-subtle: rgba(255, 255, 255, 0.08);
+    --accent-muted: rgba(255, 255, 255, 0.16);
+    --accent-mid: rgba(255, 255, 255, 0.28);
+    --stat-add: #e4e4e7;
+    --stat-del: rgba(255, 255, 255, 0.45);
+}
+
+:root[data-theme="midnight"][data-accent="warm"] {
+    --accent: #f4f4f5;
+    --accent-hover: #ffffff;
+    --accent-subtle: rgba(255, 255, 255, 0.07);
+    --accent-muted: rgba(255, 255, 255, 0.15);
+    --accent-mid: rgba(255, 255, 255, 0.25);
+    --stat-add: #f4f4f5;
+    --stat-del: rgba(255, 255, 255, 0.4);
+}
+
+:root[data-theme="light"][data-accent="warm"] {
+    --accent: #18181b;
+    --accent-hover: #09090b;
+    --accent-subtle: rgba(0, 0, 0, 0.06);
+    --accent-muted: rgba(0, 0, 0, 0.12);
+    --accent-mid: rgba(0, 0, 0, 0.24);
+    --stat-add: #18181b;
+    --stat-del: rgba(0, 0, 0, 0.45);
+}

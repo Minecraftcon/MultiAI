@@ -93,6 +93,8 @@ export function parseUnifiedDiff(diffStr, defaultStartLine = 1) {
             currentHunk.lines.push({
                 type: "add",
                 sign: "+",
+                oldLine: null,
+                newLine: curNewLine,
                 displayLine: curNewLine,
                 text: line.slice(1)
             });
@@ -102,6 +104,8 @@ export function parseUnifiedDiff(diffStr, defaultStartLine = 1) {
             currentHunk.lines.push({
                 type: "del",
                 sign: "-",
+                oldLine: curOldLine,
+                newLine: null,
                 displayLine: curOldLine,
                 text: line.slice(1)
             });
@@ -110,6 +114,8 @@ export function parseUnifiedDiff(diffStr, defaultStartLine = 1) {
             currentHunk.lines.push({
                 type: "ctx",
                 sign: " ",
+                oldLine: curOldLine,
+                newLine: curNewLine,
                 displayLine: curNewLine,
                 text: line.startsWith(" ") ? line.slice(1) : line
             });
@@ -122,7 +128,7 @@ export function parseUnifiedDiff(diffStr, defaultStartLine = 1) {
 }
 
 /**
- * Builds HTML for a modern unified diff viewer window.
+ * Builds HTML for a modern unified diff viewer window with dual line numbers and folding.
  */
 export function renderDiffCardHtml({
     diffStr = "",
@@ -130,7 +136,8 @@ export function renderDiffCardHtml({
     title = "",
     stats = null,
     startLine = 1,
-    maxHeight = 600
+    maxHeight = 600,
+    hideWhitespace = false
 } = {}) {
     const parsed = parseUnifiedDiff(diffStr, startLine);
     const displayPath = filePath || parsed.fileName || title || "diff";
@@ -140,38 +147,74 @@ export function renderDiffCardHtml({
     const langMeta = getLanguageMeta(displayPath);
 
     let rowsHtml = "";
+    let totalLinesCount = 0;
+    const minimapTicks = [];
+    let prevOldEnd = 1;
 
-    parsed.hunks.forEach((hunk) => {
-        if (hunk.header && (parsed.hunks.length > 1 || hunk.heading)) {
+    parsed.hunks.forEach((hunk, hIdx) => {
+        // Calculate skipped unchanged lines between hunks
+        const skippedCount = hIdx === 0
+            ? Math.max(0, hunk.oldStart - 1)
+            : Math.max(0, hunk.oldStart - prevOldEnd);
+
+        if (skippedCount > 0) {
             rowsHtml += `
-                <div class="mv-hunk-banner">
-                    <span class="mv-hunk-tag">${escapeHTML(hunk.header)}</span>
-                    ${hunk.heading ? `<span class="mv-hunk-context">${escapeHTML(hunk.heading)}</span>` : ""}
+                <div class="mv-chunk-banner" data-chunk-index="${hIdx}">
+                    <span class="mv-chunk-tag">
+                        <i data-lucide="chevrons-up-down"></i>
+                        +${skippedCount} more lines
+                    </span>
+                    <span class="mv-chunk-range">+${hunk.oldStart} +${hunk.newStart}</span>
                 </div>
             `;
         }
 
         hunk.lines.forEach((l) => {
-            const lineNumStr = l.displayLine !== null && l.displayLine !== undefined ? String(l.displayLine) : "";
+            if (hideWhitespace && l.type !== "ctx") {
+                const trimmed = (l.text || "").trim();
+                if (!trimmed) return;
+            }
+
+            totalLinesCount++;
             const rowClass = l.type === "add" ? "mv-row-add" : (l.type === "del" ? "mv-row-del" : "mv-row-ctx");
-            const signChar = l.sign === "+" ? "+" : (l.sign === "-" ? "-" : "&nbsp;");
+            const oldStr = l.oldLine !== null && l.oldLine !== undefined ? String(l.oldLine) : "";
+            const newStr = l.newLine !== null && l.newLine !== undefined ? String(l.newLine) : "";
+
+            if (l.type === "add" || l.type === "del") {
+                minimapTicks.push({ type: l.type, lineIdx: totalLinesCount });
+            }
 
             rowsHtml += `
                 <div class="mv-row ${rowClass}">
-                    <div class="mv-gutter" aria-hidden="true">
-                        <span class="mv-num">${escapeHTML(lineNumStr)}</span>
-                        <span class="mv-sign">${signChar}</span>
+                    <div class="mv-gutter dual" aria-hidden="true">
+                        <span class="mv-old-num">${escapeHTML(oldStr)}</span>
+                        <span class="mv-new-num">${escapeHTML(newStr)}</span>
                     </div>
                     <div class="mv-code-line">${l.text ? escapeHTML(l.text) : "&nbsp;"}</div>
                 </div>
             `;
         });
+
+        // Record end line of this hunk
+        const lastLine = hunk.lines[hunk.lines.length - 1];
+        if (lastLine && lastLine.oldLine) {
+            prevOldEnd = lastLine.oldLine + 1;
+        }
     });
+
+    // Minimap ticks
+    let minimapHtml = "";
+    if (totalLinesCount > 0) {
+        minimapTicks.forEach((tick) => {
+            const pct = Math.min(100, Math.max(0, (tick.lineIdx / totalLinesCount) * 100));
+            minimapHtml += `<div class="mv-minimap-tick ${tick.type}" style="top: ${pct.toFixed(1)}%;"></div>`;
+        });
+    }
 
     const encodedRaw = encodeURIComponent(diffStr);
 
     return `
-        <div class="modern-viewer-window diff-mode" data-raw-diff="${encodedRaw}">
+        <div class="modern-viewer-window diff-mode" data-raw-diff="${encodedRaw}" data-file-path="${escapeHTML(displayPath)}">
             <div class="mv-header">
                 <div class="mv-header-left">
                     <span class="mv-file-icon" style="color: ${langMeta.color};">
@@ -196,6 +239,9 @@ export function renderDiffCardHtml({
             <div class="mv-body" style="max-height: ${maxHeight}px;">
                 <div class="mv-table">
                     ${rowsHtml || '<div class="mv-empty">No diff changes detected.</div>'}
+                </div>
+                <div class="mv-minimap-bar" aria-hidden="true">
+                    ${minimapHtml}
                 </div>
             </div>
         </div>

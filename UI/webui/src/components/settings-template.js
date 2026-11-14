@@ -481,6 +481,18 @@ export function getSettingsHTML() {
 
                         <div class="settings-row">
                             <div class="settings-item-info">
+                                <span class="settings-item-title">Color Accent</span>
+                                <span class="settings-item-desc">Primary interaction tone across tabs, borders, and badges</span>
+                            </div>
+                            <select id="cfgAccent" class="settings-select">
+                                <option value="blue">Ocean Blue (Minimal Sky)</option>
+                                <option value="sage">Sage Green (Botanical Muted)</option>
+                                <option value="warm">Monochrome Warm (Zinc / Warm Neutral)</option>
+                            </select>
+                        </div>
+
+                        <div class="settings-row">
+                            <div class="settings-item-info">
                                 <span class="settings-item-title">Start Page Aurora Theme</span>
                                 <span class="settings-item-desc">Celestial backdrop and aura glow on the welcome screen</span>
                             </div>

@@ -210,6 +210,14 @@ class TerminalDrawerManager {
     applyDockStyles() {
         if (!this.drawerEl) return;
 
+        if (this.drawerEl.classList.contains("fused-mode")) {
+            this.drawerEl.style.width = "100%";
+            this.drawerEl.style.height = "100%";
+            this.drawerEl.style.opacity = "1";
+            this.drawerEl.style.pointerEvents = "auto";
+            return;
+        }
+
         document.documentElement.style.setProperty("--term-panel-width", `${this.width}px`);
         document.documentElement.style.setProperty("--term-panel-height", `${this.height}px`);
 
@@ -751,9 +759,23 @@ class TerminalDrawerManager {
 
     fitActiveTerminal() {
         const active = this.getActiveSession();
-        if (active && active.fitAddon && active.term) {
+        if (!active || !active.term) return;
+
+        if (active.fitAddon) {
             try {
                 active.fitAddon.fit();
+            } catch (_) {}
+        }
+
+        // Safety fallback: if cols or rows are suspiciously small (<= 2 or <= 1)
+        if (active.term.cols <= 2 || active.term.rows <= 1) {
+            const mount = active.mount;
+            const w = mount?.clientWidth || 460;
+            const h = mount?.clientHeight || 400;
+            const cols = Math.max(20, Math.floor((w - 16) / 8.5));
+            const rows = Math.max(10, Math.floor((h - 16) / 17));
+            try {
+                active.term.resize(cols, rows);
             } catch (_) {}
         }
     }

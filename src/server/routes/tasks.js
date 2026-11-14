@@ -153,10 +153,14 @@ async function handleTaskRoute(req, res) {
                 } catch (_) {}
 
                 if (json && typeof json === "object") {
+                    const urlParts = req.url.split("?")[0];
+                    if (urlParts === "/api/task/list" || urlParts === "/api/task/clean") {
+                        return sendJSON(res, proxyRes.statusCode, json);
+                    }
+
                     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
                     json.ran_for = json.elapsed_seconds ? String(json.elapsed_seconds) : elapsed;
 
-                    const urlParts = req.url.split("?")[0];
                     let extractedTaskId = "";
                     if (urlParts.startsWith("/api/task/stdout/")) {
                         extractedTaskId = decodeURIComponent(urlParts.replace("/api/task/stdout/", "")).trim();

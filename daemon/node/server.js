@@ -291,6 +291,78 @@ class TaskManager {
         }
         return count;
     }
+
+    async idle(seconds = 5, taskId = null, wakeOn = "exit", reason = "") {
+        const secs = Math.min(300, Math.max(0.1, parseFloat(seconds) || 5));
+        const startTime = Date.now();
+        const deadline = startTime + (secs * 1000);
+
+        if (taskId) {
+            const task = this.tasks.get(taskId);
+            if (task) {
+                while (Date.now() < deadline) {
+                    const isDead = !task.running;
+                    const hasOutput = (task.unreadStdout && task.unreadStdout.length > 0) || (task.unreadStderr && task.unreadStderr.length > 0);
+
+                    if ((wakeOn === "exit" || wakeOn === "any") && isDead) {
+                        await new Promise(r => setTimeout(r, 20));
+                        const out = this.getOutput(taskId);
+                        const elapsed = parseFloat(((Date.now() - startTime) / 1000).toFixed(2));
+                        return {
+                            task_id: taskId,
+                            running: out.running,
+                            exit_code: out.exit_code,
+                            stdout: out.stdout || task.accumulatedStdout,
+                            stderr: out.stderr || task.accumulatedStderr,
+                            status: "task_completed",
+                            elapsed_seconds: elapsed,
+                            reason
+                        };
+                    }
+
+                    if ((wakeOn === "output" || wakeOn === "any") && hasOutput) {
+                        await new Promise(r => setTimeout(r, 20));
+                        const out = this.getOutput(taskId);
+                        const elapsed = parseFloat(((Date.now() - startTime) / 1000).toFixed(2));
+                        return {
+                            task_id: taskId,
+                            running: out.running,
+                            exit_code: out.exit_code,
+                            stdout: out.stdout,
+                            stderr: out.stderr,
+                            status: "task_output",
+                            elapsed_seconds: elapsed,
+                            reason
+                        };
+                    }
+
+                    await new Promise(r => setTimeout(r, 40));
+                }
+
+                const out = this.getOutput(taskId);
+                const elapsed = parseFloat(((Date.now() - startTime) / 1000).toFixed(2));
+                return {
+                    task_id: taskId,
+                    running: out.running,
+                    exit_code: out.exit_code,
+                    stdout: out.stdout,
+                    stderr: out.stderr,
+                    status: "timer_expired",
+                    elapsed_seconds: elapsed,
+                    reason
+                };
+            }
+        }
+
+        const remainingMs = Math.max(0, deadline - Date.now());
+        await new Promise(r => setTimeout(r, remainingMs));
+        const elapsed = parseFloat(((Date.now() - startTime) / 1000).toFixed(2));
+        return {
+            status: "timer_expired",
+            elapsed_seconds: elapsed,
+            reason
+        };
+    }
 }
 
 let ptyModule = null;
@@ -849,12 +921,44 @@ const server = http.createServer(async (req, res) => {
 
         writeSSE({ type: "start", task_id: task.id });
 
+        let timeoutSec = 0;
+        if (body.background || body.is_daemon || body.isDaemon) {
+            timeoutSec = 0.5;
+        } else if (body.timer !== undefined) {
+            timeoutSec = parseFloat(body.timer) || 0;
+        } else if (body.timeout !== undefined) {
+            timeoutSec = parseFloat(body.timeout) || 0;
+        }
+
+        let streamTimer = null;
+        if (timeoutSec > 0) {
+            streamTimer = setTimeout(() => {
+                if (task.running) {
+                    const elapsed = ((Date.now() - task.startTime) / 1000).toFixed(2);
+                    writeSSE({
+                        type: "done",
+                        task_id: task.id,
+                        done: false,
+                        status: "running",
+                        running: true,
+                        exit_code: null,
+                        stdout: task.accumulatedStdout,
+                        stderr: task.accumulatedStderr,
+                        ran_for: elapsed
+                    });
+                    task.listeners.delete(listener);
+                    res.end();
+                }
+            }, timeoutSec * 1000);
+        }
+
         const listener = (event) => {
             if (event.type === "stdout") {
                 writeSSE({ type: "chunk", stdout: event.text, stderr: "" });
             } else if (event.type === "stderr") {
                 writeSSE({ type: "chunk", stdout: "", stderr: event.text });
             } else if (event.type === "close") {
+                if (streamTimer) clearTimeout(streamTimer);
                 const elapsed = ((Date.now() - task.startTime) / 1000).toFixed(2);
                 writeSSE({
                     type: "done",
@@ -875,6 +979,7 @@ const server = http.createServer(async (req, res) => {
         task.listeners.add(listener);
 
         req.on("close", () => {
+            if (streamTimer) clearTimeout(streamTimer);
             task.listeners.delete(listener);
         });
         return;
@@ -921,26 +1026,37 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
-    // 4. Idle background task: POST /api/task/idle
+    // 4. Idle / wait / monitor task: POST /api/task/idle
     if (req.method === "POST" && pathname === "/api/task/idle") {
         const body = await parseJSONBody(req);
-        const command = body.command;
-        if (!command) {
-            return sendJSON(res, 400, { error: "No command provided" });
+        let taskId = body.task_id || body.taskId || null;
+
+        // If a command was supplied, start the task
+        if (body.command) {
+            const task = manager.createTask(body.command, {
+                cwd: body.cwd,
+                scratchDir: body.scratch_dir,
+                artifactsDir: body.artifacts_dir,
+                shellOverride: body.shell
+            });
+            taskId = task.id;
+
+            // Pure spawn if no duration requested
+            if (body.seconds === undefined && body.time === undefined) {
+                return sendJSON(res, 200, {
+                    task_id: task.id,
+                    pid: task.pid,
+                    status: "running"
+                });
+            }
         }
 
-        const task = manager.createTask(command, {
-            cwd: body.cwd,
-            scratchDir: body.scratch_dir,
-            artifactsDir: body.artifacts_dir,
-            shellOverride: body.shell
-        });
+        const secs = body.seconds !== undefined ? body.seconds : (body.time !== undefined ? body.time : 5);
+        const wakeOn = body.wake_on || body.wakeOn || "exit";
+        const reason = body.reason || "";
 
-        return sendJSON(res, 200, {
-            task_id: task.id,
-            pid: task.pid,
-            status: "running"
-        });
+        const result = await manager.idle(secs, taskId, wakeOn, reason);
+        return sendJSON(res, 200, result);
     }
 
     // 5. Read stdout: GET /api/task/stdout/:taskId

@@ -11,22 +11,22 @@ export const listDirTool = {
         type: "function",
         function: {
             name: "list_dir",
-            description: "List the contents of a directory, including all files and subdirectories with sizes and child counts. Directory path must be an absolute path or relative path to a directory that exists (e.g. '.' for project workspace root).",
+            description: "List the contents of a directory, including all files and subdirectories with sizes and child counts.",
             parameters: {
                 type: "object",
                 properties: {
-                    DirectoryPath: {
+                    path: {
                         type: "string",
-                        description: "Path to the directory to inspect (e.g. '.' or absolute/relative directory path)."
+                        description: "Path to the directory to inspect (e.g. '.' for project workspace root)."
                     }
                 },
-                required: ["DirectoryPath"]
+                required: ["path"]
             }
         }
     },
     handler: async (args, { genState }) => {
         const payload = {
-            DirectoryPath: args.DirectoryPath || args.path || args.dir_path || args.dirPath || ".",
+            DirectoryPath: args.path || args.DirectoryPath || args.dir_path || args.dirPath || ".",
             chatId: state.currentChatId
         };
         return await toolFetch("/api/file/list-dir", { method: "POST", body: payload, genState });
@@ -259,48 +259,55 @@ export const grepSearchTool = {
         type: "function",
         function: {
             name: "grep_search",
-            description: "Use ripgrep to find exact pattern matches within files or directories. Results are returned in JSON format and for each match you will receive: Filename, LineNumber (only when MatchPerLine is true), LineContent (only when MatchPerLine is true). Total results are capped at 50 matches. Use the Includes option to filter by file type or specific paths.",
+            description: "Search for regex or literal patterns within files or directories. Results include filename, line numbers, and matching content snippets (capped at 50 matches).",
             parameters: {
                 type: "object",
                 properties: {
-                    SearchPath: {
+                    path: {
                         type: "string",
-                        description: "The path to search. Must be an absolute path or relative path to a directory or file."
+                        description: "The path to search in (e.g. '.' for workspace root, or a directory/file path)."
                     },
-                    Query: {
+                    query: {
                         type: "string",
-                        description: "The search term or pattern to look for within files."
+                        description: "The search term or regex pattern to look for within files."
                     },
-                    IsRegex: {
+                    is_regex: {
                         type: "boolean",
-                        description: "If true, treats Query as a regular expression pattern. If false, treats Query as a literal string where all characters are matched exactly."
+                        description: "If true, treats query as a regular expression pattern. If false (default), treats query as a literal string."
                     },
-                    CaseInsensitive: {
+                    case_sensitive: {
                         type: "boolean",
-                        description: "If true, performs a case-insensitive search."
+                        description: "If true, performs a case-sensitive search. If false (default), search is case-insensitive."
                     },
-                    MatchPerLine: {
+                    match_per_line: {
                         type: "boolean",
-                        description: "If true, returns each line that matches the query, including line numbers and snippets of matching lines. If false, only returns the names of files containing the query."
+                        description: "If true (default), returns each matching line with numbers and snippets. If false, returns only filenames."
                     },
-                    Includes: {
+                    includes: {
                         type: "array",
                         items: { type: "string" },
-                        description: "Glob patterns to filter files found within the SearchPath (e.g. ['*.js', '!**/vendor/*'])."
+                        description: "Glob patterns to filter files found within path (e.g. ['*.js', '!**/vendor/*'])."
                     }
                 },
-                required: ["SearchPath", "Query"]
+                required: ["path", "query"]
             }
         }
     },
     handler: async (args, { genState }) => {
+        const pathVal = args.path || args.SearchPath || args.search_path || ".";
+        const queryVal = args.query !== undefined ? args.query : (args.Query !== undefined ? args.Query : args.pattern);
+        const isRegex = args.is_regex !== undefined ? args.is_regex : (args.IsRegex !== undefined ? args.IsRegex : false);
+        const caseInsensitive = args.case_sensitive !== undefined ? !args.case_sensitive : (args.CaseInsensitive !== undefined ? args.CaseInsensitive : (args.case_insensitive !== undefined ? args.case_insensitive : true));
+        const matchPerLine = args.match_per_line !== undefined ? args.match_per_line : (args.MatchPerLine !== undefined ? args.MatchPerLine : true);
+        const includesVal = args.includes || args.Includes || args.glob;
+
         const payload = {
-            SearchPath: args.SearchPath || args.search_path || args.path || ".",
-            Query: args.Query !== undefined ? args.Query : (args.query !== undefined ? args.query : args.pattern),
-            IsRegex: args.IsRegex !== undefined ? args.IsRegex : args.is_regex,
-            CaseInsensitive: args.CaseInsensitive !== undefined ? args.CaseInsensitive : args.case_insensitive,
-            MatchPerLine: args.MatchPerLine !== undefined ? args.MatchPerLine : args.match_per_line,
-            Includes: args.Includes || args.includes || args.glob,
+            SearchPath: pathVal,
+            Query: queryVal,
+            IsRegex: isRegex,
+            CaseInsensitive: caseInsensitive,
+            MatchPerLine: matchPerLine,
+            Includes: includesVal,
             chatId: state.currentChatId
         };
         return await toolFetch("/api/code/grep", { method: "POST", body: payload, genState });

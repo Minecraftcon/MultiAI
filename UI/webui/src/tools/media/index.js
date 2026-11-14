@@ -54,28 +54,5 @@ export const mediaTools = [
             }
             return await toolFetch("/api/image/generate", { method: "POST", body: payload, genState });
         }
-    },
-    {
-        name: "get_image_status",
-        schema: {
-            type: "function",
-            function: {
-                name: "get_image_status",
-                description: "Check the status and result of a background image generation task by task_id.",
-                parameters: {
-                    type: "object",
-                    properties: {
-                        task_id: {
-                            type: "string",
-                            description: "The task_id returned by generate_image."
-                        }
-                    },
-                    required: ["task_id"]
-                }
-            }
-        },
-        handler: async (args, { genState }) => {
-            return await toolFetch(`/api/image/status/${encodeURIComponent(args.task_id)}`, { method: "GET", genState });
-        }
     }
 ];
