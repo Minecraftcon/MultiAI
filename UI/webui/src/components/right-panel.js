@@ -1510,39 +1510,197 @@ class RightPanelManager {
         const term = (filterQuery || "").trim().toLowerCase();
 
         let treeHtml = "";
+        let matchingFiles = [];
+        let matchingCode = [];
+
         if (term) {
             try {
-                const res = await fetch("/api/file/find", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ query: term })
-                });
-                const data = res.ok ? await res.json() : { results: [] };
-                const results = Array.isArray(data.results) ? data.results : [];
-                if (results.length === 0) {
-                    this.searchResultsEl.innerHTML = `<div style="padding: 10px 14px; font-size: 12.5px; color: var(--text-tertiary);">No files or folders found matching "${escapeHTML(term)}".</div>`;
-                    this.showSearchResults();
-                    return;
+                // Fetch matching files & code grep in parallel
+                const [findRes, grepRes] = await Promise.allSettled([
+                    fetch("/api/file/find", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ query: term })
+                    }),
+                    term.length >= 2 ? fetch("/api/code/grep", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ query: term, search_path: "." })
+                    }) : Promise.resolve(null)
+                ]);
+
+                if (findRes.status === "fulfilled" && findRes.value?.ok) {
+                    const data = await findRes.value.json();
+                    const results = Array.isArray(data.results) ? data.results : [];
+                    matchingFiles = results.filter(r => !r.isDir);
+                    const hierarchy = this.buildHierarchyFromFlatList(results);
+                    treeHtml = this.renderHierarchyHtml(hierarchy, 0, term, "");
                 }
-                const hierarchy = this.buildHierarchyFromFlatList(results);
-                treeHtml = this.renderHierarchyHtml(hierarchy, 0, term, "");
-            } catch (_) {
-                this.searchResultsEl.innerHTML = '<div style="padding: 10px 14px; font-size: 12.5px; color: var(--text-tertiary);">Failed to search files.</div>';
-                this.showSearchResults();
-                return;
-            }
+
+                if (grepRes.status === "fulfilled" && grepRes.value?.ok) {
+                    const grepData = await grepRes.value.json();
+                    matchingCode = Array.isArray(grepData.matches) ? grepData.matches : [];
+                }
+            } catch (_) {}
         } else {
             treeHtml = await this.buildDirectoryTreeHtml(".", 0, "");
         }
 
-        if (!treeHtml.trim()) {
-            this.searchResultsEl.innerHTML = '<div style="padding: 10px 14px; font-size: 12.5px; color: var(--text-tertiary);">Empty workspace.</div>';
+        // Build Files List HTML for the right pane
+        let filesHtml = "";
+        if (matchingFiles.length === 0) {
+            filesHtml = '<div class="search-code-empty">No matching files.</div>';
         } else {
-            this.searchResultsEl.innerHTML = treeHtml;
+            matchingFiles.forEach((file) => {
+                const meta = getLanguageMeta(file.name);
+                const parts = file.path.split("/");
+                parts.pop();
+                const dirPath = parts.join("/") || ".";
+
+                let nameHtml = escapeHTML(file.name);
+                if (term && file.name.toLowerCase().includes(term)) {
+                    const idx = file.name.toLowerCase().indexOf(term);
+                    const before = escapeHTML(file.name.slice(0, idx));
+                    const matched = escapeHTML(file.name.slice(idx, idx + term.length));
+                    const after = escapeHTML(file.name.slice(idx + term.length));
+                    nameHtml = `${before}<span class="search-tree-match">${matched}</span>${after}`;
+                }
+
+                filesHtml += `
+                    <div class="search-file-item" data-action="open-file" data-path="${escapeHTML(file.path)}" title="${escapeHTML(file.path)}">
+                        <span class="search-tree-icon" style="color: ${meta.color || "inherit"};">
+                            <i data-lucide="${meta.icon || "file-text"}"></i>
+                        </span>
+                        <div class="search-file-info">
+                            <span class="search-file-name">${nameHtml}</span>
+                            <span class="search-file-path">${escapeHTML(dirPath)}</span>
+                        </div>
+                    </div>
+                `;
+            });
         }
 
+        // Build Code Matches HTML for the right pane (grouped by filename)
+        let codeHtml = "";
+        if (matchingCode.length === 0) {
+            codeHtml = term.length < 2
+                ? '<div class="search-code-empty">Type at least 2 characters to search code.</div>'
+                : '<div class="search-code-empty">No code matches found.</div>';
+        } else {
+            const fileGroups = new Map();
+            matchingCode.forEach((m) => {
+                if (!fileGroups.has(m.filename)) {
+                    fileGroups.set(m.filename, []);
+                }
+                fileGroups.get(m.filename).push(m);
+            });
+
+            fileGroups.forEach((matches, fileName) => {
+                const meta = getLanguageMeta(fileName);
+                const baseName = fileName.split("/").pop() || fileName;
+
+                let matchesHtml = "";
+                matches.forEach((m) => {
+                    const lineContent = m.line_content || "";
+                    let contentHtml = escapeHTML(lineContent.trim());
+                    if (term && contentHtml.toLowerCase().includes(term)) {
+                        const idx = contentHtml.toLowerCase().indexOf(term);
+                        const before = escapeHTML(contentHtml.slice(0, idx));
+                        const matched = escapeHTML(contentHtml.slice(idx, idx + term.length));
+                        const after = escapeHTML(contentHtml.slice(idx + term.length));
+                        contentHtml = `${before}<span class="search-tree-match">${matched}</span>${after}`;
+                    }
+
+                    matchesHtml += `
+                        <div class="search-code-match-item" data-action="open-file" data-path="${escapeHTML(m.filename)}" data-line="${m.line_number}" title="${escapeHTML(m.filename)}:${m.line_number}">
+                            <span class="search-code-line-num">:${m.line_number}</span>
+                            <span class="search-code-line-content">${contentHtml}</span>
+                        </div>
+                    `;
+                });
+
+                codeHtml += `
+                    <div class="search-code-group">
+                        <div class="search-code-group-header" data-action="open-file" data-path="${escapeHTML(fileName)}" title="${escapeHTML(fileName)}">
+                            <span class="search-tree-icon" style="color: ${meta.color || "inherit"};">
+                                <i data-lucide="${meta.icon || "file-text"}"></i>
+                            </span>
+                            <span>${escapeHTML(baseName)}</span>
+                            <span style="font-size: 10px; color: var(--text-tertiary); margin-left: auto;">${escapeHTML(fileName)}</span>
+                        </div>
+                        <div class="search-code-group-matches">
+                            ${matchesHtml}
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        const splitLayoutHtml = `
+            <div class="search-split-container">
+                <div class="search-tree-pane">
+                    <div class="search-pane-header">Explorer</div>
+                    <div class="search-tree-content" id="launcherTreeContainer">
+                        ${treeHtml.trim() ? treeHtml : '<div class="tasks-empty-state">No files.</div>'}
+                    </div>
+                </div>
+                <div class="search-details-pane">
+                    <div class="search-section">
+                        <div class="search-section-header">
+                            <span class="search-section-title">Files</span>
+                            <span class="search-section-count">${matchingFiles.length}</span>
+                        </div>
+                        <div class="search-files-list">
+                            ${filesHtml}
+                        </div>
+                    </div>
+                    <div class="search-section">
+                        <div class="search-section-header">
+                            <span class="search-section-title">Code</span>
+                            <span class="search-section-count">${matchingCode.length}</span>
+                        </div>
+                        <div class="search-code-list">
+                            ${codeHtml}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        this.searchResultsEl.innerHTML = splitLayoutHtml;
         this.showSearchResults();
-        this.bindTreeContainerClicks(this.searchResultsEl, true, "");
+        renderIcons(this.searchResultsEl);
+        this.bindLauncherSearchResultsEvents();
+    }
+
+    bindLauncherSearchResultsEvents() {
+        if (!this.searchResultsEl) return;
+        renderIcons(this.searchResultsEl);
+
+        const treeCont = this.searchResultsEl.querySelector("#launcherTreeContainer");
+        if (treeCont) {
+            this.bindTreeContainerClicks(treeCont, true, "");
+        }
+
+        this.searchResultsEl.querySelectorAll('.search-file-item[data-action="open-file"]').forEach((item) => {
+            item.addEventListener("click", () => {
+                const p = item.getAttribute("data-path");
+                if (p) {
+                    this.openFileTab(p);
+                    this.hideSearchResults();
+                }
+            });
+        });
+
+        this.searchResultsEl.querySelectorAll('.search-code-match-item, .search-code-group-header').forEach((item) => {
+            item.addEventListener("click", () => {
+                const p = item.getAttribute("data-path");
+                if (p) {
+                    this.openFileTab(p);
+                    this.hideSearchResults();
+                }
+            });
+        });
     }
 
     async loadDirectoryContents(dirPath = ".") {
