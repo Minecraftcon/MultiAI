@@ -180,27 +180,53 @@ async function getChat(chatId) {
     const p = getPool();
     if (!p || !chatId) return null;
 
-    const chatRes = await p.query("SELECT * FROM public.chats WHERE id = $1;", [chatId]);
-    if (chatRes.rows.length === 0) return null;
+    try {
+        const chatRes = await p.query("SELECT * FROM public.chats WHERE id = $1;", [chatId]);
+        if (chatRes.rows.length === 0) return null;
 
-    const chatRow = chatRes.rows[0];
-    const msgRes = await p.query(
-        "SELECT * FROM public.chat_messages WHERE chat_id = $1 ORDER BY id ASC;",
-        [chatId]
-    );
+        const chatRow = chatRes.rows[0];
+        const msgRes = await p.query(
+            "SELECT * FROM public.chat_messages WHERE chat_id = $1 ORDER BY id ASC;",
+            [chatId]
+        );
 
-    const messages = msgRes.rows.map(r => r.data);
-    const meta = chatRow.meta || {};
+        const messages = msgRes.rows.map(r => r.data || { role: r.role, content: r.content });
+        const meta = (chatRow.meta && typeof chatRow.meta === "object") ? chatRow.meta : {};
 
-    return {
-        id: chatRow.id,
-        title: chatRow.title,
-        date: chatRow.date_folder,
-        type: chatRow.type,
-        projectId: chatRow.project_id,
-        meta,
-        messages
-    };
+        const updatedMs = chatRow.updated_at ? new Date(chatRow.updated_at).getTime() : Date.now();
+        const createdMs = chatRow.created_at ? new Date(chatRow.created_at).getTime() : Date.now();
+
+        return {
+            id: chatRow.id,
+            title: chatRow.title || meta.title || "Conversation",
+            mode: chatRow.type || meta.mode || "chat",
+            type: chatRow.type || "chat",
+            projectId: chatRow.project_id || null,
+            date: chatRow.date_folder,
+            updatedAt: updatedMs,
+            createdAt: createdMs,
+            source: "supabase",
+            fromBackend: true,
+            workspace: {
+                dateStr: chatRow.date_folder,
+                chatDir: meta.workspace?.chatDir || "",
+                scratchDir: meta.workspace?.scratchDir || "",
+                imagesDir: meta.workspace?.imagesDir || ""
+            },
+            meta: {
+                ...meta,
+                id: chatRow.id,
+                title: chatRow.title || meta.title || "Conversation",
+                updatedAt: updatedMs,
+                createdAt: createdMs
+            },
+            messages,
+            compactionState: meta.compactionState || null
+        };
+    } catch (err) {
+        console.warn(`[SUPABASE GET CHAT ERROR for ${chatId}]:`, err.message);
+        return null;
+    }
 }
 
 /**
@@ -210,36 +236,59 @@ async function listChats() {
     const p = getPool();
     if (!p) return null;
 
-    const res = await p.query(`
-        SELECT c.id, c.title, c.type, c.project_id, c.date_folder, c.updated_at, c.created_at, c.meta,
-               COUNT(m.id)::int AS msg_count
-        FROM public.chats c
-        LEFT JOIN public.chat_messages m ON m.chat_id = c.id
-        GROUP BY c.id, c.title, c.type, c.project_id, c.date_folder, c.updated_at, c.created_at, c.meta
-        ORDER BY c.updated_at DESC
-        LIMIT 100;
-    `);
+    try {
+        const res = await p.query(`
+            SELECT c.id, c.title, c.type, c.project_id, c.date_folder, c.updated_at, c.created_at, c.meta,
+                   COUNT(m.id)::int AS msg_count
+            FROM public.chats c
+            LEFT JOIN public.chat_messages m ON m.chat_id = c.id
+            GROUP BY c.id, c.title, c.type, c.project_id, c.date_folder, c.updated_at, c.created_at, c.meta
+            ORDER BY c.updated_at DESC
+            LIMIT 500;
+        `);
 
-    return res.rows.map(row => {
-        const count = (row.msg_count !== undefined && row.msg_count !== null && row.msg_count > 0)
-            ? row.msg_count
-            : (row.meta?.messageCount || 0);
-        return {
-            id: row.id,
-            title: row.title,
-            date: row.date_folder,
-            type: row.type,
-            projectId: row.project_id,
-            updatedAt: row.updated_at,
-            createdAt: row.created_at,
-            messageCount: count,
-            source: "supabase",
-            meta: {
-                ...(row.meta || {}),
-                messageCount: count
-            }
-        };
-    });
+        return res.rows.map(row => {
+            const count = (row.msg_count !== undefined && row.msg_count !== null && row.msg_count > 0)
+                ? row.msg_count
+                : (row.meta?.messageCount || 0);
+
+            const updatedMs = row.updated_at ? new Date(row.updated_at).getTime() : Date.now();
+            const createdMs = row.created_at ? new Date(row.created_at).getTime() : Date.now();
+            const meta = (row.meta && typeof row.meta === "object") ? row.meta : {};
+
+            return {
+                id: row.id,
+                title: row.title || meta.title || "Conversation",
+                mode: row.type || meta.mode || "chat",
+                type: row.type || "chat",
+                projectId: row.project_id || null,
+                date: row.date_folder,
+                updatedAt: updatedMs,
+                createdAt: createdMs,
+                messageCount: count,
+                source: "supabase",
+                fromBackend: true,
+                workspace: {
+                    dateStr: row.date_folder,
+                    chatDir: meta.workspace?.chatDir || "",
+                    scratchDir: meta.workspace?.scratchDir || "",
+                    imagesDir: meta.workspace?.imagesDir || ""
+                },
+                ...meta,
+                id: row.id,
+                title: row.title || meta.title || "Conversation",
+                mode: row.type || meta.mode || "chat",
+                updatedAt: updatedMs,
+                createdAt: createdMs,
+                messageCount: count,
+                source: "supabase",
+                fromBackend: true
+            };
+        });
+    } catch (err) {
+        console.warn("[SUPABASE LIST CHATS ERROR]", err.message);
+        return null;
+    }
 }
 
 /**
@@ -367,6 +416,7 @@ async function getAppConfig() {
 }
 
 module.exports = {
+    getPool,
     getSupabaseConfig,
     isConnected,
     loadSecretsIntoEnv,

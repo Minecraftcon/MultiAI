@@ -521,8 +521,8 @@ function startAgentJob({ projectId = null, chatId, userText, userContent = null,
                 : conversationsManager.ensureChatWorkspace(chatId);
             const savedChat = projectId
                 ? conversationsManager.getProjectChat(projectId, chatId)
-                : conversationsManager.getChat(chatId);
-            let sessionMessages = savedChat?.messages || [];
+                : await conversationsManager.getChat(chatId);
+            let sessionMessages = savedChat?.session?.messages || savedChat?.messages || [];
 
             // Ensure system turn exists
             if (sessionMessages.length === 0 || sessionMessages[0]?.role !== "system") {

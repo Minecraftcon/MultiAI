@@ -373,7 +373,9 @@ function appendChatMessage(chatId, message) {
 /**
  * Loads a single chat session by ID.
  */
-function getChat(chatId) {
+async function getChat(chatId) {
+    if (!chatId) return null;
+
     const found = findChatDateDir(chatId);
     if (found) {
         const ws = ensureChatWorkspace(chatId, found.dateFolder);
@@ -388,20 +390,22 @@ function getChat(chatId) {
                     compactionState = readJsonFile(ws.contextFile, null);
                 }
 
-                const session = {
-                    ...meta,
-                    id: chatId,
-                    messages,
-                    compactionState
-                };
+                // If local disk has messages, return immediately
+                if (Array.isArray(messages) && messages.length > 0) {
+                    const session = {
+                        ...meta,
+                        id: chatId,
+                        messages,
+                        compactionState
+                    };
 
-                return {
-                    session,
-                    workspace: ws
-                };
+                    return {
+                        session,
+                        workspace: ws
+                    };
+                }
             } catch (e) {
                 console.error(`[CONVERSATIONS] Error reading JSONL chat ${chatId}:`, e.message);
-                return null;
             }
         }
 
@@ -416,7 +420,6 @@ function getChat(chatId) {
                 };
             } catch (e) {
                 console.error(`[CONVERSATIONS] Error reading legacy chat ${chatId}:`, e.message);
-                return null;
             }
         }
     }
@@ -430,31 +433,46 @@ function getChat(chatId) {
             try {
                 const meta = readJsonFile(metaPath, {});
                 const messages = fs.existsSync(msgPath) ? readMessages(msgPath) : [];
-                const ws = ensureChatWorkspace(chatId);
-                return {
-                    session: { ...meta, id: chatId, messages },
-                    workspace: ws
-                };
+                if (Array.isArray(messages) && messages.length > 0) {
+                    const ws = ensureChatWorkspace(chatId);
+                    return {
+                        session: { ...meta, id: chatId, messages },
+                        workspace: ws
+                    };
+                }
             } catch (_) {}
         }
     }
 
     // Supabase async lookup fallback if configured
-    if (supabaseStorage && typeof supabaseStorage.getChat === "function" && supabaseStorage.getPool && supabaseStorage.getPool()) {
-        return (async () => {
-            try {
-                const cloudSession = await supabaseStorage.getChat(chatId);
-                if (cloudSession) {
-                    const ws = ensureChatWorkspace(chatId, cloudSession.date);
-                    return {
-                        session: cloudSession,
-                        workspace: ws,
-                        source: "supabase"
-                    };
-                }
-            } catch (_) {}
-            return null;
-        })();
+    if (supabaseStorage && typeof supabaseStorage.getChat === "function") {
+        try {
+            const cloudSession = await supabaseStorage.getChat(chatId);
+            if (cloudSession) {
+                const ws = ensureChatWorkspace(chatId, cloudSession.date);
+                // Materialize chat session to local disk so workspace, scratch & artifacts are ready
+                try {
+                    saveChat(cloudSession);
+                } catch (_) {}
+                return {
+                    session: cloudSession,
+                    workspace: ws,
+                    source: "supabase"
+                };
+            }
+        } catch (err) {
+            console.warn(`[CONVERSATIONS] Error retrieving chat ${chatId} from Supabase:`, err.message);
+        }
+    }
+
+    // If local was found but had 0 messages and Supabase was empty, return whatever local meta existed
+    if (found) {
+        const ws = ensureChatWorkspace(chatId, found.dateFolder);
+        const meta = readJsonFile(ws.metaFile, {});
+        return {
+            session: { ...meta, id: chatId, messages: [] },
+            workspace: ws
+        };
     }
 
     return null;
@@ -463,7 +481,7 @@ function getChat(chatId) {
 /**
  * Lists all chats across all date directories for Chat mode.
  */
-function listChats() {
+async function listChats() {
     const convRoots = [
         getConversationsRoot(),
         path.join(getStorageRoot(), "conversations") // include legacy if present
@@ -543,14 +561,47 @@ function listChats() {
         }
     }
 
-    results.sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
+    // Merge Supabase cloud chats if configured
+    if (supabaseStorage && typeof supabaseStorage.listChats === "function") {
+        try {
+            const cloudChats = await supabaseStorage.listChats();
+            if (Array.isArray(cloudChats)) {
+                for (const cloudChat of cloudChats) {
+                    if (!cloudChat || !cloudChat.id) continue;
+                    if (!seenIds.has(cloudChat.id)) {
+                        seenIds.add(cloudChat.id);
+                        results.push(cloudChat);
+                    } else {
+                        // Merge or update local with newer cloud metadata
+                        const idx = results.findIndex(c => c.id === cloudChat.id);
+                        if (idx !== -1) {
+                            const local = results[idx];
+                            const cloudUpdated = Number(cloudChat.updatedAt) || 0;
+                            const localUpdated = Number(local.updatedAt || local.createdAt) || 0;
+                            if (cloudUpdated > localUpdated) {
+                                results[idx] = { ...local, ...cloudChat };
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (err) {
+            console.warn("[CONVERSATIONS] Error fetching cloud chats from Supabase:", err.message);
+        }
+    }
+
+    results.sort((a, b) => {
+        const timeA = Number(a.updatedAt || a.createdAt) || 0;
+        const timeB = Number(b.updatedAt || b.createdAt) || 0;
+        return timeB - timeA;
+    });
     return results;
 }
 
 /**
  * Deletes a chat directory and its files.
  */
-function deleteChat(chatId) {
+async function deleteChat(chatId) {
     let deleted = false;
     const found = findChatDateDir(chatId);
     if (found) {
@@ -574,7 +625,10 @@ function deleteChat(chatId) {
     }
 
     if (supabaseStorage && typeof supabaseStorage.deleteChat === "function") {
-        supabaseStorage.deleteChat(chatId).catch(() => {});
+        try {
+            const cloudDeleted = await supabaseStorage.deleteChat(chatId);
+            if (cloudDeleted) deleted = true;
+        } catch (_) {}
     }
 
     return deleted;
@@ -583,7 +637,7 @@ function deleteChat(chatId) {
 /**
  * Deletes all chats from disk under $HOME/.MultiAI/chat/conversations/
  */
-function deleteAllChats() {
+async function deleteAllChats() {
     const convRoot = getConversationsRoot();
     if (!fs.existsSync(convRoot)) return true;
 
@@ -594,6 +648,11 @@ function deleteAllChats() {
             if (fs.existsSync(datePath) && fs.statSync(datePath).isDirectory()) {
                 fs.rmSync(datePath, { recursive: true, force: true });
             }
+        }
+        if (supabaseStorage && typeof supabaseStorage.deleteAllChats === "function") {
+            try {
+                await supabaseStorage.deleteAllChats();
+            } catch (_) {}
         }
         return true;
     } catch (err) {
