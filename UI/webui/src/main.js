@@ -28,6 +28,7 @@ import { initCloudTools } from "./components/cloud-tools.js";
 import { McpActiveTools } from "./tools/mcp/index.js";
 import { initTaskWatcher } from "./tools/terminal/task-watcher.js";
 import { initTerminalDrawer } from "./components/terminal-drawer.js";
+import { initRightPanel } from "./components/right-panel.js";
 
 async function initChatSessions() {
     loadStoredChats();
@@ -118,6 +119,7 @@ async function bootstrap() {
     initPlanDock();
     initSkillsMenu();
     initTerminalDrawer();
+    initRightPanel();
 
     await initConfig();
     if (state.config?.Tools?.EnableMcp !== false) {

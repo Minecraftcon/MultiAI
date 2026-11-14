@@ -1,5 +1,4 @@
 import { state } from "../../state/index.js";
-import { runSubagent } from "../../agent/subagent.js";
 import { toolFetch } from "../http.js";
 import { formatTodosMarkdown, persistPlanArtifact } from "./plan-serializer.js";
 
@@ -85,47 +84,13 @@ export const writeTodosTool = {
     }
 };
 
-/**
- * Spawns an isolated subagent to execute a dedicated task autonomously.
- */
-export const subagentTaskTool = {
-    name: "task",
+export const askQuestionsTool = {
+    name: "ask_questions",
     schema: {
         type: "function",
         function: {
-            name: "task",
-            description: "Spawn an isolated subagent to execute a focused investigation, research, file analysis, or test run autonomously. The subagent runs its own sub-loop with tools and returns a consolidated summary report to you.",
-            parameters: {
-                type: "object",
-                properties: {
-                    instruction: {
-                        type: "string",
-                        description: "Complete, detailed instruction for the subagent to perform."
-                    },
-                    subagent_type: {
-                        type: "string",
-                        enum: ["general-purpose", "researcher", "auditor", "tester"],
-                        description: "Role or persona for the subagent (defaults to 'general-purpose')."
-                    }
-                },
-                required: ["instruction"]
-            }
-        }
-    },
-    handler: async (args, { badgeEl, genState }) => {
-        const instruction = args.instruction || "";
-        const subagentType = args.subagent_type || "general-purpose";
-        return await runSubagent(instruction, subagentType, genState);
-    }
-};
-
-export const askQuestionTool = {
-    name: "ask_question",
-    schema: {
-        type: "function",
-        function: {
-            name: "ask_question",
-            description: "Ask the user clarifying multiple-choice questions with an interactive questionnaire in the chat box.",
+            name: "ask_questions",
+            description: "Ask the user clarifying multiple-choice or open-ended questions with an interactive questionnaire directly in the composer. Execution pauses until the user answers or skips.",
             parameters: {
                 type: "object",
                 properties: {
@@ -155,15 +120,31 @@ export const askQuestionTool = {
                             },
                             required: ["question", "options"]
                         }
+                    },
+                    question: {
+                        type: "string",
+                        description: "Single question convenience shortcut prompt if asking only one question."
+                    },
+                    options: {
+                        type: "array",
+                        items: { type: "string" },
+                        description: "Selectable choices when asking a single question."
+                    },
+                    is_multi_select: {
+                        type: "boolean",
+                        description: "Whether multiple choices can be selected for a single question."
+                    },
+                    allow_custom: {
+                        type: "boolean",
+                        description: "Whether to allow custom write-in answers (default: true)."
                     }
-                },
-                required: ["questions"]
+                }
             }
         }
     },
     handler: async (args, { genState }) => {
         const { promptUserQuestions, dismissQuestionPrompt } = await import("../../components/chat-question-prompt.js");
-        const payload = args.questions || (args.question ? [args] : []);
+        const payload = Array.isArray(args.questions) ? args.questions : (args.question ? [args] : []);
         if (genState?.abortController?.signal?.aborted) {
             return { status: "cancelled", reason: "Generation stopped" };
         }
@@ -177,22 +158,16 @@ export const askQuestionTool = {
     }
 };
 
-export const askQuestionsAliasTool = {
-    name: "ask_questions",
-    schema: {
-        ...askQuestionTool.schema,
-        function: {
-            ...askQuestionTool.schema.function,
-            name: "ask_questions"
-        }
-    },
-    handler: askQuestionTool.handler
+// Internal handler alias so calls to 'ask_question' resolve smoothly without publishing a duplicate schema
+export const askQuestionTool = {
+    name: "ask_question",
+    schema: null, // Omit duplicate schema to prevent LLM confusion/hallucination
+    handler: askQuestionsTool.handler
 };
 
 export const planningTools = [
     writeTodosTool,
-    subagentTaskTool,
-    askQuestionTool,
-    askQuestionsAliasTool
+    askQuestionsTool,
+    askQuestionTool
 ];
 

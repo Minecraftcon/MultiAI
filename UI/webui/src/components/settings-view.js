@@ -265,6 +265,9 @@ export function populateSettingsValues() {
     const themeSelect = document.getElementById("cfgTheme");
     if (themeSelect) themeSelect.value = ui.Theme || "dark";
 
+    const accentSelect = document.getElementById("cfgAccent");
+    if (accentSelect) accentSelect.value = ui.Accent || localStorage.getItem("multiai_accent") || "warm";
+
     const auroraThemeSelect = document.getElementById("cfgAuroraTheme");
     if (auroraThemeSelect) {
         if (isAndroidOrMobile()) {
@@ -746,6 +749,15 @@ export function initSettingsView() {
             const val = e.target.value;
             saveSetting("UI", "Theme", val);
             applyTheme(val);
+        });
+    }
+
+    const accentSelect = document.getElementById("cfgAccent");
+    if (accentSelect) {
+        accentSelect.addEventListener("change", (e) => {
+            const val = e.target.value;
+            saveSetting("UI", "Accent", val);
+            applyAccent(val);
         });
     }
 
@@ -1365,6 +1377,28 @@ export function applyTheme(val) {
             hljsLink.setAttribute("href", targetHref);
         }
     }
+}
+
+/* =========================================================
+   GLOBAL ACCENT APPLICATION HELPER (TOP-LEVEL EXPORT)
+   ========================================================= */
+export function applyAccent(val) {
+    if (!val || (val !== "blue" && val !== "sage" && val !== "warm")) {
+        val = "warm";
+    }
+    document.documentElement.setAttribute("data-accent", val);
+    try {
+        localStorage.setItem("multiai_accent", val);
+    } catch (e) {}
+    window.dispatchEvent(new CustomEvent("multiai-accent-changed", { detail: { accent: val } }));
+}
+
+// Auto-initialize accent from localStorage or default
+if (typeof window !== "undefined" && typeof document !== "undefined") {
+    try {
+        const savedAccent = localStorage.getItem("multiai_accent") || "warm";
+        applyAccent(savedAccent);
+    } catch (e) {}
 }
 
 // Listen for system scheme changes when theme is set to 'system'

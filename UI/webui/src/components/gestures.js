@@ -127,6 +127,13 @@ export function openPanel(animated = true) {
     if (closeTimeout) { clearTimeout(closeTimeout); closeTimeout = null; }
     isPanelOpen = true;
 
+    // If right workspace panel is open on smaller/laptop viewports, close it to avoid panel overlap
+    if (window.innerWidth < 1280 && document.body.classList.contains("right-panel-open")) {
+        if (typeof window.closeRightPanel === "function") {
+            window.closeRightPanel();
+        }
+    }
+
     const { sidePanel, panelToggle, backdrop } = getElements();
     if (sidePanel) sidePanel.setAttribute("aria-hidden", "false");
     if (panelToggle) panelToggle.setAttribute("aria-expanded", "true");

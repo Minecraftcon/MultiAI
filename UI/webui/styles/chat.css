@@ -625,8 +625,8 @@
 }
 
 .followup-item:focus-visible {
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.35);
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent-subtle);
 }
 
 .followup-icon {
@@ -640,7 +640,7 @@
 }
 
 .followup-item:hover .followup-icon {
-    color: #60a5fa;
+    color: var(--accent-hover, var(--accent));
     transform: translateX(1px);
 }
 
@@ -976,7 +976,7 @@
 .ds-pct-badge {
     font-size: 12px;
     font-weight: 700;
-    color: #60a5fa;
+    color: var(--accent);
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
@@ -992,7 +992,7 @@
 
 .ds-progress-fill {
     height: 100%;
-    background: linear-gradient(90deg, #3b82f6, #60a5fa);
+    background: var(--accent);
     border-radius: 999px;
     transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
     position: relative;

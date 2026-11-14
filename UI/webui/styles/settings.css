@@ -367,8 +367,8 @@
 }
 
 .settings-select:focus {
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent-subtle);
 }
 
 .settings-select option {
@@ -466,17 +466,17 @@
 }
 
 .settings-switch input:checked + .settings-slider {
-    background-color: #2563eb;
-    border-color: #3b82f6;
+    background-color: var(--accent);
+    border-color: var(--accent-hover, var(--accent));
 }
 
 .settings-switch input:checked + .settings-slider:before {
     transform: translateX(20px);
-    background-color: #ffffff;
+    background-color: var(--card-bg, #ffffff);
 }
 
 .settings-switch input:focus-visible + .settings-slider {
-    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.4);
+    box-shadow: 0 0 0 2px var(--accent-subtle);
 }
 
 /* Range Slider Control */
@@ -492,7 +492,7 @@
     flex: 1;
     height: 6px;
     border-radius: 3px;
-    accent-color: #3b82f6;
+    accent-color: var(--accent);
     background: var(--surface-2);
     outline: none;
     cursor: pointer;
@@ -526,8 +526,8 @@
 }
 
 .settings-textarea:focus {
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent-subtle);
 }
 
 /* Settings Action Buttons */
@@ -879,8 +879,8 @@
     }
 
     .settings-select:focus {
-        border-color: #3b82f6;
-        box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
+        border-color: var(--accent);
+        box-shadow: 0 0 0 2px var(--accent-subtle);
     }
 
     /* Switch styling for mobile */
@@ -904,7 +904,7 @@
         flex: 1;
         min-width: 0;
         height: 28px;
-        accent-color: #3b82f6;
+        accent-color: var(--accent);
         cursor: pointer;
     }
 

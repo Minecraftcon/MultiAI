@@ -212,14 +212,14 @@ export const manageTasksTool = {
         type: "function",
         function: {
             name: "manage_tasks",
-            description: "Manage background shell tasks. Send keycodes, interactive text input, or terminate tasks.",
+            description: "Manage background shell tasks: check status, inspect stdout, send interactive input, or terminate tasks.",
             parameters: {
                 type: "object",
                 properties: {
                     action: {
                         type: "string",
-                        enum: ["send_input", "kill_task"],
-                        description: "Subcommand to execute: 'send_input' (send keycode/text to stdin) or 'kill_task' (terminate task)."
+                        enum: ["status", "stdout", "send_input", "kill_task"],
+                        description: "Action to execute: 'status' or 'stdout' (view output/status), 'send_input' (send keycode/text to stdin), or 'kill_task' (terminate task)."
                     },
                     task_id: {
                         type: "string",
@@ -227,7 +227,7 @@ export const manageTasksTool = {
                     },
                     input: {
                         type: "string",
-                        description: "Input when action is 'send_input'. Keycodes like 'ctrl+c', 'ctrl+d', 'alt+x', 'enter', or text inputs in quotes like \"'my answer'\"."
+                        description: "Input when action is 'send_input'. Keycodes like 'ctrl+c', 'ctrl+d', 'enter', or text inputs in quotes like \"'my answer'\"."
                     }
                 },
                 required: ["action", "task_id"]
@@ -317,38 +317,38 @@ export const scheduleTool = {
         type: "function",
         function: {
             name: "schedule",
-            description: "Schedule a timer, pause execution, or hook onto a background task. For long tasks or waits (> 15-20s), set 'detach: true' to finish your response turn immediately; MultiAI will monitor the task in the background and re-awaken you when it completes.",
+            description: "Schedule a sleep timer, pause execution, or monitor a background task. For long-running background jobs, set 'detach: true' to conclude your turn immediately; MultiAI will monitor the task in the background and re-awaken you when it finishes.",
             parameters: {
                 type: "object",
                 properties: {
                     time: {
                         type: "number",
-                        description: "Duration in seconds to sleep or wait (e.g. 5, 30, 60, 300)."
+                        description: "Duration in seconds to sleep, pause, or wait (e.g. 5, 30, 60, 300). Also accepts 'seconds'."
                     },
                     task: {
                         type: "string",
-                        description: "Optional background task_id to monitor (or shell command to start and monitor in background). If omitted, performs a sleep timer."
+                        description: "Optional background task_id (e.g. 't_...') or shell command to start and monitor in the background. If omitted, performs a pure sleep timer."
                     },
                     detach: {
                         type: "boolean",
-                        description: "Set to true for long-running tasks or timers (> 15-20s) to detach from the current turn immediately, deliver your status message, and conclude your response turn cleanly. MultiAI will autonomously monitor the task and re-awaken you in a new turn when it finishes."
+                        description: "Set to true for long-running background jobs to detach from the current turn immediately, deliver your status message, and conclude your response cleanly. MultiAI will monitor in background and re-awaken you when complete."
                     },
                     status_message: {
                         type: "string",
-                        description: "Optional status message for the user explaining that the task is running in the background and you will check back on it (e.g. 'The download is running in the background, I will keep a watch on it every few minutes; until then you can do other tasks or close the window.')."
+                        description: "Optional status message for the user explaining that the task/timer is running in background (e.g. 'The download is running in background; I will notify you when finished.')."
                     },
                     end_response: {
                         type: "string",
-                        description: "Optional response or action prompt to return when the timer completes, allowing the agent to automatically start or continue reasoning."
+                        description: "Optional response or prompt for the agent to continue reasoning with when the timer or task completes."
                     },
                     wake_on: {
                         type: "string",
                         enum: ["exit", "output", "any", "never"],
-                        description: "When hooked on a task, early wake condition: 'exit' (default: wakes when task exits), 'output' (wakes on new output), 'any' (exit or output), 'never' (always waits full duration)."
+                        description: "When monitoring a task, early wake condition: 'exit' (default: wakes when task exits), 'output' (wakes on new output), 'any' (exit or output), 'never' (waits full duration)."
                     },
                     reason: {
                         type: "string",
-                        description: "Optional human-readable explanation of what is being scheduled or waited for."
+                        description: "Optional explanation of what is being scheduled or waited for."
                     }
                 },
                 required: ["time"]
@@ -356,7 +356,7 @@ export const scheduleTool = {
         }
     },
     handler: async (args, { genState }) => {
-        const rawTime = args.time ?? args.sleep_time ?? args.seconds ?? 5;
+        const rawTime = args.time ?? args.seconds ?? args.sleep_time ?? 5;
         const time = Math.max(0.1, parseFloat(rawTime) || 5);
         const task = (args.task || args.task_id || "").trim();
         const endResponse = args.end_response ?? args["end-response"] ?? null;
@@ -369,32 +369,26 @@ export const scheduleTool = {
             args.Exit || 
             args.background || 
             args.async || 
-            time >= 20 || 
+            (task && time >= 45) || 
             (typeof reason === "string" && /\b(detach|background)\b/i.test(reason))
         );
         const statusMessage = args.status_message || args.statusMessage || args.message || args.messege || args.exit_message || args.exitMessage || "";
 
         let taskId = null;
         if (task) {
-            if (/^[a-zA-Z0-9_-]+$/.test(task)) {
+            // Task IDs generated by MultiAI start with "t_" or "task_" or "task-"
+            const isTaskIdPattern = /^(t_|task[_-])[a-zA-Z0-9_-]+$/i.test(task);
+            if (isTaskIdPattern) {
                 taskId = task;
             } else {
+                // Shell command to spawn and monitor!
                 try {
-                    const runRes = await toolFetch("/api/task/run", {
+                    const spawnRes = await toolFetch("/api/task/idle", {
                         method: "POST",
-                        body: { command: task, timer: 0.1, timeout: 0.1, task_name: reason },
+                        body: { command: task },
                         genState
                     });
-                    taskId = runRes.task_id || null;
-                    if (!taskId && runRes.stdout !== undefined && !isDetached) {
-                        return {
-                            status: "task_completed",
-                            task,
-                            elapsed_seconds: runRes.execution_time || 0.1,
-                            output: (runRes.stdout || "") + (runRes.stderr ? "\n" + runRes.stderr : ""),
-                            end_response: endResponse || "Task completed immediately."
-                        };
-                    }
+                    taskId = spawnRes.task_id || null;
                 } catch (err) {
                     console.warn("[SCHEDULE] Could not launch task command:", err.message);
                 }
@@ -413,6 +407,10 @@ export const scheduleTool = {
                 statusMessage
             });
 
+            const defaultStatus = taskId
+                ? `Task '${taskId}' running in background (${time}s observation, wake on ${wakeOn}). I will monitor it and notify you when finished.`
+                : `Scheduled a ${time}s timer${reason ? ` for ${reason}` : ""}. I will resume when the timer completes.`;
+
             return {
                 status: "scheduled_detached",
                 detached: true,
@@ -420,7 +418,7 @@ export const scheduleTool = {
                 time,
                 wake_on: wakeOn,
                 reason,
-                status_message: statusMessage || `Task running in background (${time}s timeout, wake on ${wakeOn}). I will monitor it and notify you when finished.`
+                status_message: statusMessage || defaultStatus
             };
         }
 

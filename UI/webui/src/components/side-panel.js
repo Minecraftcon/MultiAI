@@ -10,7 +10,6 @@ import { updateSendButtonState } from "./composer.js";
 import { openSettings } from "./settings-view.js";
 import { setStartPageMode } from "./chatbox.js";
 import { dismissPlanDock } from "./chat-plan-dock.js";
-import { openTerminal } from "./terminal-drawer.js";
 
 // Extracted Sub-Components & Services
 import { 
@@ -333,14 +332,6 @@ export function initSidePanel() {
         });
     }
 
-    // 4. Interactive PTY Terminal
-    const panelTerminalBtn = document.getElementById("panelTerminalBtn");
-    if (panelTerminalBtn) {
-        panelTerminalBtn.addEventListener("click", () => {
-            closePanel();
-            openTerminal();
-        });
-    }
 
     // 4. Smooth Panel Search Mode
     if (panelSearchToggle) {

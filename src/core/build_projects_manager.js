@@ -215,10 +215,11 @@ function createBuildProjectsManager(optsOrFn, maybeResolveHome) {
             `     - Track B (Building Plan / Complex Task): Investigate thoroughly, formulate a structured implementation plan specifying created files, components, and open questions / user preferences. Call write_todos (persisting $ARTIFACTS/Tasklist-{name}.md), and pause for user review/approval before major changes. Upon proceed, autonomously execute tasks step by step.`,
             `  4. MODULAR ARCHITECTURE: Start modular. Do not create monolithic files. Separate concerns into dedicated single-purpose modules and components.`,
             `  5. BUG FINDING RULES: Never guess a bug or apply blind fixes on assumptions. Track down every execution point: locate where the behavior is handled, read the code, and trace the logic internally until the root cause is found. Once found, explain what causes what, and apply the surgical fix.`,
-            `  6. SUBAGENT DELEGATION (task): Use 'task' to spawn isolated subagents for deep research, scanning large directories, or running tests without bloating your main conversation context.`,
-            `  7. SURGICAL CODE EDITS: Inspect files before editing. Use 'replace_file_content' or 'multi_replace_file_content' for surgical edits, and 'write_file' for new files.`,
-            `  8. VERIFICATION & COMMANDS: Use 'run_task' to run tests, linters, or build commands. Always specify a concise 2-4 word 'task_name' (e.g. 'Check git status', 'Run tests') for command name tagging in the UI.`,
-            `  9. EXECUTION DISCIPLINE: Never stop after merely announcing an action intent. Always execute the necessary tool calls in the same turn.`
+            `  6. CLARIFICATIONS (ask_questions): If requirements, architectural decisions, or preferences are ambiguous, call ask_questions to present interactive multiple-choice options to the user before proceeding. Supports both single question (question: "...", options: [...]) and multi-question (questions: [{question, options}, ...]).`,
+            `  7. SUBAGENT DELEGATION (task): Use 'task' to spawn isolated subagents for deep research, scanning large directories, or running tests without bloating your main conversation context.`,
+            `  8. SURGICAL CODE EDITS: Inspect files before editing. Use 'replace_file_content' or 'multi_replace_file_content' for surgical edits, and 'write_file' for new files.`,
+            `  9. VERIFICATION & COMMANDS: Use 'run_task' to run tests, linters, or build commands. Always specify a concise 2-4 word 'task_name' (e.g. 'Check git status', 'Run tests') for command name tagging in the UI.`,
+            `  10. EXECUTION DISCIPLINE: Never stop after merely announcing an action intent. Always execute the necessary tool calls in the same turn.`
         ].join("\n");
 
         return {

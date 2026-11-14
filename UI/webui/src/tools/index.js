@@ -41,7 +41,7 @@ function getActiveToolSchemas() {
         const name = schema?.function?.name || "";
         if (toolsConfig.EnableTerminal === false && (name === "run_task" || name === "manage_tasks" || name === "schedule")) return false;
         if (toolsConfig.EnableWebSearch === false && name === "web_search") return false;
-        if (toolsConfig.EnableImageGeneration === false && (name === "generate_image" || name === "get_image_status")) return false;
+        if (toolsConfig.EnableImageGeneration === false && name === "generate_image") return false;
         if (toolsConfig.EnableFilesystem === false && (name === "list_dir" || name === "read_file" || name === "write_file" || name === "replace_file_content" || name === "multi_replace_file_content" || name === "grep_search")) return false;
         if (toolsConfig.EnableMcp === false && name.startsWith("mcp_")) return false;
         return true;
@@ -66,7 +66,7 @@ if (typeof window !== "undefined") {
  * Returns strictly isolated on-chat tool schemas for DeepSearch chats.
  */
 export function getDeepSearchOnChatTools() {
-    const allowed = ["run_task", "manage_tasks", "web_search", "schedule", "list_dir", "read_file", "write_file", "replace_file_content", "multi_replace_file_content", "grep_search", "write_todos", "task", "ask_question", "ask_questions"];
+    const allowed = ["run_task", "manage_tasks", "web_search", "schedule", "list_dir", "read_file", "write_file", "replace_file_content", "multi_replace_file_content", "grep_search", "write_todos", "ask_question", "ask_questions"];
     return allowed.map(name => getTool(name)?.schema).filter(Boolean);
 }
 
@@ -94,7 +94,7 @@ export async function executeTool(name, args, badgeEl, genState) {
     }
 
     // Check if image generation is disabled in config.ini
-    const isImageTool = name === "generate_image" || name === "get_image_status";
+    const isImageTool = name === "generate_image";
     if (toolsConfig.EnableImageGeneration === false && isImageTool) {
         throw new Error("Image generation is disabled in config.ini");
     }

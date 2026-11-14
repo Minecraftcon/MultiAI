@@ -347,13 +347,13 @@
 }
 
 .badge-diff-stat.add {
-    color: #3fb950 !important;
+    color: var(--stat-add, var(--accent, #3b82f6)) !important;
     background: transparent !important;
     border: none !important;
 }
 
 .badge-diff-stat.del {
-    color: #f85149 !important;
+    color: var(--stat-del, rgba(255, 255, 255, 0.45)) !important;
     background: transparent !important;
     border: none !important;
 }
