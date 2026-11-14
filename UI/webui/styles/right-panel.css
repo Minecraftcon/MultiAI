@@ -455,6 +455,11 @@ body.right-panel-resizing #rightPanel {
     color: var(--text-primary);
 }
 
+.launcher-more-btn.active {
+    background: var(--hover-2);
+    color: var(--accent);
+}
+
 .launcher-more-btn i {
     width: 16px;
     height: 16px;
@@ -545,6 +550,20 @@ body.right-panel-resizing #rightPanel {
     gap: 16px;
     box-sizing: border-box;
     min-width: 120px;
+}
+
+.search-details-pane.full-width {
+    width: 100% !important;
+    max-width: 100% !important;
+    flex: 1 1 100% !important;
+    padding-right: 0 !important;
+}
+
+.search-tree-pane.full-width {
+    width: 100% !important;
+    max-width: 100% !important;
+    flex: 1 1 100% !important;
+    padding-left: 0 !important;
 }
 
 .search-col-resizer {

@@ -53,6 +53,7 @@ class RightPanelManager {
         this.width = 500;
         const savedSplit = parseFloat(localStorage.getItem("multiai_search_split_percent") || "52");
         this.searchSplitPercent = (!isNaN(savedSplit) && savedSplit >= 15 && savedSplit <= 85) ? savedSplit : 52;
+        this.showSearchTree = false;
         this.searchDebounceTimer = null;
         this.searchRequestId = 0;
         this.showAllTasks = false;
@@ -236,21 +237,18 @@ class RightPanelManager {
         document.addEventListener("click", (e) => {
             if (this.isResizing || this.justFinishedResizing) return;
             if (!e.target.closest("#rightPanel") && !e.target.closest("#headerRightPanelBtn")) {
-                if (!this.searchInputEl?.value.trim()) {
+                if (!this.searchInputEl?.value.trim() && !this.showSearchTree) {
                     this.hideSearchResults();
                 }
             }
         });
 
-        // More Options button
+        // 3 Dots Button after search pill (explicitly triggers/toggles File Tree)
         if (this.moreBtn) {
-            this.moreBtn.addEventListener("click", async () => {
-                if (window.confirm("Clean finished tasks from workspace?")) {
-                    try {
-                        await fetch("/api/task/clean", { method: "POST" });
-                        this.loadTasks();
-                    } catch (_) {}
-                }
+            this.moreBtn.title = "Toggle File Tree";
+            this.moreBtn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                this.toggleSearchTree();
             });
         }
 
@@ -260,11 +258,14 @@ class RightPanelManager {
         }
         if (this.itemOpenFile) {
             this.itemOpenFile.addEventListener("click", () => {
+                this.showSearchTree = true;
+                if (this.moreBtn) this.moreBtn.classList.add("active");
                 if (this.searchInputEl) {
                     this.searchInputEl.value = "";
                     this.searchInputEl.focus();
-                    this.loadDirectoryContents(".");
                 }
+                this.showSearchResults();
+                this.renderSearchResults("");
             });
         }
         if (this.itemTerminal) {
@@ -1547,11 +1548,15 @@ class RightPanelManager {
             return;
         }
 
-        // 2. Direct VS Code collapsing file tree view updated with every letter
-        await this.renderFileTree(query, currentReqId);
+        // 2. Render search results (Tree only shown when explicitly triggered)
+        await this.renderSearchResults(query, currentReqId);
     }
 
     async renderFileTree(filterQuery = "", expectedReqId = null) {
+        return this.renderSearchResults(filterQuery, expectedReqId);
+    }
+
+    async renderSearchResults(filterQuery = "", expectedReqId = null) {
         if (!this.searchResultsEl) return;
         const term = (filterQuery || "").trim().toLowerCase();
 
@@ -1559,44 +1564,75 @@ class RightPanelManager {
         let matchingFiles = [];
         let matchingCode = [];
 
-        if (term) {
-            try {
-                // Fetch matching files & code grep in parallel
-                const [findRes, grepRes] = await Promise.allSettled([
-                    fetch("/api/file/find", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ query: term })
-                    }),
-                    term.length >= 2 ? fetch("/api/code/grep", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ query: term, search_path: "." })
-                    }) : Promise.resolve(null)
-                ]);
+        if (this.showSearchTree) {
+            // Tree explicitly triggered by clicking 3 dots button
+            if (term) {
+                try {
+                    const [findRes, grepRes] = await Promise.allSettled([
+                        fetch("/api/file/find", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ query: term })
+                        }),
+                        term.length >= 2 ? fetch("/api/code/grep", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ query: term, search_path: "." })
+                        }) : Promise.resolve(null)
+                    ]);
 
-                if (findRes.status === "fulfilled" && findRes.value?.ok) {
-                    const data = await findRes.value.json();
-                    const results = Array.isArray(data.results) ? data.results : [];
-                    matchingFiles = results.filter(r => !r.isDir);
-                    const hierarchy = this.buildHierarchyFromFlatList(results);
-                    treeHtml = this.renderHierarchyHtml(hierarchy, 0, term, "");
-                }
+                    if (findRes.status === "fulfilled" && findRes.value?.ok) {
+                        const data = await findRes.value.json();
+                        const results = Array.isArray(data.results) ? data.results : [];
+                        matchingFiles = results.filter(r => !r.isDir);
+                        const hierarchy = this.buildHierarchyFromFlatList(results);
+                        treeHtml = this.renderHierarchyHtml(hierarchy, 0, term, "");
+                    }
 
-                if (grepRes.status === "fulfilled" && grepRes.value?.ok) {
-                    const grepData = await grepRes.value.json();
-                    matchingCode = Array.isArray(grepData.matches) ? grepData.matches : [];
-                }
-            } catch (_) {}
+                    if (grepRes.status === "fulfilled" && grepRes.value?.ok) {
+                        const grepData = await grepRes.value.json();
+                        matchingCode = Array.isArray(grepData.matches) ? grepData.matches : [];
+                    }
+                } catch (_) {}
+            } else {
+                treeHtml = await this.buildDirectoryTreeHtml(".", 0, "");
+            }
         } else {
-            treeHtml = await this.buildDirectoryTreeHtml(".", 0, "");
+            // Normal search: do NOT show tree! Only fetch matching files & code
+            if (term) {
+                try {
+                    const [findRes, grepRes] = await Promise.allSettled([
+                        fetch("/api/file/find", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ query: term })
+                        }),
+                        term.length >= 2 ? fetch("/api/code/grep", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ query: term, search_path: "." })
+                        }) : Promise.resolve(null)
+                    ]);
+
+                    if (findRes.status === "fulfilled" && findRes.value?.ok) {
+                        const data = await findRes.value.json();
+                        const results = Array.isArray(data.results) ? data.results : [];
+                        matchingFiles = results.filter(r => !r.isDir);
+                    }
+
+                    if (grepRes.status === "fulfilled" && grepRes.value?.ok) {
+                        const grepData = await grepRes.value.json();
+                        matchingCode = Array.isArray(grepData.matches) ? grepData.matches : [];
+                    }
+                } catch (_) {}
+            }
         }
 
         if (expectedReqId && expectedReqId !== this.searchRequestId) {
             return;
         }
 
-        // Build Files List HTML for the right pane
+        // Build Files List HTML
         let filesHtml = "";
         if (matchingFiles.length === 0) {
             filesHtml = '<div class="search-code-empty">No matching files.</div>';
@@ -1626,7 +1662,7 @@ class RightPanelManager {
             });
         }
 
-        // Build Code Matches HTML for the right pane (grouped by filename)
+        // Build Code Matches HTML (grouped by filename)
         let codeHtml = "";
         if (matchingCode.length === 0) {
             codeHtml = term.length < 2
@@ -1684,10 +1720,11 @@ class RightPanelManager {
             });
         }
 
-        const splitLayoutHtml = `
-            <div class="search-split-container" id="searchSplitContainer">
-                <!-- Left Column: Files & Code matches -->
-                <div class="search-details-pane" style="flex: 0 0 ${this.searchSplitPercent}%; width: ${this.searchSplitPercent}%;">
+        let finalHtml = "";
+        if (!this.showSearchTree) {
+            // Normal mode: only Files & Code, full width!
+            finalHtml = `
+                <div class="search-details-pane full-width">
                     <div class="search-section">
                         <div class="search-section-header">
                             <span class="search-section-title">Files</span>
@@ -1705,23 +1742,60 @@ class RightPanelManager {
                         </div>
                     </div>
                 </div>
-
-                <!-- Column Splitter Resizer (Draggable to resize files panel) -->
-                <div class="search-col-resizer" id="searchColResizer" title="Drag to resize"></div>
-
-                <!-- Right Column: Collapsible File Tree -->
-                <div class="search-tree-pane" style="flex: 1 1 ${100 - this.searchSplitPercent}%;">
+            `;
+        } else if (!term) {
+            // Tree explicitly triggered with no search query: full-width Tree explorer!
+            finalHtml = `
+                <div class="search-tree-pane full-width">
                     <div class="search-section-header">
-                        <span class="search-section-title">Tree</span>
+                        <span class="search-section-title">Workspace Tree</span>
                     </div>
                     <div class="search-tree-content" id="launcherTreeContainer">
                         ${treeHtml.trim() ? treeHtml : '<div class="tasks-empty-state">No files.</div>'}
                     </div>
                 </div>
-            </div>
-        `;
+            `;
+        } else {
+            // Tree explicitly triggered with search query: 2-column split layout!
+            finalHtml = `
+                <div class="search-split-container" id="searchSplitContainer">
+                    <!-- Left Column: Files & Code matches -->
+                    <div class="search-details-pane" style="flex: 0 0 ${this.searchSplitPercent}%; width: ${this.searchSplitPercent}%;">
+                        <div class="search-section">
+                            <div class="search-section-header">
+                                <span class="search-section-title">Files</span>
+                            </div>
+                            <div class="search-files-list">
+                                ${filesHtml}
+                            </div>
+                        </div>
+                        <div class="search-section">
+                            <div class="search-section-header">
+                                <span class="search-section-title">Code</span>
+                            </div>
+                            <div class="search-code-list">
+                                ${codeHtml}
+                            </div>
+                        </div>
+                    </div>
 
-        this.searchResultsEl.innerHTML = splitLayoutHtml;
+                    <!-- Column Splitter Resizer (Draggable to resize files panel) -->
+                    <div class="search-col-resizer" id="searchColResizer" title="Drag to resize"></div>
+
+                    <!-- Right Column: Collapsible File Tree -->
+                    <div class="search-tree-pane" style="flex: 1 1 ${100 - this.searchSplitPercent}%;">
+                        <div class="search-section-header">
+                            <span class="search-section-title">Tree</span>
+                        </div>
+                        <div class="search-tree-content" id="launcherTreeContainer">
+                            ${treeHtml.trim() ? treeHtml : '<div class="tasks-empty-state">No files.</div>'}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        this.searchResultsEl.innerHTML = finalHtml;
         this.showSearchResults();
         renderIcons(this.searchResultsEl);
         this.bindLauncherSearchResultsEvents();
@@ -1887,7 +1961,30 @@ class RightPanelManager {
 
     hideSearchResults() {
         if (this.launcherViewEl) this.launcherViewEl.classList.remove("is-searching");
-        if (this.searchResultsEl) this.searchResultsEl.style.display = "none";
+        if (this.searchResultsEl) {
+            this.searchResultsEl.style.display = "none";
+            this.searchResultsEl.innerHTML = "";
+        }
+        this.showSearchTree = false;
+        if (this.moreBtn) this.moreBtn.classList.remove("active");
+    }
+
+    async toggleSearchTree() {
+        this.showSearchTree = !this.showSearchTree;
+        if (this.moreBtn) {
+            this.moreBtn.classList.toggle("active", this.showSearchTree);
+        }
+        const query = this.searchInputEl?.value.trim() || "";
+        if (this.showSearchTree) {
+            this.showSearchResults();
+            await this.renderSearchResults(query);
+        } else {
+            if (query) {
+                await this.renderSearchResults(query);
+            } else {
+                this.hideSearchResults();
+            }
+        }
     }
 
     // ── Background Tasks List (Matches Reference Image) ───────
