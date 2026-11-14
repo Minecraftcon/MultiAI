@@ -1249,6 +1249,11 @@ body.right-panel-resizing #rightPanel {
     color: var(--text-primary);
 }
 
+.breadcrumb-btn.active {
+    background: var(--hover);
+    color: var(--text-primary);
+}
+
 .breadcrumb-btn i {
     width: 14px;
     height: 14px;
@@ -1336,14 +1341,36 @@ body.right-panel-resizing #rightPanel {
     overflow-x: hidden;
     display: flex;
     flex-direction: column;
-    padding: 8px 10px 16px 10px;
+    padding: 0;
+    background: var(--bg-primary);
 }
 
 .viewer-editor-pane .modern-viewer-window {
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    margin: 0;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    margin: 0 !important;
     flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 100%;
+}
+
+.viewer-editor-pane .modern-viewer-window:hover {
+    border-color: transparent !important;
+    box-shadow: none !important;
+}
+
+.viewer-editor-pane .modern-viewer-window.code-mode .mv-header {
+    display: none !important;
+}
+
+.viewer-editor-pane .modern-viewer-window .mv-body {
+    max-height: none !important;
+    flex: 1;
+    height: 100%;
+    background: transparent !important;
 }
 
 /* Draggable resizer between Editor (left) and Sidebar (right) */

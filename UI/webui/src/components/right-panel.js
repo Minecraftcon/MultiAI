@@ -732,6 +732,12 @@ class RightPanelManager {
                     </span>
                 </div>
                 <div class="breadcrumb-actions">
+                    <button type="button" class="breadcrumb-btn" id="breadcrumbWrapBtn" title="Toggle Word Wrap">
+                        <i data-lucide="wrap-text"></i>
+                    </button>
+                    <button type="button" class="breadcrumb-btn" id="breadcrumbCopyBtn" title="Copy Content">
+                        <i data-lucide="copy"></i>
+                    </button>
                     <button type="button" class="breadcrumb-btn" id="breadcrumbMoreBtn" title="More options">
                         <i data-lucide="more-vertical"></i>
                     </button>
@@ -779,10 +785,40 @@ class RightPanelManager {
         if (!container) return;
         const moreBtn = container.querySelector("#breadcrumbMoreBtn");
         const sidebarBtn = container.querySelector("#breadcrumbSidebarBtn");
+        const copyBtn = container.querySelector("#breadcrumbCopyBtn");
+        const wrapBtn = container.querySelector("#breadcrumbWrapBtn");
         const menu = container.querySelector("#breadcrumbDropdownMenu");
 
         if (sidebarBtn) {
             sidebarBtn.addEventListener("click", () => this.toggleSidebar());
+        }
+
+        if (copyBtn) {
+            copyBtn.addEventListener("click", async () => {
+                if (!rawContent) return;
+                try {
+                    await navigator.clipboard.writeText(rawContent);
+                    const origHtml = copyBtn.innerHTML;
+                    copyBtn.innerHTML = '<i data-lucide="check"></i>';
+                    renderIcons(copyBtn);
+                    setTimeout(() => {
+                        copyBtn.innerHTML = origHtml;
+                        renderIcons(copyBtn);
+                    }, 2000);
+                } catch (e) {
+                    console.error("Copy content failed:", e);
+                }
+            });
+        }
+
+        if (wrapBtn) {
+            wrapBtn.addEventListener("click", () => {
+                const viewerWin = container.querySelector(".modern-viewer-window");
+                if (viewerWin) {
+                    viewerWin.classList.toggle("word-wrap");
+                    wrapBtn.classList.toggle("active", viewerWin.classList.contains("word-wrap"));
+                }
+            });
         }
 
         if (moreBtn && menu) {
