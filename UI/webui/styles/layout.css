@@ -13,6 +13,9 @@
     position: relative;
     overflow-x: hidden;
     background: var(--bg);
+    transition: transform var(--panel-speed) var(--panel-ease),
+                width var(--panel-speed) var(--panel-ease),
+                margin-right var(--panel-speed) var(--panel-ease);
 }
 
 #appShell.animate-transition {
