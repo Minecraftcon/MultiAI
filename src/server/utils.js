@@ -177,7 +177,11 @@ function getSystemInfo() {
         instructions = [
             "Operating system is Linux.",
             "Shell is Bash/sh. Use standard GNU/Linux commands: ls, cat, grep, pwd, which, curl, etc.",
-            "Package manager: apt, dnf, pacman, etc. depending on distro."
+            "ROOTLESS PACKAGE MANAGEMENT (No sudo/root required):",
+            "  - The environment may run as an unprivileged user (no root/sudo access). Do NOT run 'sudo apt install'.",
+            "  - Fast on-demand CLI binaries: use 'pkgx <binary> [args...]' (2,500+ developer tools ready out of the box, e.g. 'pkgx jq', 'pkgx ffmpeg', 'pkgx ripgrep').",
+            "  - Full libraries & tools: use 'micromamba' (75,000+ packages from Conda-Forge). Install via 'micromamba install -y -c conda-forge <package>' or run via 'micromamba run -n base <cmd>'.",
+            "  - Standard language managers: 'npm install', 'pip install --user', etc."
         ];
     }
 

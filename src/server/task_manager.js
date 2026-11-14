@@ -96,7 +96,15 @@ class TaskManager {
     runTask({ command, shellOverride, scratchDir, artifactsDir, cwd, chatId = "" } = {}) {
         const taskId = crypto.randomBytes(4).toString("hex");
 
-        const env = { ...process.env };
+        let baseEnv = { ...process.env };
+        try {
+            const rootless = require("../../scripts/setup_rootless_tools");
+            if (typeof rootless.getEnhancedEnv === "function") {
+                baseEnv = rootless.getEnhancedEnv(baseEnv);
+            }
+        } catch (_) {}
+
+        const env = { ...baseEnv };
         env.TERM = "xterm-256color";
         if (scratchDir) {
             env.SCRATCH = scratchDir;

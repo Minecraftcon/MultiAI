@@ -8,6 +8,7 @@ const supabaseStorage = require("./core/supabase_storage");
 
 const { initConsole } = require("./server/console");
 const { ensureVendorFiles } = require("../scripts/vendor_download");
+const { ensureRootlessTools } = require("../scripts/setup_rootless_tools");
 const { initPtyWebSocket } = require("./server/routes/pty");
 
 // If MULTIAI_WORKSPACE_DIR is set, anchor runtime process.cwd() to it
@@ -40,6 +41,11 @@ async function startServer() {
     } catch (err) {
         console.warn("[VENDOR] Check error:", err.message);
     }
+
+    // 2.1 Ensure rootless package managers (micromamba + pkgx) are provisioned
+    ensureRootlessTools().catch(err => {
+        console.warn("[TOOLS] Rootless tools provisioning warning:", err.message);
+    });
 
     // 3. Start task server child process and setup termination handlers
     initSupervisor();

@@ -219,7 +219,8 @@ function createBuildProjectsManager(optsOrFn, maybeResolveHome) {
             `  7. SUBAGENT DELEGATION (task): Use 'task' to spawn isolated subagents for deep research, scanning large directories, or running tests without bloating your main conversation context.`,
             `  8. SURGICAL CODE EDITS: Inspect files before editing. Use 'replace_file_content' or 'multi_replace_file_content' for surgical edits, and 'write_file' for new files.`,
             `  9. VERIFICATION & COMMANDS: Use 'run_task' to run tests, linters, or build commands. Always specify a concise 2-4 word 'task_name' (e.g. 'Check git status', 'Run tests') for command name tagging in the UI.`,
-            `  10. EXECUTION DISCIPLINE: Never stop after merely announcing an action intent. Always execute the necessary tool calls in the same turn.`
+            `  10. EXECUTION DISCIPLINE: Never stop after merely announcing an action intent. Always execute the necessary tool calls in the same turn.`,
+            `  11. ROOTLESS PACKAGE MANAGEMENT: No root/sudo access in container. Use 'pkgx <tool> [args...]' for on-demand CLI binaries or 'micromamba install -y -c conda-forge <package>' for libraries/compilers.`
         ].join("\n");
 
         return {

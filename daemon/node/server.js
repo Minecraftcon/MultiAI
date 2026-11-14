@@ -75,6 +75,25 @@ function resolveKeyCombination(combo) {
     return { bytes: Buffer.from(combo, "utf8") };
 }
 
+function getDaemonEnhancedEnv(baseEnv = process.env) {
+    const home = os.homedir() || process.env.HOME || "/tmp";
+    const binParts = [
+        path.join(home, ".local", "bin"),
+        path.join(home, ".pkgx", "bin"),
+        "/tmp/bin"
+    ];
+    const existingPath = baseEnv.PATH || process.env.PATH || "";
+    const filtered = binParts.filter(p => !existingPath.split(":").includes(p));
+    const newPath = [...filtered, existingPath].filter(Boolean).join(":");
+
+    return {
+        ...baseEnv,
+        PATH: newPath,
+        MAMBA_ROOT_PREFIX: baseEnv.MAMBA_ROOT_PREFIX || path.join(home, ".micromamba"),
+        PKGX_DIR: baseEnv.PKGX_DIR || path.join(home, ".pkgx")
+    };
+}
+
 class TaskManager {
     constructor() {
         this.tasks = new Map();
@@ -90,11 +109,11 @@ class TaskManager {
         const { cwd, scratchDir, artifactsDir, shellOverride } = options;
         const targetCwd = cwd || scratchDir || process.cwd();
 
-        const env = {
+        const env = getDaemonEnhancedEnv({
             ...process.env,
             ...(scratchDir ? { SCRATCH: scratchDir, SCRATCH_DIR: scratchDir } : {}),
             ...(artifactsDir ? { ARTIFACTS: artifactsDir, ARTIFACTS_DIR: artifactsDir } : {})
-        };
+        });
 
         const isWin = process.platform === "win32";
         let shellCmd;
@@ -401,14 +420,14 @@ class PtyManager {
         const defaultShell = isWin ? (process.env.COMSPEC || "cmd.exe") : (process.env.SHELL || "/bin/bash");
         const shell = shellOverride || defaultShell;
 
-        const mergedEnv = {
+        const mergedEnv = getDaemonEnhancedEnv({
             ...process.env,
             TERM: "xterm-256color",
             COLORTERM: "truecolor",
             ...(scratchDir ? { SCRATCH: scratchDir, SCRATCH_DIR: scratchDir } : {}),
             ...(artifactsDir ? { ARTIFACTS: artifactsDir, ARTIFACTS_DIR: artifactsDir } : {}),
             ...customEnv
-        };
+        });
 
         const targetCols = Math.max(10, Math.min(500, parseInt(cols, 10) || 80));
         const targetRows = Math.max(3, Math.min(200, parseInt(rows, 10) || 24));

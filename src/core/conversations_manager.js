@@ -241,7 +241,15 @@ function ensureChatWorkspace(chatId, dateStr) {
         `     - Conversation messages, turn histories, and session metadata are persistently mirrored on disk and Supabase if configured.`,
         `     - Working files, user projects, and './scratch' live directly in '${workdir}'.`,
         `  5. SERVER APPLICATION ISOLATION:`,
-        `     - MultiAI server source code is isolated. Do NOT modify server files or configs unless explicitly requested.`
+        `     - MultiAI server source code is isolated. Do NOT modify server files or configs unless explicitly requested.`,
+        `  6. ROOTLESS PACKAGE RUNNERS & ENVIRONMENT (Zero Sudo Required):`,
+        `     - The container environment runs as an unprivileged user (no root/sudo). Do NOT use 'sudo apt install'.`,
+        `     - To run or install packages without root:`,
+        `       a) 'pkgx <tool> [args...]' (2,500+ developer CLI binaries available on-demand, e.g. 'pkgx jq', 'pkgx ffmpeg -i ...', 'pkgx ripgrep', 'pkgx go run ...').`,
+        `       b) 'micromamba' (75,000+ Conda-Forge packages). Install libraries/tools with:`,
+        `          'micromamba install -y -c conda-forge <package_name>'`,
+        `          or run environments via 'micromamba run -n base <command>'.`,
+        `       c) Standard language managers: 'npm install', 'pip install --user', 'cargo', etc.`
     ].join("\n");
 
     return {

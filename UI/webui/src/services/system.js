@@ -105,7 +105,8 @@ export function buildFullSystemPrompt(workspace = null, personaOverride = null) 
             `- CLOUD SESSION PATH AWARENESS:`,
             `  1. In 'run_task', terminal commands run in '${effectiveWorkdir}'. Your scratchpad lives at './scratch' (accessible as '$SCRATCH'). Run 'python3 scratch/script.py' directly.`,
             `  2. In tool calls ('read_file', 'write_file', 'list_dir'), 'scratch/' and '$SCRATCH/' resolve to the workspace scratchpad, while '$ARTIFACTS/' resolves to session artifacts.`,
-            `  3. Session messages & logs are persistently mirrored in Supabase, while working files and './scratch' live in '${effectiveWorkdir}'.`
+            `  3. Session messages & logs are persistently mirrored in Supabase, while working files and './scratch' live in '${effectiveWorkdir}'.`,
+            `  4. Rootless Tools: use 'pkgx <binary> [args...]' for on-demand tools or 'micromamba install -y -c conda-forge <pkg>' without root/sudo.`
         ].join("\n");
         sections.push(wsText.trim());
     }
