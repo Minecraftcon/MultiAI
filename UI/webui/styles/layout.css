@@ -14,7 +14,9 @@
 }
 
 #appShell.animate-transition {
-    transition: transform var(--panel-speed) var(--panel-ease);
+    transition: transform var(--panel-speed) var(--panel-ease),
+                width var(--panel-speed) var(--panel-ease),
+                margin-right var(--panel-speed) var(--panel-ease);
 }
 
 header {
