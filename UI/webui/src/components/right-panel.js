@@ -1619,14 +1619,18 @@ class RightPanelManager {
                     `;
                 });
 
+                const dirParts = fileName.split("/");
+                dirParts.pop();
+                const dirPath = dirParts.join("/") || ".";
+
                 codeHtml += `
                     <div class="search-code-group">
                         <div class="search-code-group-header" data-action="open-file" data-path="${escapeHTML(fileName)}" title="${escapeHTML(fileName)}">
                             <span class="search-tree-icon" style="color: ${meta.color || "inherit"};">
                                 <i data-lucide="${meta.icon || "file-text"}"></i>
                             </span>
-                            <span>${escapeHTML(baseName)}</span>
-                            <span style="font-size: 10px; color: var(--text-tertiary); margin-left: auto;">${escapeHTML(fileName)}</span>
+                            <span class="search-code-file-name">${escapeHTML(baseName)}</span>
+                            <span class="search-code-file-path">${escapeHTML(dirPath)}</span>
                         </div>
                         <div class="search-code-group-matches">
                             ${matchesHtml}
@@ -1638,12 +1642,7 @@ class RightPanelManager {
 
         const splitLayoutHtml = `
             <div class="search-split-container">
-                <div class="search-tree-pane">
-                    <div class="search-pane-header">Explorer</div>
-                    <div class="search-tree-content" id="launcherTreeContainer">
-                        ${treeHtml.trim() ? treeHtml : '<div class="tasks-empty-state">No files.</div>'}
-                    </div>
-                </div>
+                <!-- Left Column: Files & Code matches -->
                 <div class="search-details-pane">
                     <div class="search-section">
                         <div class="search-section-header">
@@ -1662,6 +1661,16 @@ class RightPanelManager {
                         <div class="search-code-list">
                             ${codeHtml}
                         </div>
+                    </div>
+                </div>
+
+                <!-- Right Column: Collapsible File Tree -->
+                <div class="search-tree-pane">
+                    <div class="search-section-header">
+                        <span class="search-section-title">Tree</span>
+                    </div>
+                    <div class="search-tree-content" id="launcherTreeContainer">
+                        ${treeHtml.trim() ? treeHtml : '<div class="tasks-empty-state">No files.</div>'}
                     </div>
                 </div>
             </div>
