@@ -29,6 +29,7 @@ import {
 } from "./chat-scroll.js";
 import { openImageLightbox } from "./composer-attachments.js";
 import { renderPlanApprovalActions, handlePlanApprovalClick } from "./plan-hitl.js";
+import { openTerminal } from "./terminal-drawer.js";
 
 export {
     getToolBadgeConfig,
@@ -985,6 +986,16 @@ export function initChatDelegation() {
                 }
                 saveCurrentChatState();
             }
+            return;
+        }
+
+        const ptyBtn = e.target.closest(".badge-open-pty-btn");
+        if (ptyBtn) {
+            e.stopPropagation();
+            e.preventDefault();
+            const cmdBox = ptyBtn.closest(".command-output-cmd");
+            const cmd = cmdBox?.dataset?.full || cmdBox?.dataset?.compact || cmdBox?.querySelector(".command-cmd-text")?.textContent || "";
+            openTerminal({ command: cmd });
             return;
         }
 

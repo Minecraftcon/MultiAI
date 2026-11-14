@@ -162,6 +162,7 @@ class TaskManager {
         proc.on("close", (code, signal) => {
             task.running = false;
             task.exitCode = code !== null ? code : (signal ? 128 : 0);
+            task.endTime = Date.now();
             for (const l of task.listeners) {
                 try { l({ type: "close", exitCode: task.exitCode }); } catch (_) {}
             }
@@ -269,6 +270,13 @@ class TaskManager {
     }
 
     listTasks() {
+        const now = Date.now();
+        // Prune finished tasks older than 60 seconds to prevent unbounded memory growth
+        for (const [tid, task] of this.tasks.entries()) {
+            if (!task.running && task.endTime && (now - task.endTime > 60000)) {
+                this.tasks.delete(tid);
+            }
+        }
         const result = {};
         for (const [tid, task] of this.tasks.entries()) {
             result[tid] = {
@@ -417,7 +425,8 @@ class PtyManager {
         let isNative = false;
 
         let args = [];
-        if (command) {
+        const shouldRunAndExit = options.runAndExit === true;
+        if (command && shouldRunAndExit) {
             args = isWin ? ["/c", command] : ["-c", command];
         }
 
@@ -438,7 +447,7 @@ class PtyManager {
 
         if (!ptyProc) {
             if (!isWin && fs.existsSync("/usr/bin/script")) {
-                const fullCmd = command ? `${shell} -c ${JSON.stringify(command)}` : shell;
+                const fullCmd = (command && shouldRunAndExit) ? `${shell} -c ${JSON.stringify(command)}` : shell;
                 ptyProc = spawn("/usr/bin/script", ["-qec", fullCmd, "/dev/null"], {
                     cwd: targetCwd,
                     env: mergedEnv,
@@ -517,6 +526,15 @@ class PtyManager {
         }
 
         this.ptys.set(ptyId, session);
+
+        if (command && !shouldRunAndExit) {
+            setTimeout(() => {
+                try {
+                    this.writeInput(ptyId, `${command}\n`);
+                } catch (_) {}
+            }, 150);
+        }
+
         return session;
     }
 
@@ -1009,6 +1027,7 @@ const server = http.createServer(async (req, res) => {
             if (event.type === "close") {
                 clearTimeout(timer);
                 task.listeners.delete(listener);
+                manager.tasks.delete(task.id);
                 const elapsed = ((Date.now() - task.startTime) / 1000).toFixed(2);
                 sendJSON(res, 200, {
                     status: "completed",

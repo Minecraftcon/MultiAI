@@ -2238,62 +2238,63 @@ class RightPanelManager {
             if (!res.ok) return;
             const data = await res.json();
 
-            const activeTasks = [];
-            const completedTasks = [];
+            const backgroundTasks = [];
+            const nowSec = Math.round(Date.now() / 1000);
 
             for (const [id, t] of Object.entries(data)) {
                 if (!t || typeof t !== "object") continue;
-                const item = {
-                    id,
-                    running: Boolean(t.running),
-                    exitCode: t.exit_code,
-                    command: t.command || "Shell task",
-                    startTime: t.start_time
-                };
-                if (item.running) {
-                    activeTasks.push(item);
-                } else {
-                    completedTasks.push(item);
+                // Background tasks must be actively running
+                if (!t.running) continue;
+
+                const elapsed = t.start_time ? Math.max(0, nowSec - t.start_time) : 0;
+                // Background tasks must be running over 30+ seconds
+                if (elapsed >= 30) {
+                    backgroundTasks.push({
+                        id,
+                        running: true,
+                        exitCode: null,
+                        command: t.command || "Shell task",
+                        startTime: t.start_time,
+                        elapsed
+                    });
                 }
             }
 
-            this.lastActiveTasks = activeTasks;
-            this.lastCompletedTasks = completedTasks;
+            this.lastActiveTasks = backgroundTasks;
+            this.lastCompletedTasks = [];
 
-            const total = activeTasks.length + completedTasks.length;
             if (this.tasksBadgeEl) {
-                if (total > 0) {
-                    this.tasksBadgeEl.textContent = String(total);
+                if (backgroundTasks.length > 0) {
+                    this.tasksBadgeEl.textContent = String(backgroundTasks.length);
                     this.tasksBadgeEl.style.display = "inline-block";
                 } else {
                     this.tasksBadgeEl.style.display = "none";
                 }
             }
 
-            this.renderTasksList(activeTasks, completedTasks);
+            this.renderTasksList(backgroundTasks);
         } catch (err) {
             if (!isBackground) console.error("[RightPanel] Load tasks error:", err);
         }
     }
 
-    renderTasksList(activeTasks, completedTasks) {
+    renderTasksList(backgroundTasks = []) {
         if (!this.tasksListEl) return;
 
-        const allTasks = [...activeTasks, ...completedTasks];
-        if (allTasks.length === 0) {
+        if (!backgroundTasks || backgroundTasks.length === 0) {
             this.tasksListEl.innerHTML = '<div class="launcher-tasks-empty">No active background tasks.</div>';
             if (this.seeAllBtn) this.seeAllBtn.style.display = "none";
             return;
         }
 
-        const displayLimit = this.showAllTasks ? allTasks.length : 4;
-        const visibleTasks = allTasks.slice(0, displayLimit);
+        const displayLimit = this.showAllTasks ? backgroundTasks.length : 4;
+        const visibleTasks = backgroundTasks.slice(0, displayLimit);
 
         let html = "";
         visibleTasks.forEach((task) => {
             const nowSec = Math.round(Date.now() / 1000);
-            const elapsed = task.startTime ? Math.max(0, nowSec - task.startTime) : 0;
-            const durStr = task.running ? `${elapsed}s` : (task.exitCode === 0 ? "done" : `exit ${task.exitCode}`);
+            const elapsed = task.startTime ? Math.max(0, nowSec - task.startTime) : (task.elapsed || 30);
+            const durStr = elapsed >= 60 ? `${Math.floor(elapsed / 60)}m ${elapsed % 60}s` : `${elapsed}s`;
 
             html += `
                 <div class="launcher-task-row" data-task-id="${escapeHTML(task.id)}">
@@ -2311,20 +2312,16 @@ class RightPanelManager {
 
         // Show/hide "See all" button
         if (this.seeAllBtn) {
-            this.seeAllBtn.style.display = allTasks.length > 4 ? "block" : "none";
+            this.seeAllBtn.style.display = backgroundTasks.length > 4 ? "block" : "none";
         }
 
         // Clicking a task attaches to terminal or opens log output
         this.tasksListEl.querySelectorAll(".launcher-task-row").forEach((row) => {
             row.addEventListener("click", () => {
                 const tid = row.getAttribute("data-task-id");
-                const task = allTasks.find(t => t.id === tid);
+                const task = backgroundTasks.find(t => t.id === tid);
                 if (task) {
-                    if (task.running) {
-                        this.openTerminalTab();
-                    } else {
-                        this.openTaskLogTab(task);
-                    }
+                    this.openTerminalTab();
                 }
             });
         });
