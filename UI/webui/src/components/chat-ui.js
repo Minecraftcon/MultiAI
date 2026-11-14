@@ -1036,7 +1036,7 @@ export function initChatDelegation() {
             return;
         }
 
-        const viewBtn = e.target.closest(".checkpoint-view-btn, .checkpoint-open-doc-btn, .checkpoint-artifact-link");
+        const viewBtn = e.target.closest(".checkpoint-view-btn, .checkpoint-open-doc-btn, .checkpoint-artifact-link, .artifact-open-btn");
         if (viewBtn) {
             e.stopPropagation();
             const badge = viewBtn.closest(".search-badge-item.clickable-badge") || viewBtn.closest(".badge-collapse")?.previousElementSibling;
@@ -1048,14 +1048,19 @@ export function initChatDelegation() {
             const collapse = badge?._collapseDiv || badge?.nextElementSibling;
             const summaryText = collapse?.querySelector?.(".command-output-res")?.textContent || "";
 
-            showCheckpointModal({
-                artifactPath,
-                summaryText,
-                checkpointNum,
-                sliceStartIdx,
-                sliceEndIdx,
-                tokensSaved
-            });
+            if (artifactPath && window.rightPanel) {
+                window.rightPanel.open();
+                window.rightPanel.openFileTab(artifactPath);
+            } else {
+                showCheckpointModal({
+                    artifactPath,
+                    summaryText,
+                    checkpointNum,
+                    sliceStartIdx,
+                    sliceEndIdx,
+                    tokensSaved
+                });
+            }
             return;
         }
 

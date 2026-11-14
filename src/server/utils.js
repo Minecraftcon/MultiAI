@@ -424,7 +424,18 @@ function resolveSafePath(inputPath, chatId) {
         }
     }
 
-    return path.isAbsolute(processed) ? path.normalize(processed) : path.resolve(baseDir, processed);
+    const resolved = path.isAbsolute(processed) ? path.normalize(processed) : path.resolve(baseDir, processed);
+    if (!fs.existsSync(resolved) && chatId) {
+        const scratchDir = getChatScratchDir(chatId);
+        const scratchCandidate = path.resolve(scratchDir, processed);
+        if (fs.existsSync(scratchCandidate)) return scratchCandidate;
+
+        const artifactsDir = getChatArtifactsDir(chatId);
+        const artifactCandidate = path.resolve(artifactsDir, processed);
+        if (fs.existsSync(artifactCandidate)) return artifactCandidate;
+    }
+
+    return resolved;
 }
 
 function postJSON(portOrUrl, reqPath, data, timeoutMs = 3000) {

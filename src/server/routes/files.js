@@ -9,7 +9,16 @@ async function handleFileRead(args, chatId) {
         throw new Error("Missing required parameter 'path'.");
     }
 
-    const targetPath = resolveSafePath(rawPath, chatId);
+    let targetPath = null;
+    if (args.workspace && !path.isAbsolute(rawPath)) {
+        const wsCandidate = path.resolve(args.workspace, rawPath);
+        if (fs.existsSync(wsCandidate)) {
+            targetPath = wsCandidate;
+        }
+    }
+    if (!targetPath) {
+        targetPath = resolveSafePath(rawPath, chatId);
+    }
     if (!fs.existsSync(targetPath)) {
         throw new Error(`File or directory not found: ${rawPath}`);
     }

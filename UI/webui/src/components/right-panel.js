@@ -684,7 +684,10 @@ class RightPanelManager {
         this.switchTab(tabId);
     }
 
-    openDiffTab(filePath) {
+    openDiffTab(filePath, workspace = "") {
+        if (!this.isOpen) {
+            this.open();
+        }
         const tabId = `diff_${filePath}`;
         let tab = this.tabs.find(t => t.id === tabId);
         if (!tab) {
@@ -692,8 +695,11 @@ class RightPanelManager {
                 id: tabId,
                 type: "diff",
                 title: filePath.split("/").pop() || "Review",
-                path: filePath
+                path: filePath,
+                workspace: workspace || ""
             });
+        } else if (workspace) {
+            tab.workspace = workspace;
         }
         this.switchTab(tabId);
     }
@@ -1126,7 +1132,11 @@ class RightPanelManager {
         this.viewerMountEl.innerHTML = '<div class="tasks-empty-state">Loading unified diff…</div>';
 
         try {
-            const res = await fetch(`/api/history/diff?path=${encodeURIComponent(tab.path)}`);
+            const chatId = state?.currentChatId || "";
+            let diffUrl = `/api/history/diff?path=${encodeURIComponent(tab.path)}`;
+            if (chatId) diffUrl += `&chatId=${encodeURIComponent(chatId)}`;
+            if (tab.workspace) diffUrl += `&workspace=${encodeURIComponent(tab.workspace)}`;
+            const res = await fetch(diffUrl);
             if (!res.ok) {
                 this.viewerMountEl.innerHTML = '<div class="tasks-empty-state">Unable to load unified diff.</div>';
                 return;
@@ -1270,10 +1280,14 @@ class RightPanelManager {
         }
     }
 
-    openFileTab(filePath) {
+    openFileTab(filePath, workspace = "") {
+        if (!this.isOpen) {
+            this.open();
+        }
         const tabId = `file_${filePath}`;
         const existing = this.tabs.find(t => t.id === tabId);
         if (existing) {
+            if (workspace) existing.workspace = workspace;
             this.switchTab(tabId);
             return;
         }
@@ -1282,7 +1296,8 @@ class RightPanelManager {
             id: tabId,
             type: "file",
             title: filePath.split("/").pop(),
-            path: filePath
+            path: filePath,
+            workspace: workspace || ""
         });
 
         this.switchTab(tabId);
@@ -1293,10 +1308,16 @@ class RightPanelManager {
         this.viewerMountEl.innerHTML = '<div class="tasks-empty-state">Loading file…</div>';
 
         try {
+            const chatId = state?.currentChatId || "";
             const res = await fetch("/api/file/read", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ path: tab.path, numbered: false })
+                body: JSON.stringify({ 
+                    path: tab.path, 
+                    chatId,
+                    workspace: tab.workspace || "",
+                    numbered: false 
+                })
             });
 
             if (!res.ok) {
