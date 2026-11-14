@@ -1373,6 +1373,101 @@ body.right-panel-resizing #rightPanel {
     background: transparent !important;
 }
 
+/* ── Ace Editor Integration in Panel ───────────────────────── */
+.ace-editor-container {
+    flex: 1;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-primary);
+}
+
+.ace-editor-mount {
+    flex: 1;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    font-size: 13.5px;
+    line-height: 1.5;
+}
+
+.breadcrumb-btn#breadcrumbSaveBtn {
+    display: none;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    background: #111111;
+    border: 1px solid var(--border-strong);
+    color: #ffffff;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.breadcrumb-btn#breadcrumbSaveBtn:hover {
+    background: #222222;
+}
+
+.breadcrumb-btn#breadcrumbSaveBtn.saved {
+    background: #10b981;
+    border-color: #10b981;
+}
+
+.breadcrumb-btn#breadcrumbEditBtn.active {
+    background: rgba(255, 255, 255, 0.12);
+    color: var(--accent, #3b82f6);
+}
+
+/* Ace editor damp syntax theme */
+.ace-editor-container .ace_editor {
+    background: transparent !important;
+    color: #d4d4d8 !important;
+    font-family: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace !important;
+}
+
+.ace-editor-container .ace_gutter {
+    background: transparent !important;
+    color: #52525b !important;
+    border-right: 1px solid rgba(255, 255, 255, 0.06) !important;
+}
+
+.ace-editor-container .ace_gutter-active-line {
+    background: rgba(255, 255, 255, 0.04) !important;
+}
+
+.ace-editor-container .ace_active-line {
+    background: rgba(255, 255, 255, 0.03) !important;
+}
+
+.ace-editor-container .ace_cursor {
+    color: #ffffff !important;
+}
+
+.ace-editor-container .ace_selected-word,
+.ace-editor-container .ace_marker-layer .ace_selection {
+    background: rgba(255, 255, 255, 0.12) !important;
+}
+
+.ace-editor-container .ace_comment { color: #64748b !important; font-style: italic !important; }
+.ace-editor-container .ace_keyword,
+.ace-editor-container .ace_storage,
+.ace-editor-container .ace_type { color: #c48888 !important; }
+.ace-editor-container .ace_string { color: #9fb89d !important; }
+.ace-editor-container .ace_numeric,
+.ace-editor-container .ace_boolean,
+.ace-editor-container .ace_constant { color: #d4b58a !important; }
+.ace-editor-container .ace_function { color: #9faec2 !important; }
+.ace-editor-container .ace_variable { color: #c2c6cf !important; }
+.ace-editor-container .ace_operator,
+.ace-editor-container .ace_punctuation { color: #828894 !important; }
+.ace-editor-container .ace_support.ace_function,
+.ace-editor-container .ace_support.ace_class { color: #c9a489 !important; }
+
 /* Draggable resizer between Editor (left) and Sidebar (right) */
 .viewer-col-resizer {
     width: 8px;

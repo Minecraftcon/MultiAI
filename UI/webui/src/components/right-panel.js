@@ -566,12 +566,20 @@ class RightPanelManager {
     }
 
     switchTab(tabId) {
+        if (this.activeAceEditor) {
+            try { this.activeAceEditor.destroy(); } catch (_) {}
+            this.activeAceEditor = null;
+        }
         this.activeTabId = tabId;
         this.renderTabStrip();
         this.renderActiveTab();
     }
 
     closeTab(tabId) {
+        if (this.activeAceEditor) {
+            try { this.activeAceEditor.destroy(); } catch (_) {}
+            this.activeAceEditor = null;
+        }
         const idx = this.tabs.findIndex(t => t.id === tabId);
         if (idx === -1) return;
 
@@ -738,6 +746,13 @@ class RightPanelManager {
                     </span>
                 </div>
                 <div class="breadcrumb-actions">
+                    <button type="button" class="breadcrumb-btn" id="breadcrumbEditBtn" title="Edit File (Ace Editor)">
+                        <i data-lucide="pencil"></i>
+                    </button>
+                    <button type="button" class="breadcrumb-btn" id="breadcrumbSaveBtn" title="Save File (Ctrl+S)" style="display: none;">
+                        <i data-lucide="save"></i>
+                        <span>Save</span>
+                    </button>
                     <button type="button" class="breadcrumb-btn" id="breadcrumbWrapBtn" title="Toggle Word Wrap">
                         <i data-lucide="wrap-text"></i>
                     </button>
@@ -752,6 +767,11 @@ class RightPanelManager {
                     </button>
                 </div>
                 <div class="breadcrumb-dropdown-menu" id="breadcrumbDropdownMenu" style="display: none;">
+                    <div class="breadcrumb-menu-item" data-action="edit-file">
+                        <i data-lucide="pencil"></i>
+                        <span>Edit</span>
+                    </div>
+                    <div class="breadcrumb-menu-divider"></div>
                     <div class="breadcrumb-menu-item" data-action="expand-diffs">
                         <i data-lucide="chevrons-up-down"></i>
                         <span>Expand Diffs</span>
@@ -793,7 +813,28 @@ class RightPanelManager {
         const sidebarBtn = container.querySelector("#breadcrumbSidebarBtn");
         const copyBtn = container.querySelector("#breadcrumbCopyBtn");
         const wrapBtn = container.querySelector("#breadcrumbWrapBtn");
+        const editBtn = container.querySelector("#breadcrumbEditBtn");
+        const saveBtn = container.querySelector("#breadcrumbSaveBtn");
         const menu = container.querySelector("#breadcrumbDropdownMenu");
+
+        const toggleEditMode = () => {
+            const editorPane = container.querySelector(".viewer-editor-pane");
+            if (!editorPane) return;
+            const isEditing = editorPane.querySelector("#aceEditorMount") !== null;
+            if (isEditing) {
+                this.closeAceEditor(container, filePath);
+            } else {
+                this.openAceEditor(container, filePath, rawContent);
+            }
+        };
+
+        if (editBtn) {
+            editBtn.addEventListener("click", () => toggleEditMode());
+        }
+
+        if (saveBtn) {
+            saveBtn.addEventListener("click", () => this.saveAceContent(container, filePath));
+        }
 
         if (sidebarBtn) {
             sidebarBtn.addEventListener("click", () => this.toggleSidebar());
@@ -844,7 +885,9 @@ class RightPanelManager {
                     const action = item.getAttribute("data-action");
                     menu.style.display = "none";
 
-                    if (action === "expand-diffs") {
+                    if (action === "edit-file") {
+                        toggleEditMode();
+                    } else if (action === "expand-diffs") {
                         const chunks = container.querySelectorAll(".mv-chunk-banner");
                         chunks.forEach(c => c.click());
                     } else if (action === "toggle-whitespace") {
@@ -889,6 +932,180 @@ class RightPanelManager {
                     }
                 });
             });
+        }
+    }
+
+    getAceMode(filePath = "") {
+        const ext = filePath.split(".").pop()?.toLowerCase() || "";
+        switch (ext) {
+            case "js": case "mjs": case "cjs": return "ace/mode/javascript";
+            case "ts": return "ace/mode/typescript";
+            case "jsx": return "ace/mode/jsx";
+            case "tsx": return "ace/mode/tsx";
+            case "json": return "ace/mode/json";
+            case "html": case "htm": return "ace/mode/html";
+            case "css": return "ace/mode/css";
+            case "scss": return "ace/mode/scss";
+            case "less": return "ace/mode/less";
+            case "py": return "ace/mode/python";
+            case "sh": case "bash": return "ace/mode/sh";
+            case "md": case "markdown": return "ace/mode/markdown";
+            case "yml": case "yaml": return "ace/mode/yaml";
+            case "xml": case "svg": return "ace/mode/xml";
+            case "sql": return "ace/mode/sql";
+            case "rs": case "rust": return "ace/mode/rust";
+            case "go": return "ace/mode/golang";
+            case "c": case "cpp": case "h": case "hpp": return "ace/mode/c_cpp";
+            case "java": return "ace/mode/java";
+            case "php": return "ace/mode/php";
+            case "ini": case "conf": case "env": return "ace/mode/ini";
+            default: return "ace/mode/text";
+        }
+    }
+
+    openAceEditor(container, filePath, currentContent = "") {
+        const editorPane = container.querySelector(".viewer-editor-pane");
+        const editBtn = container.querySelector("#breadcrumbEditBtn");
+        const saveBtn = container.querySelector("#breadcrumbSaveBtn");
+        if (!editorPane) return;
+
+        editorPane.innerHTML = `
+            <div class="ace-editor-container" id="aceEditorContainer">
+                <div class="ace-editor-mount" id="aceEditorMount"></div>
+            </div>
+        `;
+
+        if (typeof window.ace === "undefined") {
+            editorPane.innerHTML = '<div class="tasks-empty-state">Loading Ace Editor…</div>';
+            return;
+        }
+
+        try {
+            window.ace.config.set("basePath", "/vendor/ace");
+            const mount = editorPane.querySelector("#aceEditorMount");
+            const editor = window.ace.edit(mount);
+            editor.setTheme("ace/theme/one_dark");
+            editor.session.setMode(this.getAceMode(filePath));
+            editor.setValue(currentContent || "", -1);
+            editor.setOptions({
+                fontFamily: "'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace",
+                fontSize: "13.5px",
+                tabSize: 4,
+                useSoftTabs: true,
+                showPrintMargin: false,
+                wrap: true,
+                highlightActiveLine: true,
+                enableBasicAutocompletion: true,
+                enableLiveAutocompletion: true
+            });
+
+            this.activeAceEditor = editor;
+            this.activeAceFilePath = filePath;
+            this.activeAceContent = currentContent;
+
+            // Keyboard shortcut Ctrl+S / Cmd+S to save
+            editor.commands.addCommand({
+                name: "saveFile",
+                bindKey: { win: "Ctrl-S", mac: "Command-S" },
+                exec: () => {
+                    this.saveAceContent(container, filePath);
+                }
+            });
+
+            if (editBtn) editBtn.classList.add("active");
+            if (saveBtn) saveBtn.style.display = "inline-flex";
+
+            const suffix = container.querySelector(".crumb-suffix");
+            if (suffix) suffix.textContent = "(editing)";
+
+            renderIcons(container);
+            editor.focus();
+        } catch (err) {
+            console.error("[Ace] Init error:", err);
+            editorPane.innerHTML = `<div class="tasks-empty-state">Failed to initialize editor: ${escapeHTML(err.message)}</div>`;
+        }
+    }
+
+    async saveAceContent(container, filePath) {
+        if (!this.activeAceEditor) return;
+        const saveBtn = container?.querySelector("#breadcrumbSaveBtn");
+        const newContent = this.activeAceEditor.getValue();
+
+        if (saveBtn) {
+            saveBtn.disabled = true;
+            saveBtn.innerHTML = '<i data-lucide="loader-2"></i> <span>Saving…</span>';
+            renderIcons(saveBtn);
+        }
+
+        try {
+            const chatId = state?.currentChatId || "";
+            const res = await fetch("/api/file/write", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    path: filePath,
+                    content: newContent,
+                    chatId
+                })
+            });
+
+            if (res.ok) {
+                this.activeAceContent = newContent;
+                if (saveBtn) {
+                    saveBtn.classList.add("saved");
+                    saveBtn.innerHTML = '<i data-lucide="check"></i> <span>Saved</span>';
+                    renderIcons(saveBtn);
+                    setTimeout(() => {
+                        saveBtn.classList.remove("saved");
+                        saveBtn.disabled = false;
+                        saveBtn.innerHTML = '<i data-lucide="save"></i> <span>Save</span>';
+                        renderIcons(saveBtn);
+                    }, 2000);
+                }
+            } else {
+                const errData = await res.json().catch(() => ({}));
+                alert(`Error saving file: ${errData.error || "Save failed"}`);
+                if (saveBtn) {
+                    saveBtn.disabled = false;
+                    saveBtn.innerHTML = '<i data-lucide="save"></i> <span>Save</span>';
+                    renderIcons(saveBtn);
+                }
+            }
+        } catch (e) {
+            console.error("Save file error:", e);
+            if (saveBtn) {
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = '<i data-lucide="save"></i> <span>Save</span>';
+                renderIcons(saveBtn);
+            }
+        }
+    }
+
+    closeAceEditor(container, filePath) {
+        const editorPane = container.querySelector(".viewer-editor-pane");
+        const editBtn = container.querySelector("#breadcrumbEditBtn");
+        const saveBtn = container.querySelector("#breadcrumbSaveBtn");
+
+        const content = this.activeAceEditor ? this.activeAceEditor.getValue() : (this.activeAceContent || "");
+        if (this.activeAceEditor) {
+            try { this.activeAceEditor.destroy(); } catch (_) {}
+            this.activeAceEditor = null;
+        }
+
+        if (editBtn) editBtn.classList.remove("active");
+        if (saveBtn) saveBtn.style.display = "none";
+
+        const suffix = container.querySelector(".crumb-suffix");
+        if (suffix) suffix.textContent = "(single edit)";
+
+        if (editorPane) {
+            editorPane.innerHTML = renderCodeViewerCardHtml({
+                code: content,
+                filePath,
+                maxHeight: 750
+            });
+            bindDiffViewerCards(editorPane);
+            renderIcons(editorPane);
         }
     }
 
