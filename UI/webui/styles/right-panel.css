@@ -461,37 +461,55 @@ body.right-panel-resizing #rightPanel {
 }
 
 /* Autocomplete / Directory Explorer Dropdown (VS Code File & Folder Tree) */
+/* Autocomplete / Directory Explorer (Inline VS Code File & Folder Tree, NO bubble) */
 .launcher-search-results {
-    position: absolute;
-    top: calc(100% + 6px);
+    position: relative;
+    top: 0;
     left: 0;
-    right: 40px;
+    right: 0;
+    width: 100%;
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 10px;
-    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
-    max-height: 380px;
+    border-radius: 8px;
+    box-shadow: none;
+    max-height: calc(100vh - 220px);
     overflow-y: auto;
-    z-index: 100;
+    z-index: 10;
     padding: 6px 4px;
     display: flex;
     flex-direction: column;
     gap: 1px;
+    margin-top: 10px;
+    box-sizing: border-box;
+}
+
+.right-panel-launcher-view.is-searching .launcher-menu-list,
+.right-panel-launcher-view.is-searching .launcher-tasks-section {
+    display: none !important;
+}
+
+.right-panel-launcher-view.is-searching .launcher-search-results {
+    display: flex !important;
+    flex: 1;
+    min-height: 0;
 }
 
 .search-tree-node {
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 4px 8px;
-    border-radius: 5px;
+    padding: 3px 6px;
+    border-radius: 4px;
     cursor: pointer;
-    font-size: 13px;
+    font-size: 12.5px;
     color: var(--text-secondary);
     user-select: none;
     transition: background 0.1s ease, color 0.1s ease;
-    min-height: 28px;
+    min-height: 26px;
     box-sizing: border-box;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
 }
 
 .search-tree-node:hover {
@@ -499,9 +517,11 @@ body.right-panel-resizing #rightPanel {
     color: var(--text-primary);
 }
 
+.search-tree-node.active,
 .search-tree-node.selected {
-    background: var(--hover-2);
+    background: var(--surface);
     color: var(--text-primary);
+    font-weight: 500;
 }
 
 .search-tree-chevron {
@@ -515,6 +535,7 @@ body.right-panel-resizing #rightPanel {
     transition: transform 0.14s ease;
 }
 
+.search-tree-node.is-open > .search-tree-chevron svg,
 .search-tree-node.is-open .search-tree-chevron svg {
     transform: rotate(90deg);
 }
@@ -526,8 +547,8 @@ body.right-panel-resizing #rightPanel {
 }
 
 .search-tree-icon {
-    width: 15px;
-    height: 15px;
+    width: 14px;
+    height: 14px;
     flex-shrink: 0;
     display: inline-flex;
     align-items: center;
@@ -535,8 +556,8 @@ body.right-panel-resizing #rightPanel {
 }
 
 .search-tree-icon svg {
-    width: 15px;
-    height: 15px;
+    width: 14px;
+    height: 14px;
 }
 
 .search-tree-label {
@@ -547,8 +568,10 @@ body.right-panel-resizing #rightPanel {
     flex: 1;
 }
 
-.search-tree-label .search-tree-match {
-    color: var(--accent);
+.search-tree-match {
+    color: var(--text-primary);
+    background: rgba(234, 179, 8, 0.25);
+    border-radius: 2px;
     font-weight: 600;
 }
 
@@ -1038,12 +1061,13 @@ body.right-panel-resizing #rightPanel {
     flex: 1;
 }
 
-/* File list sidebar inside viewer */
+/* VS Code Left File Explorer Sidebar inside viewer */
 .viewer-sidebar-pane {
-    width: 200px;
+    width: 230px;
     flex-shrink: 0;
     height: 100%;
-    border-left: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+    border-left: none;
     background: var(--bg);
     display: flex;
     flex-direction: column;
@@ -1053,31 +1077,104 @@ body.right-panel-resizing #rightPanel {
 
 .viewer-split-container.sidebar-collapsed .viewer-sidebar-pane {
     width: 0 !important;
+    border-right: none !important;
     border-left: none !important;
     opacity: 0;
     pointer-events: none;
 }
 
 .viewer-sidebar-header {
-    height: 30px;
+    height: 32px;
     display: flex;
     align-items: center;
+    justify-content: space-between;
     padding: 0 10px;
     border-bottom: 1px solid var(--border);
     font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
     color: var(--text-tertiary);
-    font-family: 'JetBrains Mono', monospace;
+    flex-shrink: 0;
+    background: var(--surface);
+}
+
+.viewer-sidebar-title {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.viewer-sidebar-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.viewer-sidebar-icon-btn {
+    width: 22px;
+    height: 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    padding: 0;
+    transition: background 0.12s ease, color 0.12s ease;
+}
+
+.viewer-sidebar-icon-btn:hover {
+    background: var(--hover);
+    color: var(--text-primary);
+}
+
+.viewer-sidebar-icon-btn i {
+    width: 13px;
+    height: 13px;
+}
+
+.viewer-sidebar-search-box {
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--bg);
     flex-shrink: 0;
+}
+
+.viewer-sidebar-search-icon {
+    width: 13px;
+    height: 13px;
+    color: var(--text-tertiary);
+    flex-shrink: 0;
+}
+
+.viewer-sidebar-filter-input {
+    flex: 1;
+    min-width: 0;
+    border: 1px solid var(--border);
     background: var(--surface);
+    border-radius: 4px;
+    padding: 3px 6px;
+    font-size: 11.5px;
+    color: var(--text-primary);
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.14s ease;
+}
+
+.viewer-sidebar-filter-input:focus {
+    border-color: var(--border-strong);
 }
 
 .viewer-sidebar-list {
     flex: 1;
     overflow-y: auto;
-    padding: 4px;
+    padding: 4px 2px;
     display: flex;
     flex-direction: column;
     gap: 1px;

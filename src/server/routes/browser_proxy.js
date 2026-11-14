@@ -116,3 +116,4 @@ async function handleBrowserProxyRoute(req, res) {
 module.exports = {
     handleBrowserProxyRoute
 };
+

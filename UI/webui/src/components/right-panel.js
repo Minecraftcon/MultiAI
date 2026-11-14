@@ -684,7 +684,7 @@ class RightPanelManager {
                         <i data-lucide="more-vertical"></i>
                     </button>
                     <button type="button" class="breadcrumb-btn" id="breadcrumbSidebarBtn" title="Toggle sidebar">
-                        <i data-lucide="panel-right"></i>
+                        <i data-lucide="panel-left"></i>
                     </button>
                 </div>
                 <div class="breadcrumb-dropdown-menu" id="breadcrumbDropdownMenu" style="display: none;">
@@ -800,68 +800,112 @@ class RightPanelManager {
 
     async loadViewerSidebar(folderPath, currentFilePath, isDiffMode = false) {
         const listEl = document.getElementById("viewerSidebarList");
+        const filterInput = document.getElementById("viewerSidebarFilterInput");
+        const refreshBtn = document.getElementById("viewerSidebarRefreshBtn");
         if (!listEl) return;
 
-        try {
-            if (isDiffMode) {
+        if (refreshBtn) {
+            refreshBtn.onclick = async () => {
+                this.treeCache.clear();
+                await this.loadViewerSidebar(folderPath, currentFilePath, isDiffMode);
+            };
+        }
+
+        if (filterInput) {
+            filterInput.value = "";
+            filterInput.oninput = (e) => {
+                const val = e.target.value.trim();
+                this.renderViewerSidebarContent(listEl, val, currentFilePath, isDiffMode);
+            };
+        }
+
+        // Auto-expand ancestors of currentFilePath so active file is visible in tree
+        if (currentFilePath && !isDiffMode) {
+            const cleanPath = currentFilePath.replace(/\\/g, "/").replace(/^\.\//, "");
+            const parts = cleanPath.split("/").filter(Boolean);
+            parts.pop(); // Remove file name
+            let accumulated = "";
+            for (const p of parts) {
+                accumulated = accumulated ? `${accumulated}/${p}` : p;
+                this.treeExpandedPaths.add(accumulated);
+            }
+        }
+
+        await this.renderViewerSidebarContent(listEl, "", currentFilePath, isDiffMode);
+    }
+
+    async renderViewerSidebarContent(listEl, filterTerm, currentFilePath, isDiffMode) {
+        if (!listEl) return;
+
+        if (isDiffMode) {
+            try {
                 const changesRes = await fetch("/api/history/changes");
-                if (changesRes.ok) {
-                    const changesData = await changesRes.json();
-                    const changedFiles = Array.isArray(changesData.files) ? changesData.files : [];
-                    if (changedFiles.length > 0) {
-                        let html = "";
-                        changedFiles.forEach((f) => {
-                            const p = f.displayPath || f.path;
-                            const fName = p.split("/").pop() || p;
-                            const ext = fName.split(".").pop()?.toLowerCase() || "";
-                            const isCur = currentFilePath && (currentFilePath === p || currentFilePath.endsWith(fName));
-                            html += `
-                                <div class="viewer-sidebar-item ${isCur ? "active" : ""}" data-path="${escapeHTML(p)}" data-is-diff="true" title="${escapeHTML(p)} (+${f.additions || 0} -${f.deletions || 0})">
-                                    <span class="file-ext-badge ${ext}">${escapeHTML(ext || "diff")}</span>
-                                    <span class="viewer-sidebar-filename">${escapeHTML(fName)}</span>
-                                </div>
-                            `;
-                        });
-                        listEl.innerHTML = html;
-                        this.bindViewerSidebarClicks(listEl);
-                        return;
-                    }
+                if (!changesRes.ok) {
+                    listEl.innerHTML = '<div class="tasks-empty-state">Unable to load changes.</div>';
+                    return;
                 }
+                const changesData = await changesRes.json();
+                let changedFiles = Array.isArray(changesData.files) ? changesData.files : [];
+                if (filterTerm) {
+                    changedFiles = changedFiles.filter(f => {
+                        const p = (f.displayPath || f.path || "").toLowerCase();
+                        return p.includes(filterTerm.toLowerCase());
+                    });
+                }
+                if (changedFiles.length === 0) {
+                    listEl.innerHTML = '<div class="tasks-empty-state">No changed files found.</div>';
+                    return;
+                }
+                let html = "";
+                changedFiles.forEach((f) => {
+                    const p = f.displayPath || f.path;
+                    const fName = p.split("/").pop() || p;
+                    const ext = fName.split(".").pop()?.toLowerCase() || "";
+                    const isCur = currentFilePath && (currentFilePath === p || currentFilePath.endsWith(fName));
+                    html += `
+                        <div class="viewer-sidebar-item ${isCur ? "active" : ""}" data-path="${escapeHTML(p)}" data-is-diff="true" title="${escapeHTML(p)} (+${f.additions || 0} -${f.deletions || 0})">
+                            <span class="file-ext-badge ${ext}">${escapeHTML(ext || "diff")}</span>
+                            <span class="viewer-sidebar-filename">${escapeHTML(fName)}</span>
+                        </div>
+                    `;
+                });
+                listEl.innerHTML = html;
+                renderIcons(listEl);
+                this.bindViewerSidebarClicks(listEl);
+            } catch (_) {
+                listEl.innerHTML = '<div class="tasks-empty-state">Unable to load changes.</div>';
+            }
+            return;
+        }
+
+        // Normal file mode: VS Code Tree
+        try {
+            let treeHtml = "";
+            if (filterTerm) {
+                const res = await fetch("/api/file/find", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ query: filterTerm })
+                });
+                const data = res.ok ? await res.json() : { results: [] };
+                const results = Array.isArray(data.results) ? data.results : [];
+                if (results.length === 0) {
+                    listEl.innerHTML = `<div class="tasks-empty-state">No matching files found.</div>`;
+                    return;
+                }
+                const hierarchy = this.buildHierarchyFromFlatList(results);
+                treeHtml = this.renderHierarchyHtml(hierarchy, 0, filterTerm.toLowerCase(), currentFilePath);
+            } else {
+                treeHtml = await this.buildDirectoryTreeHtml(".", 0, currentFilePath);
             }
 
-            const res = await fetch("/api/file/list-dir", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ path: folderPath || "." })
-            });
-
-            if (!res.ok) {
-                listEl.innerHTML = '<div class="tasks-empty-state">No files.</div>';
-                return;
+            if (!treeHtml.trim()) {
+                listEl.innerHTML = '<div class="tasks-empty-state">Empty workspace.</div>';
+            } else {
+                listEl.innerHTML = treeHtml;
             }
-
-            const data = await res.json();
-            const entries = Array.isArray(data.entries) ? data.entries : [];
-            if (entries.length === 0) {
-                listEl.innerHTML = '<div class="tasks-empty-state">Empty directory.</div>';
-                return;
-            }
-
-            let html = "";
-            entries.forEach((e) => {
-                const ext = e.name.split(".").pop()?.toLowerCase() || "";
-                const fullRel = folderPath && folderPath !== "." ? `${folderPath}/${e.name}` : e.name;
-                const isCur = currentFilePath && (currentFilePath === fullRel || currentFilePath.endsWith(e.name));
-                html += `
-                    <div class="viewer-sidebar-item ${isCur ? "active" : ""}" data-path="${escapeHTML(fullRel)}" title="${escapeHTML(e.name)}">
-                        <span class="file-ext-badge ${ext}">${escapeHTML(ext || "txt")}</span>
-                        <span class="viewer-sidebar-filename">${escapeHTML(e.name)}</span>
-                    </div>
-                `;
-            });
-
-            listEl.innerHTML = html;
-            this.bindViewerSidebarClicks(listEl);
+            renderIcons(listEl);
+            this.bindTreeContainerClicks(listEl, false, currentFilePath);
         } catch (_) {
             listEl.innerHTML = '<div class="tasks-empty-state">Unable to load files.</div>';
         }
@@ -926,17 +970,26 @@ class RightPanelManager {
             const splitContainerHtml = `
                 ${breadcrumbHtml}
                 <div class="viewer-split-container ${this.isSidebarOpen ? "" : "sidebar-collapsed"}">
+                    <div class="viewer-sidebar-pane">
+                        <div class="viewer-sidebar-header">
+                            <span class="viewer-sidebar-title">Changes</span>
+                            <div class="viewer-sidebar-actions">
+                                <button type="button" class="viewer-sidebar-icon-btn" id="viewerSidebarRefreshBtn" title="Refresh changes">
+                                    <i data-lucide="refresh-cw"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="viewer-sidebar-search-box">
+                            <i data-lucide="search" class="viewer-sidebar-search-icon"></i>
+                            <input type="text" class="viewer-sidebar-filter-input" id="viewerSidebarFilterInput" placeholder="Filter changes..." autocomplete="off" spellcheck="false">
+                        </div>
+                        <div class="viewer-sidebar-list" id="viewerSidebarList">
+                            <div class="tasks-empty-state">Loading changes…</div>
+                        </div>
+                    </div>
                     <div class="viewer-editor-pane">
                         ${toolbarHtml}
                         ${diffCardHtml}
-                    </div>
-                    <div class="viewer-sidebar-pane">
-                        <div class="viewer-sidebar-header">
-                            <span class="viewer-sidebar-folder" title="${escapeHTML(folderPath)}">... / ${escapeHTML(folderName)} ...</span>
-                        </div>
-                        <div class="viewer-sidebar-list" id="viewerSidebarList">
-                            <div class="tasks-empty-state">Loading files…</div>
-                        </div>
                     </div>
                 </div>
             `;
@@ -1038,16 +1091,25 @@ class RightPanelManager {
             const splitContainerHtml = `
                 ${breadcrumbHtml}
                 <div class="viewer-split-container ${this.isSidebarOpen ? "" : "sidebar-collapsed"}">
-                    <div class="viewer-editor-pane">
-                        ${codeCardHtml}
-                    </div>
                     <div class="viewer-sidebar-pane">
                         <div class="viewer-sidebar-header">
-                            <span class="viewer-sidebar-folder" title="${escapeHTML(folderPath)}">... / ${escapeHTML(folderName)} ...</span>
+                            <span class="viewer-sidebar-title">Workspace</span>
+                            <div class="viewer-sidebar-actions">
+                                <button type="button" class="viewer-sidebar-icon-btn" id="viewerSidebarRefreshBtn" title="Refresh files">
+                                    <i data-lucide="refresh-cw"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="viewer-sidebar-search-box">
+                            <i data-lucide="search" class="viewer-sidebar-search-icon"></i>
+                            <input type="text" class="viewer-sidebar-filter-input" id="viewerSidebarFilterInput" placeholder="Filter files..." autocomplete="off" spellcheck="false">
                         </div>
                         <div class="viewer-sidebar-list" id="viewerSidebarList">
                             <div class="tasks-empty-state">Loading files…</div>
                         </div>
+                    </div>
+                    <div class="viewer-editor-pane">
+                        ${codeCardHtml}
                     </div>
                 </div>
             `;
@@ -1288,6 +1350,131 @@ class RightPanelManager {
         }
     }
 
+    buildHierarchyFromFlatList(flatList) {
+        const root = { name: "", path: ".", isDir: true, children: {} };
+        for (const item of flatList) {
+            const clean = (item.path || "").replace(/\\/g, "/").replace(/^\.\//, "");
+            const parts = clean.split("/").filter(Boolean);
+            let curr = root;
+            let accumulated = "";
+            for (let i = 0; i < parts.length; i++) {
+                const part = parts[i];
+                accumulated = accumulated ? `${accumulated}/${part}` : part;
+                const isLast = i === parts.length - 1;
+                if (!curr.children[part]) {
+                    curr.children[part] = {
+                        name: part,
+                        path: accumulated,
+                        isDir: isLast ? Boolean(item.isDir) : true,
+                        children: {}
+                    };
+                }
+                curr = curr.children[part];
+            }
+        }
+        return root;
+    }
+
+    renderHierarchyHtml(node, depth = 0, term = "", activePath = "") {
+        let html = "";
+        const children = Object.values(node.children || {});
+        children.sort((a, b) => {
+            if (a.isDir && !b.isDir) return -1;
+            if (!a.isDir && b.isDir) return 1;
+            return a.name.localeCompare(b.name);
+        });
+
+        for (const child of children) {
+            const isDir = Boolean(child.isDir);
+            const nameLower = child.name.toLowerCase();
+            const paddingLeft = depth * 14 + 6;
+
+            let labelHtml = escapeHTML(child.name);
+            if (term && nameLower.includes(term)) {
+                const idx = nameLower.indexOf(term);
+                const before = escapeHTML(child.name.slice(0, idx));
+                const matched = escapeHTML(child.name.slice(idx, idx + term.length));
+                const after = escapeHTML(child.name.slice(idx + term.length));
+                labelHtml = `${before}<span class="search-tree-match">${matched}</span>${after}`;
+            }
+
+            if (isDir) {
+                const isExpanded = term ? true : this.treeExpandedPaths.has(child.path);
+                html += `
+                    <div class="search-tree-node ${isExpanded ? "is-open" : ""}" data-action="toggle-folder" data-path="${escapeHTML(child.path)}" style="padding-left: ${paddingLeft}px;">
+                        <span class="search-tree-chevron">
+                            <i data-lucide="chevron-right"></i>
+                        </span>
+                        <span class="search-tree-icon" style="color: #60a5fa;">
+                            <i data-lucide="${isExpanded ? "folder-open" : "folder"}"></i>
+                        </span>
+                        <span class="search-tree-label">${labelHtml}</span>
+                    </div>
+                `;
+                if (isExpanded) {
+                    html += this.renderHierarchyHtml(child, depth + 1, term, activePath);
+                }
+            } else {
+                const isActive = activePath && (activePath === child.path || activePath.endsWith("/" + child.name));
+                const meta = getLanguageMeta(child.name);
+                const ext = child.name.split(".").pop()?.toLowerCase() || "";
+                html += `
+                    <div class="search-tree-node ${isActive ? "active" : ""}" data-action="open-file" data-path="${escapeHTML(child.path)}" style="padding-left: ${paddingLeft + 14}px;">
+                        <span class="search-tree-icon" style="color: ${meta.color || "inherit"};">
+                            <i data-lucide="${meta.icon || "file-text"}"></i>
+                        </span>
+                        <span class="search-tree-label">${labelHtml}</span>
+                        ${ext && ext.length <= 4 ? `<span class="search-tree-badge">${escapeHTML(ext)}</span>` : ""}
+                    </div>
+                `;
+            }
+        }
+        return html;
+    }
+
+    async buildDirectoryTreeHtml(dirPath = ".", depth = 0, activePath = "") {
+        const entries = this.treeCache.get(dirPath) || await this.fetchDirectory(dirPath);
+        let html = "";
+        for (const entry of entries) {
+            const isDir = Boolean(entry.isDir);
+            const fullPath = dirPath === "." ? entry.name : `${dirPath}/${entry.name}`;
+            const paddingLeft = depth * 14 + 6;
+            const labelHtml = escapeHTML(entry.name);
+
+            if (isDir) {
+                const isExpanded = this.treeExpandedPaths.has(fullPath);
+                html += `
+                    <div class="search-tree-node ${isExpanded ? "is-open" : ""}" data-action="toggle-folder" data-path="${escapeHTML(fullPath)}" style="padding-left: ${paddingLeft}px;">
+                        <span class="search-tree-chevron">
+                            <i data-lucide="chevron-right"></i>
+                        </span>
+                        <span class="search-tree-icon" style="color: #60a5fa;">
+                            <i data-lucide="${isExpanded ? "folder-open" : "folder"}"></i>
+                        </span>
+                        <span class="search-tree-label">${labelHtml}</span>
+                    </div>
+                `;
+                if (isExpanded) {
+                    html += await this.buildDirectoryTreeHtml(fullPath, depth + 1, activePath);
+                }
+            } else {
+                const isActive = activePath && (activePath === fullPath || activePath.endsWith("/" + entry.name));
+                const meta = getLanguageMeta(entry.name);
+                const ext = entry.name.split(".").pop()?.toLowerCase() || "";
+                html += `
+                    <div class="search-tree-node ${isActive ? "active" : ""}" data-action="open-file" data-path="${escapeHTML(fullPath)}" style="padding-left: ${paddingLeft + 14}px;">
+                        <span class="search-tree-icon" style="color: ${meta.color || "inherit"};">
+                            <i data-lucide="${meta.icon || "file-text"}"></i>
+                        </span>
+                        <span class="search-tree-label">${labelHtml}</span>
+                        ${ext && ext.length <= 4 ? `<span class="search-tree-badge">${escapeHTML(ext)}</span>` : ""}
+                    </div>
+                `;
+            }
+        }
+        return html;
+    }
+
     async executeSearch(query) {
         if (!this.searchResultsEl) return;
 
@@ -1303,7 +1490,14 @@ class RightPanelManager {
                 </div>
             `;
             this.showSearchResults();
-            this.bindSearchResultClicks();
+            renderIcons(this.searchResultsEl);
+            const urlItem = this.searchResultsEl.querySelector('.search-result-item[data-action="url"]');
+            if (urlItem) {
+                urlItem.addEventListener("click", () => {
+                    this.openBrowserTab(query);
+                    this.hideSearchResults();
+                });
+            }
             return;
         }
 
@@ -1313,98 +1507,42 @@ class RightPanelManager {
 
     async renderFileTree(filterQuery = "") {
         if (!this.searchResultsEl) return;
-
         const term = (filterQuery || "").trim().toLowerCase();
-        let rootEntries = this.treeCache.get(".") || await this.fetchDirectory(".");
 
-        if (rootEntries.length === 0) {
-            rootEntries = await this.fetchDirectory(".");
+        let treeHtml = "";
+        if (term) {
+            try {
+                const res = await fetch("/api/file/find", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ query: term })
+                });
+                const data = res.ok ? await res.json() : { results: [] };
+                const results = Array.isArray(data.results) ? data.results : [];
+                if (results.length === 0) {
+                    this.searchResultsEl.innerHTML = `<div style="padding: 10px 14px; font-size: 12.5px; color: var(--text-tertiary);">No files or folders found matching "${escapeHTML(term)}".</div>`;
+                    this.showSearchResults();
+                    return;
+                }
+                const hierarchy = this.buildHierarchyFromFlatList(results);
+                treeHtml = this.renderHierarchyHtml(hierarchy, 0, term, "");
+            } catch (_) {
+                this.searchResultsEl.innerHTML = '<div style="padding: 10px 14px; font-size: 12.5px; color: var(--text-tertiary);">Failed to search files.</div>';
+                this.showSearchResults();
+                return;
+            }
+        } else {
+            treeHtml = await this.buildDirectoryTreeHtml(".", 0, "");
         }
 
-        const buildTreeHtml = async (dirPath, depth = 0) => {
-            const entries = this.treeCache.get(dirPath) || await this.fetchDirectory(dirPath);
-            let html = "";
-
-            for (const entry of entries) {
-                const isDir = Boolean(entry.isDir);
-                const fullPath = dirPath === "." ? entry.name : `${dirPath}/${entry.name}`;
-                const nameLower = entry.name.toLowerCase();
-                const pathLower = fullPath.toLowerCase();
-
-                // If filtering by term: check match
-                const isMatch = !term || nameLower.includes(term) || pathLower.includes(term);
-
-                if (isDir) {
-                    const isExpanded = this.treeExpandedPaths.has(fullPath) || (term && isMatch);
-                    const paddingLeft = depth * 14 + 6;
-
-                    // Highlight matching substring
-                    let labelHtml = escapeHTML(entry.name);
-                    if (term && nameLower.includes(term)) {
-                        const idx = nameLower.indexOf(term);
-                        const before = escapeHTML(entry.name.slice(0, idx));
-                        const matched = escapeHTML(entry.name.slice(idx, idx + term.length));
-                        const after = escapeHTML(entry.name.slice(idx + term.length));
-                        labelHtml = `${before}<span class="search-tree-match">${matched}</span>${after}`;
-                    }
-
-                    html += `
-                        <div class="search-tree-node ${isExpanded ? "is-open" : ""}" data-action="toggle-folder" data-path="${escapeHTML(fullPath)}" style="padding-left: ${paddingLeft}px;">
-                            <span class="search-tree-chevron">
-                                <i data-lucide="chevron-right"></i>
-                            </span>
-                            <span class="search-tree-icon" style="color: #60a5fa;">
-                                <i data-lucide="${isExpanded ? "folder-open" : "folder"}"></i>
-                            </span>
-                            <span class="search-tree-label">${labelHtml}</span>
-                        </div>
-                    `;
-
-                    if (isExpanded) {
-                        html += await buildTreeHtml(fullPath, depth + 1);
-                    }
-                } else {
-                    if (term && !isMatch) continue;
-
-                    const paddingLeft = depth * 14 + 20; // indent under chevron
-                    const meta = getLanguageMeta(entry.name);
-
-                    // Highlight matching substring
-                    let labelHtml = escapeHTML(entry.name);
-                    if (term && nameLower.includes(term)) {
-                        const idx = nameLower.indexOf(term);
-                        const before = escapeHTML(entry.name.slice(0, idx));
-                        const matched = escapeHTML(entry.name.slice(idx, idx + term.length));
-                        const after = escapeHTML(entry.name.slice(idx + term.length));
-                        labelHtml = `${before}<span class="search-tree-match">${matched}</span>${after}`;
-                    }
-
-                    const ext = entry.name.split(".").pop()?.toLowerCase() || "";
-
-                    html += `
-                        <div class="search-tree-node" data-action="open-file" data-path="${escapeHTML(fullPath)}" style="padding-left: ${paddingLeft}px;">
-                            <span class="search-tree-icon" style="color: ${meta.color || "inherit"};">
-                                <i data-lucide="${meta.icon || "file-text"}"></i>
-                            </span>
-                            <span class="search-tree-label">${labelHtml}</span>
-                            ${ext && ext.length <= 4 ? `<span class="search-tree-badge">${escapeHTML(ext)}</span>` : ""}
-                        </div>
-                    `;
-                }
-            }
-            return html;
-        };
-
-        const treeHtml = await buildTreeHtml(".", 0);
-
         if (!treeHtml.trim()) {
-            this.searchResultsEl.innerHTML = `<div style="padding: 10px 14px; font-size: 12.5px; color: var(--text-tertiary);">No files or folders found matching "${escapeHTML(term)}".</div>`;
+            this.searchResultsEl.innerHTML = '<div style="padding: 10px 14px; font-size: 12.5px; color: var(--text-tertiary);">Empty workspace.</div>';
         } else {
             this.searchResultsEl.innerHTML = treeHtml;
         }
 
         this.showSearchResults();
-        this.bindSearchResultClicks();
+        this.bindTreeContainerClicks(this.searchResultsEl, true, "");
     }
 
     async loadDirectoryContents(dirPath = ".") {
@@ -1412,21 +1550,11 @@ class RightPanelManager {
         await this.renderFileTree(this.searchInputEl?.value.trim() || "");
     }
 
-    bindSearchResultClicks() {
-        if (!this.searchResultsEl) return;
-        renderIcons(this.searchResultsEl);
+    bindTreeContainerClicks(containerEl, isLauncher = false, currentFilePath = "") {
+        if (!containerEl) return;
+        renderIcons(containerEl);
 
-        // URL click
-        this.searchResultsEl.querySelectorAll('.search-result-item[data-action="url"]').forEach((item) => {
-            item.addEventListener("click", () => {
-                const val = item.getAttribute("data-val");
-                if (val) this.openBrowserTab(val);
-                this.hideSearchResults();
-            });
-        });
-
-        // Tree node clicks (collapsing / expanding folders and opening files)
-        this.searchResultsEl.querySelectorAll(".search-tree-node").forEach((node) => {
+        containerEl.querySelectorAll(".search-tree-node").forEach((node) => {
             node.addEventListener("click", async (e) => {
                 e.stopPropagation();
                 const action = node.getAttribute("data-action");
@@ -1441,20 +1569,27 @@ class RightPanelManager {
                             await this.fetchDirectory(pathVal);
                         }
                     }
-                    await this.renderFileTree(this.searchInputEl?.value.trim() || "");
+                    if (isLauncher) {
+                        await this.renderFileTree(this.searchInputEl?.value.trim() || "");
+                    } else {
+                        const filterVal = document.getElementById("viewerSidebarFilterInput")?.value.trim() || "";
+                        await this.renderViewerSidebarContent(containerEl, filterVal, currentFilePath, false);
+                    }
                 } else if (action === "open-file") {
                     this.openFileTab(pathVal);
-                    this.hideSearchResults();
+                    if (isLauncher) this.hideSearchResults();
                 }
             });
         });
     }
 
     showSearchResults() {
+        if (this.launcherViewEl) this.launcherViewEl.classList.add("is-searching");
         if (this.searchResultsEl) this.searchResultsEl.style.display = "flex";
     }
 
     hideSearchResults() {
+        if (this.launcherViewEl) this.launcherViewEl.classList.remove("is-searching");
         if (this.searchResultsEl) this.searchResultsEl.style.display = "none";
     }
 
