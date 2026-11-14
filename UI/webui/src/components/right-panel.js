@@ -40,6 +40,8 @@ class RightPanelManager {
         this.searchClearBtn = null;
         this.searchResultsEl = null;
         this.moreBtn = null;
+        this.treeExpandedPaths = new Set(["."]);
+        this.treeCache = new Map();
 
         this.itemReview = null;
         this.reviewBadgeEl = null;
@@ -1241,9 +1243,8 @@ class RightPanelManager {
             return;
         }
 
-        this.searchDebounceTimer = setTimeout(() => {
-            this.executeSearch(query);
-        }, 160);
+        // Live instant update on every letter
+        this.executeSearch(query);
     }
 
     handleSearchSubmit() {
@@ -1262,7 +1263,7 @@ class RightPanelManager {
     }
 
     isUrlString(str) {
-        const s = str.toLowerCase();
+        const s = (str || "").trim().toLowerCase();
         return s.startsWith("http://") ||
                s.startsWith("https://") ||
                s.startsWith("localhost:") ||
@@ -1270,15 +1271,33 @@ class RightPanelManager {
                /^([a-z0-9-]+\.)+[a-z]{2,}(\/.*)?$/i.test(s);
     }
 
+    async fetchDirectory(dirPath = ".") {
+        try {
+            const res = await fetch("/api/file/list-dir", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ path: dirPath })
+            });
+            if (!res.ok) return [];
+            const data = await res.json();
+            const entries = Array.isArray(data.entries) ? data.entries : [];
+            this.treeCache.set(dirPath, entries);
+            return entries;
+        } catch (_) {
+            return [];
+        }
+    }
+
     async executeSearch(query) {
         if (!this.searchResultsEl) return;
 
+        // 1. If confirmed URL: show direct URL launch pill immediately
         if (this.isUrlString(query)) {
             this.searchResultsEl.innerHTML = `
                 <div class="search-result-item" data-action="url" data-val="${escapeHTML(query)}">
                     <div class="search-result-left">
                         <i data-lucide="globe"></i>
-                        <span>Open URL: <strong>${escapeHTML(query)}</strong></span>
+                        <span>Open URL: <strong style="color: var(--accent);">${escapeHTML(query)}</strong></span>
                     </div>
                     <span class="search-result-badge">web</span>
                 </div>
@@ -1288,115 +1307,144 @@ class RightPanelManager {
             return;
         }
 
-        try {
-            const dirToQuery = query.includes("/") ? query.substring(0, query.lastIndexOf("/") || 1) : ".";
-            const term = query.includes("/") ? query.substring(query.lastIndexOf("/") + 1).toLowerCase() : query.toLowerCase();
+        // 2. Direct VS Code collapsing file tree view updated with every letter
+        await this.renderFileTree(query);
+    }
 
-            const res = await fetch("/api/file/list-dir", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ path: dirToQuery })
-            });
+    async renderFileTree(filterQuery = "") {
+        if (!this.searchResultsEl) return;
 
-            if (!res.ok) {
-                this.hideSearchResults();
-                return;
-            }
+        const term = (filterQuery || "").trim().toLowerCase();
+        let rootEntries = this.treeCache.get(".") || await this.fetchDirectory(".");
 
-            const data = await res.json();
-            const entries = Array.isArray(data.entries) ? data.entries : [];
-            const filtered = entries.filter(e => !term || e.name.toLowerCase().includes(term));
-
-            if (filtered.length === 0) {
-                this.searchResultsEl.innerHTML = '<div style="padding: 8px 12px; font-size: 12px; color: var(--text-tertiary);">No files or folders matched.</div>';
-                this.showSearchResults();
-                return;
-            }
-
-            let html = "";
-            filtered.slice(0, 15).forEach((entry) => {
-                const isDir = entry.isDir;
-                const fullPath = dirToQuery === "." ? entry.name : `${dirToQuery}/${entry.name}`;
-                const meta = isDir ? { icon: "folder", color: "#60a5fa" } : getLanguageMeta(entry.name);
-
-                html += `
-                    <div class="search-result-item" data-action="${isDir ? "dir" : "file"}" data-val="${escapeHTML(fullPath)}">
-                        <div class="search-result-left">
-                            <i data-lucide="${meta.icon}" style="color: ${meta.color};"></i>
-                            <span>${escapeHTML(entry.name)}${isDir ? "/" : ""}</span>
-                        </div>
-                        <span class="search-result-badge">${isDir ? "folder" : "file"}</span>
-                    </div>
-                `;
-            });
-
-            this.searchResultsEl.innerHTML = html;
-            this.showSearchResults();
-            this.bindSearchResultClicks();
-        } catch (err) {
-            console.error("[RightPanel] Search error:", err);
-            this.hideSearchResults();
+        if (rootEntries.length === 0) {
+            rootEntries = await this.fetchDirectory(".");
         }
+
+        const buildTreeHtml = async (dirPath, depth = 0) => {
+            const entries = this.treeCache.get(dirPath) || await this.fetchDirectory(dirPath);
+            let html = "";
+
+            for (const entry of entries) {
+                const isDir = Boolean(entry.isDir);
+                const fullPath = dirPath === "." ? entry.name : `${dirPath}/${entry.name}`;
+                const nameLower = entry.name.toLowerCase();
+                const pathLower = fullPath.toLowerCase();
+
+                // If filtering by term: check match
+                const isMatch = !term || nameLower.includes(term) || pathLower.includes(term);
+
+                if (isDir) {
+                    const isExpanded = this.treeExpandedPaths.has(fullPath) || (term && isMatch);
+                    const paddingLeft = depth * 14 + 6;
+
+                    // Highlight matching substring
+                    let labelHtml = escapeHTML(entry.name);
+                    if (term && nameLower.includes(term)) {
+                        const idx = nameLower.indexOf(term);
+                        const before = escapeHTML(entry.name.slice(0, idx));
+                        const matched = escapeHTML(entry.name.slice(idx, idx + term.length));
+                        const after = escapeHTML(entry.name.slice(idx + term.length));
+                        labelHtml = `${before}<span class="search-tree-match">${matched}</span>${after}`;
+                    }
+
+                    html += `
+                        <div class="search-tree-node ${isExpanded ? "is-open" : ""}" data-action="toggle-folder" data-path="${escapeHTML(fullPath)}" style="padding-left: ${paddingLeft}px;">
+                            <span class="search-tree-chevron">
+                                <i data-lucide="chevron-right"></i>
+                            </span>
+                            <span class="search-tree-icon" style="color: #60a5fa;">
+                                <i data-lucide="${isExpanded ? "folder-open" : "folder"}"></i>
+                            </span>
+                            <span class="search-tree-label">${labelHtml}</span>
+                        </div>
+                    `;
+
+                    if (isExpanded) {
+                        html += await buildTreeHtml(fullPath, depth + 1);
+                    }
+                } else {
+                    if (term && !isMatch) continue;
+
+                    const paddingLeft = depth * 14 + 20; // indent under chevron
+                    const meta = getLanguageMeta(entry.name);
+
+                    // Highlight matching substring
+                    let labelHtml = escapeHTML(entry.name);
+                    if (term && nameLower.includes(term)) {
+                        const idx = nameLower.indexOf(term);
+                        const before = escapeHTML(entry.name.slice(0, idx));
+                        const matched = escapeHTML(entry.name.slice(idx, idx + term.length));
+                        const after = escapeHTML(entry.name.slice(idx + term.length));
+                        labelHtml = `${before}<span class="search-tree-match">${matched}</span>${after}`;
+                    }
+
+                    const ext = entry.name.split(".").pop()?.toLowerCase() || "";
+
+                    html += `
+                        <div class="search-tree-node" data-action="open-file" data-path="${escapeHTML(fullPath)}" style="padding-left: ${paddingLeft}px;">
+                            <span class="search-tree-icon" style="color: ${meta.color || "inherit"};">
+                                <i data-lucide="${meta.icon || "file-text"}"></i>
+                            </span>
+                            <span class="search-tree-label">${labelHtml}</span>
+                            ${ext && ext.length <= 4 ? `<span class="search-tree-badge">${escapeHTML(ext)}</span>` : ""}
+                        </div>
+                    `;
+                }
+            }
+            return html;
+        };
+
+        const treeHtml = await buildTreeHtml(".", 0);
+
+        if (!treeHtml.trim()) {
+            this.searchResultsEl.innerHTML = `<div style="padding: 10px 14px; font-size: 12.5px; color: var(--text-tertiary);">No files or folders found matching "${escapeHTML(term)}".</div>`;
+        } else {
+            this.searchResultsEl.innerHTML = treeHtml;
+        }
+
+        this.showSearchResults();
+        this.bindSearchResultClicks();
     }
 
     async loadDirectoryContents(dirPath = ".") {
-        if (!this.searchResultsEl) return;
-        try {
-            const res = await fetch("/api/file/list-dir", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ path: dirPath })
-            });
-            if (!res.ok) return;
-            const data = await res.json();
-            const entries = Array.isArray(data.entries) ? data.entries : [];
-
-            let html = "";
-            entries.slice(0, 20).forEach((entry) => {
-                const isDir = entry.isDir;
-                const fullPath = dirPath === "." ? entry.name : `${dirPath}/${entry.name}`;
-                const meta = isDir ? { icon: "folder", color: "#60a5fa" } : getLanguageMeta(entry.name);
-
-                html += `
-                    <div class="search-result-item" data-action="${isDir ? "dir" : "file"}" data-val="${escapeHTML(fullPath)}">
-                        <div class="search-result-left">
-                            <i data-lucide="${meta.icon}" style="color: ${meta.color};"></i>
-                            <span>${escapeHTML(entry.name)}${isDir ? "/" : ""}</span>
-                        </div>
-                        <span class="search-result-badge">${isDir ? "folder" : "file"}</span>
-                    </div>
-                `;
-            });
-
-            this.searchResultsEl.innerHTML = html;
-            this.showSearchResults();
-            this.bindSearchResultClicks();
-        } catch (err) {
-            console.error("[RightPanel] Load dir error:", err);
-        }
+        this.treeExpandedPaths.add(dirPath);
+        await this.renderFileTree(this.searchInputEl?.value.trim() || "");
     }
 
     bindSearchResultClicks() {
         if (!this.searchResultsEl) return;
         renderIcons(this.searchResultsEl);
 
-        this.searchResultsEl.querySelectorAll(".search-result-item").forEach((item) => {
+        // URL click
+        this.searchResultsEl.querySelectorAll('.search-result-item[data-action="url"]').forEach((item) => {
             item.addEventListener("click", () => {
-                const action = item.getAttribute("data-action");
                 const val = item.getAttribute("data-val");
+                if (val) this.openBrowserTab(val);
+                this.hideSearchResults();
+            });
+        });
 
-                if (action === "url") {
-                    this.openBrowserTab(val);
-                    this.hideSearchResults();
-                } else if (action === "file") {
-                    this.openFileTab(val);
-                    this.hideSearchResults();
-                } else if (action === "dir") {
-                    if (this.searchInputEl) {
-                        this.searchInputEl.value = `${val}/`;
-                        this.searchInputEl.focus();
+        // Tree node clicks (collapsing / expanding folders and opening files)
+        this.searchResultsEl.querySelectorAll(".search-tree-node").forEach((node) => {
+            node.addEventListener("click", async (e) => {
+                e.stopPropagation();
+                const action = node.getAttribute("data-action");
+                const pathVal = node.getAttribute("data-path");
+
+                if (action === "toggle-folder") {
+                    if (this.treeExpandedPaths.has(pathVal)) {
+                        this.treeExpandedPaths.delete(pathVal);
+                    } else {
+                        this.treeExpandedPaths.add(pathVal);
+                        if (!this.treeCache.has(pathVal)) {
+                            await this.fetchDirectory(pathVal);
+                        }
                     }
-                    this.loadDirectoryContents(val);
+                    await this.renderFileTree(this.searchInputEl?.value.trim() || "");
+                } else if (action === "open-file") {
+                    this.openFileTab(pathVal);
+                    this.hideSearchResults();
                 }
             });
         });

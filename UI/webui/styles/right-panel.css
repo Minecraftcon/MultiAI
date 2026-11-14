@@ -460,7 +460,7 @@ body.right-panel-resizing #rightPanel {
     height: 16px;
 }
 
-/* Autocomplete / Directory Explorer Dropdown */
+/* Autocomplete / Directory Explorer Dropdown (VS Code File & Folder Tree) */
 .launcher-search-results {
     position: absolute;
     top: calc(100% + 6px);
@@ -469,14 +469,98 @@ body.right-panel-resizing #rightPanel {
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 10px;
-    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
-    max-height: 280px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+    max-height: 380px;
     overflow-y: auto;
     z-index: 100;
-    padding: 5px;
+    padding: 6px 4px;
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 1px;
+}
+
+.search-tree-node {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--text-secondary);
+    user-select: none;
+    transition: background 0.1s ease, color 0.1s ease;
+    min-height: 28px;
+    box-sizing: border-box;
+}
+
+.search-tree-node:hover {
+    background: var(--hover);
+    color: var(--text-primary);
+}
+
+.search-tree-node.selected {
+    background: var(--hover-2);
+    color: var(--text-primary);
+}
+
+.search-tree-chevron {
+    width: 14px;
+    height: 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-tertiary);
+    flex-shrink: 0;
+    transition: transform 0.14s ease;
+}
+
+.search-tree-node.is-open .search-tree-chevron svg {
+    transform: rotate(90deg);
+}
+
+.search-tree-chevron-spacer {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+}
+
+.search-tree-icon {
+    width: 15px;
+    height: 15px;
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.search-tree-icon svg {
+    width: 15px;
+    height: 15px;
+}
+
+.search-tree-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+    flex: 1;
+}
+
+.search-tree-label .search-tree-match {
+    color: var(--accent);
+    font-weight: 600;
+}
+
+.search-tree-badge {
+    font-size: 10.5px;
+    font-family: 'JetBrains Mono', monospace;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: var(--hover);
+    color: var(--text-tertiary);
+    flex-shrink: 0;
+    margin-left: auto;
 }
 
 .search-result-item {
