@@ -864,11 +864,73 @@ async function handleListDir(args, chatId, { resolveSafePath }) {
     };
 }
 
+async function handleFindFiles(args, chatId, { resolveSafePath }) {
+    const rawPath = args.DirectoryPath || args.path || args.dir_path || ".";
+    const query = (args.query || args.pattern || "").trim().toLowerCase();
+    const targetPath = resolveSafePath(rawPath, chatId);
+    if (!fs.existsSync(targetPath)) {
+        return { results: [], total: 0 };
+    }
+
+    const stat = await fs.promises.stat(targetPath);
+    if (!stat.isDirectory()) {
+        return { results: [], total: 0 };
+    }
+
+    const IGNORE_DIRS = new Set([
+        "node_modules", ".git", ".gemini", ".next", "dist", "build", ".cache", ".turbo", ".svelte-kit", ".backups", ".MultiAI", ".history"
+    ]);
+
+    const results = [];
+    const MAX_RESULTS = 120;
+
+    async function walk(currentDir, relDir) {
+        if (results.length >= MAX_RESULTS) return;
+        let entries;
+        try {
+            entries = await fs.promises.readdir(currentDir, { withFileTypes: true });
+        } catch (_) {
+            return;
+        }
+
+        // Sort: dirs first, then alphabetical
+        entries.sort((a, b) => {
+            if (a.isDirectory() && !b.isDirectory()) return -1;
+            if (!a.isDirectory() && b.isDirectory()) return 1;
+            return a.name.localeCompare(b.name);
+        });
+
+        for (const entry of entries) {
+            if (results.length >= MAX_RESULTS) break;
+            const fullRel = relDir ? `${relDir}/${entry.name}` : entry.name;
+            const isDir = entry.isDirectory();
+
+            if (isDir) {
+                if (IGNORE_DIRS.has(entry.name)) continue;
+                const matches = !query || entry.name.toLowerCase().includes(query) || fullRel.toLowerCase().includes(query);
+                if (matches) {
+                    results.push({ name: entry.name, path: fullRel, isDir: true });
+                }
+                await walk(path.join(currentDir, entry.name), fullRel);
+            } else {
+                const matches = !query || entry.name.toLowerCase().includes(query) || fullRel.toLowerCase().includes(query);
+                if (matches) {
+                    results.push({ name: entry.name, path: fullRel, isDir: false });
+                }
+            }
+        }
+    }
+
+    await walk(targetPath, "");
+    return { results, total: results.length };
+}
+
 module.exports = {
     handleCodeGrep,
     handleSearchAndReplace: handleReplaceFileContent,
     handleReplaceFileContent,
     handleMultiReplaceFileContent,
     handleWriteFile,
-    handleListDir
+    handleListDir,
+    handleFindFiles
 };

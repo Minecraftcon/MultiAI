@@ -1,7 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const { resolveSafePath, formatBytes, getMimeType, sendJSON, postJSON } = require("../utils");
-const { handleCodeGrep, handleSearchAndReplace, handleReplaceFileContent, handleMultiReplaceFileContent, handleWriteFile, handleListDir } = require("../../tools/filesystem/code_tools");
+const { handleCodeGrep, handleSearchAndReplace, handleReplaceFileContent, handleMultiReplaceFileContent, handleWriteFile, handleListDir, handleFindFiles } = require("../../tools/filesystem/code_tools");
 
 async function handleFileRead(args, chatId) {
     const rawPath = args.path || args.AbsolutePath || args.target_file || args.file_path;
@@ -9,7 +9,16 @@ async function handleFileRead(args, chatId) {
         throw new Error("Missing required parameter 'path'.");
     }
 
-    const targetPath = resolveSafePath(rawPath, chatId);
+    let targetPath = null;
+    if (args.workspace && !path.isAbsolute(rawPath)) {
+        const wsCandidate = path.resolve(args.workspace, rawPath);
+        if (fs.existsSync(wsCandidate)) {
+            targetPath = wsCandidate;
+        }
+    }
+    if (!targetPath) {
+        targetPath = resolveSafePath(rawPath, chatId);
+    }
     if (!fs.existsSync(targetPath)) {
         throw new Error(`File or directory not found: ${rawPath}`);
     }
@@ -210,6 +219,11 @@ async function handleFilesRoute(req, res) {
 
         if (reqUrl === "/api/file/list-dir") {
             const result = await handleListDir(args, chatId, { resolveSafePath });
+            return sendJSON(res, 200, result);
+        }
+
+        if (reqUrl === "/api/file/find") {
+            const result = await handleFindFiles(args, chatId, { resolveSafePath });
             return sendJSON(res, 200, result);
         }
 

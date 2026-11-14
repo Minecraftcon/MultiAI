@@ -56,7 +56,7 @@
         transform: none !important;
         border: none !important;
         border-radius: 0 !important;
-        z-index: 100 !important;
+        z-index: 1000 !important;
         opacity: 1 !important;
         pointer-events: auto !important;
     }
@@ -89,7 +89,7 @@ html.is-android .terminal-drawer.open {
     transform: none !important;
     border: none !important;
     border-radius: 0 !important;
-    z-index: 100 !important;
+    z-index: 1000 !important;
     opacity: 1 !important;
     pointer-events: auto !important;
 }
@@ -110,11 +110,11 @@ body.term-open-top #appShell {
 }
 
 /* ── 2. Terminal Panel Base Container ── */
-/* z-index: 30 places the terminal UNDER the left panel (z-index: 40) & backdrop (z-index: 35) */
+/* z-index: 1000 ensures terminal drawer floats in foreground above side panels */
 .terminal-drawer {
     position: fixed;
     background: var(--card-bg, #111113);
-    z-index: 30;
+    z-index: 1000;
     display: flex;
     flex-direction: column;
     box-shadow: 0 0 24px rgba(0, 0, 0, 0.35);

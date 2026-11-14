@@ -295,3 +295,170 @@
     width: 15px;
     height: 15px;
 }
+
+/* =========================================================
+   DAMP / FADED SYNTAX HIGHLIGHTING THEME (HIGHLIGHT.JS)
+   Warm monochrome base with desaturated spot pastels.
+   Blocks saturated neon primaries for comfortable readability.
+   ========================================================= */
+
+/* Dark Theme (Default) */
+pre code.hljs,
+.code-bubble pre code,
+.mv-code-line,
+.modern-viewer-window code,
+.command-output-box pre code {
+    color: #d4d4d8;
+    background: transparent !important;
+}
+
+/* 1. Comments & documentation */
+.hljs-comment,
+.hljs-quote {
+    color: #64748b !important;
+    font-style: italic;
+}
+
+/* 2. Keywords, language storage & types: faded terracotta / dusty rose */
+.hljs-keyword,
+.hljs-type,
+.hljs-selector-tag,
+.hljs-section,
+.hljs-template-tag {
+    color: #c48888 !important;
+}
+
+/* 3. Strings, regex & template variables: damp sage / washed moss */
+.hljs-string,
+.hljs-regexp,
+.hljs-meta .hljs-string,
+.hljs-template-variable {
+    color: #9fb89d !important;
+}
+
+/* 4. Numbers, booleans, literals: pale warm sand / wheat */
+.hljs-number,
+.hljs-literal,
+.hljs-symbol,
+.hljs-bullet {
+    color: #d4b58a !important;
+}
+
+/* 5. Function definitions, classes, interfaces: faded slate lavender */
+.hljs-title,
+.hljs-title.function_,
+.hljs-title.class_,
+.hljs-title.class_.inherited__ {
+    color: #9faec2 !important;
+}
+
+/* 6. Attributes, tags & parameters: soft desaturated zinc */
+.hljs-attr,
+.hljs-attribute,
+.hljs-variable,
+.hljs-variable.language_,
+.hljs-name,
+.hljs-selector-id,
+.hljs-selector-class {
+    color: #c2c6cf !important;
+}
+
+/* 7. Operators & punctuation: neutral low-contrast gray */
+.hljs-punctuation,
+.hljs-operator,
+.hljs-subst {
+    color: #828894 !important;
+}
+
+/* 8. Built-in identifiers & symbols: soft desaturated ochre */
+.hljs-built_in,
+.hljs-selector-attr,
+.hljs-selector-pseudo {
+    color: #c9a489 !important;
+}
+
+/* 9. Meta pragmas, preprocessor directives & doctags: muted clay */
+.hljs-meta,
+.hljs-meta .hljs-keyword,
+.hljs-doctag {
+    color: #b8877f !important;
+}
+
+/* 10. Unified Diff additions & deletions (faded pastels) */
+.hljs-addition {
+    color: #9fb89d !important;
+    background-color: rgba(159, 184, 157, 0.12) !important;
+}
+
+.hljs-deletion {
+    color: #c48888 !important;
+    background-color: rgba(196, 136, 136, 0.12) !important;
+}
+
+/* Light Mode Overrides (Warm Bone with Deep Muted Pastels) */
+html.light-theme pre code.hljs,
+html.light-theme .code-bubble pre code,
+html.light-theme .mv-code-line,
+html.light-theme .modern-viewer-window code,
+body.light pre code.hljs,
+body.light .code-bubble pre code,
+body.light .mv-code-line {
+    color: #27272a;
+}
+
+html.light-theme .hljs-comment,
+html.light-theme .hljs-quote,
+body.light .hljs-comment,
+body.light .hljs-quote {
+    color: #71717a !important;
+    font-style: italic;
+}
+
+html.light-theme .hljs-keyword,
+html.light-theme .hljs-type,
+html.light-theme .hljs-selector-tag,
+body.light .hljs-keyword,
+body.light .hljs-type {
+    color: #9f2f2d !important;
+}
+
+html.light-theme .hljs-string,
+html.light-theme .hljs-regexp,
+body.light .hljs-string,
+body.light .hljs-regexp {
+    color: #346538 !important;
+}
+
+html.light-theme .hljs-number,
+html.light-theme .hljs-literal,
+body.light .hljs-number,
+body.light .hljs-literal {
+    color: #956400 !important;
+}
+
+html.light-theme .hljs-title,
+html.light-theme .hljs-title.function_,
+body.light .hljs-title,
+body.light .hljs-title.function_ {
+    color: #1f6c9f !important;
+}
+
+html.light-theme .hljs-attr,
+html.light-theme .hljs-attribute,
+html.light-theme .hljs-variable,
+body.light .hljs-attr,
+body.light .hljs-variable {
+    color: #3f3f46 !important;
+}
+
+html.light-theme .hljs-punctuation,
+html.light-theme .hljs-operator,
+body.light .hljs-punctuation,
+body.light .hljs-operator {
+    color: #71717a !important;
+}
+
+html.light-theme .hljs-built_in,
+body.light .hljs-built_in {
+    color: #854d0e !important;
+}

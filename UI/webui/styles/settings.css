@@ -575,6 +575,174 @@
     height: 16px;
 }
 
+/* =========================================================
+   CUSTOM ACCENT CREATOR STUDIO STYLES
+   ========================================================= */
+.accent-creator-box {
+    margin-top: 14px;
+    padding: 16px;
+    background: var(--surface-2, rgba(255, 255, 255, 0.03));
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.accent-creator-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.accent-creator-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    letter-spacing: -0.01em;
+}
+
+.accent-creator-reset-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 3px 8px;
+    font-size: 11px;
+    font-family: inherit;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.12s ease;
+}
+
+.accent-creator-reset-btn:hover {
+    background: var(--hover-2);
+    color: var(--text-primary);
+    border-color: var(--border-strong);
+}
+
+.accent-creator-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+}
+
+.accent-creator-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.accent-field-label {
+    font-size: 11.5px;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.accent-input-wrap {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 3px 6px;
+    transition: border-color 0.12s ease;
+}
+
+.accent-input-wrap:focus-within {
+    border-color: var(--accent);
+}
+
+.accent-color-picker {
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.accent-color-picker::-webkit-color-swatch-wrapper {
+    padding: 0;
+}
+
+.accent-color-picker::-webkit-color-swatch {
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+}
+
+.accent-hex-input {
+    flex: 1;
+    min-width: 0;
+    background: transparent;
+    border: none;
+    color: var(--text-primary);
+    font-size: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 500;
+    outline: none;
+    text-transform: uppercase;
+}
+
+.accent-creator-preview {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border-subtle);
+    flex-wrap: wrap;
+}
+
+.accent-preview-label {
+    font-size: 11.5px;
+    font-weight: 500;
+    color: var(--text-tertiary);
+    flex-shrink: 0;
+}
+
+.accent-preview-elements {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.accent-preview-btn {
+    height: 28px;
+    padding: 0 12px;
+    border-radius: 6px;
+    border: none;
+    background: var(--accent);
+    color: var(--send-btn-fg, #ffffff);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.accent-preview-pill {
+    display: inline-flex;
+    align-items: center;
+    height: 26px;
+    padding: 0 10px;
+    border-radius: 9999px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    font-size: 11.5px;
+    font-weight: 500;
+}
+
+.accent-preview-border {
+    font-size: 11.5px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border-strong);
+    background: var(--surface);
+    color: var(--text-primary);
+}
+
 /* Diagnostic / Information grid */
 .settings-info-grid {
     display: grid;

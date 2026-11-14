@@ -8,6 +8,40 @@ import { renderDiffCardHtml, renderCodeViewerCardHtml, bindDiffViewerCards, getL
 import { terminalDrawer } from "./terminal-drawer.js";
 import { closePanel, getIsPanelOpen } from "./gestures.js";
 
+function getFileBadgeInfo(fileName = "") {
+    const ext = fileName.split(".").pop()?.toLowerCase() || "";
+    switch (ext) {
+        case "js": case "mjs": case "cjs":
+            return { text: "js", color: "#f59e0b" };
+        case "ts":
+            return { text: "ts", color: "#3b82f6" };
+        case "jsx": case "tsx":
+            return { text: "jsx", color: "#00d8ff" };
+        case "html": case "htm":
+            return { text: "</>", color: "#f97316" };
+        case "css": case "scss": case "less":
+            return { text: "css", color: "#38bdf8" };
+        case "json":
+            return { text: "{}", color: "#eab308" };
+        case "py":
+            return { text: "py", color: "#10b981" };
+        case "md": case "markdown":
+            return { text: "M+", color: "#06b6d4" };
+        case "h": case "hpp":
+            return { text: "h", color: "#38bdf8" };
+        case "c": case "cpp": case "cc":
+            return { text: "c++", color: "#38bdf8" };
+        case "go":
+            return { text: "go", color: "#00add8" };
+        case "rs":
+            return { text: "rs", color: "#ef4444" };
+        case "sh": case "bash":
+            return { text: ">_", color: "#84cc16" };
+        default:
+            return { text: ext ? ext.slice(0, 3) : "txt", color: "#9ca3af" };
+    }
+}
+
 class RightPanelManager {
     constructor() {
         this.isOpen = false;
@@ -15,12 +49,24 @@ class RightPanelManager {
         this.activeTabId = null; // null = Launcher / Empty view
         this.pollTimer = null;
         this.isResizing = false;
+        this.justFinishedResizing = false;
         this.width = 500;
+        const savedSplit = parseFloat(localStorage.getItem("multiai_search_split_percent") || "52");
+        this.searchSplitPercent = (!isNaN(savedSplit) && savedSplit >= 15 && savedSplit <= 85) ? savedSplit : 52;
+        const savedViewerSidebarW = parseInt(localStorage.getItem("multiai_viewer_sidebar_width") || "240", 10);
+        this.viewerSidebarWidth = (!isNaN(savedViewerSidebarW) && savedViewerSidebarW >= 140 && savedViewerSidebarW <= 500) ? savedViewerSidebarW : 240;
+        document.documentElement.style.setProperty("--viewer-sidebar-width", `${this.viewerSidebarWidth}px`);
+        this.viewerSidebarScrollTop = 0;
+        this.launcherTreeScrollTop = 0;
+        this.launcherDetailsScrollTop = 0;
+        this.showSearchTree = false;
         this.searchDebounceTimer = null;
+        this.searchRequestId = 0;
         this.showAllTasks = false;
         this.lastActiveTasks = [];
         this.lastCompletedTasks = [];
-        this.isSidebarOpen = localStorage.getItem("multiai_right_panel_sidebar") !== "0";
+        const isMobileDevice = typeof window !== "undefined" && (window.innerWidth <= 768 || document.documentElement.classList.contains("is-android"));
+        this.isSidebarOpen = isMobileDevice ? false : (localStorage.getItem("multiai_right_panel_sidebar") !== "0");
         this.hideWhitespace = false;
 
         // Elements cache
@@ -40,6 +86,8 @@ class RightPanelManager {
         this.searchClearBtn = null;
         this.searchResultsEl = null;
         this.moreBtn = null;
+        this.treeExpandedPaths = new Set(["."]);
+        this.treeCache = new Map();
 
         this.itemReview = null;
         this.reviewBadgeEl = null;
@@ -192,22 +240,22 @@ class RightPanelManager {
             });
         }
 
-        // Click outside search results to hide
+        // Click outside search results to hide (never hide on panel resize or clicks inside panel)
         document.addEventListener("click", (e) => {
-            if (!e.target.closest(".launcher-search-row")) {
-                this.hideSearchResults();
+            if (this.isResizing || this.justFinishedResizing) return;
+            if (!e.target.closest("#rightPanel") && !e.target.closest("#headerRightPanelBtn")) {
+                if (!this.searchInputEl?.value.trim() && !this.showSearchTree) {
+                    this.hideSearchResults();
+                }
             }
         });
 
-        // More Options button
+        // 3 Dots Button after search pill (explicitly triggers/toggles File Tree)
         if (this.moreBtn) {
-            this.moreBtn.addEventListener("click", async () => {
-                if (window.confirm("Clean finished tasks from workspace?")) {
-                    try {
-                        await fetch("/api/task/clean", { method: "POST" });
-                        this.loadTasks();
-                    } catch (_) {}
-                }
+            this.moreBtn.title = "Toggle File Tree";
+            this.moreBtn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                this.toggleSearchTree();
             });
         }
 
@@ -217,11 +265,14 @@ class RightPanelManager {
         }
         if (this.itemOpenFile) {
             this.itemOpenFile.addEventListener("click", () => {
+                this.showSearchTree = true;
+                if (this.moreBtn) this.moreBtn.classList.add("active");
                 if (this.searchInputEl) {
                     this.searchInputEl.value = "";
                     this.searchInputEl.focus();
-                    this.loadDirectoryContents(".");
                 }
+                this.showSearchResults();
+                this.renderSearchResults("");
             });
         }
         if (this.itemTerminal) {
@@ -251,26 +302,30 @@ class RightPanelManager {
         }
         if (this.browserReloadBtn && this.browserIframe) {
             this.browserReloadBtn.addEventListener("click", () => {
-                try { this.browserIframe.contentWindow?.location.reload(); } catch (_) {
-                    this.browserIframe.src = this.browserUrlInput?.value || this.browserIframe.src;
-                }
+                const u = this.normalizeUrl(this.browserUrlInput?.value || "http://localhost:4440");
+                this.browserIframe.src = this.resolveIframeSrc(u);
             });
         }
         if (this.browserUrlInput && this.browserIframe) {
             this.browserUrlInput.addEventListener("keydown", (e) => {
                 if (e.key === "Enter") {
-                    let u = this.browserUrlInput.value.trim();
-                    if (!u.startsWith("http://") && !u.startsWith("https://")) {
-                        u = "http://" + u;
-                    }
+                    const u = this.normalizeUrl(this.browserUrlInput.value);
                     this.browserUrlInput.value = u;
-                    this.browserIframe.src = u;
+                    const activeTab = this.tabs.find(t => t.id === this.activeTabId);
+                    if (activeTab && activeTab.type === "browser") {
+                        activeTab.url = u;
+                        try {
+                            activeTab.title = new URL(u).host || "Browser";
+                            this.renderTabStrip();
+                        } catch (_) {}
+                    }
+                    this.browserIframe.src = this.resolveIframeSrc(u);
                 }
             });
         }
         if (this.browserOpenExternalBtn) {
             this.browserOpenExternalBtn.addEventListener("click", () => {
-                const u = this.browserUrlInput?.value || this.browserIframe?.src;
+                const u = this.normalizeUrl(this.browserUrlInput?.value || "http://localhost:4440");
                 if (u) window.open(u, "_blank");
             });
         }
@@ -304,6 +359,8 @@ class RightPanelManager {
 
         const onMouseUp = () => {
             this.isResizing = false;
+            this.justFinishedResizing = true;
+            setTimeout(() => { this.justFinishedResizing = false; }, 200);
             this.resizerEl.classList.remove("is-dragging");
             document.body.classList.remove("right-panel-resizing");
             document.body.style.cursor = "";
@@ -334,6 +391,8 @@ class RightPanelManager {
 
         const onTouchEnd = () => {
             this.isResizing = false;
+            this.justFinishedResizing = true;
+            setTimeout(() => { this.justFinishedResizing = false; }, 200);
             this.resizerEl.classList.remove("is-dragging");
             document.body.classList.remove("right-panel-resizing");
             document.removeEventListener("touchmove", onTouchMove);
@@ -360,7 +419,7 @@ class RightPanelManager {
 
         this.isOpen = true;
         if (this.panelEl) {
-            this.panelEl.classList.add("animate-transition");
+            this.panelEl.setAttribute("aria-hidden", "false");
         }
         document.body.classList.add("right-panel-open");
         if (this.backdropEl) {
@@ -380,7 +439,7 @@ class RightPanelManager {
     close() {
         this.isOpen = false;
         if (this.panelEl) {
-            this.panelEl.classList.add("animate-transition");
+            this.panelEl.setAttribute("aria-hidden", "true");
         }
         document.body.classList.remove("right-panel-open");
         if (this.backdropEl) {
@@ -445,7 +504,7 @@ class RightPanelManager {
             } else if (tab.type === "terminal") {
                 iconOrBadgeHtml = '<i data-lucide="square-terminal"></i>';
             } else if (tab.type === "browser") {
-                iconOrBadgeHtml = '<i data-lucide="globe" style="color: #86efac;"></i>';
+                iconOrBadgeHtml = '<i data-lucide="globe"></i>';
             } else if (tab.type === "extensions") {
                 iconOrBadgeHtml = '<i data-lucide="puzzle" style="color: #fca5a5;"></i>';
             } else if (tab.path) {
@@ -508,12 +567,20 @@ class RightPanelManager {
     }
 
     switchTab(tabId) {
+        if (this.activeAceEditor) {
+            try { this.activeAceEditor.destroy(); } catch (_) {}
+            this.activeAceEditor = null;
+        }
         this.activeTabId = tabId;
         this.renderTabStrip();
         this.renderActiveTab();
     }
 
     closeTab(tabId) {
+        if (this.activeAceEditor) {
+            try { this.activeAceEditor.destroy(); } catch (_) {}
+            this.activeAceEditor = null;
+        }
         const idx = this.tabs.findIndex(t => t.id === tabId);
         if (idx === -1) return;
 
@@ -626,7 +693,10 @@ class RightPanelManager {
         this.switchTab(tabId);
     }
 
-    openDiffTab(filePath) {
+    openDiffTab(filePath, workspace = "") {
+        if (!this.isOpen) {
+            this.open();
+        }
         const tabId = `diff_${filePath}`;
         let tab = this.tabs.find(t => t.id === tabId);
         if (!tab) {
@@ -634,8 +704,11 @@ class RightPanelManager {
                 id: tabId,
                 type: "diff",
                 title: filePath.split("/").pop() || "Review",
-                path: filePath
+                path: filePath,
+                workspace: workspace || ""
             });
+        } else if (workspace) {
+            tab.workspace = workspace;
         }
         this.switchTab(tabId);
     }
@@ -674,14 +747,32 @@ class RightPanelManager {
                     </span>
                 </div>
                 <div class="breadcrumb-actions">
+                    <button type="button" class="breadcrumb-btn" id="breadcrumbEditBtn" title="Edit File (Ace Editor)">
+                        <i data-lucide="pencil"></i>
+                    </button>
+                    <button type="button" class="breadcrumb-btn" id="breadcrumbSaveBtn" title="Save File (Ctrl+S)" style="display: none;">
+                        <i data-lucide="save"></i>
+                        <span>Save</span>
+                    </button>
+                    <button type="button" class="breadcrumb-btn" id="breadcrumbWrapBtn" title="Toggle Word Wrap">
+                        <i data-lucide="wrap-text"></i>
+                    </button>
+                    <button type="button" class="breadcrumb-btn" id="breadcrumbCopyBtn" title="Copy Content">
+                        <i data-lucide="copy"></i>
+                    </button>
                     <button type="button" class="breadcrumb-btn" id="breadcrumbMoreBtn" title="More options">
                         <i data-lucide="more-vertical"></i>
                     </button>
                     <button type="button" class="breadcrumb-btn" id="breadcrumbSidebarBtn" title="Toggle sidebar">
-                        <i data-lucide="panel-right"></i>
+                        <i data-lucide="panel-left"></i>
                     </button>
                 </div>
                 <div class="breadcrumb-dropdown-menu" id="breadcrumbDropdownMenu" style="display: none;">
+                    <div class="breadcrumb-menu-item" data-action="edit-file">
+                        <i data-lucide="pencil"></i>
+                        <span>Edit</span>
+                    </div>
+                    <div class="breadcrumb-menu-divider"></div>
                     <div class="breadcrumb-menu-item" data-action="expand-diffs">
                         <i data-lucide="chevrons-up-down"></i>
                         <span>Expand Diffs</span>
@@ -721,10 +812,61 @@ class RightPanelManager {
         if (!container) return;
         const moreBtn = container.querySelector("#breadcrumbMoreBtn");
         const sidebarBtn = container.querySelector("#breadcrumbSidebarBtn");
+        const copyBtn = container.querySelector("#breadcrumbCopyBtn");
+        const wrapBtn = container.querySelector("#breadcrumbWrapBtn");
+        const editBtn = container.querySelector("#breadcrumbEditBtn");
+        const saveBtn = container.querySelector("#breadcrumbSaveBtn");
         const menu = container.querySelector("#breadcrumbDropdownMenu");
+
+        const toggleEditMode = () => {
+            const editorPane = container.querySelector(".viewer-editor-pane");
+            if (!editorPane) return;
+            const isEditing = editorPane.querySelector("#aceEditorMount") !== null;
+            if (isEditing) {
+                this.closeAceEditor(container, filePath);
+            } else {
+                this.openAceEditor(container, filePath, rawContent);
+            }
+        };
+
+        if (editBtn) {
+            editBtn.addEventListener("click", () => toggleEditMode());
+        }
+
+        if (saveBtn) {
+            saveBtn.addEventListener("click", () => this.saveAceContent(container, filePath));
+        }
 
         if (sidebarBtn) {
             sidebarBtn.addEventListener("click", () => this.toggleSidebar());
+        }
+
+        if (copyBtn) {
+            copyBtn.addEventListener("click", async () => {
+                if (!rawContent) return;
+                try {
+                    await navigator.clipboard.writeText(rawContent);
+                    const origHtml = copyBtn.innerHTML;
+                    copyBtn.innerHTML = '<i data-lucide="check"></i>';
+                    renderIcons(copyBtn);
+                    setTimeout(() => {
+                        copyBtn.innerHTML = origHtml;
+                        renderIcons(copyBtn);
+                    }, 2000);
+                } catch (e) {
+                    console.error("Copy content failed:", e);
+                }
+            });
+        }
+
+        if (wrapBtn) {
+            wrapBtn.addEventListener("click", () => {
+                const viewerWin = container.querySelector(".modern-viewer-window");
+                if (viewerWin) {
+                    viewerWin.classList.toggle("word-wrap");
+                    wrapBtn.classList.toggle("active", viewerWin.classList.contains("word-wrap"));
+                }
+            });
         }
 
         if (moreBtn && menu) {
@@ -744,7 +886,9 @@ class RightPanelManager {
                     const action = item.getAttribute("data-action");
                     menu.style.display = "none";
 
-                    if (action === "expand-diffs") {
+                    if (action === "edit-file") {
+                        toggleEditMode();
+                    } else if (action === "expand-diffs") {
                         const chunks = container.querySelectorAll(".mv-chunk-banner");
                         chunks.forEach(c => c.click());
                     } else if (action === "toggle-whitespace") {
@@ -792,70 +936,306 @@ class RightPanelManager {
         }
     }
 
-    async loadViewerSidebar(folderPath, currentFilePath, isDiffMode = false) {
-        const listEl = document.getElementById("viewerSidebarList");
-        if (!listEl) return;
+    getAceMode(filePath = "") {
+        const ext = filePath.split(".").pop()?.toLowerCase() || "";
+        switch (ext) {
+            case "js": case "mjs": case "cjs": return "ace/mode/javascript";
+            case "ts": return "ace/mode/typescript";
+            case "jsx": return "ace/mode/jsx";
+            case "tsx": return "ace/mode/tsx";
+            case "json": return "ace/mode/json";
+            case "html": case "htm": return "ace/mode/html";
+            case "css": return "ace/mode/css";
+            case "scss": return "ace/mode/scss";
+            case "less": return "ace/mode/less";
+            case "py": return "ace/mode/python";
+            case "sh": case "bash": return "ace/mode/sh";
+            case "md": case "markdown": return "ace/mode/markdown";
+            case "yml": case "yaml": return "ace/mode/yaml";
+            case "xml": case "svg": return "ace/mode/xml";
+            case "sql": return "ace/mode/sql";
+            case "rs": case "rust": return "ace/mode/rust";
+            case "go": return "ace/mode/golang";
+            case "c": case "cpp": case "h": case "hpp": return "ace/mode/c_cpp";
+            case "java": return "ace/mode/java";
+            case "php": return "ace/mode/php";
+            case "ini": case "conf": case "env": return "ace/mode/ini";
+            default: return "ace/mode/text";
+        }
+    }
+
+    openAceEditor(container, filePath, currentContent = "") {
+        const editorPane = container.querySelector(".viewer-editor-pane");
+        const editBtn = container.querySelector("#breadcrumbEditBtn");
+        const saveBtn = container.querySelector("#breadcrumbSaveBtn");
+        if (!editorPane) return;
+
+        editorPane.innerHTML = `
+            <div class="ace-editor-container" id="aceEditorContainer">
+                <div class="ace-editor-mount" id="aceEditorMount"></div>
+            </div>
+        `;
+
+        if (typeof window.ace === "undefined") {
+            editorPane.innerHTML = '<div class="tasks-empty-state">Loading Ace Editor…</div>';
+            return;
+        }
 
         try {
-            if (isDiffMode) {
-                const changesRes = await fetch("/api/history/changes");
-                if (changesRes.ok) {
-                    const changesData = await changesRes.json();
-                    const changedFiles = Array.isArray(changesData.files) ? changesData.files : [];
-                    if (changedFiles.length > 0) {
-                        let html = "";
-                        changedFiles.forEach((f) => {
-                            const p = f.displayPath || f.path;
-                            const fName = p.split("/").pop() || p;
-                            const ext = fName.split(".").pop()?.toLowerCase() || "";
-                            const isCur = currentFilePath && (currentFilePath === p || currentFilePath.endsWith(fName));
-                            html += `
-                                <div class="viewer-sidebar-item ${isCur ? "active" : ""}" data-path="${escapeHTML(p)}" data-is-diff="true" title="${escapeHTML(p)} (+${f.additions || 0} -${f.deletions || 0})">
-                                    <span class="file-ext-badge ${ext}">${escapeHTML(ext || "diff")}</span>
-                                    <span class="viewer-sidebar-filename">${escapeHTML(fName)}</span>
-                                </div>
-                            `;
-                        });
-                        listEl.innerHTML = html;
-                        this.bindViewerSidebarClicks(listEl);
-                        return;
-                    }
-                }
-            }
+            window.ace.config.set("basePath", "/vendor/ace");
+            const mount = editorPane.querySelector("#aceEditorMount");
+            const editor = window.ace.edit(mount);
+            editor.setTheme("ace/theme/one_dark");
+            editor.session.setMode(this.getAceMode(filePath));
+            editor.setValue(currentContent || "", -1);
+            editor.setOptions({
+                fontFamily: "'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace",
+                fontSize: "13.5px",
+                tabSize: 4,
+                useSoftTabs: true,
+                showPrintMargin: false,
+                wrap: true,
+                highlightActiveLine: true,
+                enableBasicAutocompletion: true,
+                enableLiveAutocompletion: true
+            });
 
-            const res = await fetch("/api/file/list-dir", {
+            this.activeAceEditor = editor;
+            this.activeAceFilePath = filePath;
+            this.activeAceContent = currentContent;
+
+            // Keyboard shortcut Ctrl+S / Cmd+S to save
+            editor.commands.addCommand({
+                name: "saveFile",
+                bindKey: { win: "Ctrl-S", mac: "Command-S" },
+                exec: () => {
+                    this.saveAceContent(container, filePath);
+                }
+            });
+
+            if (editBtn) editBtn.classList.add("active");
+            if (saveBtn) saveBtn.style.display = "inline-flex";
+
+            const suffix = container.querySelector(".crumb-suffix");
+            if (suffix) suffix.textContent = "(editing)";
+
+            renderIcons(container);
+            editor.focus();
+        } catch (err) {
+            console.error("[Ace] Init error:", err);
+            editorPane.innerHTML = `<div class="tasks-empty-state">Failed to initialize editor: ${escapeHTML(err.message)}</div>`;
+        }
+    }
+
+    async saveAceContent(container, filePath) {
+        if (!this.activeAceEditor) return;
+        const saveBtn = container?.querySelector("#breadcrumbSaveBtn");
+        const newContent = this.activeAceEditor.getValue();
+
+        if (saveBtn) {
+            saveBtn.disabled = true;
+            saveBtn.innerHTML = '<i data-lucide="loader-2"></i> <span>Saving…</span>';
+            renderIcons(saveBtn);
+        }
+
+        try {
+            const chatId = state?.currentChatId || "";
+            const res = await fetch("/api/file/write", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ path: folderPath || "." })
+                body: JSON.stringify({
+                    path: filePath,
+                    content: newContent,
+                    chatId
+                })
             });
 
-            if (!res.ok) {
-                listEl.innerHTML = '<div class="tasks-empty-state">No files.</div>';
-                return;
+            if (res.ok) {
+                this.activeAceContent = newContent;
+                if (saveBtn) {
+                    saveBtn.classList.add("saved");
+                    saveBtn.innerHTML = '<i data-lucide="check"></i> <span>Saved</span>';
+                    renderIcons(saveBtn);
+                    setTimeout(() => {
+                        saveBtn.classList.remove("saved");
+                        saveBtn.disabled = false;
+                        saveBtn.innerHTML = '<i data-lucide="save"></i> <span>Save</span>';
+                        renderIcons(saveBtn);
+                    }, 2000);
+                }
+            } else {
+                const errData = await res.json().catch(() => ({}));
+                alert(`Error saving file: ${errData.error || "Save failed"}`);
+                if (saveBtn) {
+                    saveBtn.disabled = false;
+                    saveBtn.innerHTML = '<i data-lucide="save"></i> <span>Save</span>';
+                    renderIcons(saveBtn);
+                }
             }
-
-            const data = await res.json();
-            const entries = Array.isArray(data.entries) ? data.entries : [];
-            if (entries.length === 0) {
-                listEl.innerHTML = '<div class="tasks-empty-state">Empty directory.</div>';
-                return;
+        } catch (e) {
+            console.error("Save file error:", e);
+            if (saveBtn) {
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = '<i data-lucide="save"></i> <span>Save</span>';
+                renderIcons(saveBtn);
             }
+        }
+    }
 
-            let html = "";
-            entries.forEach((e) => {
-                const ext = e.name.split(".").pop()?.toLowerCase() || "";
-                const fullRel = folderPath && folderPath !== "." ? `${folderPath}/${e.name}` : e.name;
-                const isCur = currentFilePath && (currentFilePath === fullRel || currentFilePath.endsWith(e.name));
-                html += `
-                    <div class="viewer-sidebar-item ${isCur ? "active" : ""}" data-path="${escapeHTML(fullRel)}" title="${escapeHTML(e.name)}">
-                        <span class="file-ext-badge ${ext}">${escapeHTML(ext || "txt")}</span>
-                        <span class="viewer-sidebar-filename">${escapeHTML(e.name)}</span>
-                    </div>
-                `;
+    closeAceEditor(container, filePath) {
+        const editorPane = container.querySelector(".viewer-editor-pane");
+        const editBtn = container.querySelector("#breadcrumbEditBtn");
+        const saveBtn = container.querySelector("#breadcrumbSaveBtn");
+
+        const content = this.activeAceEditor ? this.activeAceEditor.getValue() : (this.activeAceContent || "");
+        if (this.activeAceEditor) {
+            try { this.activeAceEditor.destroy(); } catch (_) {}
+            this.activeAceEditor = null;
+        }
+
+        if (editBtn) editBtn.classList.remove("active");
+        if (saveBtn) saveBtn.style.display = "none";
+
+        const suffix = container.querySelector(".crumb-suffix");
+        if (suffix) suffix.textContent = "(single edit)";
+
+        if (editorPane) {
+            editorPane.innerHTML = renderCodeViewerCardHtml({
+                code: content,
+                filePath,
+                maxHeight: 750
             });
+            bindDiffViewerCards(editorPane);
+            renderIcons(editorPane);
+        }
+    }
 
-            listEl.innerHTML = html;
-            this.bindViewerSidebarClicks(listEl);
+    async loadViewerSidebar(folderPath, currentFilePath, isDiffMode = false) {
+        const listEl = document.getElementById("viewerSidebarList");
+        const filterInput = document.getElementById("viewerSidebarFilterInput");
+        if (!listEl) return;
+
+        if (filterInput) {
+            filterInput.value = "";
+            filterInput.oninput = (e) => {
+                const val = e.target.value.trim();
+                this.renderViewerSidebarContent(listEl, val, currentFilePath, isDiffMode);
+            };
+        }
+
+        // Auto-expand ancestors of currentFilePath so active file is visible in tree
+        if (currentFilePath && !isDiffMode) {
+            const cleanPath = currentFilePath.replace(/\\/g, "/").replace(/^\.\//, "");
+            const parts = cleanPath.split("/").filter(Boolean);
+            parts.pop(); // Remove file name
+            let accumulated = "";
+            for (const p of parts) {
+                accumulated = accumulated ? `${accumulated}/${p}` : p;
+                this.treeExpandedPaths.add(accumulated);
+            }
+        }
+
+        await this.renderViewerSidebarContent(listEl, "", currentFilePath, isDiffMode);
+    }
+
+    async renderViewerSidebarContent(listEl, filterTerm, currentFilePath, isDiffMode) {
+        if (!listEl) return;
+
+        if (isDiffMode) {
+            try {
+                const changesRes = await fetch("/api/history/changes");
+                if (!changesRes.ok) {
+                    listEl.innerHTML = '<div class="tasks-empty-state">Unable to load changes.</div>';
+                    return;
+                }
+                const changesData = await changesRes.json();
+                let changedFiles = Array.isArray(changesData.files) ? changesData.files : [];
+                if (filterTerm) {
+                    changedFiles = changedFiles.filter(f => {
+                        const p = (f.displayPath || f.path || "").toLowerCase();
+                        return p.includes(filterTerm.toLowerCase());
+                    });
+                }
+                if (changedFiles.length === 0) {
+                    listEl.innerHTML = '<div class="tasks-empty-state">No changed files found.</div>';
+                    return;
+                }
+                let html = "";
+                changedFiles.forEach((f) => {
+                    const p = f.displayPath || f.path;
+                    const fName = p.split("/").pop() || p;
+                    const ext = fName.split(".").pop()?.toLowerCase() || "";
+                    const isCur = currentFilePath && (currentFilePath === p || currentFilePath.endsWith(fName));
+                    html += `
+                        <div class="viewer-sidebar-item ${isCur ? "active" : ""}" data-path="${escapeHTML(p)}" data-is-diff="true" title="${escapeHTML(p)} (+${f.additions || 0} -${f.deletions || 0})">
+                            <span class="file-ext-badge ${ext}">${escapeHTML(ext || "diff")}</span>
+                            <span class="viewer-sidebar-filename">${escapeHTML(fName)}</span>
+                        </div>
+                    `;
+                });
+                const prevScrollTop = this.viewerSidebarScrollTop !== undefined
+                    ? this.viewerSidebarScrollTop
+                    : (listEl.scrollTop || 0);
+
+                listEl.innerHTML = html;
+                renderIcons(listEl);
+                this.bindViewerSidebarClicks(listEl);
+
+                listEl.scrollTop = prevScrollTop;
+                const activeDiff = listEl.querySelector(".viewer-sidebar-item.active");
+                if (activeDiff) {
+                    activeDiff.scrollIntoView({ block: "nearest", behavior: "smooth" });
+                }
+                listEl.onscroll = () => {
+                    this.viewerSidebarScrollTop = listEl.scrollTop;
+                };
+            } catch (_) {
+                listEl.innerHTML = '<div class="tasks-empty-state">Unable to load changes.</div>';
+            }
+            return;
+        }
+
+        // Normal file mode: VS Code Tree
+        try {
+            let treeHtml = "";
+            if (filterTerm) {
+                const res = await fetch("/api/file/find", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ query: filterTerm })
+                });
+                const data = res.ok ? await res.json() : { results: [] };
+                const results = Array.isArray(data.results) ? data.results : [];
+                if (results.length === 0) {
+                    listEl.innerHTML = `<div class="tasks-empty-state">No matching files found.</div>`;
+                    return;
+                }
+                const hierarchy = this.buildHierarchyFromFlatList(results);
+                treeHtml = this.renderHierarchyHtml(hierarchy, 0, filterTerm.toLowerCase(), currentFilePath);
+            } else {
+                treeHtml = await this.buildDirectoryTreeHtml(".", 0, currentFilePath);
+            }
+
+            const prevScrollTop = this.viewerSidebarScrollTop !== undefined
+                ? this.viewerSidebarScrollTop
+                : (listEl.scrollTop || 0);
+
+            if (!treeHtml.trim()) {
+                listEl.innerHTML = '<div class="tasks-empty-state">Empty workspace.</div>';
+            } else {
+                listEl.innerHTML = treeHtml;
+            }
+            renderIcons(listEl);
+            this.bindTreeContainerClicks(listEl, false, currentFilePath);
+
+            listEl.scrollTop = prevScrollTop;
+            const activeNode = listEl.querySelector(".search-tree-node.active, .search-tree-node.selected");
+            if (activeNode) {
+                activeNode.scrollIntoView({ block: "nearest", behavior: "smooth" });
+            }
+            listEl.onscroll = () => {
+                this.viewerSidebarScrollTop = listEl.scrollTop;
+            };
         } catch (_) {
             listEl.innerHTML = '<div class="tasks-empty-state">Unable to load files.</div>';
         }
@@ -876,6 +1256,90 @@ class RightPanelManager {
         });
     }
 
+    bindViewerColResizer(containerEl) {
+        if (!containerEl) return;
+        const resizer = containerEl.querySelector("#viewerColResizer");
+        const sidebar = containerEl.querySelector(".viewer-sidebar-pane");
+        const splitCont = containerEl.querySelector(".viewer-split-container") || containerEl;
+        if (!resizer || !sidebar) return;
+
+        let isDragging = false;
+
+        const updateWidth = (clientX) => {
+            const rect = splitCont.getBoundingClientRect();
+            if (rect.width <= 0) return;
+            // Sidebar is on the RIGHT side, so its width is (rect.right - clientX)
+            const newW = Math.max(140, Math.min(Math.min(500, rect.width - 200), rect.right - clientX));
+            this.viewerSidebarWidth = newW;
+            sidebar.style.width = `${newW}px`;
+            document.documentElement.style.setProperty("--viewer-sidebar-width", `${newW}px`);
+        };
+
+        const onMouseMove = (moveEvt) => {
+            if (!isDragging) return;
+            updateWidth(moveEvt.clientX);
+        };
+
+        const onMouseUp = () => {
+            if (!isDragging) return;
+            isDragging = false;
+            this.isResizing = false;
+            this.justFinishedResizing = true;
+            setTimeout(() => { this.justFinishedResizing = false; }, 200);
+            resizer.classList.remove("is-dragging");
+            document.body.classList.remove("viewer-sidebar-resizing");
+            document.body.style.cursor = "";
+            document.body.style.userSelect = "";
+            document.removeEventListener("mousemove", onMouseMove);
+            document.removeEventListener("mouseup", onMouseUp);
+            try {
+                localStorage.setItem("multiai_viewer_sidebar_width", String(this.viewerSidebarWidth));
+            } catch (_) {}
+        };
+
+        resizer.addEventListener("mousedown", (downEvt) => {
+            downEvt.preventDefault();
+            downEvt.stopPropagation();
+            isDragging = true;
+            this.isResizing = true;
+            resizer.classList.add("is-dragging");
+            document.body.classList.add("viewer-sidebar-resizing");
+            document.body.style.cursor = "col-resize";
+            document.body.style.userSelect = "none";
+            document.addEventListener("mousemove", onMouseMove);
+            document.addEventListener("mouseup", onMouseUp);
+        });
+
+        // Touch support
+        const onTouchMove = (tEvt) => {
+            if (!isDragging || !tEvt.touches || !tEvt.touches[0]) return;
+            updateWidth(tEvt.touches[0].clientX);
+        };
+        const onTouchEnd = () => {
+            if (!isDragging) return;
+            isDragging = false;
+            this.isResizing = false;
+            this.justFinishedResizing = true;
+            setTimeout(() => { this.justFinishedResizing = false; }, 200);
+            resizer.classList.remove("is-dragging");
+            document.body.classList.remove("viewer-sidebar-resizing");
+            document.removeEventListener("touchmove", onTouchMove);
+            document.removeEventListener("touchend", onTouchEnd);
+            try {
+                localStorage.setItem("multiai_viewer_sidebar_width", String(this.viewerSidebarWidth));
+            } catch (_) {}
+        };
+        resizer.addEventListener("touchstart", (downEvt) => {
+            if (!downEvt.touches || !downEvt.touches[0]) return;
+            isDragging = true;
+            this.isResizing = true;
+            resizer.classList.add("is-dragging");
+            document.body.classList.add("viewer-sidebar-resizing");
+            document.addEventListener("touchmove", onTouchMove, { passive: true });
+            document.addEventListener("touchend", onTouchEnd);
+        }, { passive: true });
+    }
+
     async renderDiffTab(tab) {
         if (!this.viewerMountEl) return;
         if (!tab.path) {
@@ -886,7 +1350,11 @@ class RightPanelManager {
         this.viewerMountEl.innerHTML = '<div class="tasks-empty-state">Loading unified diff…</div>';
 
         try {
-            const res = await fetch(`/api/history/diff?path=${encodeURIComponent(tab.path)}`);
+            const chatId = state?.currentChatId || "";
+            let diffUrl = `/api/history/diff?path=${encodeURIComponent(tab.path)}`;
+            if (chatId) diffUrl += `&chatId=${encodeURIComponent(chatId)}`;
+            if (tab.workspace) diffUrl += `&workspace=${encodeURIComponent(tab.workspace)}`;
+            const res = await fetch(diffUrl);
             if (!res.ok) {
                 this.viewerMountEl.innerHTML = '<div class="tasks-empty-state">Unable to load unified diff.</div>';
                 return;
@@ -917,19 +1385,64 @@ class RightPanelManager {
                 hideWhitespace: this.hideWhitespace
             });
 
+            const existingContainer = this.viewerMountEl.querySelector("#viewerSplitContainer");
+            if (existingContainer) {
+                // In-place update: preserve picker position and do not reload sidebar
+                const sidebarTitle = this.viewerMountEl.querySelector(".viewer-sidebar-title");
+                if (sidebarTitle) sidebarTitle.textContent = "Modified Files";
+
+                const breadcrumbBar = this.viewerMountEl.querySelector(".right-panel-breadcrumb-bar");
+                if (breadcrumbBar) {
+                    breadcrumbBar.outerHTML = breadcrumbHtml;
+                }
+                const editorPane = this.viewerMountEl.querySelector(".viewer-editor-pane");
+                if (editorPane) {
+                    editorPane.innerHTML = `${toolbarHtml}${diffCardHtml}`;
+                    bindDiffViewerCards(editorPane);
+                    renderIcons(editorPane);
+                }
+                this.bindBreadcrumbEvents(this.viewerMountEl, tab.path, diffStr);
+
+                const listEl = document.getElementById("viewerSidebarList");
+                if (listEl) {
+                    const hasDiffItems = listEl.querySelector(".viewer-sidebar-item");
+                    if (hasDiffItems) {
+                        listEl.querySelectorAll(".viewer-sidebar-item, .search-tree-node").forEach((n) => {
+                            n.classList.remove("active", "selected");
+                        });
+                        const activeNode = listEl.querySelector(`.viewer-sidebar-item[data-path="${escapeHTML(tab.path)}"]`);
+                        if (activeNode) {
+                            activeNode.classList.add("active");
+                            activeNode.scrollIntoView({ block: "nearest", behavior: "smooth" });
+                        } else {
+                            this.loadViewerSidebar(folderPath, tab.path, true);
+                        }
+                    } else {
+                        this.loadViewerSidebar(folderPath, tab.path, true);
+                    }
+                }
+                this.bindDiffTabButtons(tab);
+                return;
+            }
+
             const splitContainerHtml = `
                 ${breadcrumbHtml}
-                <div class="viewer-split-container ${this.isSidebarOpen ? "" : "sidebar-collapsed"}">
+                <div class="viewer-split-container ${this.isSidebarOpen ? "" : "sidebar-collapsed"}" id="viewerSplitContainer">
                     <div class="viewer-editor-pane">
                         ${toolbarHtml}
                         ${diffCardHtml}
                     </div>
+                    <div class="viewer-col-resizer" id="viewerColResizer" title="Drag to resize sidebar"></div>
                     <div class="viewer-sidebar-pane">
                         <div class="viewer-sidebar-header">
-                            <span class="viewer-sidebar-folder" title="${escapeHTML(folderPath)}">... / ${escapeHTML(folderName)} ...</span>
+                            <span class="viewer-sidebar-title">Changes</span>
+                        </div>
+                        <div class="viewer-sidebar-search-box">
+                            <i data-lucide="search" class="viewer-sidebar-search-icon"></i>
+                            <input type="text" class="viewer-sidebar-filter-input" id="viewerSidebarFilterInput" placeholder="Filter changes..." autocomplete="off" spellcheck="false">
                         </div>
                         <div class="viewer-sidebar-list" id="viewerSidebarList">
-                            <div class="tasks-empty-state">Loading files…</div>
+                            <div class="tasks-empty-state">Loading changes…</div>
                         </div>
                     </div>
                 </div>
@@ -938,53 +1451,61 @@ class RightPanelManager {
             this.viewerMountEl.innerHTML = splitContainerHtml;
             bindDiffViewerCards(this.viewerMountEl);
             renderIcons(this.viewerMountEl);
+            this.bindViewerColResizer(this.viewerMountEl);
             this.bindBreadcrumbEvents(this.viewerMountEl, tab.path, diffStr);
             this.loadViewerSidebar(folderPath, tab.path, true);
-
-            const acceptBtn = document.getElementById("diffTabAcceptBtn");
-            const revertBtn = document.getElementById("diffTabRevertBtn");
-
-            if (acceptBtn) {
-                acceptBtn.addEventListener("click", async () => {
-                    acceptBtn.disabled = true;
-                    acceptBtn.textContent = "Accepting…";
-                    try {
-                        await fetch("/api/history/accept", { method: "POST" });
-                        this.closeTab(tab.id);
-                        this.checkWorkspaceChanges();
-                    } catch (e) {
-                        console.error(e);
-                    }
-                });
-            }
-
-            if (revertBtn) {
-                revertBtn.addEventListener("click", async () => {
-                    if (!window.confirm("Revert workspace modifications for this file?")) return;
-                    revertBtn.disabled = true;
-                    try {
-                        await fetch("/api/history/revert", {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ file: tab.path })
-                        });
-                        this.closeTab(tab.id);
-                        this.checkWorkspaceChanges();
-                    } catch (e) {
-                        console.error(e);
-                    }
-                });
-            }
+            this.bindDiffTabButtons(tab);
         } catch (err) {
             console.error("[RightPanel] Render diff tab error:", err);
             this.viewerMountEl.innerHTML = '<div class="tasks-empty-state">Failed to render diff.</div>';
         }
     }
 
-    openFileTab(filePath) {
+    bindDiffTabButtons(tab) {
+        const acceptBtn = document.getElementById("diffTabAcceptBtn");
+        const revertBtn = document.getElementById("diffTabRevertBtn");
+
+        if (acceptBtn) {
+            acceptBtn.addEventListener("click", async () => {
+                acceptBtn.disabled = true;
+                acceptBtn.textContent = "Accepting…";
+                try {
+                    await fetch("/api/history/accept", { method: "POST" });
+                    this.closeTab(tab.id);
+                    this.checkWorkspaceChanges();
+                } catch (e) {
+                    console.error(e);
+                }
+            });
+        }
+
+        if (revertBtn) {
+            revertBtn.addEventListener("click", async () => {
+                if (!window.confirm("Revert workspace modifications for this file?")) return;
+                revertBtn.disabled = true;
+                try {
+                    await fetch("/api/history/revert", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ file: tab.path })
+                    });
+                    this.closeTab(tab.id);
+                    this.checkWorkspaceChanges();
+                } catch (e) {
+                    console.error(e);
+                }
+            });
+        }
+    }
+
+    openFileTab(filePath, workspace = "") {
+        if (!this.isOpen) {
+            this.open();
+        }
         const tabId = `file_${filePath}`;
         const existing = this.tabs.find(t => t.id === tabId);
         if (existing) {
+            if (workspace) existing.workspace = workspace;
             this.switchTab(tabId);
             return;
         }
@@ -993,7 +1514,8 @@ class RightPanelManager {
             id: tabId,
             type: "file",
             title: filePath.split("/").pop(),
-            path: filePath
+            path: filePath,
+            workspace: workspace || ""
         });
 
         this.switchTab(tabId);
@@ -1004,10 +1526,16 @@ class RightPanelManager {
         this.viewerMountEl.innerHTML = '<div class="tasks-empty-state">Loading file…</div>';
 
         try {
+            const chatId = state?.currentChatId || "";
             const res = await fetch("/api/file/read", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ path: tab.path, numbered: false })
+                body: JSON.stringify({ 
+                    path: tab.path, 
+                    chatId,
+                    workspace: tab.workspace || "",
+                    numbered: false 
+                })
             });
 
             if (!res.ok) {
@@ -1029,15 +1557,59 @@ class RightPanelManager {
                 maxHeight: 750
             });
 
+            const existingContainer = this.viewerMountEl.querySelector("#viewerSplitContainer");
+            if (existingContainer) {
+                // In-place update: preserve picker position and do not reload sidebar
+                const sidebarTitle = this.viewerMountEl.querySelector(".viewer-sidebar-title");
+                if (sidebarTitle) sidebarTitle.textContent = "Workspace";
+
+                const breadcrumbBar = this.viewerMountEl.querySelector(".right-panel-breadcrumb-bar");
+                if (breadcrumbBar) {
+                    breadcrumbBar.outerHTML = breadcrumbHtml;
+                }
+                const editorPane = this.viewerMountEl.querySelector(".viewer-editor-pane");
+                if (editorPane) {
+                    editorPane.innerHTML = codeCardHtml;
+                    bindDiffViewerCards(editorPane);
+                    renderIcons(editorPane);
+                }
+                this.bindBreadcrumbEvents(this.viewerMountEl, tab.path, content);
+
+                const listEl = document.getElementById("viewerSidebarList");
+                if (listEl) {
+                    const hasTreeNodes = listEl.querySelector(".search-tree-node");
+                    if (hasTreeNodes) {
+                        listEl.querySelectorAll(".search-tree-node, .viewer-sidebar-item").forEach((n) => {
+                            n.classList.remove("active", "selected");
+                        });
+                        const activeNode = listEl.querySelector(`.search-tree-node[data-path="${escapeHTML(tab.path)}"], .viewer-sidebar-item[data-path="${escapeHTML(tab.path)}"]`);
+                        if (activeNode) {
+                            activeNode.classList.add("active");
+                            activeNode.scrollIntoView({ block: "nearest", behavior: "smooth" });
+                        } else {
+                            this.loadViewerSidebar(folderPath, tab.path, false);
+                        }
+                    } else {
+                        this.loadViewerSidebar(folderPath, tab.path, false);
+                    }
+                }
+                return;
+            }
+
             const splitContainerHtml = `
                 ${breadcrumbHtml}
-                <div class="viewer-split-container ${this.isSidebarOpen ? "" : "sidebar-collapsed"}">
+                <div class="viewer-split-container ${this.isSidebarOpen ? "" : "sidebar-collapsed"}" id="viewerSplitContainer">
                     <div class="viewer-editor-pane">
                         ${codeCardHtml}
                     </div>
+                    <div class="viewer-col-resizer" id="viewerColResizer" title="Drag to resize sidebar"></div>
                     <div class="viewer-sidebar-pane">
                         <div class="viewer-sidebar-header">
-                            <span class="viewer-sidebar-folder" title="${escapeHTML(folderPath)}">... / ${escapeHTML(folderName)} ...</span>
+                            <span class="viewer-sidebar-title">Workspace</span>
+                        </div>
+                        <div class="viewer-sidebar-search-box">
+                            <i data-lucide="search" class="viewer-sidebar-search-icon"></i>
+                            <input type="text" class="viewer-sidebar-filter-input" id="viewerSidebarFilterInput" placeholder="Filter files..." autocomplete="off" spellcheck="false">
                         </div>
                         <div class="viewer-sidebar-list" id="viewerSidebarList">
                             <div class="tasks-empty-state">Loading files…</div>
@@ -1049,6 +1621,7 @@ class RightPanelManager {
             this.viewerMountEl.innerHTML = splitContainerHtml;
             bindDiffViewerCards(this.viewerMountEl);
             renderIcons(this.viewerMountEl);
+            this.bindViewerColResizer(this.viewerMountEl);
             this.bindBreadcrumbEvents(this.viewerMountEl, tab.path, content);
             this.loadViewerSidebar(folderPath, tab.path, false);
         } catch (err) {
@@ -1127,11 +1700,30 @@ class RightPanelManager {
         setTimeout(doFit, 260);
     }
 
-    openBrowserTab(url) {
-        let cleanUrl = url.trim();
-        if (!cleanUrl.startsWith("http://") && !cleanUrl.startsWith("https://")) {
-            cleanUrl = "http://" + cleanUrl;
+    normalizeUrl(rawUrl) {
+        let u = (rawUrl || "").trim();
+        if (!u) return "http://localhost:4440";
+        if (!u.startsWith("http://") && !u.startsWith("https://")) {
+            if (u.startsWith("localhost") || u.startsWith("127.0.0.1") || u.startsWith("0.0.0.0") || /:\d+/.test(u)) {
+                u = "http://" + u;
+            } else {
+                u = "https://" + u;
+            }
         }
+        return u;
+    }
+
+    resolveIframeSrc(cleanUrl) {
+        if (!cleanUrl) return "about:blank";
+        const isLocal = cleanUrl.includes("localhost") || cleanUrl.includes("127.0.0.1") || cleanUrl.includes("0.0.0.0");
+        if (isLocal) {
+            return cleanUrl;
+        }
+        return `/api/browser/proxy?url=${encodeURIComponent(cleanUrl)}`;
+    }
+
+    openBrowserTab(url) {
+        const cleanUrl = this.normalizeUrl(url);
 
         let hostname = cleanUrl;
         try {
@@ -1151,8 +1743,10 @@ class RightPanelManager {
 
     renderBrowserTab(tab) {
         if (this.browserUrlInput) this.browserUrlInput.value = tab.url;
-        if (this.browserIframe && this.browserIframe.src !== tab.url) {
-            this.browserIframe.src = tab.url;
+        const targetSrc = this.resolveIframeSrc(tab.url);
+        if (this.browserIframe && this.browserIframe.getAttribute("data-src") !== targetSrc) {
+            this.browserIframe.setAttribute("data-src", targetSrc);
+            this.browserIframe.src = targetSrc;
         }
         renderIcons(this.browserMountEl);
     }
@@ -1216,9 +1810,8 @@ class RightPanelManager {
             return;
         }
 
-        this.searchDebounceTimer = setTimeout(() => {
-            this.executeSearch(query);
-        }, 160);
+        // Live instant update on every letter
+        this.executeSearch(query);
     }
 
     handleSearchSubmit() {
@@ -1237,7 +1830,7 @@ class RightPanelManager {
     }
 
     isUrlString(str) {
-        const s = str.toLowerCase();
+        const s = (str || "").trim().toLowerCase();
         return s.startsWith("http://") ||
                s.startsWith("https://") ||
                s.startsWith("localhost:") ||
@@ -1245,144 +1838,636 @@ class RightPanelManager {
                /^([a-z0-9-]+\.)+[a-z]{2,}(\/.*)?$/i.test(s);
     }
 
-    async executeSearch(query) {
-        if (!this.searchResultsEl) return;
-
-        if (this.isUrlString(query)) {
-            this.searchResultsEl.innerHTML = `
-                <div class="search-result-item" data-action="url" data-val="${escapeHTML(query)}">
-                    <div class="search-result-left">
-                        <i data-lucide="globe" style="color: #86efac;"></i>
-                        <span>Open URL: <strong>${escapeHTML(query)}</strong></span>
-                    </div>
-                    <span class="search-result-badge">web</span>
-                </div>
-            `;
-            this.showSearchResults();
-            this.bindSearchResultClicks();
-            return;
-        }
-
-        try {
-            const dirToQuery = query.includes("/") ? query.substring(0, query.lastIndexOf("/") || 1) : ".";
-            const term = query.includes("/") ? query.substring(query.lastIndexOf("/") + 1).toLowerCase() : query.toLowerCase();
-
-            const res = await fetch("/api/file/list-dir", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ path: dirToQuery })
-            });
-
-            if (!res.ok) {
-                this.hideSearchResults();
-                return;
-            }
-
-            const data = await res.json();
-            const entries = Array.isArray(data.entries) ? data.entries : [];
-            const filtered = entries.filter(e => !term || e.name.toLowerCase().includes(term));
-
-            if (filtered.length === 0) {
-                this.searchResultsEl.innerHTML = '<div style="padding: 8px 12px; font-size: 12px; color: var(--text-tertiary);">No files or folders matched.</div>';
-                this.showSearchResults();
-                return;
-            }
-
-            let html = "";
-            filtered.slice(0, 15).forEach((entry) => {
-                const isDir = entry.isDir;
-                const fullPath = dirToQuery === "." ? entry.name : `${dirToQuery}/${entry.name}`;
-                const meta = isDir ? { icon: "folder", color: "#60a5fa" } : getLanguageMeta(entry.name);
-
-                html += `
-                    <div class="search-result-item" data-action="${isDir ? "dir" : "file"}" data-val="${escapeHTML(fullPath)}">
-                        <div class="search-result-left">
-                            <i data-lucide="${meta.icon}" style="color: ${meta.color};"></i>
-                            <span>${escapeHTML(entry.name)}${isDir ? "/" : ""}</span>
-                        </div>
-                        <span class="search-result-badge">${isDir ? "folder" : "file"}</span>
-                    </div>
-                `;
-            });
-
-            this.searchResultsEl.innerHTML = html;
-            this.showSearchResults();
-            this.bindSearchResultClicks();
-        } catch (err) {
-            console.error("[RightPanel] Search error:", err);
-            this.hideSearchResults();
-        }
-    }
-
-    async loadDirectoryContents(dirPath = ".") {
-        if (!this.searchResultsEl) return;
+    async fetchDirectory(dirPath = ".") {
         try {
             const res = await fetch("/api/file/list-dir", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ path: dirPath })
             });
-            if (!res.ok) return;
+            if (!res.ok) return [];
             const data = await res.json();
             const entries = Array.isArray(data.entries) ? data.entries : [];
-
-            let html = "";
-            entries.slice(0, 20).forEach((entry) => {
-                const isDir = entry.isDir;
-                const fullPath = dirPath === "." ? entry.name : `${dirPath}/${entry.name}`;
-                const meta = isDir ? { icon: "folder", color: "#60a5fa" } : getLanguageMeta(entry.name);
-
-                html += `
-                    <div class="search-result-item" data-action="${isDir ? "dir" : "file"}" data-val="${escapeHTML(fullPath)}">
-                        <div class="search-result-left">
-                            <i data-lucide="${meta.icon}" style="color: ${meta.color};"></i>
-                            <span>${escapeHTML(entry.name)}${isDir ? "/" : ""}</span>
-                        </div>
-                        <span class="search-result-badge">${isDir ? "folder" : "file"}</span>
-                    </div>
-                `;
-            });
-
-            this.searchResultsEl.innerHTML = html;
-            this.showSearchResults();
-            this.bindSearchResultClicks();
-        } catch (err) {
-            console.error("[RightPanel] Load dir error:", err);
+            this.treeCache.set(dirPath, entries);
+            return entries;
+        } catch (_) {
+            return [];
         }
     }
 
-    bindSearchResultClicks() {
+    buildHierarchyFromFlatList(flatList) {
+        const root = { name: "", path: ".", isDir: true, children: {} };
+        for (const item of flatList) {
+            const clean = (item.path || "").replace(/\\/g, "/").replace(/^\.\//, "");
+            const parts = clean.split("/").filter(Boolean);
+            let curr = root;
+            let accumulated = "";
+            for (let i = 0; i < parts.length; i++) {
+                const part = parts[i];
+                accumulated = accumulated ? `${accumulated}/${part}` : part;
+                const isLast = i === parts.length - 1;
+                if (!curr.children[part]) {
+                    curr.children[part] = {
+                        name: part,
+                        path: accumulated,
+                        isDir: isLast ? Boolean(item.isDir) : true,
+                        children: {}
+                    };
+                }
+                curr = curr.children[part];
+            }
+        }
+        return root;
+    }
+
+    renderHierarchyHtml(node, depth = 0, term = "", activePath = "") {
+        let html = "";
+        const children = Object.values(node.children || {});
+        children.sort((a, b) => {
+            if (a.isDir && !b.isDir) return -1;
+            if (!a.isDir && b.isDir) return 1;
+            return a.name.localeCompare(b.name);
+        });
+
+        for (const child of children) {
+            const isDir = Boolean(child.isDir);
+            const nameLower = child.name.toLowerCase();
+            const paddingLeft = depth * 14 + 6;
+
+            let labelHtml = escapeHTML(child.name);
+            if (term && nameLower.includes(term)) {
+                const idx = nameLower.indexOf(term);
+                const before = escapeHTML(child.name.slice(0, idx));
+                const matched = escapeHTML(child.name.slice(idx, idx + term.length));
+                const after = escapeHTML(child.name.slice(idx + term.length));
+                labelHtml = `${before}<span class="search-tree-match">${matched}</span>${after}`;
+            }
+
+            if (isDir) {
+                const isExpanded = term ? true : this.treeExpandedPaths.has(child.path);
+                html += `
+                    <div class="search-tree-node ${isExpanded ? "is-open" : ""}" data-action="toggle-folder" data-path="${escapeHTML(child.path)}" style="padding-left: ${paddingLeft}px;">
+                        <span class="search-tree-chevron">
+                            <i data-lucide="chevron-right"></i>
+                        </span>
+                        <span class="search-tree-icon" style="color: #60a5fa;">
+                            <i data-lucide="${isExpanded ? "folder-open" : "folder"}"></i>
+                        </span>
+                        <span class="search-tree-label">${labelHtml}</span>
+                    </div>
+                `;
+                if (isExpanded) {
+                    html += this.renderHierarchyHtml(child, depth + 1, term, activePath);
+                }
+            } else {
+                const isActive = activePath && (activePath === child.path || activePath.endsWith("/" + child.name));
+                const meta = getLanguageMeta(child.name);
+                const ext = child.name.split(".").pop()?.toLowerCase() || "";
+                html += `
+                    <div class="search-tree-node ${isActive ? "active" : ""}" data-action="open-file" data-path="${escapeHTML(child.path)}" style="padding-left: ${paddingLeft + 14}px;">
+                        <span class="search-tree-icon" style="color: ${meta.color || "inherit"};">
+                            <i data-lucide="${meta.icon || "file-text"}"></i>
+                        </span>
+                        <span class="search-tree-label">${labelHtml}</span>
+                        ${ext && ext.length <= 4 ? `<span class="search-tree-badge">${escapeHTML(ext)}</span>` : ""}
+                    </div>
+                `;
+            }
+        }
+        return html;
+    }
+
+    async buildDirectoryTreeHtml(dirPath = ".", depth = 0, activePath = "") {
+        const entries = this.treeCache.get(dirPath) || await this.fetchDirectory(dirPath);
+        let html = "";
+        for (const entry of entries) {
+            const isDir = Boolean(entry.isDir);
+            const fullPath = dirPath === "." ? entry.name : `${dirPath}/${entry.name}`;
+            const paddingLeft = depth * 14 + 6;
+            const labelHtml = escapeHTML(entry.name);
+
+            if (isDir) {
+                const isExpanded = this.treeExpandedPaths.has(fullPath);
+                html += `
+                    <div class="search-tree-node ${isExpanded ? "is-open" : ""}" data-action="toggle-folder" data-path="${escapeHTML(fullPath)}" style="padding-left: ${paddingLeft}px;">
+                        <span class="search-tree-chevron">
+                            <i data-lucide="chevron-right"></i>
+                        </span>
+                        <span class="search-tree-icon" style="color: #60a5fa;">
+                            <i data-lucide="${isExpanded ? "folder-open" : "folder"}"></i>
+                        </span>
+                        <span class="search-tree-label">${labelHtml}</span>
+                    </div>
+                `;
+                if (isExpanded) {
+                    html += await this.buildDirectoryTreeHtml(fullPath, depth + 1, activePath);
+                }
+            } else {
+                const isActive = activePath && (activePath === fullPath || activePath.endsWith("/" + entry.name));
+                const meta = getLanguageMeta(entry.name);
+                const ext = entry.name.split(".").pop()?.toLowerCase() || "";
+                html += `
+                    <div class="search-tree-node ${isActive ? "active" : ""}" data-action="open-file" data-path="${escapeHTML(fullPath)}" style="padding-left: ${paddingLeft + 14}px;">
+                        <span class="search-tree-icon" style="color: ${meta.color || "inherit"};">
+                            <i data-lucide="${meta.icon || "file-text"}"></i>
+                        </span>
+                        <span class="search-tree-label">${labelHtml}</span>
+                        ${ext && ext.length <= 4 ? `<span class="search-tree-badge">${escapeHTML(ext)}</span>` : ""}
+                    </div>
+                `;
+            }
+        }
+        return html;
+    }
+
+    async executeSearch(query) {
+        if (!this.searchResultsEl) return;
+        const currentReqId = ++this.searchRequestId;
+
+        // 1. If confirmed URL: show direct URL launch pill immediately
+        if (this.isUrlString(query)) {
+            this.searchResultsEl.innerHTML = `
+                <div class="search-result-item" data-action="url" data-val="${escapeHTML(query)}">
+                    <div class="search-result-left">
+                        <i data-lucide="globe"></i>
+                        <span>Open URL: <strong style="color: var(--accent);">${escapeHTML(query)}</strong></span>
+                    </div>
+                    <span class="search-result-badge">web</span>
+                </div>
+            `;
+            this.showSearchResults();
+            renderIcons(this.searchResultsEl);
+            const urlItem = this.searchResultsEl.querySelector('.search-result-item[data-action="url"]');
+            if (urlItem) {
+                urlItem.addEventListener("click", () => {
+                    this.openBrowserTab(query);
+                    this.hideSearchResults();
+                });
+            }
+            return;
+        }
+
+        // 2. Render search results (Tree only shown when explicitly triggered)
+        await this.renderSearchResults(query, currentReqId);
+    }
+
+    async renderFileTree(filterQuery = "", expectedReqId = null) {
+        return this.renderSearchResults(filterQuery, expectedReqId);
+    }
+
+    async renderSearchResults(filterQuery = "", expectedReqId = null) {
+        if (!this.searchResultsEl) return;
+        const term = (filterQuery || "").trim().toLowerCase();
+
+        let treeHtml = "";
+        let matchingFiles = [];
+        let matchingCode = [];
+
+        if (this.showSearchTree) {
+            // Tree explicitly triggered by clicking 3 dots button
+            if (term) {
+                try {
+                    const [findRes, grepRes] = await Promise.allSettled([
+                        fetch("/api/file/find", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ query: term })
+                        }),
+                        term.length >= 2 ? fetch("/api/code/grep", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ query: term, search_path: "." })
+                        }) : Promise.resolve(null)
+                    ]);
+
+                    if (findRes.status === "fulfilled" && findRes.value?.ok) {
+                        const data = await findRes.value.json();
+                        const results = Array.isArray(data.results) ? data.results : [];
+                        matchingFiles = results.filter(r => !r.isDir);
+                        const hierarchy = this.buildHierarchyFromFlatList(results);
+                        treeHtml = this.renderHierarchyHtml(hierarchy, 0, term, "");
+                    }
+
+                    if (grepRes.status === "fulfilled" && grepRes.value?.ok) {
+                        const grepData = await grepRes.value.json();
+                        matchingCode = Array.isArray(grepData.matches) ? grepData.matches : [];
+                    }
+                } catch (_) {}
+            } else {
+                treeHtml = await this.buildDirectoryTreeHtml(".", 0, "");
+            }
+        } else {
+            // Normal search: do NOT show tree! Only fetch matching files & code
+            if (term) {
+                try {
+                    const [findRes, grepRes] = await Promise.allSettled([
+                        fetch("/api/file/find", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ query: term })
+                        }),
+                        term.length >= 2 ? fetch("/api/code/grep", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ query: term, search_path: "." })
+                        }) : Promise.resolve(null)
+                    ]);
+
+                    if (findRes.status === "fulfilled" && findRes.value?.ok) {
+                        const data = await findRes.value.json();
+                        const results = Array.isArray(data.results) ? data.results : [];
+                        matchingFiles = results.filter(r => !r.isDir);
+                    }
+
+                    if (grepRes.status === "fulfilled" && grepRes.value?.ok) {
+                        const grepData = await grepRes.value.json();
+                        matchingCode = Array.isArray(grepData.matches) ? grepData.matches : [];
+                    }
+                } catch (_) {}
+            }
+        }
+
+        if (expectedReqId && expectedReqId !== this.searchRequestId) {
+            return;
+        }
+
+        // Build Files List HTML
+        let filesHtml = "";
+        if (matchingFiles.length === 0) {
+            filesHtml = '<div class="search-code-empty">No matching files.</div>';
+        } else {
+            matchingFiles.forEach((file) => {
+                const badge = getFileBadgeInfo(file.name);
+                const parts = file.path.split("/");
+                parts.pop();
+                const dirPath = parts.join("/") || ".";
+
+                let nameHtml = escapeHTML(file.name);
+                if (term && file.name.toLowerCase().includes(term)) {
+                    const idx = file.name.toLowerCase().indexOf(term);
+                    const before = escapeHTML(file.name.slice(0, idx));
+                    const matched = escapeHTML(file.name.slice(idx, idx + term.length));
+                    const after = escapeHTML(file.name.slice(idx + term.length));
+                    nameHtml = `${before}<span class="search-tree-match">${matched}</span>${after}`;
+                }
+
+                filesHtml += `
+                    <div class="search-file-item" data-action="open-file" data-path="${escapeHTML(file.path)}" title="${escapeHTML(file.path)}">
+                        <span class="search-file-badge" style="color: ${badge.color};">${escapeHTML(badge.text)}</span>
+                        <span class="search-file-name">${nameHtml}</span>
+                        <span class="search-file-path">${escapeHTML(dirPath)}</span>
+                    </div>
+                `;
+            });
+        }
+
+        // Build Code Matches HTML (grouped by filename)
+        let codeHtml = "";
+        if (matchingCode.length === 0) {
+            codeHtml = term.length < 2
+                ? '<div class="search-code-empty">Type at least 2 characters to search code.</div>'
+                : '<div class="search-code-empty">No code matches found.</div>';
+        } else {
+            const fileGroups = new Map();
+            matchingCode.forEach((m) => {
+                if (!fileGroups.has(m.filename)) {
+                    fileGroups.set(m.filename, []);
+                }
+                fileGroups.get(m.filename).push(m);
+            });
+
+            fileGroups.forEach((matches, fileName) => {
+                const badge = getFileBadgeInfo(fileName);
+                const baseName = fileName.split("/").pop() || fileName;
+
+                let matchesHtml = "";
+                matches.forEach((m) => {
+                    const lineContent = m.line_content || "";
+                    let contentHtml = escapeHTML(lineContent.trim());
+                    if (term && contentHtml.toLowerCase().includes(term)) {
+                        const idx = contentHtml.toLowerCase().indexOf(term);
+                        const before = escapeHTML(contentHtml.slice(0, idx));
+                        const matched = escapeHTML(contentHtml.slice(idx, idx + term.length));
+                        const after = escapeHTML(contentHtml.slice(idx + term.length));
+                        contentHtml = `${before}<span class="search-tree-match">${matched}</span>${after}`;
+                    }
+
+                    matchesHtml += `
+                        <div class="search-code-match-item" data-action="open-file" data-path="${escapeHTML(m.filename)}" data-line="${m.line_number}" title="${escapeHTML(m.filename)}:${m.line_number}">
+                            <span class="search-code-line-num">:${m.line_number}</span>
+                            <span class="search-code-line-content">${contentHtml}</span>
+                        </div>
+                    `;
+                });
+
+                const dirParts = fileName.split("/");
+                dirParts.pop();
+                const dirPath = dirParts.join("/") || ".";
+
+                codeHtml += `
+                    <div class="search-code-group">
+                        <div class="search-code-group-header" data-action="open-file" data-path="${escapeHTML(fileName)}" title="${escapeHTML(fileName)}">
+                            <span class="search-file-badge" style="color: ${badge.color};">${escapeHTML(badge.text)}</span>
+                            <span class="search-code-file-name">${escapeHTML(baseName)}</span>
+                            <span class="search-code-file-path">${escapeHTML(dirPath)}</span>
+                        </div>
+                        <div class="search-code-group-matches">
+                            ${matchesHtml}
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        let finalHtml = "";
+        if (!this.showSearchTree) {
+            // Normal mode: only Files & Code, full width!
+            finalHtml = `
+                <div class="search-details-pane full-width">
+                    <div class="search-section">
+                        <div class="search-section-header">
+                            <span class="search-section-title">Files</span>
+                        </div>
+                        <div class="search-files-list">
+                            ${filesHtml}
+                        </div>
+                    </div>
+                    <div class="search-section">
+                        <div class="search-section-header">
+                            <span class="search-section-title">Code</span>
+                        </div>
+                        <div class="search-code-list">
+                            ${codeHtml}
+                        </div>
+                    </div>
+                </div>
+            `;
+        } else if (!term) {
+            // Tree explicitly triggered with no search query: full-width Tree explorer!
+            finalHtml = `
+                <div class="search-tree-pane full-width">
+                    <div class="search-section-header">
+                        <span class="search-section-title">Workspace Tree</span>
+                    </div>
+                    <div class="search-tree-content" id="launcherTreeContainer">
+                        ${treeHtml.trim() ? treeHtml : '<div class="tasks-empty-state">No files.</div>'}
+                    </div>
+                </div>
+            `;
+        } else {
+            // Tree explicitly triggered with search query: 2-column split layout!
+            finalHtml = `
+                <div class="search-split-container" id="searchSplitContainer">
+                    <!-- Left Column: Files & Code matches -->
+                    <div class="search-details-pane" style="flex: 0 0 ${this.searchSplitPercent}%; width: ${this.searchSplitPercent}%;">
+                        <div class="search-section">
+                            <div class="search-section-header">
+                                <span class="search-section-title">Files</span>
+                            </div>
+                            <div class="search-files-list">
+                                ${filesHtml}
+                            </div>
+                        </div>
+                        <div class="search-section">
+                            <div class="search-section-header">
+                                <span class="search-section-title">Code</span>
+                            </div>
+                            <div class="search-code-list">
+                                ${codeHtml}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Column Splitter Resizer (Draggable to resize files panel) -->
+                    <div class="search-col-resizer" id="searchColResizer" title="Drag to resize"></div>
+
+                    <!-- Right Column: Collapsible File Tree -->
+                    <div class="search-tree-pane" style="flex: 1 1 ${100 - this.searchSplitPercent}%;">
+                        <div class="search-section-header">
+                            <span class="search-section-title">Tree</span>
+                        </div>
+                        <div class="search-tree-content" id="launcherTreeContainer">
+                            ${treeHtml.trim() ? treeHtml : '<div class="tasks-empty-state">No files.</div>'}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        const oldDetailsPane = this.searchResultsEl.querySelector(".search-details-pane");
+        const oldTreeCont = this.searchResultsEl.querySelector("#launcherTreeContainer");
+        if (oldDetailsPane) this.launcherDetailsScrollTop = oldDetailsPane.scrollTop;
+        if (oldTreeCont) this.launcherTreeScrollTop = oldTreeCont.scrollTop;
+
+        this.searchResultsEl.innerHTML = finalHtml;
+        this.showSearchResults();
+        renderIcons(this.searchResultsEl);
+        this.bindLauncherSearchResultsEvents();
+
+        const newDetailsPane = this.searchResultsEl.querySelector(".search-details-pane");
+        const newTreeCont = this.searchResultsEl.querySelector("#launcherTreeContainer");
+        if (newDetailsPane && this.launcherDetailsScrollTop) {
+            newDetailsPane.scrollTop = this.launcherDetailsScrollTop;
+        }
+        if (newTreeCont && this.launcherTreeScrollTop) {
+            newTreeCont.scrollTop = this.launcherTreeScrollTop;
+        }
+        if (newDetailsPane) {
+            newDetailsPane.onscroll = () => {
+                this.launcherDetailsScrollTop = newDetailsPane.scrollTop;
+            };
+        }
+        if (newTreeCont) {
+            newTreeCont.onscroll = () => {
+                this.launcherTreeScrollTop = newTreeCont.scrollTop;
+            };
+        }
+    }
+
+    bindLauncherSearchResultsEvents() {
         if (!this.searchResultsEl) return;
         renderIcons(this.searchResultsEl);
 
-        this.searchResultsEl.querySelectorAll(".search-result-item").forEach((item) => {
-            item.addEventListener("click", () => {
-                const action = item.getAttribute("data-action");
-                const val = item.getAttribute("data-val");
+        const treeCont = this.searchResultsEl.querySelector("#launcherTreeContainer");
+        if (treeCont) {
+            this.bindTreeContainerClicks(treeCont, true, "");
+        }
 
-                if (action === "url") {
-                    this.openBrowserTab(val);
+        // Interactive Column Resizer between Files & Tree
+        const colResizer = this.searchResultsEl.querySelector("#searchColResizer");
+        const leftPane = this.searchResultsEl.querySelector(".search-details-pane");
+        const rightPane = this.searchResultsEl.querySelector(".search-tree-pane");
+        const splitCont = this.searchResultsEl.querySelector("#searchSplitContainer");
+
+        if (colResizer && leftPane && rightPane && splitCont) {
+            let isColDragging = false;
+
+            const updateSplit = (clientX) => {
+                const rect = splitCont.getBoundingClientRect();
+                if (rect.width <= 0) return;
+                const offsetX = clientX - rect.left;
+                const percent = Math.max(15, Math.min(85, (offsetX / rect.width) * 100));
+                this.searchSplitPercent = percent;
+                leftPane.style.flex = `0 0 ${percent}%`;
+                leftPane.style.width = `${percent}%`;
+                rightPane.style.flex = `1 1 ${100 - percent}%`;
+            };
+
+            const onMouseMove = (moveEvt) => {
+                if (!isColDragging) return;
+                updateSplit(moveEvt.clientX);
+            };
+
+            const onMouseUp = () => {
+                if (!isColDragging) return;
+                isColDragging = false;
+                this.isResizing = false;
+                this.justFinishedResizing = true;
+                setTimeout(() => { this.justFinishedResizing = false; }, 200);
+                colResizer.classList.remove("is-dragging");
+                document.body.classList.remove("right-panel-resizing");
+                document.body.style.cursor = "";
+                document.body.style.userSelect = "";
+                document.removeEventListener("mousemove", onMouseMove);
+                document.removeEventListener("mouseup", onMouseUp);
+                try {
+                    localStorage.setItem("multiai_search_split_percent", String(this.searchSplitPercent));
+                } catch (_) {}
+            };
+
+            colResizer.addEventListener("mousedown", (downEvt) => {
+                downEvt.preventDefault();
+                downEvt.stopPropagation();
+                isColDragging = true;
+                this.isResizing = true;
+                colResizer.classList.add("is-dragging");
+                document.body.classList.add("right-panel-resizing");
+                document.body.style.cursor = "col-resize";
+                document.body.style.userSelect = "none";
+                document.addEventListener("mousemove", onMouseMove);
+                document.addEventListener("mouseup", onMouseUp);
+            });
+
+            // Touch support for column resizer
+            const onTouchMove = (tEvt) => {
+                if (!isColDragging || !tEvt.touches || !tEvt.touches[0]) return;
+                updateSplit(tEvt.touches[0].clientX);
+            };
+            const onTouchEnd = () => {
+                if (!isColDragging) return;
+                isColDragging = false;
+                this.isResizing = false;
+                this.justFinishedResizing = true;
+                setTimeout(() => { this.justFinishedResizing = false; }, 200);
+                colResizer.classList.remove("is-dragging");
+                document.body.classList.remove("right-panel-resizing");
+                document.removeEventListener("touchmove", onTouchMove);
+                document.removeEventListener("touchend", onTouchEnd);
+                try {
+                    localStorage.setItem("multiai_search_split_percent", String(this.searchSplitPercent));
+                } catch (_) {}
+            };
+            colResizer.addEventListener("touchstart", (downEvt) => {
+                if (!downEvt.touches || !downEvt.touches[0]) return;
+                isColDragging = true;
+                this.isResizing = true;
+                colResizer.classList.add("is-dragging");
+                document.body.classList.add("right-panel-resizing");
+                document.addEventListener("touchmove", onTouchMove, { passive: true });
+                document.addEventListener("touchend", onTouchEnd);
+            }, { passive: true });
+        }
+
+        this.searchResultsEl.querySelectorAll('.search-file-item[data-action="open-file"]').forEach((item) => {
+            item.addEventListener("click", () => {
+                const p = item.getAttribute("data-path");
+                if (p) {
+                    this.openFileTab(p);
                     this.hideSearchResults();
-                } else if (action === "file") {
-                    this.openFileTab(val);
+                }
+            });
+        });
+
+        this.searchResultsEl.querySelectorAll('.search-code-match-item, .search-code-group-header').forEach((item) => {
+            item.addEventListener("click", () => {
+                const p = item.getAttribute("data-path");
+                if (p) {
+                    this.openFileTab(p);
                     this.hideSearchResults();
-                } else if (action === "dir") {
-                    if (this.searchInputEl) {
-                        this.searchInputEl.value = `${val}/`;
-                        this.searchInputEl.focus();
+                }
+            });
+        });
+    }
+
+    async loadDirectoryContents(dirPath = ".") {
+        this.treeExpandedPaths.add(dirPath);
+        await this.renderFileTree(this.searchInputEl?.value.trim() || "");
+    }
+
+    bindTreeContainerClicks(containerEl, isLauncher = false, currentFilePath = "") {
+        if (!containerEl) return;
+        renderIcons(containerEl);
+
+        containerEl.querySelectorAll(".search-tree-node").forEach((node) => {
+            node.addEventListener("click", async (e) => {
+                e.stopPropagation();
+                const action = node.getAttribute("data-action");
+                const pathVal = node.getAttribute("data-path");
+
+                if (action === "toggle-folder") {
+                    if (this.treeExpandedPaths.has(pathVal)) {
+                        this.treeExpandedPaths.delete(pathVal);
+                    } else {
+                        this.treeExpandedPaths.add(pathVal);
+                        if (!this.treeCache.has(pathVal)) {
+                            await this.fetchDirectory(pathVal);
+                        }
                     }
-                    this.loadDirectoryContents(val);
+                    if (isLauncher) {
+                        await this.renderFileTree(this.searchInputEl?.value.trim() || "");
+                    } else {
+                        const filterVal = document.getElementById("viewerSidebarFilterInput")?.value.trim() || "";
+                        await this.renderViewerSidebarContent(containerEl, filterVal, currentFilePath, false);
+                    }
+                } else if (action === "open-file") {
+                    this.openFileTab(pathVal);
+                    if (isLauncher) this.hideSearchResults();
                 }
             });
         });
     }
 
     showSearchResults() {
+        if (this.launcherViewEl) this.launcherViewEl.classList.add("is-searching");
         if (this.searchResultsEl) this.searchResultsEl.style.display = "flex";
     }
 
     hideSearchResults() {
-        if (this.searchResultsEl) this.searchResultsEl.style.display = "none";
+        if (this.launcherViewEl) this.launcherViewEl.classList.remove("is-searching");
+        if (this.searchResultsEl) {
+            this.searchResultsEl.style.display = "none";
+            this.searchResultsEl.innerHTML = "";
+        }
+        this.showSearchTree = false;
+        if (this.moreBtn) this.moreBtn.classList.remove("active");
+    }
+
+    async toggleSearchTree() {
+        this.showSearchTree = !this.showSearchTree;
+        if (this.moreBtn) {
+            this.moreBtn.classList.toggle("active", this.showSearchTree);
+        }
+        const query = this.searchInputEl?.value.trim() || "";
+        if (this.showSearchTree) {
+            this.showSearchResults();
+            await this.renderSearchResults(query);
+        } else {
+            if (query) {
+                await this.renderSearchResults(query);
+            } else {
+                this.hideSearchResults();
+            }
+        }
     }
 
     // ── Background Tasks List (Matches Reference Image) ───────
@@ -1392,62 +2477,63 @@ class RightPanelManager {
             if (!res.ok) return;
             const data = await res.json();
 
-            const activeTasks = [];
-            const completedTasks = [];
+            const backgroundTasks = [];
+            const nowSec = Math.round(Date.now() / 1000);
 
             for (const [id, t] of Object.entries(data)) {
                 if (!t || typeof t !== "object") continue;
-                const item = {
-                    id,
-                    running: Boolean(t.running),
-                    exitCode: t.exit_code,
-                    command: t.command || "Shell task",
-                    startTime: t.start_time
-                };
-                if (item.running) {
-                    activeTasks.push(item);
-                } else {
-                    completedTasks.push(item);
+                // Background tasks must be actively running
+                if (!t.running) continue;
+
+                const elapsed = t.start_time ? Math.max(0, nowSec - t.start_time) : 0;
+                // Background tasks must be running over 30+ seconds
+                if (elapsed >= 30) {
+                    backgroundTasks.push({
+                        id,
+                        running: true,
+                        exitCode: null,
+                        command: t.command || "Shell task",
+                        startTime: t.start_time,
+                        elapsed
+                    });
                 }
             }
 
-            this.lastActiveTasks = activeTasks;
-            this.lastCompletedTasks = completedTasks;
+            this.lastActiveTasks = backgroundTasks;
+            this.lastCompletedTasks = [];
 
-            const total = activeTasks.length + completedTasks.length;
             if (this.tasksBadgeEl) {
-                if (total > 0) {
-                    this.tasksBadgeEl.textContent = String(total);
+                if (backgroundTasks.length > 0) {
+                    this.tasksBadgeEl.textContent = String(backgroundTasks.length);
                     this.tasksBadgeEl.style.display = "inline-block";
                 } else {
                     this.tasksBadgeEl.style.display = "none";
                 }
             }
 
-            this.renderTasksList(activeTasks, completedTasks);
+            this.renderTasksList(backgroundTasks);
         } catch (err) {
             if (!isBackground) console.error("[RightPanel] Load tasks error:", err);
         }
     }
 
-    renderTasksList(activeTasks, completedTasks) {
+    renderTasksList(backgroundTasks = []) {
         if (!this.tasksListEl) return;
 
-        const allTasks = [...activeTasks, ...completedTasks];
-        if (allTasks.length === 0) {
+        if (!backgroundTasks || backgroundTasks.length === 0) {
             this.tasksListEl.innerHTML = '<div class="launcher-tasks-empty">No active background tasks.</div>';
             if (this.seeAllBtn) this.seeAllBtn.style.display = "none";
             return;
         }
 
-        const displayLimit = this.showAllTasks ? allTasks.length : 4;
-        const visibleTasks = allTasks.slice(0, displayLimit);
+        const displayLimit = this.showAllTasks ? backgroundTasks.length : 4;
+        const visibleTasks = backgroundTasks.slice(0, displayLimit);
 
         let html = "";
         visibleTasks.forEach((task) => {
             const nowSec = Math.round(Date.now() / 1000);
-            const elapsed = task.startTime ? Math.max(0, nowSec - task.startTime) : 0;
-            const durStr = task.running ? `${elapsed}s` : (task.exitCode === 0 ? "done" : `exit ${task.exitCode}`);
+            const elapsed = task.startTime ? Math.max(0, nowSec - task.startTime) : (task.elapsed || 30);
+            const durStr = elapsed >= 60 ? `${Math.floor(elapsed / 60)}m ${elapsed % 60}s` : `${elapsed}s`;
 
             html += `
                 <div class="launcher-task-row" data-task-id="${escapeHTML(task.id)}">
@@ -1465,20 +2551,16 @@ class RightPanelManager {
 
         // Show/hide "See all" button
         if (this.seeAllBtn) {
-            this.seeAllBtn.style.display = allTasks.length > 4 ? "block" : "none";
+            this.seeAllBtn.style.display = backgroundTasks.length > 4 ? "block" : "none";
         }
 
         // Clicking a task attaches to terminal or opens log output
         this.tasksListEl.querySelectorAll(".launcher-task-row").forEach((row) => {
             row.addEventListener("click", () => {
                 const tid = row.getAttribute("data-task-id");
-                const task = allTasks.find(t => t.id === tid);
+                const task = backgroundTasks.find(t => t.id === tid);
                 if (task) {
-                    if (task.running) {
-                        this.openTerminalTab();
-                    } else {
-                        this.openTaskLogTab(task);
-                    }
+                    this.openTerminalTab();
                 }
             });
         });

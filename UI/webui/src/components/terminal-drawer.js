@@ -335,6 +335,14 @@ class TerminalDrawerManager {
 
     open(options = {}) {
         if (!this.drawerEl) this.init();
+
+        // If drawer was fused into right panel or any other element, restore it to document.body
+        if (this.drawerEl.parentElement !== document.body) {
+            document.body.appendChild(this.drawerEl);
+            this.drawerEl.classList.remove("fused-mode");
+        }
+        this.drawerEl.classList.remove("fused-mode");
+
         this.isOpen = true;
         this.drawerEl.classList.add("open");
 
@@ -353,16 +361,25 @@ class TerminalDrawerManager {
             }
         }
 
+        this.applyDockStyles();
         this.updatePersistenceIndicators();
 
-        // If no active session, spawn one
-        if (this.sessions.length === 0) {
+        const active = this.getActiveSession();
+
+        // If no active session or active session has already exited, create a new one
+        if (this.sessions.length === 0 || !active || active.exited) {
             this.createSession(options);
         } else {
+            // Forward command to active session if provided
+            if (options.command) {
+                setTimeout(() => {
+                    this.sendInput(active, `${options.command}\n`);
+                }, 100);
+            }
             setTimeout(() => {
                 this.fitActiveTerminal();
                 this.focusActiveTerminal();
-            }, 60);
+            }, 50);
         }
     }
 
@@ -560,6 +577,7 @@ class TerminalDrawerManager {
                     } else if (msg.type === "data") {
                         session.term.write(msg.data);
                     } else if (msg.type === "exit") {
+                        session.exited = true;
                         session.term.write(`\r\n\x1b[33m[Process exited with code ${msg.exit_code}]\x1b[0m\r\n`);
                     } else if (msg.type === "error") {
                         session.term.write(`\r\n\x1b[31m[PTY Error: ${msg.error}]\x1b[0m\r\n`);
@@ -635,6 +653,7 @@ class TerminalDrawerManager {
                     } else if (msg.type === "data") {
                         session.term.write(msg.data);
                     } else if (msg.type === "exit") {
+                        session.exited = true;
                         session.term.write(`\r\n\x1b[33m[Process exited with code ${msg.exit_code}]\x1b[0m\r\n`);
                         eventSource.close();
                     }

@@ -677,14 +677,20 @@ function renderDock(transitionMeta = {}) {
     });
 
     // Row View Diff Button
-    card.querySelectorAll(".dock-view-diff-btn, .dock-change-left").forEach(el => {
+    card.querySelectorAll(".dock-view-diff-btn, .dock-change-left, .dock-change-row").forEach(el => {
         el.addEventListener("click", async (e) => {
+            if (e.target.closest(".dock-revert-file-btn")) return;
             e.preventDefault();
             e.stopPropagation();
             const filePath = el.getAttribute("data-path") || el.closest(".dock-change-row")?.getAttribute("data-path");
             const workspace = el.getAttribute("data-workspace") || el.closest(".dock-change-row")?.getAttribute("data-workspace") || "";
             if (!filePath) return;
-            openDiffModal(filePath, workspace);
+            if (window.rightPanel) {
+                window.rightPanel.open();
+                window.rightPanel.openDiffTab(filePath, workspace);
+            } else {
+                openDiffModal(filePath, workspace);
+            }
         });
     });
 

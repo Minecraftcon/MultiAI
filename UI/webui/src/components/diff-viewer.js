@@ -262,15 +262,32 @@ export function renderCodeViewerCardHtml({
     const baseName = displayPath.split("/").pop() || displayPath;
     const langMeta = getLanguageMeta(displayPath);
 
+    let highlightedLines = rawLines.map(l => (l ? escapeHTML(l) : "&nbsp;"));
+    if (typeof window !== "undefined" && typeof window.hljs !== "undefined" && code) {
+        try {
+            const ext = displayPath.split(".").pop()?.toLowerCase() || "";
+            const langCandidate = (langMeta?.label || ext || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+            const lang = (langCandidate && window.hljs.getLanguage(langCandidate)) ? langCandidate : (window.hljs.getLanguage(ext) ? ext : "");
+            const res = lang
+                ? window.hljs.highlight(code, { language: lang, ignoreIllegals: true }).value
+                : window.hljs.highlightAuto(code).value;
+            const splitHl = res.split(/\r?\n/);
+            if (splitHl.length === rawLines.length) {
+                highlightedLines = splitHl.map(l => (l ? l : "&nbsp;"));
+            }
+        } catch (_) {}
+    }
+
     let rowsHtml = "";
-    rawLines.forEach((lineText, idx) => {
+    rawLines.forEach((_, idx) => {
         const lineNum = startLine + idx;
+        const lineContent = highlightedLines[idx];
         rowsHtml += `
             <div class="mv-row mv-row-ctx">
                 <div class="mv-gutter" aria-hidden="true">
                     <span class="mv-num">${lineNum}</span>
                 </div>
-                <div class="mv-code-line">${lineText ? escapeHTML(lineText) : "&nbsp;"}</div>
+                <div class="mv-code-line">${lineContent}</div>
             </div>
         `;
     });

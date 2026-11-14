@@ -29,6 +29,7 @@ import {
 } from "./chat-scroll.js";
 import { openImageLightbox } from "./composer-attachments.js";
 import { renderPlanApprovalActions, handlePlanApprovalClick } from "./plan-hitl.js";
+import { openTerminal } from "./terminal-drawer.js";
 
 export {
     getToolBadgeConfig,
@@ -988,6 +989,16 @@ export function initChatDelegation() {
             return;
         }
 
+        const ptyBtn = e.target.closest(".badge-open-pty-btn");
+        if (ptyBtn) {
+            e.stopPropagation();
+            e.preventDefault();
+            const cmdBox = ptyBtn.closest(".command-output-cmd");
+            const cmd = cmdBox?.dataset?.full || cmdBox?.dataset?.compact || cmdBox?.querySelector(".command-cmd-text")?.textContent || "";
+            openTerminal({ command: cmd });
+            return;
+        }
+
         const cmdToggle = e.target.closest(".cmd-compact-toggle");
         if (cmdToggle) {
             e.stopPropagation();
@@ -1025,7 +1036,7 @@ export function initChatDelegation() {
             return;
         }
 
-        const viewBtn = e.target.closest(".checkpoint-view-btn, .checkpoint-open-doc-btn, .checkpoint-artifact-link");
+        const viewBtn = e.target.closest(".checkpoint-view-btn, .checkpoint-open-doc-btn, .checkpoint-artifact-link, .artifact-open-btn");
         if (viewBtn) {
             e.stopPropagation();
             const badge = viewBtn.closest(".search-badge-item.clickable-badge") || viewBtn.closest(".badge-collapse")?.previousElementSibling;
@@ -1037,14 +1048,19 @@ export function initChatDelegation() {
             const collapse = badge?._collapseDiv || badge?.nextElementSibling;
             const summaryText = collapse?.querySelector?.(".command-output-res")?.textContent || "";
 
-            showCheckpointModal({
-                artifactPath,
-                summaryText,
-                checkpointNum,
-                sliceStartIdx,
-                sliceEndIdx,
-                tokensSaved
-            });
+            if (artifactPath && window.rightPanel) {
+                window.rightPanel.open();
+                window.rightPanel.openFileTab(artifactPath);
+            } else {
+                showCheckpointModal({
+                    artifactPath,
+                    summaryText,
+                    checkpointNum,
+                    sliceStartIdx,
+                    sliceEndIdx,
+                    tokensSaved
+                });
+            }
             return;
         }
 
