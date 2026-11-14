@@ -56,6 +56,9 @@ class RightPanelManager {
         const savedViewerSidebarW = parseInt(localStorage.getItem("multiai_viewer_sidebar_width") || "240", 10);
         this.viewerSidebarWidth = (!isNaN(savedViewerSidebarW) && savedViewerSidebarW >= 140 && savedViewerSidebarW <= 500) ? savedViewerSidebarW : 240;
         document.documentElement.style.setProperty("--viewer-sidebar-width", `${this.viewerSidebarWidth}px`);
+        this.viewerSidebarScrollTop = 0;
+        this.launcherTreeScrollTop = 0;
+        this.launcherDetailsScrollTop = 0;
         this.showSearchTree = false;
         this.searchDebounceTimer = null;
         this.searchRequestId = 0;
@@ -910,9 +913,22 @@ class RightPanelManager {
                         </div>
                     `;
                 });
+                const prevScrollTop = this.viewerSidebarScrollTop !== undefined
+                    ? this.viewerSidebarScrollTop
+                    : (listEl.scrollTop || 0);
+
                 listEl.innerHTML = html;
                 renderIcons(listEl);
                 this.bindViewerSidebarClicks(listEl);
+
+                listEl.scrollTop = prevScrollTop;
+                const activeDiff = listEl.querySelector(".viewer-sidebar-item.active");
+                if (activeDiff) {
+                    activeDiff.scrollIntoView({ block: "nearest", behavior: "smooth" });
+                }
+                listEl.onscroll = () => {
+                    this.viewerSidebarScrollTop = listEl.scrollTop;
+                };
             } catch (_) {
                 listEl.innerHTML = '<div class="tasks-empty-state">Unable to load changes.</div>';
             }
@@ -940,6 +956,10 @@ class RightPanelManager {
                 treeHtml = await this.buildDirectoryTreeHtml(".", 0, currentFilePath);
             }
 
+            const prevScrollTop = this.viewerSidebarScrollTop !== undefined
+                ? this.viewerSidebarScrollTop
+                : (listEl.scrollTop || 0);
+
             if (!treeHtml.trim()) {
                 listEl.innerHTML = '<div class="tasks-empty-state">Empty workspace.</div>';
             } else {
@@ -947,6 +967,15 @@ class RightPanelManager {
             }
             renderIcons(listEl);
             this.bindTreeContainerClicks(listEl, false, currentFilePath);
+
+            listEl.scrollTop = prevScrollTop;
+            const activeNode = listEl.querySelector(".search-tree-node.active, .search-tree-node.selected");
+            if (activeNode) {
+                activeNode.scrollIntoView({ block: "nearest", behavior: "smooth" });
+            }
+            listEl.onscroll = () => {
+                this.viewerSidebarScrollTop = listEl.scrollTop;
+            };
         } catch (_) {
             listEl.innerHTML = '<div class="tasks-empty-state">Unable to load files.</div>';
         }
@@ -1092,6 +1121,46 @@ class RightPanelManager {
                 hideWhitespace: this.hideWhitespace
             });
 
+            const existingContainer = this.viewerMountEl.querySelector("#viewerSplitContainer");
+            if (existingContainer) {
+                // In-place update: preserve picker position and do not reload sidebar
+                const sidebarTitle = this.viewerMountEl.querySelector(".viewer-sidebar-title");
+                if (sidebarTitle) sidebarTitle.textContent = "Modified Files";
+
+                const breadcrumbBar = this.viewerMountEl.querySelector(".right-panel-breadcrumb-bar");
+                if (breadcrumbBar) {
+                    breadcrumbBar.outerHTML = breadcrumbHtml;
+                }
+                const editorPane = this.viewerMountEl.querySelector(".viewer-editor-pane");
+                if (editorPane) {
+                    editorPane.innerHTML = `${toolbarHtml}${diffCardHtml}`;
+                    bindDiffViewerCards(editorPane);
+                    renderIcons(editorPane);
+                }
+                this.bindBreadcrumbEvents(this.viewerMountEl, tab.path, diffStr);
+
+                const listEl = document.getElementById("viewerSidebarList");
+                if (listEl) {
+                    const hasDiffItems = listEl.querySelector(".viewer-sidebar-item");
+                    if (hasDiffItems) {
+                        listEl.querySelectorAll(".viewer-sidebar-item, .search-tree-node").forEach((n) => {
+                            n.classList.remove("active", "selected");
+                        });
+                        const activeNode = listEl.querySelector(`.viewer-sidebar-item[data-path="${escapeHTML(tab.path)}"]`);
+                        if (activeNode) {
+                            activeNode.classList.add("active");
+                            activeNode.scrollIntoView({ block: "nearest", behavior: "smooth" });
+                        } else {
+                            this.loadViewerSidebar(folderPath, tab.path, true);
+                        }
+                    } else {
+                        this.loadViewerSidebar(folderPath, tab.path, true);
+                    }
+                }
+                this.bindDiffTabButtons(tab);
+                return;
+            }
+
             const splitContainerHtml = `
                 ${breadcrumbHtml}
                 <div class="viewer-split-container ${this.isSidebarOpen ? "" : "sidebar-collapsed"}" id="viewerSplitContainer">
@@ -1121,44 +1190,47 @@ class RightPanelManager {
             this.bindViewerColResizer(this.viewerMountEl);
             this.bindBreadcrumbEvents(this.viewerMountEl, tab.path, diffStr);
             this.loadViewerSidebar(folderPath, tab.path, true);
-
-            const acceptBtn = document.getElementById("diffTabAcceptBtn");
-            const revertBtn = document.getElementById("diffTabRevertBtn");
-
-            if (acceptBtn) {
-                acceptBtn.addEventListener("click", async () => {
-                    acceptBtn.disabled = true;
-                    acceptBtn.textContent = "Accepting…";
-                    try {
-                        await fetch("/api/history/accept", { method: "POST" });
-                        this.closeTab(tab.id);
-                        this.checkWorkspaceChanges();
-                    } catch (e) {
-                        console.error(e);
-                    }
-                });
-            }
-
-            if (revertBtn) {
-                revertBtn.addEventListener("click", async () => {
-                    if (!window.confirm("Revert workspace modifications for this file?")) return;
-                    revertBtn.disabled = true;
-                    try {
-                        await fetch("/api/history/revert", {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ file: tab.path })
-                        });
-                        this.closeTab(tab.id);
-                        this.checkWorkspaceChanges();
-                    } catch (e) {
-                        console.error(e);
-                    }
-                });
-            }
+            this.bindDiffTabButtons(tab);
         } catch (err) {
             console.error("[RightPanel] Render diff tab error:", err);
             this.viewerMountEl.innerHTML = '<div class="tasks-empty-state">Failed to render diff.</div>';
+        }
+    }
+
+    bindDiffTabButtons(tab) {
+        const acceptBtn = document.getElementById("diffTabAcceptBtn");
+        const revertBtn = document.getElementById("diffTabRevertBtn");
+
+        if (acceptBtn) {
+            acceptBtn.addEventListener("click", async () => {
+                acceptBtn.disabled = true;
+                acceptBtn.textContent = "Accepting…";
+                try {
+                    await fetch("/api/history/accept", { method: "POST" });
+                    this.closeTab(tab.id);
+                    this.checkWorkspaceChanges();
+                } catch (e) {
+                    console.error(e);
+                }
+            });
+        }
+
+        if (revertBtn) {
+            revertBtn.addEventListener("click", async () => {
+                if (!window.confirm("Revert workspace modifications for this file?")) return;
+                revertBtn.disabled = true;
+                try {
+                    await fetch("/api/history/revert", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ file: tab.path })
+                    });
+                    this.closeTab(tab.id);
+                    this.checkWorkspaceChanges();
+                } catch (e) {
+                    console.error(e);
+                }
+            });
         }
     }
 
@@ -1209,6 +1281,45 @@ class RightPanelManager {
                 filePath: tab.path,
                 maxHeight: 750
             });
+
+            const existingContainer = this.viewerMountEl.querySelector("#viewerSplitContainer");
+            if (existingContainer) {
+                // In-place update: preserve picker position and do not reload sidebar
+                const sidebarTitle = this.viewerMountEl.querySelector(".viewer-sidebar-title");
+                if (sidebarTitle) sidebarTitle.textContent = "Workspace";
+
+                const breadcrumbBar = this.viewerMountEl.querySelector(".right-panel-breadcrumb-bar");
+                if (breadcrumbBar) {
+                    breadcrumbBar.outerHTML = breadcrumbHtml;
+                }
+                const editorPane = this.viewerMountEl.querySelector(".viewer-editor-pane");
+                if (editorPane) {
+                    editorPane.innerHTML = codeCardHtml;
+                    bindDiffViewerCards(editorPane);
+                    renderIcons(editorPane);
+                }
+                this.bindBreadcrumbEvents(this.viewerMountEl, tab.path, content);
+
+                const listEl = document.getElementById("viewerSidebarList");
+                if (listEl) {
+                    const hasTreeNodes = listEl.querySelector(".search-tree-node");
+                    if (hasTreeNodes) {
+                        listEl.querySelectorAll(".search-tree-node, .viewer-sidebar-item").forEach((n) => {
+                            n.classList.remove("active", "selected");
+                        });
+                        const activeNode = listEl.querySelector(`.search-tree-node[data-path="${escapeHTML(tab.path)}"], .viewer-sidebar-item[data-path="${escapeHTML(tab.path)}"]`);
+                        if (activeNode) {
+                            activeNode.classList.add("active");
+                            activeNode.scrollIntoView({ block: "nearest", behavior: "smooth" });
+                        } else {
+                            this.loadViewerSidebar(folderPath, tab.path, false);
+                        }
+                    } else {
+                        this.loadViewerSidebar(folderPath, tab.path, false);
+                    }
+                }
+                return;
+            }
 
             const splitContainerHtml = `
                 ${breadcrumbHtml}
@@ -1868,10 +1979,34 @@ class RightPanelManager {
             `;
         }
 
+        const oldDetailsPane = this.searchResultsEl.querySelector(".search-details-pane");
+        const oldTreeCont = this.searchResultsEl.querySelector("#launcherTreeContainer");
+        if (oldDetailsPane) this.launcherDetailsScrollTop = oldDetailsPane.scrollTop;
+        if (oldTreeCont) this.launcherTreeScrollTop = oldTreeCont.scrollTop;
+
         this.searchResultsEl.innerHTML = finalHtml;
         this.showSearchResults();
         renderIcons(this.searchResultsEl);
         this.bindLauncherSearchResultsEvents();
+
+        const newDetailsPane = this.searchResultsEl.querySelector(".search-details-pane");
+        const newTreeCont = this.searchResultsEl.querySelector("#launcherTreeContainer");
+        if (newDetailsPane && this.launcherDetailsScrollTop) {
+            newDetailsPane.scrollTop = this.launcherDetailsScrollTop;
+        }
+        if (newTreeCont && this.launcherTreeScrollTop) {
+            newTreeCont.scrollTop = this.launcherTreeScrollTop;
+        }
+        if (newDetailsPane) {
+            newDetailsPane.onscroll = () => {
+                this.launcherDetailsScrollTop = newDetailsPane.scrollTop;
+            };
+        }
+        if (newTreeCont) {
+            newTreeCont.onscroll = () => {
+                this.launcherTreeScrollTop = newTreeCont.scrollTop;
+            };
+        }
     }
 
     bindLauncherSearchResultsEvents() {
