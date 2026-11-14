@@ -65,7 +65,8 @@ class RightPanelManager {
         this.showAllTasks = false;
         this.lastActiveTasks = [];
         this.lastCompletedTasks = [];
-        this.isSidebarOpen = localStorage.getItem("multiai_right_panel_sidebar") !== "0";
+        const isMobileDevice = typeof window !== "undefined" && (window.innerWidth <= 768 || document.documentElement.classList.contains("is-android"));
+        this.isSidebarOpen = isMobileDevice ? false : (localStorage.getItem("multiai_right_panel_sidebar") !== "0");
         this.hideWhitespace = false;
 
         // Elements cache
