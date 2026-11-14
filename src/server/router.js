@@ -23,6 +23,7 @@ const { handleBuildAgentRoute } = require("./routes/build_agent");
 const { handleMcpRoute } = require("./routes/mcp");
 const { handleHistoryRoute } = require("./routes/history");
 const { handleSkillsRoute } = require("./routes/skills");
+const { handleBrowserProxyRoute } = require("./routes/browser_proxy");
 const { sendJSON } = require("./utils");
 
 async function routeRequest(req, res) {
@@ -104,6 +105,11 @@ async function routeRequest(req, res) {
         // Web Search & Fetch
         if (req.method === "POST" && (reqUrl === "/api/search" || reqUrl === "/api/fetch")) {
             return handleSearchRoute(req, res);
+        }
+
+        // Embedded Browser Proxy
+        if ((req.method === "GET" || req.method === "HEAD") && reqUrl === "/api/browser/proxy") {
+            return handleBrowserProxyRoute(req, res);
         }
 
         // DeepSearch

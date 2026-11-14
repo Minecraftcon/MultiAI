@@ -251,26 +251,30 @@ class RightPanelManager {
         }
         if (this.browserReloadBtn && this.browserIframe) {
             this.browserReloadBtn.addEventListener("click", () => {
-                try { this.browserIframe.contentWindow?.location.reload(); } catch (_) {
-                    this.browserIframe.src = this.browserUrlInput?.value || this.browserIframe.src;
-                }
+                const u = this.normalizeUrl(this.browserUrlInput?.value || "http://localhost:4440");
+                this.browserIframe.src = this.resolveIframeSrc(u);
             });
         }
         if (this.browserUrlInput && this.browserIframe) {
             this.browserUrlInput.addEventListener("keydown", (e) => {
                 if (e.key === "Enter") {
-                    let u = this.browserUrlInput.value.trim();
-                    if (!u.startsWith("http://") && !u.startsWith("https://")) {
-                        u = "http://" + u;
-                    }
+                    const u = this.normalizeUrl(this.browserUrlInput.value);
                     this.browserUrlInput.value = u;
-                    this.browserIframe.src = u;
+                    const activeTab = this.tabs.find(t => t.id === this.activeTabId);
+                    if (activeTab && activeTab.type === "browser") {
+                        activeTab.url = u;
+                        try {
+                            activeTab.title = new URL(u).host || "Browser";
+                            this.renderTabStrip();
+                        } catch (_) {}
+                    }
+                    this.browserIframe.src = this.resolveIframeSrc(u);
                 }
             });
         }
         if (this.browserOpenExternalBtn) {
             this.browserOpenExternalBtn.addEventListener("click", () => {
-                const u = this.browserUrlInput?.value || this.browserIframe?.src;
+                const u = this.normalizeUrl(this.browserUrlInput?.value || "http://localhost:4440");
                 if (u) window.open(u, "_blank");
             });
         }
@@ -1127,11 +1131,30 @@ class RightPanelManager {
         setTimeout(doFit, 260);
     }
 
-    openBrowserTab(url) {
-        let cleanUrl = url.trim();
-        if (!cleanUrl.startsWith("http://") && !cleanUrl.startsWith("https://")) {
-            cleanUrl = "http://" + cleanUrl;
+    normalizeUrl(rawUrl) {
+        let u = (rawUrl || "").trim();
+        if (!u) return "http://localhost:4440";
+        if (!u.startsWith("http://") && !u.startsWith("https://")) {
+            if (u.startsWith("localhost") || u.startsWith("127.0.0.1") || u.startsWith("0.0.0.0") || /:\d+/.test(u)) {
+                u = "http://" + u;
+            } else {
+                u = "https://" + u;
+            }
         }
+        return u;
+    }
+
+    resolveIframeSrc(cleanUrl) {
+        if (!cleanUrl) return "about:blank";
+        const isLocal = cleanUrl.includes("localhost") || cleanUrl.includes("127.0.0.1") || cleanUrl.includes("0.0.0.0");
+        if (isLocal) {
+            return cleanUrl;
+        }
+        return `/api/browser/proxy?url=${encodeURIComponent(cleanUrl)}`;
+    }
+
+    openBrowserTab(url) {
+        const cleanUrl = this.normalizeUrl(url);
 
         let hostname = cleanUrl;
         try {
@@ -1151,8 +1174,10 @@ class RightPanelManager {
 
     renderBrowserTab(tab) {
         if (this.browserUrlInput) this.browserUrlInput.value = tab.url;
-        if (this.browserIframe && this.browserIframe.src !== tab.url) {
-            this.browserIframe.src = tab.url;
+        const targetSrc = this.resolveIframeSrc(tab.url);
+        if (this.browserIframe && this.browserIframe.getAttribute("data-src") !== targetSrc) {
+            this.browserIframe.setAttribute("data-src", targetSrc);
+            this.browserIframe.src = targetSrc;
         }
         renderIcons(this.browserMountEl);
     }
