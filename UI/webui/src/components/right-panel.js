@@ -8,6 +8,40 @@ import { renderDiffCardHtml, renderCodeViewerCardHtml, bindDiffViewerCards, getL
 import { terminalDrawer } from "./terminal-drawer.js";
 import { closePanel, getIsPanelOpen } from "./gestures.js";
 
+function getFileBadgeInfo(fileName = "") {
+    const ext = fileName.split(".").pop()?.toLowerCase() || "";
+    switch (ext) {
+        case "js": case "mjs": case "cjs":
+            return { text: "js", color: "#f59e0b" };
+        case "ts":
+            return { text: "ts", color: "#3b82f6" };
+        case "jsx": case "tsx":
+            return { text: "jsx", color: "#00d8ff" };
+        case "html": case "htm":
+            return { text: "</>", color: "#f97316" };
+        case "css": case "scss": case "less":
+            return { text: "css", color: "#38bdf8" };
+        case "json":
+            return { text: "{}", color: "#eab308" };
+        case "py":
+            return { text: "py", color: "#10b981" };
+        case "md": case "markdown":
+            return { text: "M+", color: "#06b6d4" };
+        case "h": case "hpp":
+            return { text: "h", color: "#38bdf8" };
+        case "c": case "cpp": case "cc":
+            return { text: "c++", color: "#38bdf8" };
+        case "go":
+            return { text: "go", color: "#00add8" };
+        case "rs":
+            return { text: "rs", color: "#ef4444" };
+        case "sh": case "bash":
+            return { text: ">_", color: "#84cc16" };
+        default:
+            return { text: ext ? ext.slice(0, 3) : "txt", color: "#9ca3af" };
+    }
+}
+
 class RightPanelManager {
     constructor() {
         this.isOpen = false;
@@ -15,8 +49,12 @@ class RightPanelManager {
         this.activeTabId = null; // null = Launcher / Empty view
         this.pollTimer = null;
         this.isResizing = false;
+        this.justFinishedResizing = false;
         this.width = 500;
+        const savedSplit = parseFloat(localStorage.getItem("multiai_search_split_percent") || "52");
+        this.searchSplitPercent = (!isNaN(savedSplit) && savedSplit >= 15 && savedSplit <= 85) ? savedSplit : 52;
         this.searchDebounceTimer = null;
+        this.searchRequestId = 0;
         this.showAllTasks = false;
         this.lastActiveTasks = [];
         this.lastCompletedTasks = [];
@@ -194,10 +232,13 @@ class RightPanelManager {
             });
         }
 
-        // Click outside search results to hide
+        // Click outside search results to hide (never hide on panel resize or clicks inside panel)
         document.addEventListener("click", (e) => {
-            if (!e.target.closest(".launcher-search-row")) {
-                this.hideSearchResults();
+            if (this.isResizing || this.justFinishedResizing) return;
+            if (!e.target.closest("#rightPanel") && !e.target.closest("#headerRightPanelBtn")) {
+                if (!this.searchInputEl?.value.trim()) {
+                    this.hideSearchResults();
+                }
             }
         });
 
@@ -310,6 +351,8 @@ class RightPanelManager {
 
         const onMouseUp = () => {
             this.isResizing = false;
+            this.justFinishedResizing = true;
+            setTimeout(() => { this.justFinishedResizing = false; }, 200);
             this.resizerEl.classList.remove("is-dragging");
             document.body.classList.remove("right-panel-resizing");
             document.body.style.cursor = "";
@@ -340,6 +383,8 @@ class RightPanelManager {
 
         const onTouchEnd = () => {
             this.isResizing = false;
+            this.justFinishedResizing = true;
+            setTimeout(() => { this.justFinishedResizing = false; }, 200);
             this.resizerEl.classList.remove("is-dragging");
             document.body.classList.remove("right-panel-resizing");
             document.removeEventListener("touchmove", onTouchMove);
@@ -1477,6 +1522,7 @@ class RightPanelManager {
 
     async executeSearch(query) {
         if (!this.searchResultsEl) return;
+        const currentReqId = ++this.searchRequestId;
 
         // 1. If confirmed URL: show direct URL launch pill immediately
         if (this.isUrlString(query)) {
@@ -1502,10 +1548,10 @@ class RightPanelManager {
         }
 
         // 2. Direct VS Code collapsing file tree view updated with every letter
-        await this.renderFileTree(query);
+        await this.renderFileTree(query, currentReqId);
     }
 
-    async renderFileTree(filterQuery = "") {
+    async renderFileTree(filterQuery = "", expectedReqId = null) {
         if (!this.searchResultsEl) return;
         const term = (filterQuery || "").trim().toLowerCase();
 
@@ -1546,13 +1592,17 @@ class RightPanelManager {
             treeHtml = await this.buildDirectoryTreeHtml(".", 0, "");
         }
 
+        if (expectedReqId && expectedReqId !== this.searchRequestId) {
+            return;
+        }
+
         // Build Files List HTML for the right pane
         let filesHtml = "";
         if (matchingFiles.length === 0) {
             filesHtml = '<div class="search-code-empty">No matching files.</div>';
         } else {
             matchingFiles.forEach((file) => {
-                const meta = getLanguageMeta(file.name);
+                const badge = getFileBadgeInfo(file.name);
                 const parts = file.path.split("/");
                 parts.pop();
                 const dirPath = parts.join("/") || ".";
@@ -1568,13 +1618,9 @@ class RightPanelManager {
 
                 filesHtml += `
                     <div class="search-file-item" data-action="open-file" data-path="${escapeHTML(file.path)}" title="${escapeHTML(file.path)}">
-                        <span class="search-tree-icon" style="color: ${meta.color || "inherit"};">
-                            <i data-lucide="${meta.icon || "file-text"}"></i>
-                        </span>
-                        <div class="search-file-info">
-                            <span class="search-file-name">${nameHtml}</span>
-                            <span class="search-file-path">${escapeHTML(dirPath)}</span>
-                        </div>
+                        <span class="search-file-badge" style="color: ${badge.color};">${escapeHTML(badge.text)}</span>
+                        <span class="search-file-name">${nameHtml}</span>
+                        <span class="search-file-path">${escapeHTML(dirPath)}</span>
                     </div>
                 `;
             });
@@ -1596,7 +1642,7 @@ class RightPanelManager {
             });
 
             fileGroups.forEach((matches, fileName) => {
-                const meta = getLanguageMeta(fileName);
+                const badge = getFileBadgeInfo(fileName);
                 const baseName = fileName.split("/").pop() || fileName;
 
                 let matchesHtml = "";
@@ -1626,9 +1672,7 @@ class RightPanelManager {
                 codeHtml += `
                     <div class="search-code-group">
                         <div class="search-code-group-header" data-action="open-file" data-path="${escapeHTML(fileName)}" title="${escapeHTML(fileName)}">
-                            <span class="search-tree-icon" style="color: ${meta.color || "inherit"};">
-                                <i data-lucide="${meta.icon || "file-text"}"></i>
-                            </span>
+                            <span class="search-file-badge" style="color: ${badge.color};">${escapeHTML(badge.text)}</span>
                             <span class="search-code-file-name">${escapeHTML(baseName)}</span>
                             <span class="search-code-file-path">${escapeHTML(dirPath)}</span>
                         </div>
@@ -1641,13 +1685,12 @@ class RightPanelManager {
         }
 
         const splitLayoutHtml = `
-            <div class="search-split-container">
+            <div class="search-split-container" id="searchSplitContainer">
                 <!-- Left Column: Files & Code matches -->
-                <div class="search-details-pane">
+                <div class="search-details-pane" style="flex: 0 0 ${this.searchSplitPercent}%; width: ${this.searchSplitPercent}%;">
                     <div class="search-section">
                         <div class="search-section-header">
                             <span class="search-section-title">Files</span>
-                            <span class="search-section-count">${matchingFiles.length}</span>
                         </div>
                         <div class="search-files-list">
                             ${filesHtml}
@@ -1656,7 +1699,6 @@ class RightPanelManager {
                     <div class="search-section">
                         <div class="search-section-header">
                             <span class="search-section-title">Code</span>
-                            <span class="search-section-count">${matchingCode.length}</span>
                         </div>
                         <div class="search-code-list">
                             ${codeHtml}
@@ -1664,8 +1706,11 @@ class RightPanelManager {
                     </div>
                 </div>
 
+                <!-- Column Splitter Resizer (Draggable to resize files panel) -->
+                <div class="search-col-resizer" id="searchColResizer" title="Drag to resize"></div>
+
                 <!-- Right Column: Collapsible File Tree -->
-                <div class="search-tree-pane">
+                <div class="search-tree-pane" style="flex: 1 1 ${100 - this.searchSplitPercent}%;">
                     <div class="search-section-header">
                         <span class="search-section-title">Tree</span>
                     </div>
@@ -1689,6 +1734,91 @@ class RightPanelManager {
         const treeCont = this.searchResultsEl.querySelector("#launcherTreeContainer");
         if (treeCont) {
             this.bindTreeContainerClicks(treeCont, true, "");
+        }
+
+        // Interactive Column Resizer between Files & Tree
+        const colResizer = this.searchResultsEl.querySelector("#searchColResizer");
+        const leftPane = this.searchResultsEl.querySelector(".search-details-pane");
+        const rightPane = this.searchResultsEl.querySelector(".search-tree-pane");
+        const splitCont = this.searchResultsEl.querySelector("#searchSplitContainer");
+
+        if (colResizer && leftPane && rightPane && splitCont) {
+            let isColDragging = false;
+
+            const updateSplit = (clientX) => {
+                const rect = splitCont.getBoundingClientRect();
+                if (rect.width <= 0) return;
+                const offsetX = clientX - rect.left;
+                const percent = Math.max(15, Math.min(85, (offsetX / rect.width) * 100));
+                this.searchSplitPercent = percent;
+                leftPane.style.flex = `0 0 ${percent}%`;
+                leftPane.style.width = `${percent}%`;
+                rightPane.style.flex = `1 1 ${100 - percent}%`;
+            };
+
+            const onMouseMove = (moveEvt) => {
+                if (!isColDragging) return;
+                updateSplit(moveEvt.clientX);
+            };
+
+            const onMouseUp = () => {
+                if (!isColDragging) return;
+                isColDragging = false;
+                this.isResizing = false;
+                this.justFinishedResizing = true;
+                setTimeout(() => { this.justFinishedResizing = false; }, 200);
+                colResizer.classList.remove("is-dragging");
+                document.body.classList.remove("right-panel-resizing");
+                document.body.style.cursor = "";
+                document.body.style.userSelect = "";
+                document.removeEventListener("mousemove", onMouseMove);
+                document.removeEventListener("mouseup", onMouseUp);
+                try {
+                    localStorage.setItem("multiai_search_split_percent", String(this.searchSplitPercent));
+                } catch (_) {}
+            };
+
+            colResizer.addEventListener("mousedown", (downEvt) => {
+                downEvt.preventDefault();
+                downEvt.stopPropagation();
+                isColDragging = true;
+                this.isResizing = true;
+                colResizer.classList.add("is-dragging");
+                document.body.classList.add("right-panel-resizing");
+                document.body.style.cursor = "col-resize";
+                document.body.style.userSelect = "none";
+                document.addEventListener("mousemove", onMouseMove);
+                document.addEventListener("mouseup", onMouseUp);
+            });
+
+            // Touch support for column resizer
+            const onTouchMove = (tEvt) => {
+                if (!isColDragging || !tEvt.touches || !tEvt.touches[0]) return;
+                updateSplit(tEvt.touches[0].clientX);
+            };
+            const onTouchEnd = () => {
+                if (!isColDragging) return;
+                isColDragging = false;
+                this.isResizing = false;
+                this.justFinishedResizing = true;
+                setTimeout(() => { this.justFinishedResizing = false; }, 200);
+                colResizer.classList.remove("is-dragging");
+                document.body.classList.remove("right-panel-resizing");
+                document.removeEventListener("touchmove", onTouchMove);
+                document.removeEventListener("touchend", onTouchEnd);
+                try {
+                    localStorage.setItem("multiai_search_split_percent", String(this.searchSplitPercent));
+                } catch (_) {}
+            };
+            colResizer.addEventListener("touchstart", (downEvt) => {
+                if (!downEvt.touches || !downEvt.touches[0]) return;
+                isColDragging = true;
+                this.isResizing = true;
+                colResizer.classList.add("is-dragging");
+                document.body.classList.add("right-panel-resizing");
+                document.addEventListener("touchmove", onTouchMove, { passive: true });
+                document.addEventListener("touchend", onTouchEnd);
+            }, { passive: true });
         }
 
         this.searchResultsEl.querySelectorAll('.search-file-item[data-action="open-file"]').forEach((item) => {
