@@ -109,14 +109,26 @@ async function runTests() {
         assert.ok(fs.existsSync(loaded.workspace.messagesFile), "messages.jsonl must be materialized on disk");
         assert.ok(fs.existsSync(loaded.workspace.metaFile), "meta.json must be materialized on disk");
 
-        // Test 4: Second read now resolves locally from disk without calling cloud
+        // Test 4: On every load, getChat reloads fresh directly from cloud
         let cloudCalled = false;
-        supabaseStorage.getChat = async () => { cloudCalled = true; return null; };
+        supabaseStorage.getChat = async (id) => {
+            cloudCalled = true;
+            return {
+                id,
+                title: "Updated Cloud Title",
+                mode: "chat",
+                messages: [
+                    { role: "system", content: "You are an assistant." },
+                    { role: "user", content: "Fresh message from cloud" }
+                ]
+            };
+        };
         const secondLoad = await convManager.getChat("chat_cloud_001");
-        assert.ok(secondLoad, "Chat should be cached on disk");
-        assert.strictEqual(secondLoad.session.messages.length, 3);
-        assert.strictEqual(cloudCalled, false, "Local disk cache should be used for subsequent reads");
-        console.log("✓ Test 3 & 4: getChat hydrates cloud conversations and caches them to container disk");
+        assert.ok(secondLoad, "Chat should be returned");
+        assert.strictEqual(cloudCalled, true, "Must query cloud directly on every load");
+        assert.strictEqual(secondLoad.session.title, "Updated Cloud Title", "Must use fresh cloud state");
+        assert.strictEqual(secondLoad.session.messages.length, 2);
+        console.log("✓ Test 3 & 4: getChat reloads fresh from cloud on every request");
 
         console.log("✓ ALL CLOUD CHATS CROSS-DEVICE SYNC TESTS PASSED!");
     } finally {

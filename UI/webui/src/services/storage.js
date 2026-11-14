@@ -89,65 +89,40 @@ export function loadStoredChats() {
 }
 
 /**
- * Asynchronously synchronizes chats from $HOME/.MuktiAI/conversations/
+ * Asynchronously reloads all conversations fresh from Supabase Cloud.
  */
 export async function syncFromBackendDisk() {
     try {
         const res = await fetch("/api/chats");
         if (!res.ok) return;
         const data = await res.json();
-        if (Array.isArray(data.chats) && data.chats.length > 0) {
-            let changed = false;
-            for (const diskChat of data.chats) {
-                if (!diskChat || !diskChat.id) continue;
-                diskChat.source = diskChat.source || "supabase";
-                diskChat.fromBackend = true;
-                const existing = state.chatSessions[diskChat.id];
-                if (!existing) {
-                    state.chatSessions[diskChat.id] = diskChat;
-                    changed = true;
+        if (Array.isArray(data.chats)) {
+            const nextSessions = {};
+            for (const cloudChat of data.chats) {
+                if (!cloudChat || !cloudChat.id) continue;
+                cloudChat.source = "supabase";
+                cloudChat.fromBackend = true;
+                const existing = state.chatSessions[cloudChat.id];
+                if (existing) {
+                    if (existing.messages && existing.messages.length > 0 && (!cloudChat.messages || cloudChat.messages.length === 0)) {
+                        cloudChat.messages = existing.messages;
+                    }
+                    if (existing.compactionState && !cloudChat.compactionState) {
+                        cloudChat.compactionState = existing.compactionState;
+                    }
+                    nextSessions[cloudChat.id] = { ...existing, ...cloudChat };
                 } else {
-                    existing.source = existing.source || "supabase";
-                    existing.fromBackend = true;
-                    if (diskChat.messageCount && (!existing.messageCount || diskChat.messageCount > existing.messageCount)) {
-                        existing.messageCount = diskChat.messageCount;
-                    }
-                    if (!existing.workspace && diskChat.workspace) {
-                        existing.workspace = diskChat.workspace;
-                        changed = true;
-                    }
-                    if ((diskChat.updatedAt || 0) > (existing.updatedAt || 0)) {
-                        // CRITICAL: NEVER overwrite existing in-memory messages with undefined/empty!
-                        if ((!diskChat.messages || diskChat.messages.length === 0) && (existing.messages && existing.messages.length > 0)) {
-                            diskChat.messages = existing.messages;
-                        }
-                        if (existing.title && (!diskChat.title || diskChat.title === "Conversation")) {
-                            diskChat.title = existing.title;
-                        }
-                        if (existing.compactionState && !diskChat.compactionState) {
-                            diskChat.compactionState = existing.compactionState;
-                        }
-                        state.chatSessions[diskChat.id] = { ...existing, ...diskChat };
-                        changed = true;
-                    } else if ((!existing.messages || existing.messages.length === 0) && diskChat.messages && diskChat.messages.length > 0) {
-                        existing.messages = diskChat.messages;
-                        if (diskChat.compactionState && !existing.compactionState) {
-                            existing.compactionState = diskChat.compactionState;
-                        }
-                        changed = true;
-                    }
+                    nextSessions[cloudChat.id] = cloudChat;
                 }
             }
-
-            if (changed) {
-                try {
-                    localStorage.setItem(CHATS_STORAGE_KEY, JSON.stringify(state.chatSessions));
-                } catch (_) {}
-                document.dispatchEvent(new CustomEvent("chatsUpdated"));
-            }
+            state.chatSessions = nextSessions;
+            try {
+                localStorage.setItem(CHATS_STORAGE_KEY, JSON.stringify(state.chatSessions));
+            } catch (_) {}
+            document.dispatchEvent(new CustomEvent("chatsUpdated"));
         }
     } catch (err) {
-        console.warn("[STORAGE] Backend chats sync error:", err.message);
+        console.warn("[STORAGE] Cloud chats reload error:", err.message);
     }
 }
 
