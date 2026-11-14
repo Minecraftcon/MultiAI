@@ -252,7 +252,34 @@ export function populateSettingsValues() {
     if (themeSelect) themeSelect.value = ui.Theme || "dark";
 
     const accentSelect = document.getElementById("cfgAccent");
-    if (accentSelect) accentSelect.value = ui.Accent || localStorage.getItem("multiai_accent") || "warm";
+    const accentPanel = document.getElementById("accentCreatorPanel");
+    const currentAccent = ui.Accent || localStorage.getItem("multiai_accent") || "warm";
+    if (accentSelect) {
+        accentSelect.value = currentAccent;
+        if (accentPanel) {
+            accentPanel.style.display = currentAccent === "custom" ? "flex" : "none";
+        }
+    }
+
+    // Populate custom accent inputs
+    const customAccent = getCustomAccentConfig();
+    const customAccentColor = document.getElementById("cfgCustomAccentColor");
+    const customAccentPicker = document.getElementById("cfgCustomAccentPicker");
+    const customBgColor = document.getElementById("cfgCustomBgColor");
+    const customBgPicker = document.getElementById("cfgCustomBgPicker");
+    const customSurfaceColor = document.getElementById("cfgCustomSurfaceColor");
+    const customSurfacePicker = document.getElementById("cfgCustomSurfacePicker");
+    const customSendBgColor = document.getElementById("cfgCustomSendBgColor");
+    const customSendBgPicker = document.getElementById("cfgCustomSendBgPicker");
+
+    if (customAccentColor) customAccentColor.value = customAccent.accent;
+    if (customAccentPicker) customAccentPicker.value = customAccent.accent;
+    if (customBgColor) customBgColor.value = customAccent.bg;
+    if (customBgPicker) customBgPicker.value = customAccent.bg;
+    if (customSurfaceColor) customSurfaceColor.value = customAccent.surface;
+    if (customSurfacePicker) customSurfacePicker.value = customAccent.surface;
+    if (customSendBgColor) customSendBgColor.value = customAccent.sendBg;
+    if (customSendBgPicker) customSendBgPicker.value = customAccent.sendBg;
 
     const auroraThemeSelect = document.getElementById("cfgAuroraTheme");
     if (auroraThemeSelect) {
@@ -698,11 +725,76 @@ export function initSettingsView() {
     }
 
     const accentSelect = document.getElementById("cfgAccent");
+    const accentPanel = document.getElementById("accentCreatorPanel");
     if (accentSelect) {
         accentSelect.addEventListener("change", (e) => {
             const val = e.target.value;
             saveSetting("UI", "Accent", val);
             applyAccent(val);
+            if (accentPanel) {
+                accentPanel.style.display = val === "custom" ? "flex" : "none";
+            }
+        });
+    }
+
+    // Custom Accent Creator Event Listeners
+    const saveCustomAccentConfig = (cfg) => {
+        try {
+            localStorage.setItem("multiai_custom_accent", JSON.stringify(cfg));
+        } catch (_) {}
+        applyCustomAccentVariables(cfg);
+    };
+
+    const bindColorPair = (textInputId, pickerInputId, key) => {
+        const textEl = document.getElementById(textInputId);
+        const pickerEl = document.getElementById(pickerInputId);
+        if (!textEl || !pickerEl) return;
+
+        const syncValue = (val) => {
+            if (!val.startsWith("#")) val = "#" + val;
+            textEl.value = val.toUpperCase();
+            pickerEl.value = val;
+            const current = getCustomAccentConfig();
+            current[key] = val;
+            saveCustomAccentConfig(current);
+        };
+
+        pickerEl.addEventListener("input", (e) => syncValue(e.target.value));
+        textEl.addEventListener("change", (e) => syncValue(e.target.value));
+    };
+
+    bindColorPair("cfgCustomAccentColor", "cfgCustomAccentPicker", "accent");
+    bindColorPair("cfgCustomBgColor", "cfgCustomBgPicker", "bg");
+    bindColorPair("cfgCustomSurfaceColor", "cfgCustomSurfacePicker", "surface");
+    bindColorPair("cfgCustomSendBgColor", "cfgCustomSendBgPicker", "sendBg");
+
+    const accentResetBtn = document.getElementById("accentResetDefaultBtn");
+    if (accentResetBtn) {
+        accentResetBtn.addEventListener("click", () => {
+            const defaults = {
+                accent: "#3b82f6",
+                bg: "#0f0f0f",
+                surface: "#161618",
+                sendBg: "#f4f4f5"
+            };
+            saveCustomAccentConfig(defaults);
+            const ca = document.getElementById("cfgCustomAccentColor");
+            const cap = document.getElementById("cfgCustomAccentPicker");
+            const cb = document.getElementById("cfgCustomBgColor");
+            const cbp = document.getElementById("cfgCustomBgPicker");
+            const cs = document.getElementById("cfgCustomSurfaceColor");
+            const csp = document.getElementById("cfgCustomSurfacePicker");
+            const csend = document.getElementById("cfgCustomSendBgColor");
+            const csendp = document.getElementById("cfgCustomSendBgPicker");
+
+            if (ca) ca.value = defaults.accent;
+            if (cap) cap.value = defaults.accent;
+            if (cb) cb.value = defaults.bg;
+            if (cbp) cbp.value = defaults.bg;
+            if (cs) cs.value = defaults.surface;
+            if (csp) csp.value = defaults.surface;
+            if (csend) csend.value = defaults.sendBg;
+            if (csendp) csendp.value = defaults.sendBg;
         });
     }
 
@@ -1322,14 +1414,101 @@ export function applyTheme(val) {
 /* =========================================================
    GLOBAL ACCENT APPLICATION HELPER (TOP-LEVEL EXPORT)
    ========================================================= */
+export function getCustomAccentConfig() {
+    try {
+        const raw = localStorage.getItem("multiai_custom_accent");
+        if (raw) return JSON.parse(raw);
+    } catch (_) {}
+    return {
+        accent: "#3b82f6",
+        bg: "#0f0f0f",
+        surface: "#161618",
+        sendBg: "#f4f4f5"
+    };
+}
+
+export function hexToRgba(hex, alpha) {
+    if (!hex || typeof hex !== "string") return `rgba(255, 255, 255, ${alpha})`;
+    let clean = hex.replace("#", "").trim();
+    if (clean.length === 3) {
+        clean = clean.split("").map(c => c + c).join("");
+    }
+    if (clean.length !== 6) return `rgba(255, 255, 255, ${alpha})`;
+    const num = parseInt(clean, 16);
+    const r = (num >> 16) & 255;
+    const g = (num >> 8) & 255;
+    const b = num & 255;
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+export function applyCustomAccentVariables(cfg) {
+    if (!cfg) cfg = getCustomAccentConfig();
+    const root = document.documentElement;
+    const accent = cfg.accent || "#3b82f6";
+    const bg = cfg.bg || "#0f0f0f";
+    const surface = cfg.surface || "#161618";
+    const sendBg = cfg.sendBg || accent;
+
+    root.style.setProperty("--custom-accent", accent);
+    root.style.setProperty("--custom-accent-hover", accent);
+    root.style.setProperty("--custom-accent-subtle", hexToRgba(accent, 0.12));
+    root.style.setProperty("--custom-accent-muted", hexToRgba(accent, 0.22));
+    root.style.setProperty("--custom-accent-mid", hexToRgba(accent, 0.38));
+
+    root.style.setProperty("--custom-bg", bg);
+    root.style.setProperty("--custom-bg-alt", hexToRgba(bg, 0.95));
+    root.style.setProperty("--custom-surface", surface);
+
+    // Subtle border tinting based on the accent tone
+    root.style.setProperty("--custom-border", hexToRgba(accent, 0.15));
+    root.style.setProperty("--custom-border-strong", hexToRgba(accent, 0.30));
+    root.style.setProperty("--custom-border-subtle", hexToRgba(accent, 0.08));
+
+    root.style.setProperty("--custom-send-bg", sendBg);
+    root.style.setProperty("--custom-send-fg", isColorDark(sendBg) ? "#ffffff" : "#09090b");
+}
+
+function isColorDark(hex) {
+    if (!hex || typeof hex !== "string") return true;
+    let clean = hex.replace("#", "").trim();
+    if (clean.length === 3) clean = clean.split("").map(c => c + c).join("");
+    if (clean.length !== 6) return true;
+    const num = parseInt(clean, 16);
+    const r = (num >> 16) & 255;
+    const g = (num >> 8) & 255;
+    const b = num & 255;
+    const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    return luma < 140;
+}
+
 export function applyAccent(val) {
-    if (!val || (val !== "blue" && val !== "sage" && val !== "warm")) {
+    if (!val || (val !== "blue" && val !== "sage" && val !== "warm" && val !== "custom")) {
         val = "warm";
     }
     document.documentElement.setAttribute("data-accent", val);
     try {
         localStorage.setItem("multiai_accent", val);
     } catch (e) {}
+
+    if (val === "custom") {
+        applyCustomAccentVariables();
+    } else {
+        const root = document.documentElement;
+        root.style.removeProperty("--custom-accent");
+        root.style.removeProperty("--custom-accent-hover");
+        root.style.removeProperty("--custom-accent-subtle");
+        root.style.removeProperty("--custom-accent-muted");
+        root.style.removeProperty("--custom-accent-mid");
+        root.style.removeProperty("--custom-bg");
+        root.style.removeProperty("--custom-bg-alt");
+        root.style.removeProperty("--custom-surface");
+        root.style.removeProperty("--custom-border");
+        root.style.removeProperty("--custom-border-strong");
+        root.style.removeProperty("--custom-border-subtle");
+        root.style.removeProperty("--custom-send-bg");
+        root.style.removeProperty("--custom-send-fg");
+    }
+
     window.dispatchEvent(new CustomEvent("multiai-accent-changed", { detail: { accent: val } }));
 }
 

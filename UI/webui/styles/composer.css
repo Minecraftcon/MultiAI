@@ -150,7 +150,7 @@
 }
 
 .chatbox-model-btn:hover {
-    background: var(--hover-3);
+    background: var(--accent-subtle, var(--hover-3));
     border-color: var(--border-strong);
     color: var(--text-primary);
 }
@@ -160,7 +160,7 @@
 }
 
 .chatbox-model-btn.is-open {
-    background: var(--hover-3);
+    background: var(--accent-subtle, var(--hover-3));
     border-color: var(--border-strong);
     color: var(--text-primary);
 }

@@ -488,7 +488,54 @@ export function getSettingsHTML() {
                                 <option value="blue">Ocean Blue (Minimal Sky)</option>
                                 <option value="sage">Sage Green (Botanical Muted)</option>
                                 <option value="warm">Monochrome Warm (Zinc / Warm Neutral)</option>
+                                <option value="custom">Custom Studio (Creator Mode)</option>
                             </select>
+                        </div>
+
+                        <!-- Custom Accent Creator Studio Panel -->
+                        <div id="accentCreatorPanel" class="accent-creator-box" style="display: none;">
+                            <div class="accent-creator-header">
+                                <span class="accent-creator-title">Custom Accent Creator</span>
+                                <button type="button" id="accentResetDefaultBtn" class="accent-creator-reset-btn">Reset Defaults</button>
+                            </div>
+                            <div class="accent-creator-grid">
+                                <div class="accent-creator-field">
+                                    <label class="accent-field-label" for="cfgCustomAccentColor">Accent Tone</label>
+                                    <div class="accent-input-wrap">
+                                        <input type="color" id="cfgCustomAccentPicker" class="accent-color-picker" value="#3b82f6" />
+                                        <input type="text" id="cfgCustomAccentColor" class="accent-hex-input" value="#3b82f6" spellcheck="false" />
+                                    </div>
+                                </div>
+                                <div class="accent-creator-field">
+                                    <label class="accent-field-label" for="cfgCustomBgColor">Canvas Background</label>
+                                    <div class="accent-input-wrap">
+                                        <input type="color" id="cfgCustomBgPicker" class="accent-color-picker" value="#0f0f0f" />
+                                        <input type="text" id="cfgCustomBgColor" class="accent-hex-input" value="#0f0f0f" spellcheck="false" />
+                                    </div>
+                                </div>
+                                <div class="accent-creator-field">
+                                    <label class="accent-field-label" for="cfgCustomSurfaceColor">Surface / Cards</label>
+                                    <div class="accent-input-wrap">
+                                        <input type="color" id="cfgCustomSurfacePicker" class="accent-color-picker" value="#161618" />
+                                        <input type="text" id="cfgCustomSurfaceColor" class="accent-hex-input" value="#161618" spellcheck="false" />
+                                    </div>
+                                </div>
+                                <div class="accent-creator-field">
+                                    <label class="accent-field-label" for="cfgCustomSendBgColor">Send Button / CTA</label>
+                                    <div class="accent-input-wrap">
+                                        <input type="color" id="cfgCustomSendBgPicker" class="accent-color-picker" value="#f4f4f5" />
+                                        <input type="text" id="cfgCustomSendBgColor" class="accent-hex-input" value="#f4f4f5" spellcheck="false" />
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="accent-creator-preview">
+                                <span class="accent-preview-label">Live Preview:</span>
+                                <div class="accent-preview-elements">
+                                    <button type="button" class="accent-preview-btn">Interactive Button</button>
+                                    <div class="accent-preview-pill">Model Selector Pill</div>
+                                    <div class="accent-preview-border">Tinted Border</div>
+                                </div>
+                            </div>
                         </div>
 
                         <div class="settings-row">

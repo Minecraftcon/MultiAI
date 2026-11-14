@@ -360,7 +360,7 @@ class RightPanelManager {
 
         this.isOpen = true;
         if (this.panelEl) {
-            this.panelEl.classList.add("animate-transition");
+            this.panelEl.setAttribute("aria-hidden", "false");
         }
         document.body.classList.add("right-panel-open");
         if (this.backdropEl) {
@@ -380,7 +380,7 @@ class RightPanelManager {
     close() {
         this.isOpen = false;
         if (this.panelEl) {
-            this.panelEl.classList.add("animate-transition");
+            this.panelEl.setAttribute("aria-hidden", "true");
         }
         document.body.classList.remove("right-panel-open");
         if (this.backdropEl) {
@@ -445,7 +445,7 @@ class RightPanelManager {
             } else if (tab.type === "terminal") {
                 iconOrBadgeHtml = '<i data-lucide="square-terminal"></i>';
             } else if (tab.type === "browser") {
-                iconOrBadgeHtml = '<i data-lucide="globe" style="color: #86efac;"></i>';
+                iconOrBadgeHtml = '<i data-lucide="globe"></i>';
             } else if (tab.type === "extensions") {
                 iconOrBadgeHtml = '<i data-lucide="puzzle" style="color: #fca5a5;"></i>';
             } else if (tab.path) {
@@ -1252,7 +1252,7 @@ class RightPanelManager {
             this.searchResultsEl.innerHTML = `
                 <div class="search-result-item" data-action="url" data-val="${escapeHTML(query)}">
                     <div class="search-result-left">
-                        <i data-lucide="globe" style="color: #86efac;"></i>
+                        <i data-lucide="globe"></i>
                         <span>Open URL: <strong>${escapeHTML(query)}</strong></span>
                     </div>
                     <span class="search-result-badge">web</span>

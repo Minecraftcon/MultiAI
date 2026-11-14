@@ -43,7 +43,7 @@
     --accent-mid: rgba(59, 130, 246, 0.38);
 
     /* Button specific tokens */
-    --send-btn-bg: #f4f4f5;
+    --send-btn-bg: var(--accent);
     --send-btn-fg: #09090b;
 
     /* States & Overlays */
@@ -312,6 +312,11 @@
     --accent-subtle: rgba(59, 130, 246, 0.12);
     --accent-muted: rgba(59, 130, 246, 0.22);
     --accent-mid: rgba(59, 130, 246, 0.38);
+    --border: rgba(59, 130, 246, 0.14);
+    --border-strong: rgba(59, 130, 246, 0.28);
+    --border-subtle: rgba(59, 130, 246, 0.07);
+    --send-btn-bg: #3b82f6;
+    --send-btn-fg: #ffffff;
     --stat-add: #60a5fa;
     --stat-del: rgba(255, 255, 255, 0.45);
 }
@@ -323,6 +328,11 @@
     --accent-subtle: rgba(56, 189, 248, 0.10);
     --accent-muted: rgba(56, 189, 248, 0.20);
     --accent-mid: rgba(56, 189, 248, 0.35);
+    --border: rgba(56, 189, 248, 0.12);
+    --border-strong: rgba(56, 189, 248, 0.24);
+    --border-subtle: rgba(56, 189, 248, 0.06);
+    --send-btn-bg: #38bdf8;
+    --send-btn-fg: #000000;
     --stat-add: #38bdf8;
     --stat-del: rgba(255, 255, 255, 0.4);
 }
@@ -333,6 +343,11 @@
     --accent-subtle: rgba(37, 99, 235, 0.08);
     --accent-muted: rgba(37, 99, 235, 0.16);
     --accent-mid: rgba(37, 99, 235, 0.30);
+    --border: rgba(37, 99, 235, 0.14);
+    --border-strong: rgba(37, 99, 235, 0.28);
+    --border-subtle: rgba(37, 99, 235, 0.06);
+    --send-btn-bg: #2563eb;
+    --send-btn-fg: #ffffff;
     --stat-add: #2563eb;
     --stat-del: rgba(0, 0, 0, 0.45);
 }
@@ -344,6 +359,11 @@
     --accent-subtle: rgba(74, 222, 128, 0.12);
     --accent-muted: rgba(74, 222, 128, 0.22);
     --accent-mid: rgba(74, 222, 128, 0.38);
+    --border: rgba(74, 222, 128, 0.14);
+    --border-strong: rgba(74, 222, 128, 0.28);
+    --border-subtle: rgba(74, 222, 128, 0.07);
+    --send-btn-bg: #4ade80;
+    --send-btn-fg: #09090b;
     --stat-add: #4ade80;
     --stat-del: rgba(255, 255, 255, 0.45);
 }
@@ -354,6 +374,11 @@
     --accent-subtle: rgba(74, 222, 128, 0.10);
     --accent-muted: rgba(74, 222, 128, 0.20);
     --accent-mid: rgba(74, 222, 128, 0.35);
+    --border: rgba(74, 222, 128, 0.12);
+    --border-strong: rgba(74, 222, 128, 0.24);
+    --border-subtle: rgba(74, 222, 128, 0.06);
+    --send-btn-bg: #4ade80;
+    --send-btn-fg: #000000;
     --stat-add: #4ade80;
     --stat-del: rgba(255, 255, 255, 0.4);
 }
@@ -364,6 +389,11 @@
     --accent-subtle: rgba(22, 163, 74, 0.08);
     --accent-muted: rgba(22, 163, 74, 0.16);
     --accent-mid: rgba(22, 163, 74, 0.30);
+    --border: rgba(22, 163, 74, 0.14);
+    --border-strong: rgba(22, 163, 74, 0.28);
+    --border-subtle: rgba(22, 163, 74, 0.06);
+    --send-btn-bg: #16a34a;
+    --send-btn-fg: #ffffff;
     --stat-add: #16a34a;
     --stat-del: rgba(0, 0, 0, 0.45);
 }
@@ -375,6 +405,11 @@
     --accent-subtle: rgba(255, 255, 255, 0.08);
     --accent-muted: rgba(255, 255, 255, 0.16);
     --accent-mid: rgba(255, 255, 255, 0.28);
+    --border: rgba(255, 255, 255, 0.09);
+    --border-strong: rgba(255, 255, 255, 0.18);
+    --border-subtle: rgba(255, 255, 255, 0.05);
+    --send-btn-bg: #f4f4f5;
+    --send-btn-fg: #09090b;
     --stat-add: #e4e4e7;
     --stat-del: rgba(255, 255, 255, 0.45);
 }
@@ -385,6 +420,11 @@
     --accent-subtle: rgba(255, 255, 255, 0.07);
     --accent-muted: rgba(255, 255, 255, 0.15);
     --accent-mid: rgba(255, 255, 255, 0.25);
+    --border: rgba(255, 255, 255, 0.08);
+    --border-strong: rgba(255, 255, 255, 0.16);
+    --border-subtle: rgba(255, 255, 255, 0.04);
+    --send-btn-bg: #f8fafc;
+    --send-btn-fg: #000000;
     --stat-add: #f4f4f5;
     --stat-del: rgba(255, 255, 255, 0.4);
 }
@@ -395,6 +435,32 @@
     --accent-subtle: rgba(0, 0, 0, 0.06);
     --accent-muted: rgba(0, 0, 0, 0.12);
     --accent-mid: rgba(0, 0, 0, 0.24);
+    --border: rgba(0, 0, 0, 0.10);
+    --border-strong: rgba(0, 0, 0, 0.20);
+    --border-subtle: rgba(0, 0, 0, 0.06);
+    --send-btn-bg: #09090b;
+    --send-btn-fg: #ffffff;
     --stat-add: #18181b;
     --stat-del: rgba(0, 0, 0, 0.45);
+}
+
+/* 4. Custom User Created Accent (Live dynamic overrides) */
+:root[data-accent="custom"] {
+    --accent: var(--custom-accent, #3b82f6);
+    --accent-hover: var(--custom-accent-hover, #60a5fa);
+    --accent-subtle: var(--custom-accent-subtle, rgba(59, 130, 246, 0.12));
+    --accent-muted: var(--custom-accent-muted, rgba(59, 130, 246, 0.22));
+    --accent-mid: var(--custom-accent-mid, rgba(59, 130, 246, 0.38));
+    --bg: var(--custom-bg, #0f0f0f);
+    --bg-alt: var(--custom-bg-alt, #141414);
+    --surface: var(--custom-surface, #161618);
+    --card-bg: var(--custom-surface, #161618);
+    --modal-bg: var(--custom-surface, #161618);
+    --border: var(--custom-border, rgba(59, 130, 246, 0.14));
+    --border-strong: var(--custom-border-strong, rgba(59, 130, 246, 0.28));
+    --border-subtle: var(--custom-border-subtle, rgba(59, 130, 246, 0.07));
+    --send-btn-bg: var(--custom-send-bg, var(--accent));
+    --send-btn-fg: var(--custom-send-fg, #ffffff);
+    --stat-add: var(--accent);
+    --stat-del: rgba(255, 255, 255, 0.45);
 }

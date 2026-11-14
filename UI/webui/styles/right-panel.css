@@ -12,58 +12,46 @@
     position: fixed;
     top: 0;
     right: 0;
-    bottom: 0;
     width: var(--right-panel-width);
     max-width: 92vw;
     height: 100%;
-    height: 100dvh;
+    height: calc(100dvh / var(--ui-scale, 1));
     padding-top: env(safe-area-inset-top, 0px);
     padding-bottom: env(safe-area-inset-bottom, 0px);
-    background: var(--bg);
+    background: var(--surface);
     border-left: 1px solid var(--border);
     display: flex;
     flex-direction: column;
-    z-index: 75;
-    transform: translate3d(100%, 0, 0);
+    z-index: 40;
+    transform: translateX(100%);
     will-change: transform;
-    backface-visibility: hidden;
-    -webkit-backface-visibility: hidden;
-    contain: layout style;
-    box-shadow: -6px 0 28px rgba(0, 0, 0, 0.16);
+    font-family: inherit;
+    box-shadow: -8px 0 36px var(--scrim);
     user-select: none;
     -webkit-user-select: none;
     visibility: hidden;
     pointer-events: none;
-}
-
-#rightPanel.animate-transition {
-    transition: transform var(--panel-speed, 0.32s) var(--panel-ease, cubic-bezier(0.2, 0.9, 0.3, 1)),
-                visibility 0s var(--panel-speed, 0.32s);
+    transition: transform var(--panel-speed) var(--panel-ease), visibility 0s var(--panel-speed);
 }
 
 body.right-panel-open #rightPanel {
-    transform: translate3d(0, 0, 0);
+    transform: translateX(0);
     visibility: visible;
     pointer-events: auto;
-}
-
-body.right-panel-open #rightPanel.animate-transition {
-    transition: transform var(--panel-speed, 0.32s) var(--panel-ease, cubic-bezier(0.2, 0.9, 0.3, 1)),
-                visibility 0s 0s;
+    transition: transform var(--panel-speed) var(--panel-ease), visibility 0s 0s;
 }
 
 /* ── Mobile/Tablet Backdrop (Below 900px) ─────────────────── */
 .right-panel-backdrop {
     position: fixed;
     inset: 0;
-    background: var(--scrim, rgba(0, 0, 0, 0.5));
+    background: var(--scrim);
     backdrop-filter: blur(2px);
     -webkit-backdrop-filter: blur(2px);
-    z-index: 70;
+    z-index: 39;
     opacity: 0;
     pointer-events: none;
-    will-change: opacity;
-    transition: opacity var(--panel-speed, 0.32s) var(--panel-ease, cubic-bezier(0.2, 0.9, 0.3, 1));
+    transition: opacity var(--panel-speed) var(--panel-ease);
 }
 
 @media (max-width: 899px) {
@@ -73,14 +61,16 @@ body.right-panel-open #rightPanel.animate-transition {
     }
 }
 
-@media (min-width: 900px) {
-    #appShell {
-        transition: width var(--panel-speed, 0.32s) var(--panel-ease, cubic-bezier(0.2, 0.9, 0.3, 1)),
-                    max-width var(--panel-speed, 0.32s) var(--panel-ease, cubic-bezier(0.2, 0.9, 0.3, 1)),
-                    margin var(--panel-speed, 0.32s) var(--panel-ease, cubic-bezier(0.2, 0.9, 0.3, 1));
-    }
+/* Desktop AppShell Resizing:
+   Pinned strictly to left (margin-left: 0), right side docks seamlessly without moving <header> or jumping #panelToggle!
+   Width and margin-right transition in perfect lockstep with #rightPanel's transform.
+   #chat and #inputArea naturally auto-scale within #appShell without scroll reflow jitter. */
+#appShell {
+    transition: width var(--panel-speed) var(--panel-ease),
+                margin-right var(--panel-speed) var(--panel-ease);
+}
 
-    /* Pinned strictly to left (margin-left: 0), right side docks seamlessly */
+@media (min-width: 900px) {
     body.right-panel-open #appShell {
         width: calc(100% - var(--right-panel-width)) !important;
         max-width: calc(100% - var(--right-panel-width)) !important;
@@ -130,8 +120,8 @@ body.right-panel-resizing #rightPanel {
 
 /* ── Panel Header (Top row matching chat background color) ── */
 .right-panel-header {
-    height: 42px;
-    padding: 0 8px 0 0;
+    height: 56px;
+    padding: 0 12px 0 0;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -139,6 +129,9 @@ body.right-panel-resizing #rightPanel {
     background: var(--bg) !important; /* User: same colour as chat background */
     flex-shrink: 0;
     overflow: hidden;
+    user-select: none;
+    position: relative;
+    z-index: 10;
 }
 
 /* VS Code-like Multi-Tab Strip */
@@ -306,15 +299,16 @@ body.right-panel-resizing #rightPanel {
 .right-panel-header-actions {
     display: flex;
     align-items: center;
-    gap: 2px;
+    gap: 4px;
     flex-shrink: 0;
-    margin-left: 6px;
+    margin-left: 8px;
 }
 
 .right-panel-action-btn {
-    width: 30px;
-    height: 30px;
-    border-radius: 6px;
+    position: relative;
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -322,22 +316,32 @@ body.right-panel-resizing #rightPanel {
     background: transparent;
     border: none;
     cursor: pointer;
-    transition: all 0.14s ease;
+    touch-action: manipulation;
+    transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
+    z-index: 12;
+}
+
+.right-panel-action-btn::after {
+    content: '';
+    position: absolute;
+    inset: -6px;
 }
 
 .right-panel-action-btn:hover {
     color: var(--text-primary);
-    background: var(--hover);
+    background: var(--border);
 }
 
 .right-panel-action-btn:active {
     transform: scale(0.95);
 }
 
+.right-panel-action-btn svg,
 .right-panel-action-btn i {
-    width: 15px;
-    height: 15px;
+    width: 18px;
+    height: 18px;
     stroke-width: 2;
+    pointer-events: none;
 }
 
 /* ── Panel Body ──────────────────────────────────────────── */
