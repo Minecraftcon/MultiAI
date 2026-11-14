@@ -55,23 +55,28 @@ class ChatBoxComponent {
         </div>
 
         <div class="composer-dock composer composer-compact" id="chatboxDock">
+            <!-- Top Resize Handle for Easy Vertical Resizing -->
+            <div class="composer-top-resizer" id="composerTopResizer" title="Drag to resize chatbox"></div>
             ${auraHtml}
 
             <!-- Top: Staged Attachments Strip -->
             <div id="stagedAttachments" class="staged-attachments-strip" style="display: none;"></div>
 
-            <!-- Top: Main textarea column -->
+            <!-- Top: Main textarea column with live syntax highlighter backdrop -->
             <div class="composer-main-col">
-                <textarea 
-                    id="input" 
-                    class="composer-textarea" 
-                    placeholder="Message AI…" 
-                    rows="1" 
-                    aria-label="Message AI"
-                    enterkeyhint="enter"
-                    autocomplete="off"
-                    autocorrect="on"
-                    spellcheck="true"></textarea>
+                <div class="composer-input-wrapper">
+                    <div id="composerHighlighter" class="composer-highlighter" aria-hidden="true"></div>
+                    <textarea 
+                        id="input" 
+                        class="composer-textarea" 
+                        placeholder="Message AI…" 
+                        rows="1" 
+                        aria-label="Message AI"
+                        enterkeyhint="enter"
+                        autocomplete="off"
+                        autocorrect="on"
+                        spellcheck="true"></textarea>
+                </div>
             </div>
 
             <!-- Bottom: Action Toolbar with Plus, Model Picker & Send -->
@@ -103,7 +108,7 @@ class ChatBoxComponent {
             </div>
         </div>
 
-        <!-- Start Page Footer (Visible only when in start page mode, positioned under left corner of chatbox) -->
+        <!-- Start Page Footer (Visible on start page mode for model & workspace selection) -->
         <div class="start-page-footer" id="startPageFooter">
             <button id="heroModelPickerBtn" class="hero-model-picker-btn" type="button" aria-haspopup="dialog" aria-expanded="false" title="Select AI Model">
                 <i data-lucide="bot" class="hero-model-icon"></i>
@@ -132,6 +137,7 @@ class ChatBoxComponent {
 
         this.root = this.container.querySelector("#chatboxDock");
         this.inputEl = this.container.querySelector("#input");
+        this.highlighterEl = this.container.querySelector("#composerHighlighter");
         this.sendBtn = this.container.querySelector("#send");
         this.attachBtn = this.container.querySelector("#attachSheetBtn");
         this.stagedStrip = this.container.querySelector("#stagedAttachments");
@@ -141,6 +147,7 @@ class ChatBoxComponent {
         this.chatboxModelPickerBtn = this.container.querySelector("#chatboxModelPickerBtn");
 
         this.bindEvents();
+        this.initComposerResizer();
         this.updateLayoutMode();
         updateStartPageHeroTitle();
         this.syncDeepSearchPill();
@@ -153,10 +160,18 @@ class ChatBoxComponent {
     bindEvents() {
         if (!this.inputEl) return;
 
-        // Auto-resize and adapt mode smoothly on input
+        // Auto-resize, update highlighter and adapt mode smoothly on input
         this.inputEl.addEventListener("input", () => {
             this.handleInputResize();
             this.updateInputMeta();
+            this.updateHighlighter();
+        });
+
+        this.inputEl.addEventListener("scroll", () => {
+            if (this.highlighterEl) {
+                this.highlighterEl.scrollTop = this.inputEl.scrollTop;
+                this.highlighterEl.scrollLeft = this.inputEl.scrollLeft;
+            }
         });
 
         this.inputEl.addEventListener("focus", () => {
@@ -182,6 +197,11 @@ class ChatBoxComponent {
             if (e.key === "Enter") {
                 if (this.isComposing || e.isComposing) return;
 
+                // Never send if a slash command or skills menu popup is active
+                if (document.getElementById("skillsMenuContainer")) {
+                    return;
+                }
+
                 if (isMobileBrowser()) {
                     // Mobile browsers: do NOT send on Enter.
                     // Allow the native textarea action to insert a newline.
@@ -195,6 +215,9 @@ class ChatBoxComponent {
                     this.triggerSend();
                 }
             } else if (e.key === "Escape") {
+                if (document.getElementById("skillsMenuContainer")) {
+                    return;
+                }
                 if (this.inputEl.value) {
                     e.preventDefault();
                     this.clearInput();
@@ -219,6 +242,70 @@ class ChatBoxComponent {
     }
 
     /**
+     * Initializes smooth vertical drag-to-resize on the chatbox top border.
+     */
+    initComposerResizer() {
+        const resizer = this.container.querySelector("#composerTopResizer");
+        if (!resizer || !this.inputEl || !this.root) return;
+
+        const savedHeight = parseInt(localStorage.getItem("multiai_composer_height"), 10);
+        if (savedHeight && savedHeight >= 22 && savedHeight <= 480) {
+            this.manualHeight = savedHeight;
+        }
+
+        let isDragging = false;
+        let startY = 0;
+        let startHeight = 0;
+
+        const onMouseMove = (e) => {
+            if (!isDragging) return;
+            const deltaY = startY - e.clientY; // Dragging UP increases height, DOWN decreases
+            const minH = 22; // Minimal compact height
+            const maxH = Math.min(window.innerHeight * 0.65, 480);
+            const newHeight = Math.max(minH, Math.min(maxH, startHeight + deltaY));
+
+            this.manualHeight = newHeight;
+            this.inputEl.style.height = `${newHeight}px`;
+
+            if (newHeight > 34) {
+                this.root.classList.remove("composer-compact");
+                this.root.classList.add("composer-expanded");
+                this.inputEl.style.overflowY = "auto";
+            } else {
+                this.root.classList.remove("composer-expanded");
+                this.root.classList.add("composer-compact");
+                this.inputEl.style.overflowY = "hidden";
+            }
+        };
+
+        const onMouseUp = () => {
+            if (!isDragging) return;
+            isDragging = false;
+            resizer.classList.remove("is-resizing");
+            document.body.style.cursor = "";
+            document.body.style.userSelect = "";
+            document.removeEventListener("mousemove", onMouseMove);
+            document.removeEventListener("mouseup", onMouseUp);
+
+            if (this.manualHeight) {
+                localStorage.setItem("multiai_composer_height", String(this.manualHeight));
+            }
+        };
+
+        resizer.addEventListener("mousedown", (e) => {
+            isDragging = true;
+            startY = e.clientY;
+            startHeight = this.inputEl.getBoundingClientRect().height;
+            resizer.classList.add("is-resizing");
+            document.body.style.cursor = "ns-resize";
+            document.body.style.userSelect = "none";
+            document.addEventListener("mousemove", onMouseMove);
+            document.addEventListener("mouseup", onMouseUp);
+            e.preventDefault();
+        });
+    }
+
+    /**
      * Smoothly calculates target height for the textarea and updates layout mode.
      * Supports explicit newlines (\n) AND natural text wrapping without newlines.
      * Keeps buttons anchored at the bottom while the top expands upwards.
@@ -227,12 +314,27 @@ class ChatBoxComponent {
         if (!this.inputEl || !this.root) return;
 
         const baseHeight = 24;
-        const maxHeight = 180;
+        const maxHeight = 240;
         const text = this.inputEl.value || "";
         const trimmedText = text.trim();
         const hasNewline = text.includes("\n");
         const hasStaged = this.hasAttachments || 
             (this.stagedStrip && this.stagedStrip.children.length > 0 && this.stagedStrip.style.display !== "none");
+
+        // If user manually resized the composer, respect it
+        if (this.manualHeight && !hasNewline) {
+            this.inputEl.style.height = `${this.manualHeight}px`;
+            if (this.manualHeight > 34) {
+                this.root.classList.remove("composer-compact");
+                this.root.classList.add("composer-expanded");
+                this.inputEl.style.overflowY = "auto";
+            } else {
+                this.root.classList.remove("composer-expanded");
+                this.root.classList.add("composer-compact");
+                this.inputEl.style.overflowY = "hidden";
+            }
+            return;
+        }
 
         // 1. Completely empty with no attachments: cleanly collapse to compact mode
         if (!trimmedText && !hasStaged) {
@@ -251,9 +353,8 @@ class ChatBoxComponent {
         this.inputEl.style.height = "auto";
         const scrollH = this.inputEl.scrollHeight;
 
-        // In expanded mode, padding is 4px top + 4px bottom and line-height ~22px -> ~30px for single line.
-        // Threshold for multiline wrap is > 32px or explicit newline
-        const threshold = this.root.classList.contains("composer-expanded") ? 32 : 28;
+        // In expanded mode, threshold for multiline wrap is > 34px or explicit newline
+        const threshold = 34;
         const isMultiLine = hasNewline || (scrollH > threshold);
         const shouldExpand = isMultiLine || hasStaged;
 
@@ -261,10 +362,9 @@ class ChatBoxComponent {
             if (!this.root.classList.contains("composer-expanded")) {
                 this.root.classList.remove("composer-compact");
                 this.root.classList.add("composer-expanded");
-                // Re-read scrollHeight since padding changes when expanding
                 this.inputEl.style.height = "auto";
             }
-            const targetHeight = Math.min(Math.max(this.inputEl.scrollHeight, 44), maxHeight);
+            const targetHeight = Math.min(Math.max(this.inputEl.scrollHeight, baseHeight), maxHeight);
             if (this.inputEl.style.height !== targetHeight + "px") {
                 this.inputEl.style.height = targetHeight + "px";
             }
@@ -329,6 +429,7 @@ class ChatBoxComponent {
             this.inputEl.value = val;
             this.handleInputResize();
             this.updateInputMeta();
+            this.updateHighlighter();
         }
     }
 
@@ -337,7 +438,46 @@ class ChatBoxComponent {
             this.inputEl.value = "";
             this.handleInputResize();
             this.updateInputMeta();
+            this.updateHighlighter();
         }
+    }
+
+    updateHighlighter() {
+        if (!this.highlighterEl || !this.inputEl) return;
+        const val = this.inputEl.value || "";
+        this.highlighterEl.scrollTop = this.inputEl.scrollTop;
+        this.highlighterEl.scrollLeft = this.inputEl.scrollLeft;
+
+        if (!val) {
+            this.highlighterEl.innerHTML = "";
+            return;
+        }
+
+        const skills = (typeof window !== "undefined" && window.__knownSkills) ? window.__knownSkills : [];
+        if (skills.length === 0) {
+            this.highlighterEl.innerHTML = escapeHTML(val);
+            return;
+        }
+
+        let html = escapeHTML(val);
+
+        // Highlight any recognized skill token (e.g. "> android-cli", "/android-cli", or "android-cli")
+        for (const skill of skills) {
+            const idEsc = escapeHTML(skill.id).replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
+            const nameEsc = escapeHTML(skill.name || "").replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
+            const variants = nameEsc && nameEsc !== idEsc ? `${idEsc}|${nameEsc}` : idEsc;
+            const regex = new RegExp(`(?:^|(?<=\\s))(?:\\/|&gt;|\\>)?\\s*(${variants})(?=\\s|$)`, "gi");
+
+            html = html.replace(regex, (fullMatch) => {
+                return `<mark class="chatbox-skill-token">${fullMatch}</mark>`;
+            });
+        }
+
+        if (val.endsWith("\n")) {
+            html += "<br>&nbsp;";
+        }
+
+        this.highlighterEl.innerHTML = html;
     }
 
     focus() {
@@ -354,7 +494,7 @@ class ChatBoxComponent {
             this.sendBtn.classList.add("generating");
             this.sendBtn.title = "Stop generation";
             this.sendBtn.setAttribute("aria-label", "Stop generation");
-            this.sendBtn.innerHTML = '<i data-lucide="square"></i>';
+            this.sendBtn.innerHTML = '<i data-lucide="square" class="stop-icon"></i>';
             renderIcons(this.sendBtn);
             this.inputEl.disabled = true;
             if (modelSelect) modelSelect.disabled = true;
@@ -377,31 +517,39 @@ class ChatBoxComponent {
      */
     setDeepSearchPill(active) {
         const pillsContainer = this.container?.querySelector("#composerModePills") || this.modePills;
-        const attachBtn = this.container?.querySelector("#attachSheetBtn") || this.attachBtn;
         if (!pillsContainer) return;
+
+        let deepSearchEl = pillsContainer.querySelector("#deepSearchPill");
 
         if (active) {
             pillsContainer.style.display = "flex";
-            pillsContainer.innerHTML = `
-                <div class="composer-mode-pill active" id="deepSearchPill" title="Deep Search Active (Click X to disable)">
+            if (!deepSearchEl) {
+                deepSearchEl = document.createElement("div");
+                deepSearchEl.className = "composer-mode-pill active";
+                deepSearchEl.id = "deepSearchPill";
+                deepSearchEl.title = "Deep Search Active (Click X to disable)";
+                deepSearchEl.innerHTML = `
                     <i data-lucide="compass"></i>
                     <span>Deep Search</span>
                     <button type="button" class="mode-pill-del" id="deepSearchPillRemove" aria-label="Remove Deep Search" title="Disable Deep Search">
                         <i data-lucide="x"></i>
                     </button>
-                </div>
-            `;
-            renderIcons(pillsContainer);
-            const removeBtn = pillsContainer.querySelector("#deepSearchPillRemove");
-            if (removeBtn) {
-                removeBtn.addEventListener("click", (e) => {
-                    e.stopPropagation();
-                    setDeepSearchActive(false);
-                });
+                `;
+                pillsContainer.prepend(deepSearchEl);
+                renderIcons(deepSearchEl);
+                const removeBtn = deepSearchEl.querySelector("#deepSearchPillRemove");
+                if (removeBtn) {
+                    removeBtn.addEventListener("click", (e) => {
+                        e.stopPropagation();
+                        setDeepSearchActive(false);
+                    });
+                }
             }
         } else {
-            pillsContainer.innerHTML = "";
-            pillsContainer.style.display = "none";
+            if (deepSearchEl) deepSearchEl.remove();
+            if (pillsContainer.children.length === 0) {
+                pillsContainer.style.display = "none";
+            }
         }
         this.handleInputResize();
     }

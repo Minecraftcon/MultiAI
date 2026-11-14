@@ -17,35 +17,87 @@
 }
 
 /* ── 1. Body Dock Classes (Pushing Chat Aside / Up / Down) ── */
-/* On desktop viewports (>= 901px): push chat aside cleanly, max 40vw to never squash chatbox */
-@media (min-width: 901px) {
+/* On desktop and tablet viewports (>= 769px): push chat aside cleanly, allow full resizability */
+@media (min-width: 769px) {
     body.term-open-left #appShell {
-        margin-left: min(var(--term-panel-width), 40vw);
-        width: calc(100% - min(var(--term-panel-width), 40vw));
+        margin-left: var(--term-panel-width);
+        width: calc(100% - var(--term-panel-width));
     }
 
     body.term-open-right #appShell {
-        margin-right: min(var(--term-panel-width), 40vw);
-        width: calc(100% - min(var(--term-panel-width), 40vw));
+        margin-right: var(--term-panel-width);
+        width: calc(100% - var(--term-panel-width));
     }
 }
 
-/* Mobile & Tablet viewports (<= 900px): do NOT push chatbox off-screen; overlay gracefully */
-@media (max-width: 900px) {
+/* Mobile & narrow viewports (<= 768px): FULLSCREEN terminal mode to prevent impossible side-by-side squashing */
+@media (max-width: 768px) {
     body.term-open-left #appShell,
     body.term-open-right #appShell {
         margin-left: 0 !important;
         margin-right: 0 !important;
         width: 100% !important;
     }
-    .terminal-drawer.dock-left,
-    .terminal-drawer.dock-right {
-        max-width: min(88vw, 380px) !important;
+
+    .terminal-drawer {
+        display: none !important;
     }
-    .terminal-drawer.dock-bottom,
-    .terminal-drawer.dock-top {
-        max-height: 80vh !important;
+
+    .terminal-drawer.open {
+        display: flex !important;
+        top: 0 !important;
+        bottom: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        width: 100vw !important;
+        max-width: 100vw !important;
+        height: 100dvh !important;
+        max-height: 100dvh !important;
+        transform: none !important;
+        border: none !important;
+        border-radius: 0 !important;
+        z-index: 100 !important;
+        opacity: 1 !important;
+        pointer-events: auto !important;
     }
+
+    .terminal-drawer .terminal-resizer {
+        display: none !important;
+    }
+
+    /* On mobile fullscreen, dock-switcher and expand buttons are redundant */
+    .terminal-dock-picker,
+    #terminalExpandBtn {
+        display: none !important;
+    }
+}
+
+html.is-android .terminal-drawer {
+    display: none !important;
+}
+
+html.is-android .terminal-drawer.open {
+    display: flex !important;
+    top: 0 !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    width: 100vw !important;
+    max-width: 100vw !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    transform: none !important;
+    border: none !important;
+    border-radius: 0 !important;
+    z-index: 100 !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+}
+
+html.is-android .terminal-drawer .terminal-resizer,
+html.is-android .terminal-dock-picker,
+html.is-android #terminalExpandBtn {
+    display: none !important;
 }
 
 body.term-open-bottom #appShell {
@@ -98,23 +150,30 @@ body.term-open-top #appShell {
 .terminal-drawer.dock-left .terminal-resizer {
     top: 0;
     bottom: 0;
-    right: -4px;
-    width: 8px;
+    right: -10px;
+    width: 20px;
     height: 100%;
     cursor: col-resize;
+    z-index: 100;
+}
+
+.terminal-drawer.dock-left .terminal-resizer::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    right: 8px;
+    transform: translateY(-50%);
+    width: 3px;
+    height: 48px;
+    background: var(--border, rgba(255, 255, 255, 0.16));
+    border-radius: 3px;
+    transition: background 0.15s ease, height 0.15s ease;
 }
 
 .terminal-drawer.dock-left .terminal-resizer:hover::after,
 .terminal-drawer.dock-left .terminal-resizer.resizing::after {
-    content: "";
-    position: absolute;
-    top: 50%;
-    right: 3px;
-    transform: translateY(-50%);
-    width: 2px;
-    height: 48px;
-    background: var(--border-strong, rgba(255, 255, 255, 0.25));
-    border-radius: 2px;
+    background: var(--accent, #3b82f6);
+    height: 64px;
 }
 
 /* B. DOCK RIGHT */
@@ -137,23 +196,30 @@ body.term-open-top #appShell {
 .terminal-drawer.dock-right .terminal-resizer {
     top: 0;
     bottom: 0;
-    left: -4px;
-    width: 8px;
+    left: -10px;
+    width: 20px;
     height: 100%;
     cursor: col-resize;
+    z-index: 100;
+}
+
+.terminal-drawer.dock-right .terminal-resizer::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 8px;
+    transform: translateY(-50%);
+    width: 3px;
+    height: 48px;
+    background: var(--border, rgba(255, 255, 255, 0.16));
+    border-radius: 3px;
+    transition: background 0.15s ease, height 0.15s ease;
 }
 
 .terminal-drawer.dock-right .terminal-resizer:hover::after,
 .terminal-drawer.dock-right .terminal-resizer.resizing::after {
-    content: "";
-    position: absolute;
-    top: 50%;
-    left: 3px;
-    transform: translateY(-50%);
-    width: 2px;
-    height: 48px;
-    background: var(--border-strong, rgba(255, 255, 255, 0.25));
-    border-radius: 2px;
+    background: var(--accent, #3b82f6);
+    height: 64px;
 }
 
 /* C. DOCK DOWN (Bottom) */
@@ -174,10 +240,32 @@ body.term-open-top #appShell {
 }
 
 .terminal-drawer.dock-bottom .terminal-resizer {
-    top: -4px;
+    top: -10px;
     left: 0;
     right: 0;
-    height: 8px;
+    height: 20px;
+    cursor: row-resize;
+    z-index: 100;
+}
+
+.terminal-drawer.dock-bottom .terminal-resizer::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 8px;
+    transform: translateX(-50%);
+    height: 3px;
+    width: 48px;
+    background: var(--border, rgba(255, 255, 255, 0.16));
+    border-radius: 3px;
+    transition: background 0.15s ease, width 0.15s ease;
+}
+
+.terminal-drawer.dock-bottom .terminal-resizer:hover::after,
+.terminal-drawer.dock-bottom .terminal-resizer.resizing::after {
+    background: var(--accent, #3b82f6);
+    width: 64px;
+}
     cursor: row-resize;
 }
 
@@ -283,6 +371,84 @@ body.term-open-top #appShell {
     letter-spacing: 0.04em;
     text-transform: uppercase;
     flex-shrink: 0;
+}
+
+/* Back to Chat Switcher Button inside Terminal Header */
+.terminal-chat-switch-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 24px;
+    padding: 0 8px;
+    background: var(--surface-2, rgba(255, 255, 255, 0.08));
+    border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
+    border-radius: 6px;
+    color: var(--text-primary, #f4f4f5);
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease;
+    flex-shrink: 0;
+}
+
+.terminal-chat-switch-btn:hover {
+    background: var(--hover, rgba(255, 255, 255, 0.15));
+    border-color: var(--border-strong, rgba(255, 255, 255, 0.25));
+}
+
+/* Header Terminal Persistence Pill (visible in Chat view when session is alive) */
+.header-terminal-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 30px;
+    padding: 0 10px;
+    background: var(--surface-2, rgba(255, 255, 255, 0.08));
+    border: 1px solid var(--border, rgba(255, 255, 255, 0.14));
+    border-radius: 6px;
+    color: var(--text-primary, #f4f4f5);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    animation: fadeIn 0.2s ease forwards;
+}
+
+.header-terminal-pill:hover {
+    background: var(--hover-2, rgba(255, 255, 255, 0.14));
+    border-color: var(--border-strong, rgba(255, 255, 255, 0.3));
+}
+
+.terminal-pulsing-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #22c55e;
+    box-shadow: 0 0 6px #22c55e;
+    display: inline-block;
+    animation: terminalPulse 2s infinite ease-in-out;
+}
+
+@keyframes terminalPulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.35; transform: scale(0.85); }
+}
+
+/* Active session indicator dot on side panel Terminal button */
+#panelTerminalBtn.has-active-session {
+    position: relative;
+}
+
+#panelTerminalBtn.has-active-session::after {
+    content: "";
+    position: absolute;
+    top: 10px;
+    right: 14px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #22c55e;
+    box-shadow: 0 0 6px #22c55e;
 }
 
 .terminal-title-badge svg {

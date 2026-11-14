@@ -24,6 +24,7 @@ const { handleMcpRoute } = require("./routes/mcp");
 const { handleHistoryRoute } = require("./routes/history");
 const { handleCloudToolsRoute } = require("./routes/cloud_tools");
 const { isAuthenticated, handleLogin, handleAuthCheck, handleCaptchaEndpoint, renderLockPage } = require("./auth");
+const { handleSkillsRoute } = require("./routes/skills");
 const { sendJSON } = require("./utils");
 
 async function routeRequest(req, res) {
@@ -191,6 +192,11 @@ async function routeRequest(req, res) {
         // MultiAI Cloud Tools (Uploads to /tmp/user/files & Git Clone Engine)
         if (reqUrl.startsWith("/api/cloud/")) {
             return handleCloudToolsRoute(req, res);
+        }
+
+        // Skills Catalog & Content
+        if (reqUrl.startsWith("/api/skills")) {
+            return handleSkillsRoute(req, res);
         }
 
         // Static assets

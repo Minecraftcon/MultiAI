@@ -161,6 +161,17 @@ export function initBottomSheet() {
         });
     }
 
+    // Skills Picker
+    const pickSkillsBtn = document.getElementById("pickSkillsBtn");
+    if (pickSkillsBtn) {
+        pickSkillsBtn.addEventListener("click", () => {
+            closeAttachmentSheet();
+            import("./skills-menu.js").then(sm => {
+                sm.openSkillsMenu("");
+            });
+        });
+    }
+
     // Deep Search Mode Toggle (+ / -)
     if (pickDeepSearchBtn) {
         pickDeepSearchBtn.addEventListener("click", () => {

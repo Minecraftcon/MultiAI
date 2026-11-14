@@ -84,6 +84,7 @@
     <link rel="stylesheet" href="./styles/responsive.css">
     <link rel="stylesheet" href="/vendor/xterm/xterm.css">
     <link rel="stylesheet" href="./styles/terminal.css">
+    <link rel="stylesheet" href="./styles/skills-menu.css">
     <link rel="stylesheet" href="./styles/classics.css">
 </head>
 <body>
@@ -209,7 +210,7 @@
             </button>
         </div>
 
-        <div class="header-center">
+        <div class="header-center" style="display: none;">
             <div id="modelPicker" class="model-picker">
                 <button id="modelPickerBtn" class="model-picker-btn" type="button" aria-haspopup="dialog" aria-expanded="false" title="Select AI Model">
                     <span id="modelPickerName" class="model-picker-name">Gemini 2.5 Flash</span>
@@ -223,6 +224,10 @@
         </div>
 
         <div class="header-right">
+            <button id="headerTerminalPill" class="header-terminal-pill" type="button" aria-label="Open Terminal" title="Switch to Terminal (session preserved in background)" style="display: none;">
+                <span class="terminal-pulsing-dot"></span>
+                <span>Terminal</span>
+            </button>
             <button id="headerNewChatBtn" class="icon-btn" type="button" aria-label="New chat" title="New chat">
                 <i data-lucide="square-pen"></i>
             </button>
@@ -276,6 +281,15 @@
             <div class="sheet-action-text">
                 <span class="sheet-action-title">Documents</span>
                 <span class="sheet-action-desc">PDF, TXT, code & data</span>
+            </div>
+        </button>
+        <button id="pickSkillsBtn" type="button" class="sheet-action-card">
+            <div class="sheet-action-icon" style="background: rgba(255, 255, 255, 0.06); color: var(--text-primary);">
+                <i data-lucide="sparkles"></i>
+            </div>
+            <div class="sheet-action-text">
+                <span class="sheet-action-title">Skills</span>
+                <span class="sheet-action-desc">Directives from ~/.agents/skills</span>
             </div>
         </button>
     </div>

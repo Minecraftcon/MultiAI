@@ -87,7 +87,10 @@ export async function runAgent(userText, currentAIMessage, chatId, images = [], 
     const isFirstUserTurn = session.messages.filter(m => m.role === "user").length === 1;
 
     if (isFirstUserTurn && session.messages[0]?.role === "system") {
-        session.messages[0].content = state.activeSystemPrompt + TITLE_SYSTEM_PROMPT;
+        const skillsBlock = session.messages[0].content?.includes("[ACTIVATED SKILLS]")
+            ? session.messages[0].content.slice(session.messages[0].content.indexOf("[ACTIVATED SKILLS]"))
+            : "";
+        session.messages[0].content = state.activeSystemPrompt + TITLE_SYSTEM_PROMPT + (skillsBlock ? `\n\n${skillsBlock}` : "");
     }
 
     const selectedModel = session.model || (modelSelect ? modelSelect.value : "gemini-2.5-flash");
@@ -680,7 +683,10 @@ export async function runAgent(userText, currentAIMessage, chatId, images = [], 
         clearInterval(statusTimer);
         transientCorrectionNotice = null;
         if (isFirstUserTurn && session.messages[0]?.role === "system") {
-            session.messages[0].content = state.activeSystemPrompt;
+            const skillsBlock = session.messages[0].content?.includes("[ACTIVATED SKILLS]")
+                ? session.messages[0].content.slice(session.messages[0].content.indexOf("[ACTIVATED SKILLS]"))
+                : "";
+            session.messages[0].content = state.activeSystemPrompt + (skillsBlock ? `\n\n${skillsBlock}` : "");
         }
     }
 }

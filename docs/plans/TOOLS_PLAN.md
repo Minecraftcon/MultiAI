@@ -30,7 +30,7 @@ This document catalogs the complete suite of advanced agent tools, their schemas
 
 ### 1. `run_command` — [x] DONE (`run_task`)
 Executes bash shell commands directly in the Linux environment.
-* **MultiAI Status**: Implemented in `client/src/tools/terminal/index.js` (`run_task`). Supports execution with timer cooldown, background task promotion, execution duration tracking, stdout/stderr, and exit code.
+* **MultiAI Status**: Implemented in `UI/webui/src/tools/terminal/index.js` (`run_task`). Supports execution with timer cooldown, background task promotion, execution duration tracking, stdout/stderr, and exit code.
 ```json
 {
   "name": "run_command",
@@ -53,7 +53,7 @@ Executes bash shell commands directly in the Linux environment.
 
 ### 2. `view_file` — [x] DONE (`read_file`)
 Inspects text or binary files (images, audio, video, PDF) on the local filesystem.
-* **MultiAI Status**: Fully redesigned in `src/server/routes/files.js` and `client/src/tools/filesystem/index.js` (`read_file`). Features strict 400-line max windowing, full bidirectional slicing (`start_line` forward / `end_line` backwards / range), 45KB (46,080 bytes) hard byte cap per view, `content_offset` pagination, multimodal base64 image preview generation, 100-entry directory listing guard, and binary file protection.
+* **MultiAI Status**: Fully redesigned in `src/server/routes/files.js` and `UI/webui/src/tools/filesystem/index.js` (`read_file`). Features strict 400-line max windowing, full bidirectional slicing (`start_line` forward / `end_line` backwards / range), 45KB (46,080 bytes) hard byte cap per view, `content_offset` pagination, multimodal base64 image preview generation, 100-entry directory listing guard, and binary file protection.
 ```json
 {
   "name": "view_file",
@@ -75,7 +75,7 @@ Inspects text or binary files (images, audio, video, PDF) on the local filesyste
 
 ### 3. `write_to_file` — [x] DONE (`write_file`)
 Creates new files or overwrites existing ones (including creating parent directories).
-* **MultiAI Status**: Implemented in `client/src/tools/filesystem/index.js` (`write_file`). Supports recursive directory creation and byte/line count reporting.
+* **MultiAI Status**: Implemented in `UI/webui/src/tools/filesystem/index.js` (`write_file`). Supports recursive directory creation and byte/line count reporting.
 ```json
 {
   "name": "write_to_file",
@@ -104,7 +104,7 @@ Creates new files or overwrites existing ones (including creating parent directo
 
 ### 4. `replace_file_content` — [x] DONE
 Performs a single contiguous block replacement in an existing file.
-* **MultiAI Status**: Implemented in `src/tools/filesystem/code_tools.js` and `client/src/tools/filesystem/index.js`. Supports exact character matching, line window scoping (`start_line`/`end_line`), `allow_multiple` guard, newline preservation (`\r\n` vs `\n`), unified diff generation, and chat badge integration.
+* **MultiAI Status**: Implemented in `src/tools/filesystem/code_tools.js` and `UI/webui/src/tools/filesystem/index.js`. Supports exact character matching, line window scoping (`start_line`/`end_line`), `allow_multiple` guard, newline preservation (`\r\n` vs `\n`), unified diff generation, and chat badge integration.
 ```json
 {
   "name": "replace_file_content",
@@ -130,7 +130,7 @@ Performs a single contiguous block replacement in an existing file.
 
 ### 5. `multi_replace_file_content` — [x] DONE
 Performs multiple non-contiguous block edits across the same file in a single atomic operation.
-* **MultiAI Status**: Implemented in `src/tools/filesystem/code_tools.js` and `client/src/tools/filesystem/index.js`. Validates all chunks prior to mutation, sorts and executes bottom-up by line number/position, generates aggregate unified diff, and writes atomically.
+* **MultiAI Status**: Implemented in `src/tools/filesystem/code_tools.js` and `UI/webui/src/tools/filesystem/index.js`. Validates all chunks prior to mutation, sorts and executes bottom-up by line number/position, generates aggregate unified diff, and writes atomically.
 ```json
 {
   "name": "multi_replace_file_content",
@@ -162,7 +162,7 @@ Performs multiple non-contiguous block edits across the same file in a single at
 
 ### 6. `grep_search` — [x] DONE
 Fast pattern and regex searching across files using ripgrep with pure Node.js fallback.
-* **MultiAI Status**: Fully implemented in `src/tools/filesystem/code_tools.js` and `client/src/tools/filesystem/index.js`. Features a high-performance dual engine: detects native ripgrep (`/bin/rg`) for sub-millisecond JSON streaming searches, and automatically falls back to an asynchronous Node.js filesystem scanner when missing. Supports `SearchPath`, `Query`, `IsRegex`, `CaseInsensitive`, `MatchPerLine`, and glob `Includes`. Output matches the exact schema with capped 50 matches.
+* **MultiAI Status**: Fully implemented in `src/tools/filesystem/code_tools.js` and `UI/webui/src/tools/filesystem/index.js`. Features a high-performance dual engine: detects native ripgrep (`/bin/rg`) for sub-millisecond JSON streaming searches, and automatically falls back to an asynchronous Node.js filesystem scanner when missing. Supports `SearchPath`, `Query`, `IsRegex`, `CaseInsensitive`, `MatchPerLine`, and glob `Includes`. Output matches the exact schema with capped 50 matches.
 ```json
 {
   "name": "grep_search",
@@ -185,7 +185,7 @@ Fast pattern and regex searching across files using ripgrep with pure Node.js fa
 
 ### 7. `list_dir` — [x] DONE
 Lists directory contents (files, child counts, sizes).
-* **MultiAI Status**: Fully implemented as a standalone tool in `src/tools/filesystem/code_tools.js`, `src/server/routes/files.js`, and `client/src/tools/filesystem/index.js`. Features directory sorting, per-file byte sizes, subdirectory child counts, and human-readable summary. `read_file` strictly handles file reading and rejects directories with an explicit error guiding the model to `list_dir`.
+* **MultiAI Status**: Fully implemented as a standalone tool in `src/tools/filesystem/code_tools.js`, `src/server/routes/files.js`, and `UI/webui/src/tools/filesystem/index.js`. Features directory sorting, per-file byte sizes, subdirectory child counts, and human-readable summary. `read_file` strictly handles file reading and rejects directories with an explicit error guiding the model to `list_dir`.
 ```json
 {
   "name": "list_dir",
@@ -203,7 +203,7 @@ Lists directory contents (files, child counts, sizes).
 
 ### 8. `search_web` — [x] DONE (`web_search`)
 Performs live internet search queries and returns relevant excerpts with URLs.
-* **MultiAI Status**: Implemented in `client/src/tools/web/index.js` with SearXNG, DuckDuckGo, and Google fallback support.
+* **MultiAI Status**: Implemented in `UI/webui/src/tools/web/index.js` with SearXNG, DuckDuckGo, and Google fallback support.
 ```json
 {
   "name": "search_web",
@@ -222,7 +222,7 @@ Performs live internet search queries and returns relevant excerpts with URLs.
 
 ### 9. `read_url_content` — [x] DONE (via `web_search` with `type: "fetch"`)
 Fetches and converts public web page content directly into clean markdown.
-* **MultiAI Status**: Fully implemented in `client/src/tools/web/index.js` via `web_search`. When `type: "fetch"` is passed (or when an `http(s)://` URL is provided as the query), MultiAI automatically delegates to `activeWebProvider.fetch()` to scrape and return the full webpage content.
+* **MultiAI Status**: Fully implemented in `UI/webui/src/tools/web/index.js` via `web_search`. When `type: "fetch"` is passed (or when an `http(s)://` URL is provided as the query), MultiAI automatically delegates to `activeWebProvider.fetch()` to scrape and return the full webpage content.
 ```json
 {
   "name": "read_url_content",
@@ -263,7 +263,7 @@ Spawns an autonomous browser session to interact with web apps, click, navigate,
 
 ### 11. `generate_image` — [x] DONE (`generate_image`)
 Generates or edits UI mocks and image assets.
-* **MultiAI Status**: Implemented in `client/src/tools/media/index.js` with ComfyUI, Stable Diffusion, and DALL-E connectors, progress polling, and image previews.
+* **MultiAI Status**: Implemented in `UI/webui/src/tools/media/index.js` with ComfyUI, Stable Diffusion, and DALL-E connectors, progress polling, and image previews.
 ```json
 {
   "name": "generate_image",
@@ -284,7 +284,7 @@ Generates or edits UI mocks and image assets.
 
 ### 12. `manage_task` — [x] DONE (`manage_tasks`)
 Inspects, interacts with, or kills background tasks.
-* **MultiAI Status**: Implemented in `client/src/tools/terminal/index.js` (`manage_tasks`). Includes keycode combination support (`ctrl+c`, `ctrl+d`, `enter`, `tab`, arrow keys) and process termination.
+* **MultiAI Status**: Implemented in `UI/webui/src/tools/terminal/index.js` (`manage_tasks`). Includes keycode combination support (`ctrl+c`, `ctrl+d`, `enter`, `tab`, arrow keys) and process termination.
 ```json
 {
   "name": "manage_task",
@@ -304,7 +304,7 @@ Inspects, interacts with, or kills background tasks.
 
 ### 13. `schedule` — [x] DONE (`schedule`)
 Schedules one-shot countdown timers or recurring cron triggers.
-* **MultiAI Status**: Implemented in `client/src/tools/terminal/index.js` (`schedule`). Supports sleep timers, task monitoring with `wake_on` (`exit`/`output`), and autonomous `end_response` prompting.
+* **MultiAI Status**: Implemented in `UI/webui/src/tools/terminal/index.js` (`schedule`). Supports sleep timers, task monitoring with `wake_on` (`exit`/`output`), and autonomous `end_response` prompting.
 ```json
 {
   "name": "schedule",
