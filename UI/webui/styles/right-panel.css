@@ -98,11 +98,11 @@ body.right-panel-resizing #rightPanel {
 .right-panel-resizer {
     position: absolute;
     top: 0;
-    left: -4px;
+    left: -6px;
     bottom: 0;
-    width: 8px;
+    width: 12px;
     cursor: col-resize;
-    z-index: 80;
+    z-index: 999;
     transition: background 0.15s ease;
 }
 
@@ -1346,18 +1346,56 @@ body.right-panel-resizing #rightPanel {
     flex: 1;
 }
 
-/* VS Code Left File Explorer Sidebar inside viewer */
+/* Draggable resizer between Editor (left) and Sidebar (right) */
+.viewer-col-resizer {
+    width: 8px;
+    margin: 0 -4px;
+    cursor: col-resize;
+    position: relative;
+    z-index: 25;
+    flex-shrink: 0;
+    background: transparent;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.viewer-col-resizer::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 3px;
+    width: 1px;
+    background: var(--border);
+    transition: background 0.15s ease, width 0.15s ease;
+}
+
+.viewer-col-resizer:hover::after,
+.viewer-col-resizer.is-dragging::after {
+    background: var(--text-tertiary);
+    width: 2px;
+}
+
+.viewer-split-container.sidebar-collapsed .viewer-col-resizer {
+    display: none !important;
+}
+
+/* VS Code File Explorer Sidebar inside viewer (on the RIGHT) */
 .viewer-sidebar-pane {
-    width: 230px;
+    width: var(--viewer-sidebar-width, 240px);
     flex-shrink: 0;
     height: 100%;
-    border-right: 1px solid var(--border);
-    border-left: none;
+    border-left: 1px solid var(--border);
+    border-right: none;
     background: var(--bg);
     display: flex;
     flex-direction: column;
     overflow: hidden;
     transition: width 0.18s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.18s ease;
+}
+
+body.viewer-sidebar-resizing .viewer-sidebar-pane {
+    transition: none !important;
 }
 
 .viewer-split-container.sidebar-collapsed .viewer-sidebar-pane {

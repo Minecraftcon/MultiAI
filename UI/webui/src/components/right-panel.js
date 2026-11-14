@@ -53,6 +53,9 @@ class RightPanelManager {
         this.width = 500;
         const savedSplit = parseFloat(localStorage.getItem("multiai_search_split_percent") || "52");
         this.searchSplitPercent = (!isNaN(savedSplit) && savedSplit >= 15 && savedSplit <= 85) ? savedSplit : 52;
+        const savedViewerSidebarW = parseInt(localStorage.getItem("multiai_viewer_sidebar_width") || "240", 10);
+        this.viewerSidebarWidth = (!isNaN(savedViewerSidebarW) && savedViewerSidebarW >= 140 && savedViewerSidebarW <= 500) ? savedViewerSidebarW : 240;
+        document.documentElement.style.setProperty("--viewer-sidebar-width", `${this.viewerSidebarWidth}px`);
         this.showSearchTree = false;
         this.searchDebounceTimer = null;
         this.searchRequestId = 0;
@@ -847,15 +850,7 @@ class RightPanelManager {
     async loadViewerSidebar(folderPath, currentFilePath, isDiffMode = false) {
         const listEl = document.getElementById("viewerSidebarList");
         const filterInput = document.getElementById("viewerSidebarFilterInput");
-        const refreshBtn = document.getElementById("viewerSidebarRefreshBtn");
         if (!listEl) return;
-
-        if (refreshBtn) {
-            refreshBtn.onclick = async () => {
-                this.treeCache.clear();
-                await this.loadViewerSidebar(folderPath, currentFilePath, isDiffMode);
-            };
-        }
 
         if (filterInput) {
             filterInput.value = "";
@@ -972,6 +967,90 @@ class RightPanelManager {
         });
     }
 
+    bindViewerColResizer(containerEl) {
+        if (!containerEl) return;
+        const resizer = containerEl.querySelector("#viewerColResizer");
+        const sidebar = containerEl.querySelector(".viewer-sidebar-pane");
+        const splitCont = containerEl.querySelector(".viewer-split-container") || containerEl;
+        if (!resizer || !sidebar) return;
+
+        let isDragging = false;
+
+        const updateWidth = (clientX) => {
+            const rect = splitCont.getBoundingClientRect();
+            if (rect.width <= 0) return;
+            // Sidebar is on the RIGHT side, so its width is (rect.right - clientX)
+            const newW = Math.max(140, Math.min(Math.min(500, rect.width - 200), rect.right - clientX));
+            this.viewerSidebarWidth = newW;
+            sidebar.style.width = `${newW}px`;
+            document.documentElement.style.setProperty("--viewer-sidebar-width", `${newW}px`);
+        };
+
+        const onMouseMove = (moveEvt) => {
+            if (!isDragging) return;
+            updateWidth(moveEvt.clientX);
+        };
+
+        const onMouseUp = () => {
+            if (!isDragging) return;
+            isDragging = false;
+            this.isResizing = false;
+            this.justFinishedResizing = true;
+            setTimeout(() => { this.justFinishedResizing = false; }, 200);
+            resizer.classList.remove("is-dragging");
+            document.body.classList.remove("viewer-sidebar-resizing");
+            document.body.style.cursor = "";
+            document.body.style.userSelect = "";
+            document.removeEventListener("mousemove", onMouseMove);
+            document.removeEventListener("mouseup", onMouseUp);
+            try {
+                localStorage.setItem("multiai_viewer_sidebar_width", String(this.viewerSidebarWidth));
+            } catch (_) {}
+        };
+
+        resizer.addEventListener("mousedown", (downEvt) => {
+            downEvt.preventDefault();
+            downEvt.stopPropagation();
+            isDragging = true;
+            this.isResizing = true;
+            resizer.classList.add("is-dragging");
+            document.body.classList.add("viewer-sidebar-resizing");
+            document.body.style.cursor = "col-resize";
+            document.body.style.userSelect = "none";
+            document.addEventListener("mousemove", onMouseMove);
+            document.addEventListener("mouseup", onMouseUp);
+        });
+
+        // Touch support
+        const onTouchMove = (tEvt) => {
+            if (!isDragging || !tEvt.touches || !tEvt.touches[0]) return;
+            updateWidth(tEvt.touches[0].clientX);
+        };
+        const onTouchEnd = () => {
+            if (!isDragging) return;
+            isDragging = false;
+            this.isResizing = false;
+            this.justFinishedResizing = true;
+            setTimeout(() => { this.justFinishedResizing = false; }, 200);
+            resizer.classList.remove("is-dragging");
+            document.body.classList.remove("viewer-sidebar-resizing");
+            document.removeEventListener("touchmove", onTouchMove);
+            document.removeEventListener("touchend", onTouchEnd);
+            try {
+                localStorage.setItem("multiai_viewer_sidebar_width", String(this.viewerSidebarWidth));
+            } catch (_) {}
+        };
+        resizer.addEventListener("touchstart", (downEvt) => {
+            if (!downEvt.touches || !downEvt.touches[0]) return;
+            isDragging = true;
+            this.isResizing = true;
+            resizer.classList.add("is-dragging");
+            document.body.classList.add("viewer-sidebar-resizing");
+            document.addEventListener("touchmove", onTouchMove, { passive: true });
+            document.addEventListener("touchend", onTouchEnd);
+        }, { passive: true });
+    }
+
     async renderDiffTab(tab) {
         if (!this.viewerMountEl) return;
         if (!tab.path) {
@@ -1015,15 +1094,15 @@ class RightPanelManager {
 
             const splitContainerHtml = `
                 ${breadcrumbHtml}
-                <div class="viewer-split-container ${this.isSidebarOpen ? "" : "sidebar-collapsed"}">
+                <div class="viewer-split-container ${this.isSidebarOpen ? "" : "sidebar-collapsed"}" id="viewerSplitContainer">
+                    <div class="viewer-editor-pane">
+                        ${toolbarHtml}
+                        ${diffCardHtml}
+                    </div>
+                    <div class="viewer-col-resizer" id="viewerColResizer" title="Drag to resize sidebar"></div>
                     <div class="viewer-sidebar-pane">
                         <div class="viewer-sidebar-header">
                             <span class="viewer-sidebar-title">Changes</span>
-                            <div class="viewer-sidebar-actions">
-                                <button type="button" class="viewer-sidebar-icon-btn" id="viewerSidebarRefreshBtn" title="Refresh changes">
-                                    <i data-lucide="refresh-cw"></i>
-                                </button>
-                            </div>
                         </div>
                         <div class="viewer-sidebar-search-box">
                             <i data-lucide="search" class="viewer-sidebar-search-icon"></i>
@@ -1033,16 +1112,13 @@ class RightPanelManager {
                             <div class="tasks-empty-state">Loading changes…</div>
                         </div>
                     </div>
-                    <div class="viewer-editor-pane">
-                        ${toolbarHtml}
-                        ${diffCardHtml}
-                    </div>
                 </div>
             `;
 
             this.viewerMountEl.innerHTML = splitContainerHtml;
             bindDiffViewerCards(this.viewerMountEl);
             renderIcons(this.viewerMountEl);
+            this.bindViewerColResizer(this.viewerMountEl);
             this.bindBreadcrumbEvents(this.viewerMountEl, tab.path, diffStr);
             this.loadViewerSidebar(folderPath, tab.path, true);
 
@@ -1136,15 +1212,14 @@ class RightPanelManager {
 
             const splitContainerHtml = `
                 ${breadcrumbHtml}
-                <div class="viewer-split-container ${this.isSidebarOpen ? "" : "sidebar-collapsed"}">
+                <div class="viewer-split-container ${this.isSidebarOpen ? "" : "sidebar-collapsed"}" id="viewerSplitContainer">
+                    <div class="viewer-editor-pane">
+                        ${codeCardHtml}
+                    </div>
+                    <div class="viewer-col-resizer" id="viewerColResizer" title="Drag to resize sidebar"></div>
                     <div class="viewer-sidebar-pane">
                         <div class="viewer-sidebar-header">
                             <span class="viewer-sidebar-title">Workspace</span>
-                            <div class="viewer-sidebar-actions">
-                                <button type="button" class="viewer-sidebar-icon-btn" id="viewerSidebarRefreshBtn" title="Refresh files">
-                                    <i data-lucide="refresh-cw"></i>
-                                </button>
-                            </div>
                         </div>
                         <div class="viewer-sidebar-search-box">
                             <i data-lucide="search" class="viewer-sidebar-search-icon"></i>
@@ -1154,15 +1229,13 @@ class RightPanelManager {
                             <div class="tasks-empty-state">Loading files…</div>
                         </div>
                     </div>
-                    <div class="viewer-editor-pane">
-                        ${codeCardHtml}
-                    </div>
                 </div>
             `;
 
             this.viewerMountEl.innerHTML = splitContainerHtml;
             bindDiffViewerCards(this.viewerMountEl);
             renderIcons(this.viewerMountEl);
+            this.bindViewerColResizer(this.viewerMountEl);
             this.bindBreadcrumbEvents(this.viewerMountEl, tab.path, content);
             this.loadViewerSidebar(folderPath, tab.path, false);
         } catch (err) {
