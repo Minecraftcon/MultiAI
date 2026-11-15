@@ -494,13 +494,71 @@ class BaseProvider {
         return pruned;
     }
 
+    /**
+     * Normalizes a structured system_server / system_instructions hierarchy into a unified instruction block.
+     * Supports plain strings, arrays of directives, and hierarchy objects with scope/priority/ephemeral tags.
+     */
+    formatSystemServerInstruction(systemServer) {
+        if (!systemServer) return "";
+        if (typeof systemServer === "string") {
+            return systemServer.trim();
+        }
+        if (Array.isArray(systemServer)) {
+            return systemServer
+                .map(item => typeof item === "string" ? item.trim() : this.formatSystemServerInstruction(item))
+                .filter(Boolean)
+                .join("\n\n");
+        }
+        if (typeof systemServer === "object") {
+            const parts = [];
+            if (systemServer.server) {
+                parts.push(this.formatSystemServerInstruction(systemServer.server));
+            }
+            if (systemServer.ephemeral) {
+                parts.push(`[EPHEMERAL RUNTIME DIRECTIVE]\n${this.formatSystemServerInstruction(systemServer.ephemeral)}`);
+            }
+            if (systemServer.instruction || systemServer.instructions) {
+                const scope = systemServer.scope ? `[Scope: ${systemServer.scope}] ` : "";
+                const priority = systemServer.priority ? `[Priority: ${systemServer.priority}] ` : "";
+                const content = systemServer.instruction || systemServer.instructions;
+                parts.push(`${scope}${priority}${typeof content === "string" ? content.trim() : this.formatSystemServerInstruction(content)}`);
+            }
+            return parts.filter(Boolean).join("\n\n");
+        }
+        return String(systemServer);
+    }
+
     formatPayload({ model, messages, tools, tool_choice, config = {}, supportsTools = true, supportsVision = false, options = {} }) {
         const maxContextTokens = options.maxContextTokens || config.max_context_tokens || 100000;
         const msgsToNormalize = maxContextTokens ? this.pruneMessagesForContext(messages, maxContextTokens, options) : messages;
 
+        let normalizedMessages = this.normalizeMessages(msgsToNormalize, supportsTools, supportsVision);
+
+        // Inject temporary system instructions hierarchy (system_server / system_instructions)
+        const systemServer = options.system_server || options.system_instructions;
+        const serverDirective = this.formatSystemServerInstruction(systemServer);
+
+        if (serverDirective) {
+            const formattedDirective = `<system_server>\n${serverDirective}\n</system_server>`;
+            const sysIdx = normalizedMessages.findIndex(m => m.role === "system");
+            if (sysIdx !== -1) {
+                const existing = normalizedMessages[sysIdx];
+                const existingContent = typeof existing.content === "string" ? existing.content : JSON.stringify(existing.content);
+                normalizedMessages[sysIdx] = {
+                    ...existing,
+                    content: `${existingContent}\n\n${formattedDirective}`
+                };
+            } else {
+                normalizedMessages.unshift({
+                    role: "system",
+                    content: formattedDirective
+                });
+            }
+        }
+
         const payload = {
             model,
-            messages: this.normalizeMessages(msgsToNormalize, supportsTools, supportsVision)
+            messages: normalizedMessages
         };
         if (config.default_max_tokens) {
             payload.max_tokens = config.default_max_tokens;

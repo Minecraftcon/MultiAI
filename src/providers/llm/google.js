@@ -119,6 +119,11 @@ class GoogleProvider extends BaseProvider {
         }
 
         const payload = { contents };
+        const systemServer = options.system_server || options.system_instructions;
+        const serverDirective = this.formatSystemServerInstruction(systemServer);
+        if (serverDirective) {
+            systemParts.push({ text: `[SYSTEM_SERVER DIRECTIVE]\n${serverDirective}` });
+        }
         if (systemParts.length > 0) {
             payload.systemInstruction = { parts: systemParts };
         }

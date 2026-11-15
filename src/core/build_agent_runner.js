@@ -518,6 +518,7 @@ function startAgentJob({ projectId = null, chatId, userText, userContent = null,
             let hasRunVerification = false;
             let verificationNudgeCount = 0;
             let todoContinueRetries = 0;
+            let ephemeralDirective = null;
 
             while (round < maxRounds && job.isRunning) {
                 if (abortController.signal.aborted) {
@@ -532,12 +533,31 @@ function startAgentJob({ projectId = null, chatId, userText, userContent = null,
                 let chatResult;
                 try {
                     const activeTools = [...SERVER_BUILD_TOOLS, ...mcpManager.getActiveToolSchemas()];
+
+                    const serverDirectives = [];
+                    if (job.system_server) serverDirectives.push(job.system_server);
+                    if (ws.system_server) serverDirectives.push(ws.system_server);
+                    if (ephemeralDirective) {
+                        serverDirectives.push(ephemeralDirective);
+                        ephemeralDirective = null; // Consume single-round directive
+                    }
+                    if (round >= maxRounds - 3) {
+                        serverDirectives.push({
+                            scope: "round_budget",
+                            priority: "high",
+                            instruction: `Approaching round budget limit (${round}/${maxRounds}). Finalize changes and verify.`
+                        });
+                    }
+
                     chatResult = await providerHandler.handleChat({
                         model,
                         apiKey,
                         providerConfig,
                         messages: sessionMessages,
-                        tools: activeTools
+                        tools: activeTools,
+                        options: {
+                            system_server: serverDirectives.length > 0 ? serverDirectives : undefined
+                        }
                     });
                 } catch (err) {
                     if (abortController.signal.aborted) throw err;
@@ -613,12 +633,11 @@ function startAgentJob({ projectId = null, chatId, userText, userContent = null,
 
                 if (activeOrPendingTask && !isQuestion && todoContinueRetries < 15 && round < maxRounds - 1) {
                     todoContinueRetries++;
-                    const nudgeTurn = {
-                        role: "user",
-                        content: `[Build Mode Engine]: Proceed with the next planned task: "${activeOrPendingTask.content}". Update your plan status with write_todos and execute the necessary tool actions.`
+                    ephemeralDirective = {
+                        scope: "task_progression",
+                        priority: "high",
+                        instruction: `[Build Mode Engine]: Proceed with the next planned task: "${activeOrPendingTask.content}". Update your plan status with write_todos and execute the necessary tool actions.`
                     };
-                    sessionMessages.push(nudgeTurn);
-                    conversationsManager.appendMessage(ws.messagesFile, nudgeTurn);
                     continue;
                 }
 
@@ -626,12 +645,12 @@ function startAgentJob({ projectId = null, chatId, userText, userContent = null,
                 const allCompleted = job.todos.length > 0 && job.todos.every(t => t.status === "completed");
                 if (allCompleted && !hasRunVerification && verificationNudgeCount < 1) {
                     verificationNudgeCount++;
-                    const verifTurn = {
-                        role: "user",
-                        content: `[Build Mode Verification Gate]: All planned implementation tasks have been marked completed. Please run project tests, linters, or syntax checks (via run_task) to verify your changes before delivering your final concluding summary.`
+                    hasRunVerification = true;
+                    ephemeralDirective = {
+                        scope: "verification_gate",
+                        priority: "critical",
+                        instruction: `[Build Mode Verification Gate]: All planned implementation tasks have been marked completed. Please run project tests, linters, or syntax checks (via run_task) to verify your changes before delivering your final concluding summary.`
                     };
-                    sessionMessages.push(verifTurn);
-                    conversationsManager.appendMessage(ws.messagesFile, verifTurn);
                     continue;
                 }
 

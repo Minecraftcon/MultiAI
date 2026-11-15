@@ -71,7 +71,8 @@ Available tools:`;
                 tool_choice,
                 config,
                 supportsTools,
-                supportsVision
+                supportsVision,
+                options
             });
 
             if (!payload.max_tokens && config.default_max_tokens) {
@@ -89,11 +90,15 @@ Available tools:`;
             ? this.buildToolSystemPrompt(tools)
             : "";
 
+        const systemServer = options.system_server || options.system_instructions;
+        const serverDirective = this.formatSystemServerInstruction(systemServer);
+        const serverBlock = serverDirective ? `\n\n<system_server>\n${serverDirective}\n</system_server>` : "";
+
         for (const msg of normalized) {
             if (msg.role === "system") {
                 formattedMessages.push({
                     role: "system",
-                    content: msg.content + (toolPrompt ? toolPrompt : "")
+                    content: msg.content + (toolPrompt ? toolPrompt : "") + serverBlock
                 });
                 systemPromptInjected = true;
             } else if (msg.role === "assistant") {
@@ -129,10 +134,10 @@ Available tools:`;
             }
         }
 
-        if (!systemPromptInjected && toolPrompt) {
+        if (!systemPromptInjected && (toolPrompt || serverBlock)) {
             formattedMessages.unshift({
                 role: "system",
-                content: "You are a helpful AI assistant." + toolPrompt
+                content: "You are a helpful AI assistant." + (toolPrompt ? toolPrompt : "") + serverBlock
             });
         }
 

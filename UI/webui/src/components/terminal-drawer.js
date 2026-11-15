@@ -110,7 +110,12 @@ class TerminalDrawerManager {
                     </button>
                 </div>
             </div>
-            <div class="terminal-body" id="terminalBody"></div>
+            <div class="terminal-body" id="terminalBody">
+                <button type="button" class="terminal-scroll-bottom-btn" id="terminalScrollBottomBtn" title="Scroll to latest output" aria-label="Scroll to bottom">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 12px; height: 12px;"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                    <span class="term-scroll-badge">Latest</span>
+                </button>
+            </div>
         `;
 
         document.body.appendChild(drawer);
@@ -126,6 +131,20 @@ class TerminalDrawerManager {
         drawer.querySelector("#terminalExpandBtn").addEventListener("click", () => this.toggleFullscreen());
         drawer.querySelector("#terminalClearBtn").addEventListener("click", () => this.clearActiveTerminal());
         drawer.querySelector("#terminalNewTabBtn").addEventListener("click", () => this.createSession());
+
+        // Quick scroll to bottom button
+        const scrollBottomBtn = drawer.querySelector("#terminalScrollBottomBtn");
+        if (scrollBottomBtn) {
+            scrollBottomBtn.addEventListener("click", (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const active = this.getActiveSession();
+                if (active && active.term) {
+                    active.term.scrollToBottom();
+                    this.syncScrollBottomButton();
+                }
+            });
+        }
 
         // Dock picker dropdown listeners
         const dockBtn = drawer.querySelector("#terminalDockBtn");
@@ -514,6 +533,9 @@ class TerminalDrawerManager {
         term.open(session.mount);
         term.focus();
 
+        // Enable touch drag & momentum scrolling on mobile / touch devices
+        this.setupTouchScroll(session);
+
         setTimeout(() => {
             if (session.fitAddon) {
                 try { session.fitAddon.fit(); } catch (_) {}
@@ -570,6 +592,7 @@ class TerminalDrawerManager {
                         if (msg.history) session.term.write(msg.history);
                     } else if (msg.type === "data") {
                         session.term.write(msg.data);
+                        this.syncScrollBottomButton();
                     } else if (msg.type === "exit") {
                         session.exited = true;
                         session.term.write(`\r\n\x1b[33m[Process exited with code ${msg.exit_code}]\x1b[0m\r\n`);
@@ -646,6 +669,7 @@ class TerminalDrawerManager {
                         session.term.write(msg.history);
                     } else if (msg.type === "data") {
                         session.term.write(msg.data);
+                        this.syncScrollBottomButton();
                     } else if (msg.type === "exit") {
                         session.exited = true;
                         session.term.write(`\r\n\x1b[33m[Process exited with code ${msg.exit_code}]\x1b[0m\r\n`);
@@ -723,6 +747,7 @@ class TerminalDrawerManager {
         this.renderTabs();
         this.fitActiveTerminal();
         this.focusActiveTerminal();
+        this.syncScrollBottomButton();
     }
 
     closeSession(sessionId) {
@@ -730,6 +755,9 @@ class TerminalDrawerManager {
         if (idx === -1) return;
 
         const session = this.sessions[idx];
+        if (typeof session._touchCleanup === "function") {
+            try { session._touchCleanup(); } catch (_) {}
+        }
         if (session.ws) {
             try { session.ws.close(); } catch (_) {}
         }
@@ -742,6 +770,7 @@ class TerminalDrawerManager {
 
         this.sessions.splice(idx, 1);
         this.updatePersistenceIndicators();
+        this.syncScrollBottomButton();
 
         if (this.sessions.length > 0) {
             const nextActive = this.sessions[Math.max(0, idx - 1)];
@@ -810,6 +839,233 @@ class TerminalDrawerManager {
         const active = this.getActiveSession();
         if (active && active.term) {
             active.term.clear();
+        }
+    }
+
+    setupTouchScroll(session) {
+        if (!session || !session.mount || !session.term) return;
+
+        const term = session.term;
+        const mount = session.mount;
+
+        let startY = 0;
+        let startX = 0;
+        let lastY = 0;
+        let lastTime = 0;
+        let velocityY = 0;
+        let accumulatedY = 0;
+        let isTouchScrolling = false;
+        let momentumRafId = null;
+
+        const getCellHeight = () => {
+            const cssHeight = term._core?._renderService?.dimensions?.css?.cell?.height;
+            if (typeof cssHeight === "number" && cssHeight > 6) {
+                return cssHeight;
+            }
+            const rowEl = mount.querySelector(".xterm-rows > div");
+            if (rowEl && rowEl.clientHeight > 6) {
+                return rowEl.clientHeight;
+            }
+            const fs = term.options?.fontSize || 13;
+            const lh = term.options?.lineHeight || 1.25;
+            return Math.max(12, Math.round(fs * lh));
+        };
+
+        const updateScrollIndicator = () => {
+            this.syncScrollBottomButton();
+        };
+
+        const cancelMomentum = () => {
+            if (momentumRafId) {
+                cancelAnimationFrame(momentumRafId);
+                momentumRafId = null;
+            }
+        };
+
+        const getTouchPos = (e) => {
+            if (e.touches && e.touches.length === 2) {
+                return {
+                    y: (e.touches[0].clientY + e.touches[1].clientY) / 2,
+                    x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+                    valid: true
+                };
+            }
+            if (e.touches && e.touches.length === 1) {
+                return {
+                    y: e.touches[0].clientY,
+                    x: e.touches[0].clientX,
+                    valid: true
+                };
+            }
+            return { y: 0, x: 0, valid: false };
+        };
+
+        const onTouchStart = (e) => {
+            const pos = getTouchPos(e);
+            if (!pos.valid) return;
+            cancelMomentum();
+
+            startY = pos.y;
+            startX = pos.x;
+            lastY = pos.y;
+            lastTime = performance.now();
+            velocityY = 0;
+            accumulatedY = 0;
+            isTouchScrolling = false;
+        };
+
+        const onTouchMove = (e) => {
+            const pos = getTouchPos(e);
+            if (!pos.valid) return;
+
+            const currentY = pos.y;
+            const currentX = pos.x;
+            const deltaY = lastY - currentY; // positive = dragging finger up (scroll down); negative = dragging finger down (scroll up)
+            const totalDy = Math.abs(currentY - startY);
+            const totalDx = Math.abs(currentX - startX);
+
+            if (!isTouchScrolling) {
+                // Dominant vertical motion over slop threshold
+                if (totalDy > 6 && totalDy > totalDx * 0.7) {
+                    isTouchScrolling = true;
+                } else if (totalDx > 12) {
+                    return; // Horizontal gesture
+                } else {
+                    return; // Within tap slop
+                }
+            }
+
+            if (isTouchScrolling) {
+                if (e.cancelable) {
+                    e.preventDefault();
+                }
+
+                const now = performance.now();
+                const dt = now - lastTime;
+                if (dt > 0) {
+                    const instantV = deltaY / dt;
+                    velocityY = velocityY * 0.35 + instantV * 0.65;
+                }
+                lastY = currentY;
+                lastTime = now;
+
+                const cellHeight = getCellHeight();
+                accumulatedY += deltaY;
+
+                const lines = Math.trunc(accumulatedY / cellHeight);
+                if (lines !== 0) {
+                    term.scrollLines(lines);
+                    accumulatedY -= lines * cellHeight;
+                    updateScrollIndicator();
+                }
+            }
+        };
+
+        const onTouchEnd = (e) => {
+            if (!isTouchScrolling) {
+                // Tap detected without scroll movement
+                const touchEnd = e.changedTouches?.[0];
+                const endY = touchEnd ? touchEnd.clientY : lastY;
+                const endX = touchEnd ? touchEnd.clientX : startX;
+                if (Math.abs(endY - startY) < 8 && Math.abs(endX - startX) < 8) {
+                    term.focus();
+                    if (term.textarea) {
+                        term.textarea.focus();
+                    }
+                }
+                return;
+            }
+
+            isTouchScrolling = false;
+
+            // Trigger inertial fling/momentum scrolling if user released with velocity
+            const elapsed = performance.now() - lastTime;
+            if (elapsed < 80 && Math.abs(velocityY) > 0.12) {
+                let currentV = velocityY;
+                let lastFrame = performance.now();
+                let momentumAccum = accumulatedY;
+                const cellHeight = getCellHeight();
+
+                const momentumStep = (now) => {
+                    const dt = Math.min(32, now - lastFrame);
+                    lastFrame = now;
+
+                    // Deceleration friction
+                    currentV *= 0.935;
+
+                    if (Math.abs(currentV) < 0.02) {
+                        momentumRafId = null;
+                        updateScrollIndicator();
+                        return;
+                    }
+
+                    momentumAccum += currentV * dt;
+                    const lines = Math.trunc(momentumAccum / cellHeight);
+                    if (lines !== 0) {
+                        term.scrollLines(lines);
+                        momentumAccum -= lines * cellHeight;
+                        updateScrollIndicator();
+                    }
+
+                    momentumRafId = requestAnimationFrame(momentumStep);
+                };
+
+                momentumRafId = requestAnimationFrame(momentumStep);
+            } else {
+                updateScrollIndicator();
+            }
+        };
+
+        const onTouchCancel = () => {
+            cancelMomentum();
+            isTouchScrolling = false;
+        };
+
+        // Attach with { passive: false } so preventDefault() can stop page bounce on mobile
+        mount.addEventListener("touchstart", onTouchStart, { passive: false });
+        mount.addEventListener("touchmove", onTouchMove, { passive: false });
+        mount.addEventListener("touchend", onTouchEnd, { passive: false });
+        mount.addEventListener("touchcancel", onTouchCancel, { passive: false });
+
+        // Also track onScroll from xterm directly
+        term.onScroll(() => {
+            updateScrollIndicator();
+        });
+
+        // Store cleanup handles on session
+        session._touchCleanup = () => {
+            cancelMomentum();
+            mount.removeEventListener("touchstart", onTouchStart);
+            mount.removeEventListener("touchmove", onTouchMove);
+            mount.removeEventListener("touchend", onTouchEnd);
+            mount.removeEventListener("touchcancel", onTouchCancel);
+        };
+    }
+
+    syncScrollBottomButton() {
+        const btn = this.drawerEl?.querySelector("#terminalScrollBottomBtn");
+        if (!btn) return;
+        const active = this.getActiveSession();
+        if (!active || !active.term) {
+            btn.classList.remove("visible");
+            return;
+        }
+
+        const buffer = active.term.buffer?.active;
+        if (!buffer) {
+            btn.classList.remove("visible");
+            return;
+        }
+
+        const linesAbove = buffer.baseY - buffer.viewportY;
+        if (linesAbove > 1) {
+            btn.classList.add("visible");
+            const badge = btn.querySelector(".term-scroll-badge");
+            if (badge) {
+                badge.textContent = linesAbove > 99 ? "99+" : String(linesAbove);
+            }
+        } else {
+            btn.classList.remove("visible");
         }
     }
 

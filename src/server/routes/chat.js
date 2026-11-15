@@ -8,7 +8,7 @@ async function handleChat(req, res) {
         let body = "";
         for await (const chunk of req) body += chunk;
         const data = JSON.parse(body || "{}");
-        const { model, messages, tools, tool_choice } = data;
+        const { model, messages, tools, tool_choice, system_server, system_instructions, options = {} } = data;
         let providerId = data.provider;
 
         const config = loadModelsConfig();
@@ -48,6 +48,11 @@ async function handleChat(req, res) {
             }
         }
 
+        const effectiveOptions = {
+            ...options,
+            system_server: system_server || system_instructions || options.system_server
+        };
+
         // Streaming execution if requested and supported by provider handler
         if (data.stream && typeof providerHandler.handleChatStream === "function") {
             const streamResult = await providerHandler.handleChatStream({
@@ -57,6 +62,7 @@ async function handleChat(req, res) {
                 messages,
                 tools,
                 tool_choice,
+                options: effectiveOptions,
                 req,
                 res
             });
@@ -72,7 +78,8 @@ async function handleChat(req, res) {
             providerConfig: effectiveProviderConfig,
             messages,
             tools,
-            tool_choice
+            tool_choice,
+            options: effectiveOptions
         });
 
         if (chatResult.status !== 200) {
@@ -93,7 +100,8 @@ async function handleAgentStream(req, res) {
         let body = "";
         for await (const chunk of req) body += chunk;
         const data = JSON.parse(body || "{}");
-        const { model, messages, tools, chatId, todos } = data;
+        const { model, messages, tools, chatId, todos, system_server, system_instructions } = data;
+        const activeSystemServer = system_server || system_instructions || null;
 
         res.writeHead(200, {
             "Content-Type": "text/event-stream",
@@ -113,13 +121,15 @@ async function handleAgentStream(req, res) {
             messages: messages || [],
             model: model || "gemini-2.5-flash",
             chatId: chatId || "",
-            todos: todos || []
+            todos: todos || [],
+            system_server: activeSystemServer
         }, {
             configurable: {
                 thread_id: chatId || "default_thread",
                 tools: tools || [],
                 modelsConfig: loadModelsConfig(),
-                getApiKey: getEnvKey
+                getApiKey: getEnvKey,
+                system_server: activeSystemServer
             },
             streamMode: "updates"
         });

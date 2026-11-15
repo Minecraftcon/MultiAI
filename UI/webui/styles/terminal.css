@@ -39,11 +39,11 @@
         width: 100% !important;
     }
 
-    .terminal-drawer {
+    .terminal-drawer:not(.fused-mode) {
         display: none !important;
     }
 
-    .terminal-drawer.open {
+    .terminal-drawer.open:not(.fused-mode) {
         display: flex !important;
         top: 0 !important;
         bottom: 0 !important;
@@ -61,22 +61,22 @@
         pointer-events: auto !important;
     }
 
-    .terminal-drawer .terminal-resizer {
+    .terminal-drawer:not(.fused-mode) .terminal-resizer {
         display: none !important;
     }
 
     /* On mobile fullscreen, dock-switcher and expand buttons are redundant */
-    .terminal-dock-picker,
-    #terminalExpandBtn {
+    .terminal-drawer:not(.fused-mode) .terminal-dock-picker,
+    .terminal-drawer:not(.fused-mode) #terminalExpandBtn {
         display: none !important;
     }
 }
 
-html.is-android .terminal-drawer {
+html.is-android .terminal-drawer:not(.fused-mode) {
     display: none !important;
 }
 
-html.is-android .terminal-drawer.open {
+html.is-android .terminal-drawer.open:not(.fused-mode) {
     display: flex !important;
     top: 0 !important;
     bottom: 0 !important;
@@ -94,9 +94,9 @@ html.is-android .terminal-drawer.open {
     pointer-events: auto !important;
 }
 
-html.is-android .terminal-drawer .terminal-resizer,
-html.is-android .terminal-dock-picker,
-html.is-android #terminalExpandBtn {
+html.is-android .terminal-drawer:not(.fused-mode) .terminal-resizer,
+html.is-android .terminal-drawer:not(.fused-mode) .terminal-dock-picker,
+html.is-android .terminal-drawer:not(.fused-mode) #terminalExpandBtn {
     display: none !important;
 }
 
@@ -664,11 +664,25 @@ body.term-open-top #appShell {
     overflow: hidden;
     background: #09090b;
     padding: 6px 8px;
+    touch-action: pan-y;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
 }
 
 .terminal-container {
     width: 100%;
     height: 100%;
+    position: relative;
+    touch-action: pan-y;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+}
+
+.terminal-container .xterm,
+.terminal-container .xterm-screen,
+.terminal-container .xterm-viewport {
+    touch-action: pan-y;
+    overscroll-behavior-y: contain;
 }
 
 .terminal-container .xterm-viewport::-webkit-scrollbar {
@@ -686,6 +700,75 @@ body.term-open-top #appShell {
 
 .terminal-container .xterm-viewport::-webkit-scrollbar-thumb:hover {
     background: rgba(255, 255, 255, 0.26);
+}
+
+/* Floating Scroll-to-Bottom Quick Pill for Touch & Desktop */
+.terminal-scroll-bottom-btn {
+    position: absolute;
+    bottom: 14px;
+    right: 14px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 28px;
+    padding: 0 10px;
+    background: #18181b;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 9999px;
+    color: #f4f4f5;
+    font-size: 11px;
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+    z-index: 100;
+    opacity: 0;
+    transform: translateY(8px) scale(0.95);
+    pointer-events: none;
+    transition: opacity 0.16s ease, transform 0.16s ease, background 0.15s ease, border-color 0.15s ease;
+    user-select: none;
+}
+
+.terminal-scroll-bottom-btn.visible {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    pointer-events: auto;
+}
+
+.terminal-scroll-bottom-btn:hover {
+    background: #27272a;
+    border-color: rgba(255, 255, 255, 0.26);
+}
+
+.terminal-scroll-bottom-btn svg {
+    width: 12px;
+    height: 12px;
+    color: var(--text-secondary, #9ca3af);
+}
+
+.term-scroll-badge {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: #ffffff;
+}
+
+@media (max-width: 768px), (pointer: coarse) {
+    .terminal-scroll-bottom-btn {
+        height: 32px;
+        padding: 0 12px;
+        bottom: 12px;
+        right: 12px;
+        font-size: 11.5px;
+    }
+
+    .terminal-container .xterm-viewport::-webkit-scrollbar {
+        width: 6px;
+    }
+
+    .terminal-container .xterm-viewport::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.28);
+    }
 }
 
 /* Open in PTY button on task badges in chat */

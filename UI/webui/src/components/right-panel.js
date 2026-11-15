@@ -1693,6 +1693,9 @@ class RightPanelManager {
             if (activeSession?.term) {
                 activeSession.term.focus();
             }
+            if (typeof terminalDrawer.syncScrollBottomButton === "function") {
+                terminalDrawer.syncScrollBottomButton();
+            }
         };
 
         requestAnimationFrame(doFit);

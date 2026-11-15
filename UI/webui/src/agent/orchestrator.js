@@ -86,12 +86,7 @@ export async function runAgent(userText, currentAIMessage, chatId, images = [], 
     saveStoredChats();
     const isFirstUserTurn = session.messages.filter(m => m.role === "user").length === 1;
 
-    if (isFirstUserTurn && session.messages[0]?.role === "system") {
-        const skillsBlock = session.messages[0].content?.includes("[ACTIVATED SKILLS]")
-            ? session.messages[0].content.slice(session.messages[0].content.indexOf("[ACTIVATED SKILLS]"))
-            : "";
-        session.messages[0].content = state.activeSystemPrompt + TITLE_SYSTEM_PROMPT + (skillsBlock ? `\n\n${skillsBlock}` : "");
-    }
+    let ephemeralServerDirective = isFirstUserTurn ? { ephemeral: TITLE_SYSTEM_PROMPT.trim() } : null;
 
     const selectedModel = session.model || (modelSelect ? modelSelect.value : "gemini-2.5-flash");
     const overallStartTime = Date.now();
@@ -174,14 +169,16 @@ export async function runAgent(userText, currentAIMessage, chatId, images = [], 
                     return;
                 }
                 const workingMessages = compileWorkingMessages(session);
-                if (transientCorrectionNotice) {
-                    workingMessages.push(transientCorrectionNotice);
-                }
+                const currentSystemServer = ephemeralServerDirective || transientCorrectionNotice || null;
+                ephemeralServerDirective = null; // consume single-round directive
+                transientCorrectionNotice = null; // consume single-round correction
+
                 const isStreamingEnabled = state.config?.Agent?.StreamResponse !== false;
                 response = await callChatModel(workingMessages, {
                     model: selectedModel,
                     tools: activeTools,
                     signal: genState?.abortController?.signal,
+                    system_server: currentSystemServer,
                     onChunk: isStreamingEnabled ? (chunk, accumulated) => {
                         if (currentAIMessage && !genState.abortRequested) {
                             updateAIStream(currentAIMessage, accumulated, false, overallStartTime, hasRunTools);
@@ -267,11 +264,6 @@ export async function runAgent(userText, currentAIMessage, chatId, images = [], 
                     assistantMessage.content = roundText;
                     state.messages = session.messages;
                     saveStoredChats();
-
-                    // Remove title generation instruction from system prompt once handled
-                    if (session.messages[0]?.role === "system" && session.messages[0].content.includes(TITLE_SYSTEM_PROMPT)) {
-                        session.messages[0].content = state.activeSystemPrompt;
-                    }
                 }
             }
 
@@ -290,16 +282,14 @@ export async function runAgent(userText, currentAIMessage, chatId, images = [], 
                 let finalDisplay = roundText.trim();
 
                 // If the response is purely reasoning/thinking with no answer content during an agent loop,
-                // route to activity thought trace and prompt the model to proceed with action or final response
+                // route to activity thought trace and prompt the model via system_server to proceed with action
                 const { thoughtHtml, content: actualContent } = extractThoughtAndContent(finalDisplay);
                 if ((hasRunTools || round > 0) && thoughtHtml && !actualContent && (maxRounds === Infinity || round < maxRounds - 1)) {
                     addThoughtTrace(currentAIMessage, finalDisplay);
-                    session.messages.push({
-                        role: "user",
-                        content: "Continue with the required action or state your final response."
-                    });
-                    state.messages = session.messages;
-                    saveStoredChats();
+                    ephemeralServerDirective = {
+                        scope: "thought_continuation",
+                        instruction: "Thought trace completed without tool execution. Proceed with the required action or state your final response."
+                    };
                     continue;
                 }
 
@@ -310,12 +300,11 @@ export async function runAgent(userText, currentAIMessage, chatId, images = [], 
                     promissoryRetries++;
                     logEvent("PROMISSORY_CONTINUE", { round, model: selectedModel, text: finalDisplay });
                     addThoughtTrace(currentAIMessage, finalDisplay);
-                    session.messages.push({
-                        role: "user",
-                        content: "Proceed with the action."
-                    });
-                    state.messages = session.messages;
-                    saveStoredChats();
+                    ephemeralServerDirective = {
+                        scope: "promissory_continuation",
+                        priority: "high",
+                        instruction: "Do not announce intent. Execute the tool action immediately in this turn."
+                    };
                     continue;
                 }
 
@@ -335,12 +324,11 @@ export async function runAgent(userText, currentAIMessage, chatId, images = [], 
                     if (finalDisplay) {
                         addThoughtTrace(currentAIMessage, finalDisplay);
                     }
-                    session.messages.push({
-                        role: "user",
-                        content: `[Build Mode Engine]: Proceed with the next planned task: "${activeOrPendingTask.content}". Update your plan status with write_todos and execute the necessary tool actions.`
-                    });
-                    state.messages = session.messages;
-                    saveStoredChats();
+                    ephemeralServerDirective = {
+                        scope: "task_progression",
+                        priority: "high",
+                        instruction: `[Build Mode Engine]: Proceed with the next planned task: "${activeOrPendingTask.content}". Update your plan status with write_todos and execute the necessary tool actions.`
+                    };
                     continue;
                 }
 
@@ -354,16 +342,16 @@ export async function runAgent(userText, currentAIMessage, chatId, images = [], 
                     hasRunTools
                 })) {
                     verificationNudgeCount++;
+                    hasRunVerification = true;
                     logEvent("BUILD_VERIFICATION_GATE", { round, model: selectedModel });
                     if (finalDisplay) {
                         addThoughtTrace(currentAIMessage, finalDisplay);
                     }
-                    session.messages.push({
-                        role: "user",
-                        content: getVerificationPrompt()
-                    });
-                    state.messages = session.messages;
-                    saveStoredChats();
+                    ephemeralServerDirective = {
+                        scope: "verification_gate",
+                        priority: "critical",
+                        instruction: getVerificationPrompt()
+                    };
                     continue;
                 }
 
@@ -390,12 +378,11 @@ export async function runAgent(userText, currentAIMessage, chatId, images = [], 
                     } else {
                         // Second retry: nudge model to write the summary if it was unsure
                         stageStatus = "Synthesizing final answer";
-                        session.messages.push({
-                            role: "user",
-                            content: "All requested tool actions have finished executing. Please provide a clear summary of the results and your final answer."
-                        });
-                        state.messages = session.messages;
-                        saveStoredChats();
+                        ephemeralServerDirective = {
+                            scope: "tool_synthesis",
+                            priority: "high",
+                            instruction: "All requested tool actions have finished executing. Please provide a clear summary of the results and your final answer."
+                        };
                         continue;
                     }
                 }
@@ -409,12 +396,11 @@ export async function runAgent(userText, currentAIMessage, chatId, images = [], 
                         const retryPrompt = hasRunTools
                             ? "All requested tool actions have finished executing. Please provide a clear summary of the results and your final answer."
                             : "Your previous reply was empty. Provide an immediate direct answer or perform the required tool action.";
-                        session.messages.push({
-                            role: "user",
-                            content: retryPrompt
-                        });
-                        state.messages = session.messages;
-                        saveStoredChats();
+                        ephemeralServerDirective = {
+                            scope: "empty_retry",
+                            priority: "high",
+                            instruction: retryPrompt
+                        };
                         continue;
                     }
                 }
@@ -469,8 +455,9 @@ export async function runAgent(userText, currentAIMessage, chatId, images = [], 
 
                 const availableToolsList = tools.map(t => t.function?.name).filter(Boolean).join(", ");
                 transientCorrectionNotice = {
-                    role: "user",
-                    content: `[System Notice]: Tool "${unknownNames}" is not recognized or cannot be run. Available tools: ${availableToolsList}. Please retry using a valid tool from the list with its expected parameters, or reply directly if no tool is required.`
+                    scope: "tool_correction",
+                    priority: "high",
+                    instruction: `Tool "${unknownNames}" is not recognized or cannot be run. Available tools: ${availableToolsList}. Please retry using a valid tool from the list with its expected parameters, or reply directly if no tool is required.`
                 };
 
                 stageStatus = `Retrying tool call (${invalidToolRetries}/3)`;
@@ -682,12 +669,6 @@ export async function runAgent(userText, currentAIMessage, chatId, images = [], 
     } finally {
         clearInterval(statusTimer);
         transientCorrectionNotice = null;
-        if (isFirstUserTurn && session.messages[0]?.role === "system") {
-            const skillsBlock = session.messages[0].content?.includes("[ACTIVATED SKILLS]")
-                ? session.messages[0].content.slice(session.messages[0].content.indexOf("[ACTIVATED SKILLS]"))
-                : "";
-            session.messages[0].content = state.activeSystemPrompt + (skillsBlock ? `\n\n${skillsBlock}` : "");
-        }
     }
 }
 

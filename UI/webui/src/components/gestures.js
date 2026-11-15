@@ -224,8 +224,8 @@ export function initGestures() {
         if (e.touches.length !== 1) return;
 
         const target = e.target;
-        // Don't intercept touches on interactive inputs, controls, or code blocks
-        if (target.closest('button, a, input, textarea, select, pre, .table-wrapper, table, .mobile-msg-actions, .composer, .command-output-box, .model-picker-dropdown')) {
+        // Don't intercept touches on interactive inputs, controls, terminal, right-panel or code blocks
+        if (target.closest('button, a, input, textarea, select, pre, .table-wrapper, table, .mobile-msg-actions, .composer, .command-output-box, .model-picker-dropdown, #rightPanel, .terminal-drawer, .right-panel-terminal-mount, .terminal-container, .xterm, .fused-terminal-container')) {
             return;
         }
 

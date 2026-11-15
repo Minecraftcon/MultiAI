@@ -13,7 +13,7 @@ import { getActiveContextFilterer } from "./context-filter.js";
  * @param {Array<Object>} options.tools
  * @returns {Promise<Object>}
  */
-export async function callChatModel(messages, { model, tools, signal, onChunk } = {}) {
+export async function callChatModel(messages, { model, tools, signal, onChunk, system_server } = {}) {
     let effectiveModel = model;
     if (effectiveModel === "dots-3-note-preview:free") {
         effectiveModel = "dots-studio/dots-3-note-preview:free";
@@ -29,7 +29,17 @@ export async function callChatModel(messages, { model, tools, signal, onChunk } 
         (typeof model === "string" && (model.startsWith("claude-") || model.startsWith("gpt-") || model.startsWith("deepseek-"))) ? "puter" : null
     );
 
-    const rawCleaned = Array.isArray(messages) ? messages.map(sanitizeMessage).filter(Boolean) : [];
+    let rawCleaned = Array.isArray(messages) ? messages.map(sanitizeMessage).filter(Boolean) : [];
+    if (system_server && provider === "puter") {
+        const serverStr = typeof system_server === "string" ? system_server : JSON.stringify(system_server);
+        rawCleaned = rawCleaned.map((m, idx) => {
+            if (idx === 0 && m.role === "system") {
+                return { ...m, content: `${m.content}\n\n<system_server>\n${serverStr}\n</system_server>` };
+            }
+            return m;
+        });
+    }
+
     const filterer = getActiveContextFilterer();
     const cleanedMessages = filterer.filterMessages(rawCleaned);
 
@@ -94,7 +104,8 @@ export async function callChatModel(messages, { model, tools, signal, onChunk } 
                 provider,
                 messages: cleanedMessages,
                 tools,
-                stream: shouldStream
+                stream: shouldStream,
+                system_server
             }),
             signal: activeSignal
         });

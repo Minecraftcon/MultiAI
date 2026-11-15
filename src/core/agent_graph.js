@@ -138,6 +138,7 @@ async function agentModelNode(state, config) {
     const providerKey = providerId || providerConfig.name || providerConfig.type || model;
     const providerHandler = resolveProvider(providerKey);
 
+    const system_server = state.system_server || config?.configurable?.system_server;
     let chatResult;
     try {
         chatResult = await providerHandler.handleChat({
@@ -145,7 +146,10 @@ async function agentModelNode(state, config) {
             apiKey,
             providerConfig,
             messages,
-            tools: tools.length > 0 ? tools : undefined
+            tools: tools.length > 0 ? tools : undefined,
+            options: {
+                system_server
+            }
         });
 
         if (chatResult.status && chatResult.status !== 200) {
@@ -243,11 +247,12 @@ async function toolsNode(state, config) {
  */
 async function recoveryNode(state) {
     const recoveryNotice = {
-        role: "system",
-        content: `[CIRCUIT BREAKER ACTIVATED]: An operation has failed repeatedly (${state.errorCount} consecutive errors). Please analyze previous errors, change your strategy, or ask the user for clarification rather than repeating the same failed call.`
+        scope: "circuit_breaker",
+        priority: "critical",
+        instruction: `[CIRCUIT BREAKER ACTIVATED]: An operation has failed repeatedly (${state.errorCount} consecutive errors). Please analyze previous errors, change your strategy, or ask the user for clarification rather than repeating the same failed call.`
     };
     return {
-        messages: [recoveryNotice],
+        system_server: recoveryNotice,
         recoveryAttempts: (state.recoveryAttempts || 0) + 1,
         errorCount: 0
     };

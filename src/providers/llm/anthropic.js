@@ -21,7 +21,7 @@ class AnthropicProvider extends BaseProvider {
         return baseUrl.endsWith("/messages") ? baseUrl : `${baseUrl}/messages`;
     }
 
-    formatPayload({ model, messages, tools, tool_choice, config = {}, supportsTools = true, supportsVision = true }) {
+    formatPayload({ model, messages, tools, tool_choice, config = {}, supportsTools = true, supportsVision = true, options = {} }) {
         let systemPrompt = "";
         const anthropicMessages = [];
 
@@ -115,6 +115,12 @@ class AnthropicProvider extends BaseProvider {
             max_tokens: config.default_max_tokens || 4096,
             messages: anthropicMessages
         };
+
+        const systemServer = options.system_server || options.system_instructions;
+        const serverDirective = this.formatSystemServerInstruction(systemServer);
+        if (serverDirective) {
+            systemPrompt += (systemPrompt ? "\n\n" : "") + `<system_server>\n${serverDirective}\n</system_server>`;
+        }
 
         if (systemPrompt) {
             payload.system = systemPrompt;
