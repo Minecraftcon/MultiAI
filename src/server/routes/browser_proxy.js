@@ -238,24 +238,90 @@ function generateInjectedScript(currentUrl, proxyOrigin) {
     (function setupIframeInspector() {
         let iframeInspectActive = false;
         let iframeOverlay = null;
+        let currentHoverEl = null;
+
+        function rgbToHex(rgb) {
+            if (!rgb) return "";
+            const m = rgb.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)$/);
+            if (!m) return rgb;
+            const r = parseInt(m[1], 10).toString(16).padStart(2, "0");
+            const g = parseInt(m[2], 10).toString(16).padStart(2, "0");
+            const b = parseInt(m[3], 10).toString(16).padStart(2, "0");
+            if (m[4] !== undefined && parseFloat(m[4]) < 1) {
+                const a = Math.round(parseFloat(m[4]) * 255).toString(16).padStart(2, "0");
+                return ("#" + r + g + b + a).toUpperCase();
+            }
+            return ("#" + r + g + b).toUpperCase();
+        }
 
         function buildSel(el) {
             if (!el || el === document.body) return "body";
             if (el.id) return "#" + el.id;
             const tag = el.tagName.toLowerCase();
-            const classes = Array.from(el.classList || []).slice(0, 2).map(c => "." + c).join("");
+            const classes = Array.from(el.classList || [])
+                .filter(function(c) { return !c.startsWith("element-inspector") && !c.startsWith("is-"); })
+                .slice(0, 2)
+                .map(function(c) { return "." + c; })
+                .join("");
             return tag + classes;
         }
 
-        function onIframeMove(e) {
-            if (!iframeInspectActive) return;
-            const el = document.elementFromPoint(e.clientX, e.clientY);
-            if (!el || el === iframeOverlay) return;
+        function extractData(el) {
+            const r = el.getBoundingClientRect();
+            const cs = window.getComputedStyle(el);
+            const tag = el.tagName.toLowerCase();
+            const classes = Array.from(el.classList || [])
+                .filter(function(c) { return !c.startsWith("element-inspector") && !c.startsWith("is-"); })
+                .slice(0, 2)
+                .map(function(c) { return "." + c; })
+                .join("");
+            const tagDisplay = tag + classes;
+            const dimsDisplay = r.width.toFixed(1) + " × " + r.height.toFixed(1);
 
+            const a11yName = el.getAttribute("aria-label") ||
+                             el.getAttribute("title") ||
+                             el.getAttribute("alt") ||
+                             el.getAttribute("placeholder") ||
+                             (el.innerText ? el.innerText.trim().slice(0, 36) : "");
+            const a11yRole = el.getAttribute("role") || tag;
+            const isFocusable = el.tabIndex >= 0 || ["a", "button", "input", "textarea", "select"].includes(tag);
+
+            return {
+                selector: buildSel(el),
+                tagName: el.tagName,
+                tagDisplay: tagDisplay,
+                dimsDisplay: dimsDisplay,
+                rect: {
+                    top: r.top,
+                    left: r.left,
+                    width: parseFloat(r.width.toFixed(2)),
+                    height: parseFloat(r.height.toFixed(2)),
+                    x: Math.round(r.x),
+                    y: Math.round(r.y)
+                },
+                styles: {
+                    color: rgbToHex(cs.color),
+                    rawColor: cs.color,
+                    backgroundColor: rgbToHex(cs.backgroundColor),
+                    rawBg: cs.backgroundColor,
+                    font: cs.fontSize + " " + cs.fontFamily.split(",")[0].replace(/['"]/g, ""),
+                    padding: (cs.paddingTop + " " + cs.paddingRight).replace(/px/g, "px ")
+                },
+                accessibility: {
+                    name: a11yName,
+                    role: a11yRole,
+                    focusable: isFocusable
+                },
+                outerHTML: (el.outerHTML || "").slice(0, 1500)
+            };
+        }
+
+        function sendHover(el) {
+            if (!el) return;
             const r = el.getBoundingClientRect();
             if (!iframeOverlay) {
                 iframeOverlay = document.createElement("div");
-                iframeOverlay.style.cssText = "position:fixed;pointer-events:none;z-index:9999990;border:2px solid #3b82f6;background:rgba(59,130,246,0.15);border-radius:3px;";
+                iframeOverlay.style.cssText = "position:fixed;pointer-events:none;z-index:9999990;border:2px solid #3b82f6;background:rgba(59,130,246,0.14);border-radius:4px;box-sizing:border-box;";
                 document.body.appendChild(iframeOverlay);
             }
             iframeOverlay.style.display = "block";
@@ -263,6 +329,29 @@ function generateInjectedScript(currentUrl, proxyOrigin) {
             iframeOverlay.style.left = r.left + "px";
             iframeOverlay.style.width = r.width + "px";
             iframeOverlay.style.height = r.height + "px";
+
+            const data = extractData(el);
+            try {
+                window.parent.postMessage({
+                    type: "MULTIAI_ELEMENT_HOVER",
+                    elementData: data,
+                    rect: {
+                        top: r.top,
+                        left: r.left,
+                        width: r.width,
+                        height: r.height
+                    }
+                }, "*");
+            } catch (_) {}
+        }
+
+        function onIframeMove(e) {
+            if (!iframeInspectActive) return;
+            const el = document.elementFromPoint(e.clientX, e.clientY);
+            if (!el || el === iframeOverlay) return;
+            if (el === currentHoverEl) return;
+            currentHoverEl = el;
+            sendHover(el);
         }
 
         function onIframeClick(e) {
@@ -270,34 +359,27 @@ function generateInjectedScript(currentUrl, proxyOrigin) {
             e.preventDefault();
             e.stopPropagation();
 
-            const el = document.elementFromPoint(e.clientX, e.clientY);
+            const el = currentHoverEl || document.elementFromPoint(e.clientX, e.clientY);
             if (!el) return;
 
-            const r = el.getBoundingClientRect();
-            const cs = window.getComputedStyle(el);
-            const data = {
-                selector: buildSel(el),
-                tagName: el.tagName,
-                id: el.id || "",
-                classList: Array.from(el.classList || []),
-                rect: { x: Math.round(r.x), y: Math.round(r.y), width: parseFloat(r.width.toFixed(2)), height: parseFloat(r.height.toFixed(2)) },
-                styles: {
-                    color: cs.color,
-                    backgroundColor: cs.backgroundColor,
-                    font: cs.fontSize + " " + cs.fontFamily.split(",")[0],
-                    padding: cs.paddingTop + " " + cs.paddingRight
-                },
-                accessibility: {
-                    name: el.getAttribute("aria-label") || (el.innerText ? el.innerText.trim().slice(0, 40) : ""),
-                    role: el.getAttribute("role") || el.tagName.toLowerCase(),
-                    focusable: el.tabIndex >= 0 || ["a","button","input","textarea","select"].includes(el.tagName.toLowerCase())
-                },
-                outerHTML: (el.outerHTML || "").slice(0, 1500)
-            };
-
+            const data = extractData(el);
             setInspectActive(false);
             try {
                 window.parent.postMessage({ type: "MULTIAI_ELEMENT_SELECTED", elementData: data }, "*");
+            } catch (_) {}
+        }
+
+        function onIframeScroll() {
+            if (iframeInspectActive && currentHoverEl) {
+                sendHover(currentHoverEl);
+            }
+        }
+
+        function onIframeLeave() {
+            currentHoverEl = null;
+            if (iframeOverlay) iframeOverlay.style.display = "none";
+            try {
+                window.parent.postMessage({ type: "MULTIAI_ELEMENT_UNHOVER" }, "*");
             } catch (_) {}
         }
 
@@ -306,10 +388,18 @@ function generateInjectedScript(currentUrl, proxyOrigin) {
             if (active) {
                 document.addEventListener("mousemove", onIframeMove, true);
                 document.addEventListener("click", onIframeClick, true);
+                window.addEventListener("scroll", onIframeScroll, true);
+                document.addEventListener("mouseleave", onIframeLeave, true);
             } else {
+                currentHoverEl = null;
                 document.removeEventListener("mousemove", onIframeMove, true);
                 document.removeEventListener("click", onIframeClick, true);
+                window.removeEventListener("scroll", onIframeScroll, true);
+                document.removeEventListener("mouseleave", onIframeLeave, true);
                 if (iframeOverlay) iframeOverlay.style.display = "none";
+                try {
+                    window.parent.postMessage({ type: "MULTIAI_ELEMENT_UNHOVER" }, "*");
+                } catch (_) {}
             }
         }
 

@@ -68,9 +68,20 @@ function extractElementData(el) {
     const a11yRole = el.getAttribute("role") || el.tagName.toLowerCase();
     const isFocusable = el.tabIndex >= 0 || ["a", "button", "input", "textarea", "select"].includes(el.tagName.toLowerCase());
 
+    const tag = el.tagName.toLowerCase();
+    const validClasses = Array.from(el.classList || [])
+        .filter(c => !c.startsWith("element-inspector") && !c.startsWith("is-"))
+        .slice(0, 2)
+        .map(c => "." + c)
+        .join("");
+    const tagDisplay = `${tag}${validClasses}`;
+    const dimsDisplay = `${rect.width.toFixed(1)} × ${rect.height.toFixed(1)}`;
+
     return {
         selector,
         tagName: el.tagName,
+        tagDisplay,
+        dimsDisplay,
         id: el.id || "",
         classList: Array.from(el.classList || []),
         rect: {
@@ -133,11 +144,33 @@ export function initElementInspector() {
         });
     }
 
-    // Listen for elements selected inside embedded browser iframes
+    // Listen for elements selected or hovered inside embedded browser iframes
     window.addEventListener("message", (e) => {
-        if (e.data && e.data.type === "MULTIAI_ELEMENT_SELECTED" && e.data.elementData) {
+        if (!e.data) return;
+
+        if (e.data.type === "MULTIAI_ELEMENT_SELECTED" && e.data.elementData) {
             stopElementInspection();
             addElementAttachment(e.data.elementData);
+        } else if (e.data.type === "MULTIAI_ELEMENT_HOVER" && e.data.elementData) {
+            if (!isActive) return;
+            const iframe = document.getElementById("rightPanelBrowserFrame");
+            if (!iframe) return;
+            const ifr = iframe.getBoundingClientRect();
+            const r = e.data.rect || e.data.elementData?.rect;
+            if (!r) return;
+
+            const globalRect = {
+                top: ifr.top + r.top,
+                left: ifr.left + r.left,
+                width: r.width,
+                height: r.height,
+                bottom: ifr.top + r.top + r.height,
+                right: ifr.left + r.left + r.width
+            };
+            renderInspectorTooltipContent(e.data.elementData, globalRect);
+        } else if (e.data.type === "MULTIAI_ELEMENT_UNHOVER") {
+            if (overlayEl) overlayEl.style.display = "none";
+            if (tooltipEl) tooltipEl.style.display = "none";
         }
     });
 
@@ -155,43 +188,33 @@ function handleMouseMove(e) {
     const el = document.elementFromPoint(e.clientX, e.clientY);
     if (!el) return;
 
-    // Ignore inspector's own elements
-    if (el === overlayEl || el === tooltipEl || el === barEl || barEl?.contains(el)) {
+    // Ignore inspector's own elements and ignore browser iframe (iframe emits its own MULTIAI_ELEMENT_HOVER)
+    if (el === overlayEl || el === tooltipEl || el === barEl || barEl?.contains(el) || el.tagName === "IFRAME" || el.id === "rightPanelBrowserFrame") {
         return;
     }
 
     currentTargetEl = el;
-    updateInspectorTooltip(el, e.clientX, e.clientY);
+    const rect = el.getBoundingClientRect();
+    const data = extractElementData(el);
+    renderInspectorTooltipContent(data, rect);
 }
 
-function updateInspectorTooltip(el, mouseX, mouseY) {
+function renderInspectorTooltipContent(data, rect) {
     if (!overlayEl || !tooltipEl) return;
 
-    const rect = el.getBoundingClientRect();
-    const cs = window.getComputedStyle(el);
-    const tag = el.tagName.toLowerCase();
-    const classes = Array.from(el.classList || [])
-        .filter(c => !c.startsWith("element-inspector") && !c.startsWith("is-"))
-        .slice(0, 2)
-        .map(c => "." + c)
-        .join("");
+    const tagDisplay = data.tagDisplay || (data.tagName ? data.tagName.toLowerCase() : "element");
+    const dimsDisplay = data.dimsDisplay || `${rect.width.toFixed(1)} × ${rect.height.toFixed(1)}`;
 
-    const tagDisplay = `${tag}${classes}`;
-    const dimsDisplay = `${rect.width.toFixed(1)} × ${rect.height.toFixed(1)}`;
+    const csColor = data.styles?.rawColor || data.styles?.color || "#ffffff";
+    const colorHex = data.styles?.color || "#FFFFFF";
+    const csBg = data.styles?.rawBg || data.styles?.backgroundColor || "transparent";
+    const bgHex = data.styles?.backgroundColor || "transparent";
+    const fontStr = data.styles?.font || "inherit";
+    const paddingStr = data.styles?.padding || "0px";
 
-    const colorHex = rgbToHex(cs.color);
-    const bgHex = rgbToHex(cs.backgroundColor);
-    const fontStr = `${cs.fontSize} "${cs.fontFamily.split(",")[0].replace(/['"]/g, "")}"`;
-    const paddingStr = `${cs.paddingTop} ${cs.paddingRight}`;
-
-    const a11yName = el.getAttribute("aria-label") ||
-                     el.getAttribute("title") ||
-                     el.getAttribute("alt") ||
-                     el.getAttribute("placeholder") ||
-                     (el.innerText ? el.innerText.trim().slice(0, 36) : "");
-
-    const a11yRole = el.getAttribute("role") || tag;
-    const isFocusable = el.tabIndex >= 0 || ["a", "button", "input", "textarea", "select"].includes(tag);
+    const a11yName = data.accessibility?.name || "";
+    const a11yRole = data.accessibility?.role || tagDisplay.split(".")[0];
+    const isFocusable = Boolean(data.accessibility?.focusable);
 
     // Position overlay box
     overlayEl.style.display = "block";
@@ -210,7 +233,7 @@ function updateInspectorTooltip(el, mouseX, mouseY) {
             <div class="inspector-tt-row">
                 <span class="inspector-tt-lbl">Color</span>
                 <span class="inspector-tt-val">
-                    <span class="inspector-swatch" style="background:${cs.color};"></span>
+                    <span class="inspector-swatch" style="background:${csColor};"></span>
                     ${colorHex}
                 </span>
             </div>
@@ -221,7 +244,7 @@ function updateInspectorTooltip(el, mouseX, mouseY) {
             <div class="inspector-tt-row">
                 <span class="inspector-tt-lbl">Background</span>
                 <span class="inspector-tt-val">
-                    <span class="inspector-swatch" style="background:${cs.backgroundColor};"></span>
+                    <span class="inspector-swatch" style="background:${csBg};"></span>
                     ${bgHex}
                 </span>
             </div>
@@ -255,6 +278,8 @@ function updateInspectorTooltip(el, mouseX, mouseY) {
     if (top < 10) {
         top = rect.bottom + 8;
     }
+    // Clamp within viewport
+    top = Math.max(10, Math.min(window.innerHeight - ttRect.height - 10, top));
     let left = Math.max(10, Math.min(window.innerWidth - ttRect.width - 10, rect.left));
 
     tooltipEl.style.top = `${top}px`;
@@ -324,3 +349,4 @@ export function stopElementInspection() {
 export function toggleElementInspection() {
     isActive ? stopElementInspection() : startElementInspection();
 }
+

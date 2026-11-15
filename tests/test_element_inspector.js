@@ -23,7 +23,17 @@ assert(jsContent.includes("export function startElementInspection"), "Must expor
 assert(jsContent.includes("export function stopElementInspection"), "Must export stopElementInspection");
 assert(jsContent.includes("export function toggleElementInspection"), "Must export toggleElementInspection");
 assert(jsContent.includes("MULTIAI_ELEMENT_SELECTED"), "Must listen for iframe element selection events");
-console.log("✓ element-inspector.js interface verified cleanly.");
+assert(jsContent.includes("MULTIAI_ELEMENT_HOVER"), "Must listen for iframe element hover events to show pop up bubble");
+assert(jsContent.includes("MULTIAI_ELEMENT_UNHOVER"), "Must listen for iframe element unhover events");
+console.log("✓ element-inspector.js interface and cross-frame event listeners verified cleanly.");
+
+// 2.B Verify browser proxy injection sends MULTIAI_ELEMENT_HOVER
+const proxyPath = path.join(__dirname, "../src/server/routes/browser_proxy.js");
+const proxyContent = fs.readFileSync(proxyPath, "utf-8");
+assert(proxyContent.includes("MULTIAI_ELEMENT_HOVER"), "browser_proxy.js must post MULTIAI_ELEMENT_HOVER on iframe hover");
+assert(proxyContent.includes("MULTIAI_ELEMENT_UNHOVER"), "browser_proxy.js must post MULTIAI_ELEMENT_UNHOVER on mouseleave/deactivate");
+assert(proxyContent.includes("MULTIAI_ELEMENT_SELECTED"), "browser_proxy.js must post MULTIAI_ELEMENT_SELECTED on click");
+console.log("✓ browser_proxy.js iframe inspector cross-frame message dispatching verified cleanly.");
 
 // 3. Verify HTML bindings
 const htmlPath = path.join(__dirname, "../UI/webui/index.html");
