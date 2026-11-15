@@ -1,5 +1,6 @@
 const http = require("http");
 const fs = require("fs");
+const path = require("path");
 const { getConfig } = require("./core/config_manager");
 const { initSupervisor } = require("./server/supervisor");
 const { routeRequest } = require("./server/router");
@@ -9,12 +10,26 @@ const { initConsole } = require("./server/console");
 const { ensureVendorFiles } = require("../scripts/vendor_download");
 const { initPtyWebSocket } = require("./server/routes/pty");
 
-// If MULTIAI_WORKSPACE_DIR is set, anchor runtime process.cwd() to it
-if (process.env.MULTIAI_WORKSPACE_DIR && fs.existsSync(process.env.MULTIAI_WORKSPACE_DIR)) {
-    try {
-        process.chdir(process.env.MULTIAI_WORKSPACE_DIR);
-    } catch (e) {
-        console.warn("[WORKSPACE] Could not chdir to workspace directory:", e.message);
+// Resolve workspace directory from CLI arguments or environment variable
+let cliWorkspace = null;
+const cliArgs = process.argv.slice(2);
+for (let i = 0; i < cliArgs.length; i++) {
+    if (cliArgs[i] === "--workspace" && cliArgs[i + 1]) cliWorkspace = cliArgs[++i];
+    else if (cliArgs[i].startsWith("--workspace=")) cliWorkspace = cliArgs[i].split("=")[1];
+}
+const targetWorkspace = cliWorkspace || process.env.MULTIAI_WORKSPACE_DIR;
+if (targetWorkspace) {
+    const resolvedWs = path.resolve(targetWorkspace);
+    if (!fs.existsSync(resolvedWs)) {
+        try { fs.mkdirSync(resolvedWs, { recursive: true }); } catch (_) {}
+    }
+    if (fs.existsSync(resolvedWs)) {
+        try {
+            process.chdir(resolvedWs);
+            process.env.MULTIAI_WORKSPACE_DIR = resolvedWs;
+        } catch (e) {
+            console.warn("[WORKSPACE] Could not chdir to workspace directory:", e.message);
+        }
     }
 }
 

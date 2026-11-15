@@ -528,6 +528,9 @@ function openInBrowser(url) {
 }
 
 function runConsole(supervisor, rootDir, workspaceDir, port, host) {
+    if (!process.stdin || !process.stdin.isTTY) {
+        return;
+    }
     const displayHost = (host === "0.0.0.0" || host === "127.0.0.1" || !host) ? "localhost" : host;
     const probeHost = (host === "0.0.0.0" || !host) ? "127.0.0.1" : host;
 
