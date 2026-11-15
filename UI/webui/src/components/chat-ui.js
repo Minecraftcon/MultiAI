@@ -724,7 +724,8 @@ export function updateAIStream(element, fullText, isDone, startTime, hasTools) {
             const newDetails = preSearchContent.querySelector(".thought-box");
             if (newDetails) {
                 const wasUserOpened = prevDetails && prevDetails.dataset.userToggled === "open";
-                const isThinkingActive = !isDone && !hasTools && (!content || !content.trim());
+                const hasStreamingTools = Boolean(element._streamingToolBadges && element._streamingToolBadges.size > 0);
+                const isThinkingActive = !isDone && !hasTools && !hasStreamingTools && (!content || !content.trim());
                 if (wasUserOpened) {
                     newDetails.open = true;
                     newDetails.dataset.userToggled = "open";

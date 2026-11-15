@@ -737,15 +737,19 @@ export function updateStreamingToolBadge(element, toolData, overallStartTime) {
         const sec = overallStartTime ? ((Date.now() - overallStartTime) / 1000).toFixed(1) : "";
         const secText = sec ? ` (${sec}s)` : "";
         const fileDisplay = partialPath ? (partialPath.split("/").pop() || partialPath) : "";
+        let newLabel = "";
         if (diffCounts && diffCounts.adds > 0) {
             const countDisplay = diffCounts.dels > 0 ? `+${diffCounts.adds}/-${diffCounts.dels}` : `+${diffCounts.adds}`;
-            activityLabel.textContent = fileDisplay
+            newLabel = fileDisplay
                 ? `Writing ${fileDisplay} [${countDisplay}]...${secText}`
                 : `Streaming ${toolName} [${countDisplay}]...${secText}`;
         } else if (fileDisplay) {
-            activityLabel.textContent = `Streaming ${toolName} (${fileDisplay})...${secText}`;
+            newLabel = `Streaming ${toolName} (${fileDisplay})...${secText}`;
         } else {
-            activityLabel.textContent = `Streaming ${toolName}...${secText}`;
+            newLabel = `Streaming ${toolName}...${secText}`;
+        }
+        if (activityLabel.textContent !== newLabel) {
+            activityLabel.textContent = newLabel;
         }
     }
 }

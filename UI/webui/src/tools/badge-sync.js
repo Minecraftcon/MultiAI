@@ -143,10 +143,11 @@ export function setBadgeDiffStats(badgeEl, queryEl, statHtml) {
             queryEl.insertAdjacentElement("afterend", statsEl);
         }
     }
+    if (statsEl.innerHTML === (statHtml || "")) return;
     statsEl.innerHTML = statHtml || "";
     if (!statHtml && statsEl.parentNode) {
         statsEl.remove();
-    } else if (statsEl) {
+    } else if (statsEl && !badgeEl.classList.contains("is-streaming-tool")) {
         statsEl.classList.remove("stat-updated");
         void statsEl.offsetWidth; // retrigger reflow
         statsEl.classList.add("stat-updated");

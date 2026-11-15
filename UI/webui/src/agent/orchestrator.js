@@ -174,6 +174,10 @@ export async function runAgent(userText, currentAIMessage, chatId, images = [], 
     const statusTimer = setInterval(() => {
         const activityLabel = currentAIMessage.querySelector(".activity-label");
         if (activityLabel) {
+            // Do not fight with live streaming tool badge status
+            if (currentAIMessage._streamingToolBadges && currentAIMessage._streamingToolBadges.size > 0) {
+                return;
+            }
             const sec = ((Date.now() - overallStartTime) / 1000).toFixed(1);
             activityLabel.textContent = `${stageStatus}... (${sec}s)`;
         }
@@ -210,7 +214,7 @@ export async function runAgent(userText, currentAIMessage, chatId, images = [], 
                 });
             }
             const activityLabel = currentAIMessage.querySelector(".activity-label");
-            if (activityLabel) {
+            if (activityLabel && (!currentAIMessage._streamingToolBadges || currentAIMessage._streamingToolBadges.size === 0)) {
                 const sec = ((Date.now() - overallStartTime) / 1000).toFixed(1);
                 activityLabel.textContent = `${stageStatus}... (${sec}s)`;
             }

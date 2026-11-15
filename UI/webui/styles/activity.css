@@ -447,6 +447,15 @@
     letter-spacing: -0.01em;
 }
 
+/* Prevent opacity: 0 restart during live streaming so numbers count up smoothly without flickering */
+.search-badge-item.is-streaming-tool .badge-diff-stats .badge-diff-stat,
+.search-badge-item.is-streaming-tool .badge-diff-stats.stat-updated .badge-diff-stat {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+    filter: none !important;
+}
+
 .search-badge-item.is-streaming-tool .search-icon-circle i,
 .search-badge-item.is-streaming-tool .search-icon-circle svg {
     animation: streamingToolPulse 1.6s ease-in-out infinite;
