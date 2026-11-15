@@ -201,17 +201,9 @@ function generateInjectedScript(currentUrl, proxyOrigin) {
     })();
 
     // ── 4. Patch Location.prototype.assign / replace ──────────────────────────
-    try {
-        if (typeof Location !== "undefined" && Location.prototype) {
-            Location.prototype.assign = function(url) {
-                window.location.href = toProxyUrl(url);
-            };
-            Location.prototype.replace = function(url) {
-                // Use native replace to avoid adding a history entry
-                Object.getPrototypeOf(window.location).replace.call(window.location, toProxyUrl(url));
-            };
-        }
-    } catch (_) {}
+    // These are patched AFTER the href-setter patch so they can use nativeNavigate.
+    // We defer them into a closure that runs after nativeNavigate is defined.
+    // (They're defined below, after nativeNavigate is set up.)
 
     // ── 5. Patch History.pushState / replaceState (SPA navigation) ───────────
     try {
@@ -241,38 +233,83 @@ function generateInjectedScript(currentUrl, proxyOrigin) {
         }
     } catch (_) {}
 
-    // ── 6. Intercept window.location setter ──────────────────────────────────
-    // DuckDuckGo and other sites set location.href directly from JS
+    // ── 6. Intercept location.href setter ────────────────────────────────────
+    // DuckDuckGo autocomplete & many SPAs set location.href = "/path" or
+    // window.location.href = url directly from JS, going through Location.prototype's
+    // href setter. We capture the native setter BEFORE redefining it so that
+    // assign/replace/nativeNavigate can call it without infinite recursion.
+    let _nativeHrefSetter = null;
     try {
-        const locationDescriptor = Object.getOwnPropertyDescriptor(window, "location");
-        if (!locationDescriptor || locationDescriptor.configurable) {
-            let _locHref = window.location.href;
-            // We can't redefine window.location itself in modern browsers, but we patch assign/replace above.
-            // Additionally intercept document.location
+        const locProto = Object.getPrototypeOf(window.location);
+        const origDesc = Object.getOwnPropertyDescriptor(locProto, "href");
+        if (origDesc && typeof origDesc.set === "function") {
+            _nativeHrefSetter = origDesc.set;
+            Object.defineProperty(locProto, "href", {
+                configurable: true,
+                enumerable:   origDesc.enumerable,
+                get: origDesc.get,
+                set: function(url) {
+                    const proxied = toProxyUrl(String(url));
+                    try { _nativeHrefSetter.call(this, proxied); } catch (_) {}
+                }
+            });
         }
+    } catch (_) {}
+
+    // Helper: navigate via native setter (no double-proxy risk)
+    function nativeNavigate(url) {
+        const proxied = toProxyUrl(String(url));
+        if (_nativeHrefSetter) {
+            try { _nativeHrefSetter.call(window.location, proxied); return; } catch (_) {}
+        }
+        // Fallback — hits the patched setter but toProxyUrl is idempotent for already-proxied URLs
+        window.location.href = proxied;
+    }
+
+    // ── 4 (deferred). Patch Location.prototype.assign / replace ──────────────
+    // Now that nativeNavigate exists, wire assign/replace to it.
+    try {
+        if (typeof Location !== "undefined" && Location.prototype) {
+            Location.prototype.assign  = function(url) { nativeNavigate(String(url)); };
+            Location.prototype.replace = function(url) { nativeNavigate(String(url)); };
+        }
+    } catch (_) {}
+
+    // ── 6b. Patch HTMLFormElement.prototype.submit ────────────────────────────
+    // DDG calls form.submit() directly from JS — this bypasses addEventListener('submit').
+    try {
+        const _formSubmit = HTMLFormElement.prototype.submit;
+        HTMLFormElement.prototype._multiai_real_submit = _formSubmit; // expose for submit-event handler
+        HTMLFormElement.prototype.submit = function() {
+            const method = (this.getAttribute("method") || "GET").toUpperCase();
+            const rawAction = this.getAttribute("action") || CURRENT_URL;
+            try {
+                const actionUrl = new URL(rawAction, CURRENT_URL);
+                const formData = new FormData(this);
+                if (method === "GET") {
+                    for (const [key, val] of formData.entries()) {
+                        actionUrl.searchParams.append(key, val);
+                    }
+                    nativeNavigate(actionUrl.href);
+                } else {
+                    this.action = toProxyUrl(actionUrl.href);
+                    return _formSubmit.call(this);
+                }
+            } catch (_) {
+                return _formSubmit.call(this);
+            }
+        };
     } catch (_) {}
 
     // ── 7. Intercept all link clicks (capture phase, mousedown + click) ───────
     // mousedown handles DuckDuckGo-style links that set href on mousedown
-    function interceptAnchor(e) {
-        const a = e.target.closest("a[href]");
-        if (!a) return;
-        const href = a.getAttribute("href");
-        if (!href || href.startsWith("#") || href.startsWith("javascript:") || href.startsWith("mailto:")) return;
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        // Slight delay so DuckDuckGo's own mousedown handler can set data-url if needed
-        const finalHref = a.dataset.url || a.href || href;
-        window.location.href = toProxyUrl(finalHref);
-    }
     document.addEventListener("mousedown", function(e) {
-        // Only intercept left-clicks on links
         if (e.button !== 0) return;
         const a = e.target.closest("a[href]");
         if (!a) return;
         const href = a.getAttribute("href");
         if (!href || href.startsWith("#") || href.startsWith("javascript:") || href.startsWith("mailto:")) return;
-        // Store for the upcoming click handler
+        // Cache so the click handler can read the latest resolved href
         a._multiai_pending_href = a.href || href;
     }, true);
     document.addEventListener("click", function(e) {
@@ -284,10 +321,10 @@ function generateInjectedScript(currentUrl, proxyOrigin) {
         e.stopImmediatePropagation();
         const finalHref = a._multiai_pending_href || a.dataset.url || a.href || href;
         a._multiai_pending_href = null;
-        window.location.href = toProxyUrl(finalHref);
+        nativeNavigate(finalHref);
     }, true);
 
-    // ── 8. Intercept form submissions ─────────────────────────────────────────
+    // ── 8. Intercept form submissions (event-based) ───────────────────────────
     document.addEventListener("submit", function(e) {
         const form = e.target;
         if (!form) return;
@@ -302,20 +339,22 @@ function generateInjectedScript(currentUrl, proxyOrigin) {
                 for (const [key, val] of formData.entries()) {
                     actionUrl.searchParams.append(key, val);
                 }
-                window.location.href = toProxyUrl(actionUrl.href);
+                nativeNavigate(actionUrl.href);
             } else {
                 form.action = toProxyUrl(actionUrl.href);
-                form.submit();
+                // Use the real (unpatched) submit for POST — avoids re-entering our GET path
+                const realSubmit = HTMLFormElement.prototype._multiai_real_submit;
+                if (realSubmit) realSubmit.call(form);
             }
         } catch (_) {
-            window.location.href = toProxyUrl(action);
+            nativeNavigate(action);
         }
     }, true);
 
     // ── 9. Intercept window.open ──────────────────────────────────────────────
     try {
         window.open = function(url, target, features) {
-            if (url) { window.location.href = toProxyUrl(url); return window; }
+            if (url) { nativeNavigate(url); return window; }
         };
     } catch (_) {}
 
