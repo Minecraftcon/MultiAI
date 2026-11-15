@@ -9,6 +9,7 @@ import { saveCurrentChatState } from "../services/storage.js";
 import { requestScrollToBottom } from "./chat-ui.js";
 import { getTool } from "../tools/registry.js";
 import { openTerminal } from "./terminal-drawer.js";
+import { setBadgeDiffStats } from "../tools/badge-sync.js";
 
 
 /**
@@ -544,6 +545,248 @@ export function addToolBadge(element, toolName, args) {
     renderIcons(item);
     if (chat) requestScrollToBottom(chat);
     return item;
+}
+
+/**
+ * Extracts a partial or complete file path from in-flight streaming JSON arguments.
+ *
+ * @param {string} rawJson
+ * @returns {string}
+ */
+export function extractStreamingPath(rawJson) {
+    if (!rawJson || typeof rawJson !== "string") return "";
+    const m = rawJson.match(/"(?:path|TargetFile|target_file|file_path|FilePath)"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"?/i);
+    if (m && m[1]) {
+        try {
+            return JSON.parse(`"${m[1]}"`);
+        } catch (_) {
+            return m[1].replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+        }
+    }
+    return "";
+}
+
+/**
+ * Computes live diff stats (+lines, -lines) from in-flight streaming JSON arguments.
+ *
+ * @param {string} toolName
+ * @param {string} rawJson
+ * @returns {{adds: number, dels: number}|null}
+ */
+export function extractStreamingDiffCounts(toolName, rawJson) {
+    if (!rawJson || typeof rawJson !== "string") return null;
+
+    if (toolName === "write_file" || toolName === "create_file") {
+        const contentIdx = rawJson.search(/"(?:content|CodeContent)"\s*:\s*"/i);
+        if (contentIdx === -1) return null;
+
+        const valueStartMatch = rawJson.slice(contentIdx).match(/"(?:content|CodeContent)"\s*:\s*"/i);
+        if (!valueStartMatch) return null;
+        const valueStart = contentIdx + valueStartMatch[0].length;
+        const valuePortion = rawJson.slice(valueStart);
+
+        let lineCount = 1;
+        for (let i = 0; i < valuePortion.length; i++) {
+            if (valuePortion[i] === "\n") {
+                lineCount++;
+            } else if (valuePortion[i] === "\\" && valuePortion[i + 1] === "n") {
+                lineCount++;
+                i++;
+            }
+        }
+        return { adds: lineCount, dels: 0 };
+    }
+
+    if (toolName === "replace_file_content" || toolName === "search_and_replace") {
+        let dels = 0;
+        let adds = 0;
+
+        const targetMatch = rawJson.match(/"(?:target_content|TargetContent)"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"?/i);
+        if (targetMatch && targetMatch[1]) {
+            const rawTarget = targetMatch[1];
+            let targetLines = 1;
+            for (let i = 0; i < rawTarget.length; i++) {
+                if (rawTarget[i] === "\n" || (rawTarget[i] === "\\" && rawTarget[i + 1] === "n")) {
+                    targetLines++;
+                    if (rawTarget[i] === "\\") i++;
+                }
+            }
+            dels = targetLines;
+        }
+
+        const replIdx = rawJson.search(/"(?:replacement_content|ReplacementContent)"\s*:\s*"/i);
+        if (replIdx !== -1) {
+            const replStartMatch = rawJson.slice(replIdx).match(/"(?:replacement_content|ReplacementContent)"\s*:\s*"/i);
+            if (replStartMatch) {
+                const replStart = replIdx + replStartMatch[0].length;
+                const replPortion = rawJson.slice(replStart);
+                let replLines = 1;
+                for (let i = 0; i < replPortion.length; i++) {
+                    if (replPortion[i] === "\n" || (replPortion[i] === "\\" && replPortion[i + 1] === "n")) {
+                        replLines++;
+                        if (replPortion[i] === "\\") i++;
+                    }
+                }
+                adds = replLines;
+            }
+        }
+
+        if (dels > 0 || adds > 0) {
+            return { adds, dels };
+        }
+    }
+
+    if (toolName === "multi_replace_file_content") {
+        const replMatches = rawJson.match(/"(?:replacement_content|ReplacementContent)"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"?/gi);
+        const targetMatches = rawJson.match(/"(?:target_content|TargetContent)"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"?/gi);
+        let totalAdds = 0;
+        let totalDels = 0;
+        if (Array.isArray(targetMatches)) {
+            for (const tm of targetMatches) {
+                const m = tm.match(/"(?:target_content|TargetContent)"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"?/i);
+                if (m && m[1]) {
+                    totalDels += (m[1].split("\n").length || 1);
+                }
+            }
+        }
+        if (Array.isArray(replMatches)) {
+            for (const rm of replMatches) {
+                const m = rm.match(/"(?:replacement_content|ReplacementContent)"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"?/i);
+                if (m && m[1]) {
+                    totalAdds += (m[1].split("\n").length || 1);
+                }
+            }
+        }
+        if (totalAdds > 0 || totalDels > 0) {
+            return { adds: totalAdds, dels: totalDels };
+        }
+    }
+
+    return null;
+}
+
+/**
+ * Updates or mounts a tool execution badge in real-time while tool calls and arguments are streaming.
+ *
+ * @param {HTMLElement} element
+ * @param {Object} toolData
+ * @param {number} overallStartTime
+ */
+export function updateStreamingToolBadge(element, toolData, overallStartTime) {
+    if (!element || !toolData) return;
+
+    // 1. Auto-collapse thought box the moment tool streaming begins
+    element.querySelectorAll(".thought-box").forEach(tb => {
+        if (tb.dataset.userToggled !== "open") {
+            tb.open = false;
+        }
+    });
+
+    const toolName = toolData.name || "";
+    if (!toolName) return;
+
+    if (!element._streamingToolBadges) {
+        element._streamingToolBadges = new Map();
+    }
+
+    const badgeKey = toolData.id || String(toolData.index ?? 0);
+    let badgeEl = element._streamingToolBadges.get(badgeKey);
+
+    const accumulatedArgs = toolData.accumulatedArgs || "";
+    const partialPath = extractStreamingPath(accumulatedArgs);
+    const diffCounts = extractStreamingDiffCounts(toolName, accumulatedArgs);
+
+    if (!badgeEl) {
+        const initialArgs = { path: partialPath };
+        badgeEl = addToolBadge(element, toolName, initialArgs);
+        badgeEl.classList.add("is-streaming-tool");
+
+        const labelEl = badgeEl.querySelector(".search-label");
+        if (labelEl) {
+            if (toolName === "write_file") {
+                const isArtifact = partialPath.startsWith("$ARTIFACTS/") || partialPath.startsWith("${ARTIFACTS}/");
+                labelEl.textContent = isArtifact ? "Writing artifact" : "Writing file";
+            } else if (toolName === "replace_file_content" || toolName === "search_and_replace" || toolName === "multi_replace_file_content") {
+                labelEl.textContent = "Editing file";
+            }
+        }
+        element._streamingToolBadges.set(badgeKey, badgeEl);
+    }
+
+    const queryEl = badgeEl.querySelector(".search-query");
+    if (queryEl && partialPath && queryEl.textContent !== partialPath) {
+        queryEl.textContent = partialPath;
+        queryEl.dataset.full = partialPath;
+        queryEl.dataset.compact = partialPath;
+    }
+
+    if (diffCounts) {
+        let statHtml = "";
+        if (diffCounts.adds > 0) {
+            statHtml += `<span class="badge-diff-stat add">+${diffCounts.adds}</span>`;
+        }
+        if (diffCounts.dels > 0) {
+            statHtml += `<span class="badge-diff-stat del">-${diffCounts.dels}</span>`;
+        }
+        setBadgeDiffStats(badgeEl, queryEl, statHtml);
+    }
+
+    // Update activity status label with live line counts and elapsed time
+    const activityLabel = element.querySelector(".activity-label");
+    if (activityLabel) {
+        const sec = overallStartTime ? ((Date.now() - overallStartTime) / 1000).toFixed(1) : "";
+        const secText = sec ? ` (${sec}s)` : "";
+        const fileDisplay = partialPath ? (partialPath.split("/").pop() || partialPath) : "";
+        if (diffCounts && diffCounts.adds > 0) {
+            const countDisplay = diffCounts.dels > 0 ? `+${diffCounts.adds}/-${diffCounts.dels}` : `+${diffCounts.adds}`;
+            activityLabel.textContent = fileDisplay
+                ? `Writing ${fileDisplay} [${countDisplay}]...${secText}`
+                : `Streaming ${toolName} [${countDisplay}]...${secText}`;
+        } else if (fileDisplay) {
+            activityLabel.textContent = `Streaming ${toolName} (${fileDisplay})...${secText}`;
+        } else {
+            activityLabel.textContent = `Streaming ${toolName}...${secText}`;
+        }
+    }
+}
+
+/**
+ * Synchronizes a pre-mounted streaming tool badge with final execution arguments.
+ *
+ * @param {HTMLElement} badgeEl
+ * @param {string} toolName
+ * @param {Object} args
+ */
+export function syncToolBadgeArgs(badgeEl, toolName, args) {
+    if (!badgeEl || !args) return;
+    badgeEl.classList.remove("is-streaming-tool");
+    const isFileEditTool = (toolName === "replace_file_content" || toolName === "multi_replace_file_content" || toolName === "search_and_replace");
+    const config = getToolBadgeConfig(toolName, args);
+    const labelEl = badgeEl.querySelector(".search-label");
+    const queryEl = badgeEl.querySelector(".search-query");
+
+    if (labelEl && config.label) {
+        labelEl.textContent = isFileEditTool ? "Editing" : config.label;
+    }
+    if (queryEl && config.compactDetail) {
+        queryEl.textContent = config.compactDetail;
+        queryEl.dataset.full = config.detail;
+        queryEl.dataset.compact = config.compactDetail;
+    }
+    if (config.diffStatsHtml && queryEl) {
+        setBadgeDiffStats(badgeEl, queryEl, config.diffStatsHtml);
+    }
+    if (config.isArtifact) {
+        badgeEl.dataset.artifactPath = args.path;
+        badgeEl.classList.add("artifact-badge-item");
+    }
+    if (isFileEditTool) {
+        const editFilePath = args.path || args.TargetFile || args.target_file || args.file_path || "";
+        if (editFilePath) {
+            badgeEl.classList.add("file-edit-badge", "is-editing");
+            badgeEl.dataset.editFile = editFilePath;
+        }
+    }
 }
 
 /**

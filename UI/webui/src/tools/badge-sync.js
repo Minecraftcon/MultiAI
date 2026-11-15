@@ -127,6 +127,33 @@ export function onToolStart(name, args, badgeEl) {
 }
 
 /**
+ * Sets or updates the diff stats pill (+N / -N) on a tool badge with rollup animation.
+ */
+export function setBadgeDiffStats(badgeEl, queryEl, statHtml) {
+    if (!badgeEl || !queryEl) return;
+    let statsEl = badgeEl.querySelector(".badge-diff-stats");
+    if (!statsEl) {
+        if (!statHtml) return;
+        statsEl = document.createElement("span");
+        statsEl.className = "badge-diff-stats";
+        const countEl = badgeEl.querySelector(".badge-edit-count");
+        if (countEl) {
+            countEl.insertAdjacentElement("afterend", statsEl);
+        } else {
+            queryEl.insertAdjacentElement("afterend", statsEl);
+        }
+    }
+    statsEl.innerHTML = statHtml || "";
+    if (!statHtml && statsEl.parentNode) {
+        statsEl.remove();
+    } else if (statsEl) {
+        statsEl.classList.remove("stat-updated");
+        void statsEl.offsetWidth; // retrigger reflow
+        statsEl.classList.add("stat-updated");
+    }
+}
+
+/**
  * Updates badge indicators and collapse panel output upon completion.
  */
 export function onToolComplete(name, args, badgeEl, data, options = {}) {
@@ -239,30 +266,6 @@ export function onToolComplete(name, args, badgeEl, data, options = {}) {
                 `;
             }
         }
-
-function setBadgeDiffStats(badgeEl, queryEl, statHtml) {
-    if (!badgeEl || !queryEl) return;
-    let statsEl = badgeEl.querySelector(".badge-diff-stats");
-    if (!statsEl) {
-        if (!statHtml) return;
-        statsEl = document.createElement("span");
-        statsEl.className = "badge-diff-stats";
-        const countEl = badgeEl.querySelector(".badge-edit-count");
-        if (countEl) {
-            countEl.insertAdjacentElement("afterend", statsEl);
-        } else {
-            queryEl.insertAdjacentElement("afterend", statsEl);
-        }
-    }
-    statsEl.innerHTML = statHtml || "";
-    if (!statHtml && statsEl.parentNode) {
-        statsEl.remove();
-    } else if (statsEl) {
-        statsEl.classList.remove("stat-updated");
-        void statsEl.offsetWidth; // retrigger reflow
-        statsEl.classList.add("stat-updated");
-    }
-}
 
     if ((name === "replace_file_content" || name === "multi_replace_file_content" || name === "search_and_replace") && data) {
         const queryEl = badgeEl.querySelector(".search-query");

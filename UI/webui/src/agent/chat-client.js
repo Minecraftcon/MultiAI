@@ -13,7 +13,7 @@ import { getActiveContextFilterer } from "./context-filter.js";
  * @param {Array<Object>} options.tools
  * @returns {Promise<Object>}
  */
-export async function callChatModel(messages, { model, tools, signal, onChunk, system_server } = {}) {
+export async function callChatModel(messages, { model, tools, signal, onChunk, onToolChunk, system_server } = {}) {
     let effectiveModel = model;
     if (effectiveModel === "dots-3-note-preview:free") {
         effectiveModel = "dots-studio/dots-3-note-preview:free";
@@ -202,6 +202,17 @@ export async function callChatModel(messages, { model, tools, signal, onChunk, s
                             if (sig) {
                                 toolCallsMap[idx].thoughtSignature = sig;
                                 toolCallsMap[idx].thought_signature = sig;
+                            }
+
+                            if (onToolChunk) {
+                                onToolChunk({
+                                    index: idx,
+                                    id: toolCallsMap[idx].id,
+                                    name: toolCallsMap[idx].function.name,
+                                    deltaName: tc.function?.name || "",
+                                    deltaArgs: tc.function?.arguments || "",
+                                    accumulatedArgs: toolCallsMap[idx].function.arguments
+                                });
                             }
                         }
                     }

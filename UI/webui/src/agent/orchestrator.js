@@ -5,6 +5,7 @@ import { extractText, formatToolResult, extractChatTitleAndContent } from "../ut
 import { tools, getActiveToolSchemas, executeTool, onToolStart, onToolComplete, onToolError, hasTool, McpActiveTools } from "../tools/index.js";
 import { registerAgentRunner } from "../tools/terminal/task-watcher.js";
 import { addToolBadge, addThoughtTrace, clearAIStream, updateAIStream, finalizeStopped } from "../components/chat-ui.js";
+import { updateStreamingToolBadge, syncToolBadgeArgs } from "../components/chat-tool-badges.js";
 import { saveStoredChats } from "../services/storage.js";
 import { renderChatList } from "../components/side-panel.js";
 import { sanitizeMessage } from "./sanitizer.js";
@@ -250,6 +251,11 @@ export async function runAgent(userText, currentAIMessage, chatId, images = [], 
                         if (currentAIMessage && !genState.abortRequested) {
                             updateAIStream(currentAIMessage, accumulated, false, overallStartTime, hasRunTools);
                         }
+                    } : undefined,
+                    onToolChunk: isStreamingEnabled ? (toolData) => {
+                        if (currentAIMessage && !genState.abortRequested) {
+                            updateStreamingToolBadge(currentAIMessage, toolData, overallStartTime);
+                        }
                     } : undefined
                 });
             } catch (err) {
@@ -282,6 +288,11 @@ export async function runAgent(userText, currentAIMessage, chatId, images = [], 
                                 onChunk: isStreamingEnabledRetry ? (chunk, accumulated) => {
                                     if (currentAIMessage && !genState.abortRequested) {
                                         updateAIStream(currentAIMessage, accumulated, false, overallStartTime, hasRunTools);
+                                    }
+                                } : undefined,
+                                onToolChunk: isStreamingEnabledRetry ? (toolData) => {
+                                    if (currentAIMessage && !genState.abortRequested) {
+                                        updateStreamingToolBadge(currentAIMessage, toolData, overallStartTime);
                                     }
                                 } : undefined
                             });
@@ -579,7 +590,15 @@ export async function runAgent(userText, currentAIMessage, chatId, images = [], 
                 }
 
                 stageStatus = `Running ${toolName}`;
-                const badgeEl = addToolBadge(currentAIMessage, toolName, args);
+                let badgeEl = currentAIMessage._streamingToolBadges?.get(call.id || String(i));
+                if (!badgeEl && currentAIMessage._streamingToolBadges) {
+                    badgeEl = currentAIMessage._streamingToolBadges.get(String(i));
+                }
+                if (badgeEl) {
+                    syncToolBadgeArgs(badgeEl, toolName, args);
+                } else {
+                    badgeEl = addToolBadge(currentAIMessage, toolName, args);
+                }
 
                 let result;
                 const filePath = args.path || args.AbsolutePath || args.file_path || args.target_file;
@@ -745,6 +764,10 @@ export async function runAgent(userText, currentAIMessage, chatId, images = [], 
                         content: JSON.stringify({ error: `Maximum of ${MAX_TOOLS_PER_ROUND} tool calls per round reached.` })
                     });
                 }
+            }
+
+            if (currentAIMessage && currentAIMessage._streamingToolBadges) {
+                currentAIMessage._streamingToolBadges.clear();
             }
         }
 
