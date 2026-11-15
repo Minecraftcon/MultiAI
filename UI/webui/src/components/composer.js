@@ -107,7 +107,7 @@ export async function send() {
     chatbox.clearInput();
 
     // Parse on-text skills and inline entities from the message
-    const { skills: onTextSkills, cleanText: skillCleanText } = parseOnTextSkills(rawText);
+    const { skills: onTextSkills, cleanText } = parseOnTextSkills(rawText);
     const { elements: inlineElements, skills: inlineSkills } = extractEntitiesFromText(rawText);
 
     // Merge all skills (on-text + inline + persistent)
@@ -227,7 +227,7 @@ export async function send() {
 
     try {
         // Build multimodal payload or doc-augmented text
-        let promptText = cleanPromptText(skillCleanText || rawText);
+        let promptText = cleanPromptText(cleanText || rawText);
 
         if (docs.length > 0) {
             const docContexts = docs.map(d => {
