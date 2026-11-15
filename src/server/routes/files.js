@@ -2,6 +2,7 @@ const fs = require("fs");
 const path = require("path");
 const { resolveSafePath, formatBytes, getMimeType, sendJSON, postJSON } = require("../utils");
 const { handleCodeGrep, handleSearchAndReplace, handleReplaceFileContent, handleMultiReplaceFileContent, handleWriteFile, handleListDir, handleFindFiles } = require("../../tools/filesystem/code_tools");
+const { workspaceWatcher } = require("../../core/workspace_watcher");
 
 async function handleFileRead(args, chatId) {
     const rawPath = args.path || args.AbsolutePath || args.target_file || args.file_path;
@@ -182,6 +183,17 @@ async function handleFileRead(args, chatId) {
 async function handleFilesRoute(req, res) {
     const reqUrl = req.url.split("?")[0];
     try {
+        if (req.method === "GET" && reqUrl === "/api/file/events") {
+            return workspaceWatcher.handleEventsSSE(req, res);
+        }
+
+        if (req.method === "GET" && reqUrl === "/api/file/version") {
+            return sendJSON(res, 200, {
+                version: workspaceWatcher.getWorkspaceVersion(),
+                workspace: workspaceWatcher.watchedDir || process.cwd()
+            });
+        }
+
         let body = "";
         for await (const chunk of req) body += chunk;
         const args = JSON.parse(body || "{}");
@@ -204,16 +216,19 @@ async function handleFilesRoute(req, res) {
 
         if (reqUrl === "/api/file/write") {
             const result = await handleWriteFile(args, chatId, { resolveSafePath });
+            workspaceWatcher.notifyChange("write", args.path || "");
             return sendJSON(res, 200, result);
         }
 
         if (reqUrl === "/api/file/replace" || reqUrl === "/api/file/search-replace") {
             const result = await handleReplaceFileContent(args, chatId, { resolveSafePath });
+            workspaceWatcher.notifyChange("replace", args.path || args.target_file || "");
             return sendJSON(res, 200, result);
         }
 
         if (reqUrl === "/api/file/multi-replace") {
             const result = await handleMultiReplaceFileContent(args, chatId, { resolveSafePath });
+            workspaceWatcher.notifyChange("multi-replace", args.path || args.target_file || "");
             return sendJSON(res, 200, result);
         }
 

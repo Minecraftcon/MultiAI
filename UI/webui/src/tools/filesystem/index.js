@@ -108,6 +108,7 @@ export const writeFileTool = {
         const result = await toolFetch("/api/file/write", { method: "POST", body: payload, genState });
         if (result && !result.error) {
             try { document.dispatchEvent(new CustomEvent("changesUpdated", { detail: { chatId: state.currentChatId } })); } catch (_) {}
+            try { window.dispatchEvent(new CustomEvent("workspace-files-changed")); } catch (_) {}
         }
         return result;
     }
@@ -175,6 +176,7 @@ export const replaceFileContentTool = {
         const result = await toolFetch("/api/file/replace", { method: "POST", body: payload, genState });
         if (result && !result.error) {
             try { document.dispatchEvent(new CustomEvent("changesUpdated", { detail: { chatId: state.currentChatId } })); } catch (_) {}
+            try { window.dispatchEvent(new CustomEvent("workspace-files-changed")); } catch (_) {}
         }
         return result;
     }
@@ -248,6 +250,7 @@ export const multiReplaceFileContentTool = {
         const result = await toolFetch("/api/file/multi-replace", { method: "POST", body: payload, genState });
         if (result && !result.error) {
             try { document.dispatchEvent(new CustomEvent("changesUpdated", { detail: { chatId: state.currentChatId } })); } catch (_) {}
+            try { window.dispatchEvent(new CustomEvent("workspace-files-changed")); } catch (_) {}
         }
         return result;
     }

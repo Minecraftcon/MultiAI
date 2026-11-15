@@ -88,6 +88,9 @@ class RightPanelManager {
         this.moreBtn = null;
         this.treeExpandedPaths = new Set(["."]);
         this.treeCache = new Map();
+        this.lastWorkspaceVersion = null;
+        this.eventSource = null;
+        this._refreshDebounceTimer = null;
 
         this.itemReview = null;
         this.reviewBadgeEl = null;
@@ -150,6 +153,7 @@ class RightPanelManager {
         this.browserIframe = document.getElementById("rightPanelBrowserFrame");
         this.browserBackBtn = document.getElementById("browserBackBtn");
         this.browserReloadBtn = document.getElementById("browserReloadBtn");
+        this.browserInspectBtn = document.getElementById("browserInspectBtn");
         this.browserOpenExternalBtn = document.getElementById("browserOpenExternalBtn");
 
         // Load persisted width
@@ -161,6 +165,7 @@ class RightPanelManager {
 
         renderIcons(this.panelEl);
         this.bindEvents();
+        this.initWorkspaceWatcher();
     }
 
     bindEvents() {
@@ -279,7 +284,7 @@ class RightPanelManager {
             this.itemTerminal.addEventListener("click", () => this.openTerminalTab());
         }
         if (this.itemBrowser) {
-            this.itemBrowser.addEventListener("click", () => this.openBrowserTab("http://localhost:4440"));
+            this.itemBrowser.addEventListener("click", () => this.openBrowserTab("https://duckduckgo.com"));
         }
         if (this.itemExtensions) {
             this.itemExtensions.addEventListener("click", () => this.openExtensionsTab());
@@ -323,12 +328,42 @@ class RightPanelManager {
                 }
             });
         }
+        if (this.browserInspectBtn) {
+            this.browserInspectBtn.addEventListener("click", () => {
+                import("./element-inspector.js").then(ei => {
+                    ei.toggleElementInspection();
+                });
+            });
+        }
         if (this.browserOpenExternalBtn) {
             this.browserOpenExternalBtn.addEventListener("click", () => {
                 const u = this.normalizeUrl(this.browserUrlInput?.value || "http://localhost:4440");
                 if (u) window.open(u, "_blank");
             });
         }
+
+        // Listen for navigation & title updates from embedded browser proxy iframe
+        window.addEventListener("message", (e) => {
+            if (e.data && e.data.type === "MULTIAI_BROWSER_NAVIGATED") {
+                const finalUrl = e.data.url;
+                const pageTitle = e.data.title;
+                if (finalUrl && this.browserUrlInput) {
+                    this.browserUrlInput.value = finalUrl;
+                }
+                const activeTab = this.tabs.find(t => t.id === this.activeTabId);
+                if (activeTab && activeTab.type === "browser") {
+                    if (finalUrl) activeTab.url = finalUrl;
+                    if (pageTitle && pageTitle !== "about:blank") {
+                        activeTab.title = pageTitle;
+                    } else {
+                        try {
+                            activeTab.title = new URL(activeTab.url).host || "Browser";
+                        } catch (_) {}
+                    }
+                    this.renderTabStrip();
+                }
+            }
+        });
 
         // Resizer drag handler
         if (this.resizerEl) {
@@ -433,6 +468,7 @@ class RightPanelManager {
         this.renderActiveTab();
         this.loadTasks();
         this.checkWorkspaceChanges();
+        this.debouncedRefreshFileTree();
         this.startPolling();
     }
 
@@ -449,6 +485,77 @@ class RightPanelManager {
             this.toggleBtn.classList.remove("active");
         }
         this.stopPolling();
+    }
+
+    initWorkspaceWatcher() {
+        if (typeof window === "undefined") return;
+        if (this.eventSource) {
+            try { this.eventSource.close(); } catch (_) {}
+            this.eventSource = null;
+        }
+
+        if (window.EventSource) {
+            try {
+                this.eventSource = new EventSource("/api/file/events");
+                this.eventSource.onmessage = (e) => {
+                    try {
+                        const data = JSON.parse(e.data);
+                        if (data && data.version && data.version !== this.lastWorkspaceVersion) {
+                            this.lastWorkspaceVersion = data.version;
+                            this.debouncedRefreshFileTree();
+                        }
+                    } catch (_) {}
+                };
+                this.eventSource.onerror = () => {
+                    // EventSource automatically attempts auto-reconnection
+                };
+            } catch (err) {
+                console.warn("[RightPanel] SSE watch connection failed:", err.message);
+            }
+        }
+
+        // Listen for internal app events (e.g. tool execution, Ace editor save)
+        window.addEventListener("workspace-files-changed", () => {
+            this.debouncedRefreshFileTree();
+        });
+    }
+
+    debouncedRefreshFileTree() {
+        if (this._refreshDebounceTimer) {
+            clearTimeout(this._refreshDebounceTimer);
+        }
+        this._refreshDebounceTimer = setTimeout(() => {
+            this.refreshFileTree(true);
+        }, 150);
+    }
+
+    async refreshFileTree(force = true) {
+        if (force) {
+            this.treeCache.clear();
+        }
+
+        // 1. If viewer sidebar is mounted in DOM
+        const listEl = document.getElementById("viewerSidebarList");
+        if (listEl) {
+            const filterInput = document.getElementById("viewerSidebarFilterInput");
+            const filterVal = filterInput ? filterInput.value.trim() : "";
+            const activeTab = (this.tabs || []).find(t => t.id === this.activeTabId);
+            const isDiffMode = Boolean(activeTab?.isDiff);
+            const currentFilePath = activeTab?.path || "";
+
+            const prevScrollTop = listEl.scrollTop || 0;
+            await this.renderViewerSidebarContent(listEl, filterVal, currentFilePath, isDiffMode);
+            listEl.scrollTop = prevScrollTop;
+        }
+
+        // 2. If launcher search tree is active
+        if (this.showSearchTree && this.searchResultsEl && this.searchResultsEl.style.display !== "none") {
+            const query = this.searchInputEl?.value.trim() || "";
+            await this.renderFileTree(query);
+        }
+
+        // 3. Update changes badge
+        this.checkWorkspaceChanges();
     }
 
     startPolling() {
@@ -472,6 +579,10 @@ class RightPanelManager {
             const res = await fetch("/api/history/changes");
             if (res.ok) {
                 const data = await res.json();
+                if (data.version && data.version !== this.lastWorkspaceVersion) {
+                    this.lastWorkspaceVersion = data.version;
+                    this.debouncedRefreshFileTree();
+                }
                 const count = Array.isArray(data.files) ? data.files.length : 0;
                 if (this.reviewBadgeEl) {
                     if (count > 0) {
@@ -1052,6 +1163,7 @@ class RightPanelManager {
 
             if (res.ok) {
                 this.activeAceContent = newContent;
+                this.debouncedRefreshFileTree();
                 if (saveBtn) {
                     saveBtn.classList.add("saved");
                     saveBtn.innerHTML = '<i data-lucide="check"></i> <span>Saved</span>';
@@ -1113,7 +1225,17 @@ class RightPanelManager {
     async loadViewerSidebar(folderPath, currentFilePath, isDiffMode = false) {
         const listEl = document.getElementById("viewerSidebarList");
         const filterInput = document.getElementById("viewerSidebarFilterInput");
+        const refreshBtn = document.getElementById("viewerSidebarRefreshBtn");
         if (!listEl) return;
+
+        if (refreshBtn && !refreshBtn.dataset.bound) {
+            refreshBtn.dataset.bound = "true";
+            refreshBtn.addEventListener("click", async () => {
+                refreshBtn.classList.add("spinning");
+                await this.refreshFileTree(true);
+                setTimeout(() => refreshBtn.classList.remove("spinning"), 400);
+            });
+        }
 
         if (filterInput) {
             filterInput.value = "";
@@ -1436,6 +1558,11 @@ class RightPanelManager {
                     <div class="viewer-sidebar-pane">
                         <div class="viewer-sidebar-header">
                             <span class="viewer-sidebar-title">Changes</span>
+                            <div class="viewer-sidebar-actions">
+                                <button class="viewer-sidebar-icon-btn" id="viewerSidebarRefreshBtn" title="Refresh changes">
+                                    <i data-lucide="refresh-cw"></i>
+                                </button>
+                            </div>
                         </div>
                         <div class="viewer-sidebar-search-box">
                             <i data-lucide="search" class="viewer-sidebar-search-icon"></i>
@@ -1606,6 +1733,11 @@ class RightPanelManager {
                     <div class="viewer-sidebar-pane">
                         <div class="viewer-sidebar-header">
                             <span class="viewer-sidebar-title">Workspace</span>
+                            <div class="viewer-sidebar-actions">
+                                <button class="viewer-sidebar-icon-btn" id="viewerSidebarRefreshBtn" title="Refresh files (live auto-updates active)">
+                                    <i data-lucide="refresh-cw"></i>
+                                </button>
+                            </div>
                         </div>
                         <div class="viewer-sidebar-search-box">
                             <i data-lucide="search" class="viewer-sidebar-search-icon"></i>
@@ -1705,15 +1837,55 @@ class RightPanelManager {
 
     normalizeUrl(rawUrl) {
         let u = (rawUrl || "").trim();
-        if (!u) return "http://localhost:4440";
-        if (!u.startsWith("http://") && !u.startsWith("https://")) {
-            if (u.startsWith("localhost") || u.startsWith("127.0.0.1") || u.startsWith("0.0.0.0") || /:\d+/.test(u)) {
-                u = "http://" + u;
-            } else {
-                u = "https://" + u;
-            }
+        if (!u) return "https://duckduckgo.com";
+
+        // 1. Explicit search engines prefix: "g query", "google query", "!g query"
+        if (/^(!g|g|google)\s+/i.test(u)) {
+            const q = u.replace(/^(!g|g|google)\s+/i, "").trim();
+            return `https://www.google.com/search?q=${encodeURIComponent(q)}`;
         }
-        return u;
+        if (/^(!d|ddg|duckduckgo)\s+/i.test(u)) {
+            const q = u.replace(/^(!d|ddg|duckduckgo)\s+/i, "").trim();
+            return `https://duckduckgo.com/?q=${encodeURIComponent(q)}`;
+        }
+        if (/^(!b|b|bing)\s+/i.test(u)) {
+            const q = u.replace(/^(!b|b|bing)\s+/i, "").trim();
+            return `https://www.bing.com/search?q=${encodeURIComponent(q)}`;
+        }
+
+        // 2. Already starts with protocol
+        if (u.startsWith("http://") || u.startsWith("https://")) {
+            if (/\s/.test(u)) {
+                return `https://duckduckgo.com/?q=${encodeURIComponent(u)}`;
+            }
+            return u;
+        }
+
+        // 3. Localhost or private IP address with optional port
+        if (
+            u.startsWith("localhost") ||
+            u.startsWith("127.0.0.1") ||
+            u.startsWith("0.0.0.0") ||
+            /^192\.168\.\d+\.\d+/i.test(u) ||
+            /^10\.\d+\.\d+\.\d+/i.test(u) ||
+            /^172\.(1[6-9]|2\d|3[01])\.\d+\.\d+/i.test(u)
+        ) {
+            return "http://" + u;
+        }
+
+        // 4. Port only pattern like :3000
+        if (/^:\d+/.test(u)) {
+            return "http://localhost" + u;
+        }
+
+        // 5. Valid domain (no spaces, contains a dot with 2+ letter TLD)
+        const domainPattern = /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+(\/.*)?$/;
+        if (!/\s/.test(u) && domainPattern.test(u)) {
+            return "https://" + u;
+        }
+
+        // 6. Otherwise: Web Search Query!
+        return `https://duckduckgo.com/?q=${encodeURIComponent(u)}`;
     }
 
     resolveIframeSrc(cleanUrl) {
@@ -1817,28 +1989,55 @@ class RightPanelManager {
         this.executeSearch(query);
     }
 
+    findExactFileMatch(q) {
+        if (!q) return null;
+        const norm = q.trim().replace(/^\.\//, "");
+        for (const [dir, entries] of this.treeCache.entries()) {
+            if (Array.isArray(entries)) {
+                for (const item of entries) {
+                    if (!item.isDir && (item.path === norm || item.name === norm)) {
+                        return item.path;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
     handleSearchSubmit() {
         if (!this.searchInputEl) return;
         const q = this.searchInputEl.value.trim();
         if (!q) return;
 
+        // 1. Explicit URL / Domain
         if (this.isUrlString(q)) {
             this.openBrowserTab(q);
             this.hideSearchResults();
             return;
         }
 
-        this.openFileTab(q);
+        // 2. Exact file match in workspace
+        const exactFile = this.findExactFileMatch(q);
+        if (exactFile) {
+            this.openFileTab(exactFile);
+            this.hideSearchResults();
+            return;
+        }
+
+        // 3. Otherwise: Web Search in embedded browser
+        this.openBrowserTab(q);
         this.hideSearchResults();
     }
 
     isUrlString(str) {
         const s = (str || "").trim().toLowerCase();
+        if (!s || /\s/.test(s)) return false;
         return s.startsWith("http://") ||
                s.startsWith("https://") ||
-               s.startsWith("localhost:") ||
-               s.startsWith("127.0.0.1:") ||
-               /^([a-z0-9-]+\.)+[a-z]{2,}(\/.*)?$/i.test(s);
+               s.startsWith("localhost") ||
+               s.startsWith("127.0.0.1") ||
+               s.startsWith("0.0.0.0") ||
+               /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+(\/.*)?$/.test(s);
     }
 
     async fetchDirectory(dirPath = ".") {
@@ -1941,7 +2140,15 @@ class RightPanelManager {
     }
 
     async buildDirectoryTreeHtml(dirPath = ".", depth = 0, activePath = "") {
-        const entries = this.treeCache.get(dirPath) || await this.fetchDirectory(dirPath);
+        const rawEntries = this.treeCache.get(dirPath) || await this.fetchDirectory(dirPath);
+        const entries = Array.isArray(rawEntries) ? [...rawEntries] : [];
+        entries.sort((a, b) => {
+            const aDir = Boolean(a.isDir);
+            const bDir = Boolean(b.isDir);
+            if (aDir && !bDir) return -1;
+            if (!aDir && bDir) return 1;
+            return (a.name || "").localeCompare(b.name || "");
+        });
         let html = "";
         for (const entry of entries) {
             const isDir = Boolean(entry.isDir);
@@ -2183,10 +2390,21 @@ class RightPanelManager {
         }
 
         let finalHtml = "";
+        const webSearchSection = term ? `
+            <div class="search-section" style="margin-bottom: 8px;">
+                <div class="search-file-item search-web-item" data-action="web-search" data-val="${escapeHTML(filterQuery)}" style="cursor: pointer;">
+                    <span class="search-file-badge" style="color: var(--accent);">WEB</span>
+                    <span class="search-file-name">Search web for: <strong style="color: var(--accent);">${escapeHTML(filterQuery)}</strong></span>
+                    <span class="search-file-path">Browser</span>
+                </div>
+            </div>
+        ` : "";
+
         if (!this.showSearchTree) {
             // Normal mode: only Files & Code, full width!
             finalHtml = `
                 <div class="search-details-pane full-width">
+                    ${webSearchSection}
                     <div class="search-section">
                         <div class="search-section-header">
                             <span class="search-section-title">Files</span>
@@ -2223,6 +2441,7 @@ class RightPanelManager {
                 <div class="search-split-container" id="searchSplitContainer">
                     <!-- Left Column: Files & Code matches -->
                     <div class="search-details-pane" style="flex: 0 0 ${this.searchSplitPercent}%; width: ${this.searchSplitPercent}%;">
+                        ${webSearchSection}
                         <div class="search-section">
                             <div class="search-section-header">
                                 <span class="search-section-title">Files</span>
@@ -2386,6 +2605,16 @@ class RightPanelManager {
                 const p = item.getAttribute("data-path");
                 if (p) {
                     this.openFileTab(p);
+                    this.hideSearchResults();
+                }
+            });
+        });
+
+        this.searchResultsEl.querySelectorAll('.search-web-item[data-action="web-search"]').forEach((item) => {
+            item.addEventListener("click", () => {
+                const q = item.getAttribute("data-val");
+                if (q) {
+                    this.openBrowserTab(q);
                     this.hideSearchResults();
                 }
             });
@@ -2600,6 +2829,47 @@ class RightPanelManager {
                 this.viewerMountEl.innerHTML = '<div class="tasks-empty-state">Unable to load task output.</div>';
             }
         }
+    }
+
+    getEditorContext() {
+        const activeTab = (this.tabs || []).find(t => t.id === this.activeTabId);
+        if (!activeTab || activeTab.isTerminal || activeTab.isBrowser) {
+            return null;
+        }
+
+        const filePath = activeTab.path || "";
+        const isDiff = Boolean(activeTab.isDiff);
+
+        if (this.activeAceEditor) {
+            try {
+                const pos = this.activeAceEditor.getCursorPosition() || { row: 0, column: 0 };
+                const selectedText = (this.activeAceEditor.getSelectedText() || "").trim();
+                const lineCount = this.activeAceEditor.session?.getLength() || 0;
+                const currentLineText = (this.activeAceEditor.session?.getLine(pos.row) || "").trim();
+
+                return {
+                    filePath,
+                    isEditing: true,
+                    isDiff,
+                    cursor: {
+                        line: pos.row + 1,
+                        column: pos.column + 1,
+                        totalLines: lineCount
+                    },
+                    currentLineText: currentLineText || undefined,
+                    selectedText: selectedText || undefined
+                };
+            } catch (_) {}
+        }
+
+        // Active file viewer tab (even if not currently in Ace edit mode)
+        const windowSelection = (typeof window !== "undefined" ? window.getSelection()?.toString() : "")?.trim() || "";
+        return {
+            filePath,
+            isEditing: false,
+            isDiff,
+            selectedText: windowSelection || undefined
+        };
     }
 }
 

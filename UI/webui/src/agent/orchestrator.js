@@ -12,6 +12,8 @@ import { callChatModel } from "./chat-client.js";
 import { extractThoughtAndContent } from "../components/renderer.js";
 import { shouldCompact, compactSessionContext, compileWorkingMessages } from "./compactor.js";
 import { isVerificationToolCall, shouldTriggerVerification, getVerificationPrompt } from "./verification-gate.js";
+import { rightPanel } from "../components/right-panel.js";
+import { terminalDrawer } from "../components/terminal-drawer.js";
 
 function isPromissoryAnnouncement(text) {
     if (!text) return false;
@@ -87,6 +89,40 @@ export async function runAgent(userText, currentAIMessage, chatId, images = [], 
     const isFirstUserTurn = session.messages.filter(m => m.role === "user").length === 1;
 
     let ephemeralServerDirective = isFirstUserTurn ? { ephemeral: TITLE_SYSTEM_PROMPT.trim() } : null;
+
+    // Capture user IDE/Workspace runtime context (editor cursor position & terminal buffer)
+    const runtimeContextDirectives = [];
+    try {
+        const editorCtx = rightPanel?.getEditorContext ? rightPanel.getEditorContext() : null;
+        if (editorCtx && editorCtx.filePath) {
+            let details = `Active File: "${editorCtx.filePath}" (${editorCtx.isEditing ? "user is actively editing" : "viewing"})`;
+            if (editorCtx.cursor) {
+                details += `\nCursor Position: Line ${editorCtx.cursor.line}, Column ${editorCtx.cursor.column} (Total lines: ${editorCtx.cursor.totalLines})`;
+            }
+            if (editorCtx.currentLineText) {
+                details += `\nCurrent Line Content: ${editorCtx.currentLineText}`;
+            }
+            if (editorCtx.selectedText) {
+                details += `\nUser Selected Text:\n"""\n${editorCtx.selectedText.slice(0, 1500)}\n"""`;
+            }
+            runtimeContextDirectives.push({
+                scope: "user_editor_context",
+                priority: "medium",
+                instruction: `[USER ACTIVE EDITOR CONTEXT]:\n${details}\n(The user is focused on this location; maintain awareness if discussing or modifying this file).`
+            });
+        }
+    } catch (_) {}
+
+    try {
+        const termCtx = terminalDrawer?.getTerminalContext ? terminalDrawer.getTerminalContext(35) : null;
+        if (termCtx && termCtx.recentOutput) {
+            runtimeContextDirectives.push({
+                scope: "user_terminal_context",
+                priority: "medium",
+                instruction: `[USER RECENT TERMINAL CONTEXT]:\nStatus: ${termCtx.isOpen ? "Terminal window is currently OPEN/VISIBLE" : "Background terminal session"}\nSession: ${termCtx.title || termCtx.sessionId}\nRecent Output Buffer:\n\`\`\`\n${termCtx.recentOutput.slice(-2500)}\n\`\`\`\n(This is the user's live terminal output; consider this when diagnosing errors, test results, or CLI status).`
+            });
+        }
+    } catch (_) {}
 
     const selectedModel = session.model || (modelSelect ? modelSelect.value : "gemini-2.5-flash");
     const overallStartTime = Date.now();
@@ -169,9 +205,22 @@ export async function runAgent(userText, currentAIMessage, chatId, images = [], 
                     return;
                 }
                 const workingMessages = compileWorkingMessages(session);
-                const currentSystemServer = ephemeralServerDirective || transientCorrectionNotice || null;
-                ephemeralServerDirective = null; // consume single-round directive
-                transientCorrectionNotice = null; // consume single-round correction
+                const directivesToInclude = [];
+                if (ephemeralServerDirective) {
+                    directivesToInclude.push(ephemeralServerDirective);
+                    ephemeralServerDirective = null; // consume single-round directive
+                }
+                if (runtimeContextDirectives.length > 0 && round === 0) {
+                    directivesToInclude.push(...runtimeContextDirectives);
+                }
+                if (transientCorrectionNotice) {
+                    directivesToInclude.push(transientCorrectionNotice);
+                    transientCorrectionNotice = null; // consume single-round correction
+                }
+
+                const currentSystemServer = directivesToInclude.length === 1
+                    ? directivesToInclude[0]
+                    : (directivesToInclude.length > 1 ? directivesToInclude : null);
 
                 const isStreamingEnabled = state.config?.Agent?.StreamResponse !== false;
                 response = await callChatModel(workingMessages, {

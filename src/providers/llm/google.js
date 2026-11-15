@@ -82,6 +82,7 @@ class GoogleProvider extends BaseProvider {
                         const thoughtSig = tc.thoughtSignature || tc.thought_signature || tc.function?.thoughtSignature || tc.function?.thought_signature;
                         if (thoughtSig) {
                             fcPart.thoughtSignature = thoughtSig;
+                            fcPart.thought_signature = thoughtSig;
                         }
                         parts.push(fcPart);
                     }
@@ -197,9 +198,13 @@ class GoogleProvider extends BaseProvider {
             text += part.text;
         }
 
+        let currentThoughtSig = null;
         for (const part of parts) {
+            if (part.thoughtSignature || part.thought_signature) {
+                currentThoughtSig = part.thoughtSignature || part.thought_signature;
+            }
             if (part.functionCall) {
-                const thoughtSig = part.thoughtSignature || part.thought_signature || part.functionCall?.thoughtSignature || part.functionCall?.thought_signature || null;
+                const thoughtSig = part.thoughtSignature || part.thought_signature || part.functionCall?.thoughtSignature || part.functionCall?.thought_signature || currentThoughtSig || null;
                 const toolCall = {
                     id: part.functionCall.id || ("call_" + Math.random().toString(36).substring(2, 10)),
                     type: "function",
@@ -210,6 +215,7 @@ class GoogleProvider extends BaseProvider {
                 };
                 if (thoughtSig) {
                     toolCall.thoughtSignature = thoughtSig;
+                    toolCall.thought_signature = thoughtSig;
                 }
                 toolCalls.push(toolCall);
             }
@@ -335,7 +341,12 @@ class GoogleProvider extends BaseProvider {
                 if (!candidate) return;
 
                 const parts = candidate.content?.parts || [];
+                let lastSeenThoughtSig = null;
                 for (const part of parts) {
+                    if (part.thoughtSignature || part.thought_signature) {
+                        lastSeenThoughtSig = part.thoughtSignature || part.thought_signature;
+                    }
+
                     // 1. Thoughts / reasoning delta
                     if (part.text && part.thought) {
                         const sseChunk = {
@@ -362,7 +373,7 @@ class GoogleProvider extends BaseProvider {
                     }
                     // 3. Tool call / function call delta
                     if (part.functionCall) {
-                        const thoughtSig = part.thoughtSignature || part.thought_signature || part.functionCall?.thoughtSignature || null;
+                        const thoughtSig = part.thoughtSignature || part.thought_signature || part.functionCall?.thoughtSignature || part.functionCall?.thought_signature || lastSeenThoughtSig || null;
                         const toolCallChunk = {
                             index: toolCallIndex++,
                             id: part.functionCall.id || ("call_" + Math.random().toString(36).slice(2, 10)),
@@ -374,6 +385,7 @@ class GoogleProvider extends BaseProvider {
                         };
                         if (thoughtSig) {
                             toolCallChunk.thoughtSignature = thoughtSig;
+                            toolCallChunk.thought_signature = thoughtSig;
                         }
                         const sseChunk = {
                             choices: [{

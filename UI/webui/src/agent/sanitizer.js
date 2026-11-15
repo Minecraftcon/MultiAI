@@ -27,6 +27,7 @@ export function sanitizeMessage(msg) {
                 const sig = tc.thoughtSignature || tc.thought_signature || tc.function?.thoughtSignature || tc.function?.thought_signature;
                 if (sig) {
                     call.thoughtSignature = sig;
+                    call.thought_signature = sig;
                 }
                 return call;
             });

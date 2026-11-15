@@ -142,9 +142,34 @@ export function renderStagedAttachments() {
 
     const images = stagedAttachments.filter(a => a.type === "image");
     const docs = stagedAttachments.filter(a => a.type === "document");
+    const elements = stagedAttachments.filter(a => a.type === "element");
 
     const row = document.createElement("div");
     row.className = "staged-items-row";
+
+    // 0. Render inspected UI elements
+    elements.forEach(att => {
+        const item = document.createElement("div");
+        item.className = "staged-att-item staged-element-item";
+        const dims = att.elementData?.rect ? `${Math.round(att.elementData.rect.width)}×${Math.round(att.elementData.rect.height)}` : "";
+        item.innerHTML = `
+            <div class="staged-element-preview" title="${escapeHTML(att.name)}">
+                <i data-lucide="mouse-pointer-click"></i>
+                <span class="staged-element-name">${escapeHTML(att.name)}</span>
+                ${dims ? `<span class="staged-element-dims">${dims}</span>` : ""}
+            </div>
+            <button type="button" class="staged-att-del" title="Remove element" aria-label="Remove element">
+                <i data-lucide="x"></i>
+            </button>
+        `;
+        item.querySelector(".staged-att-del")?.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const idx = stagedAttachments.indexOf(att);
+            if (idx !== -1) stagedAttachments.splice(idx, 1);
+            renderStagedAttachments();
+        });
+        row.appendChild(item);
+    });
 
     // 1. Render images starting right from the left corner over the plus button
     images.forEach(att => {
@@ -318,4 +343,23 @@ export async function addDocumentFiles(files) {
     }
 
     renderStagedAttachments();
+}
+
+export function addElementAttachment(elementData) {
+    if (!elementData) return;
+    const existingIdx = stagedAttachments.findIndex(a => a.type === "element");
+    const item = {
+        type: "element",
+        name: elementData.selector || elementData.tagName?.toLowerCase() || "element",
+        elementData
+    };
+    if (existingIdx !== -1) {
+        stagedAttachments[existingIdx] = item;
+    } else {
+        stagedAttachments.push(item);
+    }
+    renderStagedAttachments();
+    showToast(`Element selected: ${item.name}`);
+    const input = document.getElementById("input");
+    if (input) input.focus();
 }

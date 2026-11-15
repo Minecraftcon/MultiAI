@@ -82,8 +82,8 @@ async function routeRequest(req, res) {
             return handleImageStatus(req, res);
         }
 
-        // Filesystem routes
-        if (req.method === "POST" && (reqUrl.startsWith("/api/file/") || reqUrl === "/api/code/grep")) {
+        // Filesystem routes (read/write/find/list + SSE live events)
+        if ((req.method === "POST" || req.method === "GET") && (reqUrl.startsWith("/api/file/") || reqUrl === "/api/code/grep")) {
             return handleFilesRoute(req, res);
         }
 
@@ -108,7 +108,7 @@ async function routeRequest(req, res) {
         }
 
         // Embedded Browser Proxy
-        if ((req.method === "GET" || req.method === "HEAD") && reqUrl === "/api/browser/proxy") {
+        if ((req.method === "GET" || req.method === "HEAD" || req.method === "POST") && reqUrl === "/api/browser/proxy") {
             return handleBrowserProxyRoute(req, res);
         }
 

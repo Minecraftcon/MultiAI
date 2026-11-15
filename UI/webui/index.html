@@ -90,6 +90,7 @@
     <link rel="stylesheet" href="./styles/skills-menu.css">
     <link rel="stylesheet" href="./styles/classics.css">
     <link rel="stylesheet" href="./styles/right-panel.css">
+    <link rel="stylesheet" href="./styles/element-inspector.css">
 </head>
 <body>
 
@@ -349,6 +350,7 @@
                     <button type="button" id="browserBackBtn" class="browser-nav-btn" title="Back"><i data-lucide="arrow-left"></i></button>
                     <button type="button" id="browserReloadBtn" class="browser-nav-btn" title="Reload"><i data-lucide="rotate-cw"></i></button>
                     <input type="text" id="browserUrlInput" class="browser-url-input" spellcheck="false" />
+                    <button type="button" id="browserInspectBtn" class="browser-nav-btn" title="Inspect & Select Element (Jetski Inspector)"><i data-lucide="mouse-pointer-click"></i></button>
                     <button type="button" id="browserOpenExternalBtn" class="browser-nav-btn" title="Open in new window"><i data-lucide="external-link"></i></button>
                 </div>
                 <iframe id="rightPanelBrowserFrame" class="browser-iframe" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-downloads"></iframe>
@@ -395,6 +397,15 @@
             <div class="sheet-action-text">
                 <span class="sheet-action-title">Skills</span>
                 <span class="sheet-action-desc">Directives from ~/.agents/skills</span>
+            </div>
+        </button>
+        <button id="pickElementBtn" type="button" class="sheet-action-card">
+            <div class="sheet-action-icon element-icon-bg">
+                <i data-lucide="mouse-pointer-click"></i>
+            </div>
+            <div class="sheet-action-text">
+                <span class="sheet-action-title">Element</span>
+                <span class="sheet-action-desc">Inspect & select UI element</span>
             </div>
         </button>
     </div>

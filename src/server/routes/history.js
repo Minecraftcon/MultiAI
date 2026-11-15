@@ -6,6 +6,7 @@
 const path = require("path");
 const { sendJSON, getChatWorkspace } = require("../utils");
 const shadowGit = require("../../core/shadow_git_manager");
+const { workspaceWatcher } = require("../../core/workspace_watcher");
 
 function resolveWorkspacesForChat(chatId) {
     if (chatId) {
@@ -55,6 +56,7 @@ async function handleHistoryRoute(req, res) {
 
             return sendJSON(res, 200, {
                 status: "success",
+                version: workspaceWatcher.getWorkspaceVersion(),
                 workspaces,
                 totalFiles: allFiles.length,
                 totalAdditions,

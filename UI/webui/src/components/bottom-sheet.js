@@ -172,6 +172,17 @@ export function initBottomSheet() {
         });
     }
 
+    // Element Inspector Picker (Jetski Preview Parity)
+    const pickElementBtn = document.getElementById("pickElementBtn");
+    if (pickElementBtn) {
+        pickElementBtn.addEventListener("click", () => {
+            closeAttachmentSheet();
+            import("./element-inspector.js").then(ei => {
+                ei.startElementInspection();
+            });
+        });
+    }
+
     // Deep Search Mode Toggle (+ / -)
     if (pickDeepSearchBtn) {
         pickDeepSearchBtn.addEventListener("click", () => {

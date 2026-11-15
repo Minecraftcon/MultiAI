@@ -91,6 +91,39 @@ assert.ok(googlePayload.systemInstruction.parts[1].text.includes("[SYSTEM_SERVER
 assert.ok(googlePayload.systemInstruction.parts[1].text.includes("Direct host execution profile."));
 console.log("✓ GoogleProvider native multi-part systemInstruction passed");
 
+// 4.B Test GoogleProvider thought_signature retention in functionCall parts
+const googleToolPayload = googleProvider.formatPayload({
+    model: "gemini-2.5-flash",
+    messages: [
+        { role: "user", content: "Write a test file" },
+        {
+            role: "assistant",
+            content: "Writing file...",
+            tool_calls: [{
+                id: "call_abc123",
+                type: "function",
+                function: { name: "write_file", arguments: '{"path":"test.txt"}' },
+                thoughtSignature: "cryptographic_thought_sig_xyz"
+            }]
+        },
+        {
+            role: "tool",
+            tool_call_id: "call_abc123",
+            name: "write_file",
+            content: '{"success":true}'
+        }
+    ]
+});
+
+const assistantContent = googleToolPayload.contents.find(c => c.role === "model");
+assert.ok(assistantContent, "Model content turn must exist");
+const fcPart = assistantContent.parts.find(p => p.functionCall);
+assert.ok(fcPart, "functionCall part must exist");
+assert.strictEqual(fcPart.functionCall.name, "write_file");
+assert.strictEqual(fcPart.thoughtSignature, "cryptographic_thought_sig_xyz");
+assert.strictEqual(fcPart.thought_signature, "cryptographic_thought_sig_xyz");
+console.log("✓ GoogleProvider thought_signature retention in functionCall parts passed");
+
 // 5. Test AnthropicProvider (Claude <system_server> integration)
 const anthropicProvider = new AnthropicProvider();
 const anthropicPayload = anthropicProvider.formatPayload({
@@ -128,6 +161,37 @@ assert.ok(groqPayload.messages[0].content.includes("Groq Base System."));
 assert.ok(groqPayload.messages[0].content.includes("<system_server>"));
 assert.ok(groqPayload.messages[0].content.includes("Groq server constraint: strict json format."));
 console.log("✓ GroqProvider system_server integration passed");
+
+// 7. Test User Editor Cursor Position & Terminal Output in system_server
+const userContextPayload = baseProvider.formatPayload({
+    model: "test-model",
+    messages: [
+        { role: "system", content: "Base Persona." },
+        { role: "user", content: "Why is line 42 throwing an error?" }
+    ],
+    options: {
+        system_server: [
+            {
+                scope: "user_editor_context",
+                priority: "medium",
+                instruction: "[USER ACTIVE EDITOR CONTEXT]:\nFile: \"src/index.js\" (user is actively editing)\nCursor Position: Line 42, Column 18 (Total lines: 75)\nCurrent Line Content: const port = config.port;\nUser Selected Text:\n\"\"\"\nconfig.port\n\"\"\""
+            },
+            {
+                scope: "user_terminal_context",
+                priority: "medium",
+                instruction: "[USER RECENT TERMINAL CONTEXT]:\nStatus: Terminal window is currently OPEN/VISIBLE\nSession: bash-1\nRecent Output Buffer:\n```\n$ node src/index.js\nTypeError: Cannot read properties of undefined (reading 'port')\n    at startServer (src/index.js:42:18)\n```"
+            }
+        ]
+    }
+});
+
+assert.strictEqual(userContextPayload.messages[0].role, "system");
+assert.ok(userContextPayload.messages[0].content.includes("[USER ACTIVE EDITOR CONTEXT]"));
+assert.ok(userContextPayload.messages[0].content.includes("File: \"src/index.js\""));
+assert.ok(userContextPayload.messages[0].content.includes("Cursor Position: Line 42, Column 18"));
+assert.ok(userContextPayload.messages[0].content.includes("[USER RECENT TERMINAL CONTEXT]"));
+assert.ok(userContextPayload.messages[0].content.includes("TypeError: Cannot read properties of undefined"));
+console.log("✓ User Editor Cursor & Terminal History in system_server passed cleanly");
 
 console.log("\nALL TEMPORARY SYSTEM INSTRUCTIONS HIERARCHY TESTS PASSED CLEANLY!");
 

@@ -198,6 +198,11 @@ export async function callChatModel(messages, { model, tools, signal, onChunk, s
                                 if (tc.function?.name) toolCallsMap[idx].function.name += tc.function.name;
                                 if (tc.function?.arguments) toolCallsMap[idx].function.arguments += tc.function.arguments;
                             }
+                            const sig = tc.thoughtSignature || tc.thought_signature || tc.function?.thoughtSignature || tc.function?.thought_signature;
+                            if (sig) {
+                                toolCallsMap[idx].thoughtSignature = sig;
+                                toolCallsMap[idx].thought_signature = sig;
+                            }
                         }
                     }
                 } catch (_) {}

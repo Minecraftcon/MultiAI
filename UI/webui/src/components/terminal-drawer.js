@@ -842,6 +842,48 @@ class TerminalDrawerManager {
         }
     }
 
+    getTerminalContext(maxLines = 35) {
+        const active = this.getActiveSession();
+        if (!active || !active.term) return null;
+
+        const isDrawerOpen = Boolean(this.isOpen);
+        const rightPanelEl = typeof document !== "undefined" ? document.getElementById("rightPanel") : null;
+        const isRightPanelOpen = Boolean(rightPanelEl && rightPanelEl.classList.contains("right-panel-open"));
+        const isRightPanelFused = Boolean(active.isFused && isRightPanelOpen);
+        const isVisible = isDrawerOpen || isRightPanelFused;
+
+        const recentOutput = this.getRecentOutput(active, maxLines);
+        if (!recentOutput) return null;
+
+        return {
+            isOpen: isVisible,
+            sessionId: active.id,
+            title: active.title || "terminal",
+            recentOutput
+        };
+    }
+
+    getRecentOutput(session = null, maxLines = 35) {
+        const s = session || this.getActiveSession();
+        if (!s || !s.term || !s.term.buffer) return "";
+        try {
+            const buf = s.term.buffer.active;
+            if (!buf) return "";
+            const end = buf.length;
+            const start = Math.max(0, end - maxLines);
+            const lines = [];
+            for (let i = start; i < end; i++) {
+                const line = buf.getLine(i);
+                if (line) lines.push(line.translateToString(true));
+            }
+            while (lines.length > 0 && !lines[0].trim()) lines.shift();
+            while (lines.length > 0 && !lines[lines.length - 1].trim()) lines.pop();
+            return lines.join("\n").trim();
+        } catch (_) {
+            return "";
+        }
+    }
+
     setupTouchScroll(session) {
         if (!session || !session.mount || !session.term) return;
 

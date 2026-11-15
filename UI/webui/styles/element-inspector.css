@@ -1,0 +1,291 @@
+/* =========================================================
+   ELEMENT INSPECTOR & PICKER (JETSKI PREVIEW PARITY)
+   Minimalist Warm Monochrome / Clean Technical Aesthetic (Rule 2)
+   ========================================================= */
+
+/* ── Highlight Box Over Target Element ───────────────────── */
+.element-inspector-overlay {
+    position: fixed;
+    pointer-events: none;
+    z-index: 9999990;
+    border: 2px solid #3b82f6;
+    background: rgba(59, 130, 246, 0.14);
+    border-radius: 4px;
+    box-sizing: border-box;
+    transition: top 0.05s ease-out, left 0.05s ease-out, width 0.05s ease-out, height 0.05s ease-out;
+    display: none;
+}
+
+/* ── Rich Inspection Popover Tooltip ─────────────────────── */
+.element-inspector-tooltip {
+    position: fixed;
+    pointer-events: none;
+    z-index: 9999995;
+    background: #18181b;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 8px;
+    padding: 10px 14px;
+    box-shadow: 0 10px 32px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(0, 0, 0, 0.4);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11.5px;
+    line-height: 1.5;
+    color: #e4e4e7;
+    width: 320px;
+    max-width: 90vw;
+    box-sizing: border-box;
+    display: none;
+    user-select: none;
+}
+
+.inspector-tt-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding-bottom: 8px;
+    margin-bottom: 8px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.inspector-tt-tag {
+    font-weight: 700;
+    color: #93c5fd;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    letter-spacing: -0.01em;
+}
+
+.inspector-tt-dims {
+    font-size: 10.5px;
+    color: #a1a1aa;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.inspector-tt-specs {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 10px;
+}
+
+.inspector-tt-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.inspector-tt-lbl {
+    color: #a1a1aa;
+    font-size: 11px;
+}
+
+.inspector-tt-val {
+    color: #f4f4f5;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    max-width: 190px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.inspector-swatch {
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    flex-shrink: 0;
+}
+
+.inspector-tt-a11y {
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    padding-top: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.inspector-tt-a11y-hdr {
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: #71717a;
+    text-transform: uppercase;
+    margin-bottom: 2px;
+}
+
+.inspector-tt-val.a11y-yes {
+    color: #4ade80;
+    font-weight: 600;
+}
+
+.inspector-tt-val.a11y-no {
+    color: #71717a;
+}
+
+/* ── Floating Status Pill (Selecting element... [Cancel]) ─── */
+.element-inspector-bar {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 9999999;
+    background: #18181b;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 9999px;
+    padding: 7px 14px 7px 18px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    box-shadow: 0 10px 32px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(0, 0, 0, 0.4);
+    font-size: 12px;
+    font-family: inherit;
+    font-weight: 500;
+    color: #f4f4f5;
+    user-select: none;
+    animation: inspectorBarSlideUp 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes inspectorBarSlideUp {
+    from {
+        opacity: 0;
+        transform: translate(-50%, 16px);
+    }
+    to {
+        opacity: 1;
+        transform: translate(-50%, 0);
+    }
+}
+
+.inspector-pulse-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #3b82f6;
+    box-shadow: 0 0 8px #3b82f6;
+    animation: inspectorPulse 1.3s infinite ease-in-out;
+}
+
+@keyframes inspectorPulse {
+    0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.4;
+        transform: scale(0.85);
+    }
+}
+
+.inspector-cancel-btn {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 6px;
+    color: #fff;
+    padding: 3px 10px;
+    font-size: 11px;
+    font-family: inherit;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.12s ease, transform 0.1s ease;
+}
+
+.inspector-cancel-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.inspector-cancel-btn:active {
+    transform: scale(0.96);
+}
+
+/* Cursor when active */
+body.is-element-inspecting,
+body.is-element-inspecting * {
+    cursor: crosshair !important;
+}
+
+/* ── Staged Attachment Element Pill (Above Input) ────────── */
+.staged-element-item {
+    padding: 4px 5px 0 0;
+}
+
+.staged-element-preview {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 6px 12px;
+    background: var(--surface-2);
+    border: 1px solid rgba(59, 130, 246, 0.35);
+    border-radius: 12px;
+    font-size: 12px;
+    color: var(--text-primary);
+    max-width: 260px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.staged-element-preview svg {
+    width: 14px;
+    height: 14px;
+    color: #60a5fa;
+    flex-shrink: 0;
+}
+
+.staged-element-name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: #93c5fd;
+    font-weight: 500;
+}
+
+.staged-element-dims {
+    color: var(--text-secondary);
+    font-size: 10px;
+    flex-shrink: 0;
+}
+
+/* ── User Message Bubble Element Pill ────────────────────── */
+.msg-bubble-elements {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 6px;
+}
+
+.msg-element-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 8px;
+    border-radius: 6px;
+    background: rgba(59, 130, 246, 0.15);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    color: #93c5fd;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+}
+
+.msg-element-pill svg {
+    width: 12px;
+    height: 12px;
+    color: #60a5fa;
+}
+
+.msg-element-size {
+    color: #a1a1aa;
+    font-size: 10px;
+}
+
+/* Icon in bottom sheet */
+.sheet-action-icon.element-icon-bg {
+    background: rgba(59, 130, 246, 0.18);
+    border: 1px solid rgba(59, 130, 246, 0.35);
+    color: #60a5fa;
+}

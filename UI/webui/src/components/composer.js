@@ -126,6 +126,7 @@ export async function send() {
 
     const docs = currentAttachments.filter(a => a.type === "document");
     const images = currentAttachments.filter(a => a.type === "image");
+    const elements = currentAttachments.filter(a => a.type === "element");
 
     let docsHtml = "";
     if (docs.length > 0) {
@@ -134,6 +135,17 @@ export async function send() {
                 <i data-lucide="file-text"></i>
                 <span class="msg-doc-name" title="${d.name}">${d.name}</span>
                 <span class="msg-doc-size">${formatFileSize(d.size)}</span>
+            </div>
+        `).join("") + `</div>`;
+    }
+
+    let elementsHtml = "";
+    if (elements.length > 0) {
+        elementsHtml = `<div class="msg-bubble-elements">` + elements.map(el => `
+            <div class="msg-element-pill">
+                <i data-lucide="mouse-pointer-click"></i>
+                <span class="msg-element-tag">${escapeHTML(el.name)}</span>
+                ${el.elementData?.rect ? `<span class="msg-element-size">${Math.round(el.elementData.rect.width)}×${Math.round(el.elementData.rect.height)}</span>` : ""}
             </div>
         `).join("") + `</div>`;
     }
@@ -154,12 +166,13 @@ export async function send() {
     userDiv.innerHTML = `
         <div class="user-bubble-content">
             ${docsHtml}
+            ${elementsHtml}
             ${imgsHtml}
             ${textHtml}
         </div>
     `;
 
-    userDiv.dataset.rawText = rawText || (images.length > 0 ? "Attached image" : "Attached document");
+    userDiv.dataset.rawText = rawText || (elements.length > 0 ? `Inspected element: ${elements[0].name}` : (images.length > 0 ? "Attached image" : "Attached document"));
     chat.appendChild(userDiv);
     renderIcons(userDiv);
     forceReengageAutoScroll(chat);
@@ -216,6 +229,29 @@ export async function send() {
                 return `[Attached document: ${d.name} (${formatFileSize(d.size)})]`;
             }).join("\n\n");
             promptText = promptText ? `${promptText}\n\n${docContexts}` : docContexts;
+        }
+
+        if (elements.length > 0) {
+            const elContexts = elements.map(el => {
+                const d = el.elementData;
+                return `<user_selected_ui_element>
+Selector: ${d.selector}
+Tag: <${d.tagName?.toLowerCase() || "element"}>
+Dimensions: ${d.rect ? `${Math.round(d.rect.width)} × ${Math.round(d.rect.height)} px` : "unknown"}
+Computed Styles:
+  color: ${d.styles?.color || "inherit"}
+  background-color: ${d.styles?.backgroundColor || "transparent"}
+  font: ${d.styles?.font || "inherit"}
+  padding: ${d.styles?.padding || "0"}
+Accessibility:
+  name: "${d.accessibility?.name || ""}"
+  role: "${d.accessibility?.role || ""}"
+  focusable: ${d.accessibility?.focusable ? "yes" : "no"}
+Outer HTML:
+${d.outerHTML || ""}
+</user_selected_ui_element>`;
+            }).join("\n\n");
+            promptText = promptText ? `${promptText}\n\n${elContexts}` : elContexts;
         }
 
         const modelSelect = document.getElementById("modelSelect");

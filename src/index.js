@@ -5,6 +5,7 @@ const { getConfig } = require("./core/config_manager");
 const { initSupervisor } = require("./server/supervisor");
 const { routeRequest } = require("./server/router");
 const { mcpManager } = require("./core/mcp_manager");
+const { workspaceWatcher } = require("./core/workspace_watcher");
 
 const { initConsole } = require("./server/console");
 const { ensureVendorFiles } = require("../scripts/vendor_download");
@@ -44,7 +45,10 @@ async function startServer() {
     // 2. Start task daemon child process and setup termination handlers
     initSupervisor();
 
-    // 3. Initialize configured Model Context Protocol (MCP) servers
+    // 3. Start workspace filesystem watcher for live file tree updates
+    workspaceWatcher.init();
+
+    // 4. Initialize configured Model Context Protocol (MCP) servers
     mcpManager.init().catch(err => {
         console.warn("[MCP] Initialization error:", err.message);
     });
