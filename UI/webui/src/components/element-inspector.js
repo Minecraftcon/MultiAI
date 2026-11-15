@@ -3,7 +3,7 @@
    Hover highlights, popover specs, accessibility & attachment
    ========================================================= */
 import { escapeHTML } from "../utils/dom.js";
-import { insertInlineEntity } from "./inline-entity.js";
+import { insertInlineEntity, formatElementDisplayLabel } from "./inline-entity.js";
 import { showToast } from "./bottom-sheet.js";
 
 let isActive = false;
@@ -149,11 +149,13 @@ export function initElementInspector() {
 
         if (e.data.type === "MULTIAI_ELEMENT_SELECTED" && e.data.elementData) {
             stopElementInspection();
+            const elData = e.data.elementData;
+            const displayLabel = formatElementDisplayLabel(elData.selector, elData.tagName);
             insertInlineEntity({
                 type: "element",
-                id: e.data.elementData.selector,
-                label: e.data.elementData.selector,
-                data: e.data.elementData
+                id: elData.selector,
+                label: displayLabel,
+                data: elData
             });
         } else if (e.data.type === "MULTIAI_ELEMENT_HOVER" && e.data.elementData) {
             if (!isActive) return;
@@ -304,10 +306,11 @@ function handleClick(e) {
 
     const data = extractElementData(target);
     stopElementInspection();
+    const displayLabel = formatElementDisplayLabel(data.selector, data.tagName);
     insertInlineEntity({
         type: "element",
         id: data.selector,
-        label: data.selector,
+        label: displayLabel,
         data: data
     });
 }

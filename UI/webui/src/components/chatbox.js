@@ -9,9 +9,10 @@
        butter-smooth transition.
    ========================================================= */
 import { renderIcons } from "../utils/icons.js";
-import { isMobileBrowser } from "../utils/dom.js";
+import { isMobileBrowser, escapeHTML } from "../utils/dom.js";
 import { onStartPageModeChange, isAndroidOrMobile } from "./aurora-theme.js";
 import { state, setDeepSearchActive } from "../state/index.js";
+import { getEntity } from "./inline-entity.js";
 
 class ChatBoxComponent {
     constructor() {
@@ -445,24 +446,41 @@ class ChatBoxComponent {
             return;
         }
 
-        const skills = (typeof window !== "undefined" && window.__knownSkills) ? window.__knownSkills : [];
-        if (skills.length === 0) {
-            this.highlighterEl.innerHTML = escapeHTML(val);
-            return;
-        }
-
         let html = escapeHTML(val);
 
-        // Highlight any recognized skill token (e.g. "> android-cli", "/android-cli", or "android-cli")
-        for (const skill of skills) {
-            const idEsc = escapeHTML(skill.id).replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
-            const nameEsc = escapeHTML(skill.name || "").replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
-            const variants = nameEsc && nameEsc !== idEsc ? `${idEsc}|${nameEsc}` : idEsc;
-            const regex = new RegExp(`(?:^|(?<=\\s))(?:\\/|&gt;|\\>)?\\s*(${variants})(?=\\s|$)`, "gi");
+        // 1. Highlight glyph skills (e.g. "⚛ encode-ccres-database", "🔲 antigravity-guide", "⚡ android-cli")
+        html = html.replace(/(?:^|(?<=\s))(⚛|🔲|🤖|◈|🔍|⚡)\s*([a-zA-Z0-9_\-]+)(?=\s|$)/g, (fullMatch) => {
+            return `<mark class="chatbox-entity-token entity-skill">${fullMatch}</mark>`;
+        });
 
-            html = html.replace(regex, (fullMatch) => {
-                return `<mark class="chatbox-skill-token">${fullMatch}</mark>`;
-            });
+        // 2. Highlight glyph elements (e.g. "⌖ selection", "⌖ button.followup-item")
+        html = html.replace(/(?:^|(?<=\s))⌖\s*([^\s\]\n\r]+)(?=\s|$)/g, (fullMatch) => {
+            return `<mark class="chatbox-entity-token entity-element">${fullMatch}</mark>`;
+        });
+
+        // 3. Highlight bracketed entity tokens: [ ... ]
+        html = html.replace(/\[\s*([^\]\n\r]+?)\s*\]/g, (fullMatch, rawInner) => {
+            const inner = rawInner.trim();
+            const stored = getEntity(inner);
+            const isSkill = (inner.startsWith("skill:") || (stored && stored.type === "skill"));
+            const isEl = (inner.startsWith("element:") || inner.startsWith("el:") || (stored && stored.type === "element"));
+            const cls = isEl ? "entity-element" : (isSkill ? "entity-skill" : "");
+            return `<mark class="chatbox-entity-token ${cls}">${fullMatch}</mark>`;
+        });
+
+        // 4. Highlight recognized skills with slash or arrow (> skill-id, /skill-id)
+        const skills = (state && state.skills) ? state.skills : ((typeof window !== "undefined" && window.__knownSkills) ? window.__knownSkills : []);
+        if (skills && skills.length > 0) {
+            for (const skill of skills) {
+                const idEsc = escapeHTML(skill.id).replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
+                const nameEsc = escapeHTML(skill.name || "").replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
+                const variants = nameEsc && nameEsc !== idEsc ? `${idEsc}|${nameEsc}` : idEsc;
+                const regex = new RegExp(`(?:^|(?<=\\s))(?:\\/|&gt;|\\>)\\s*(${variants})(?=\\s|$)`, "gi");
+
+                html = html.replace(regex, (fullMatch) => {
+                    return `<mark class="chatbox-entity-token entity-skill">${fullMatch}</mark>`;
+                });
+            }
         }
 
         if (val.endsWith("\n")) {

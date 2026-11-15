@@ -63,11 +63,23 @@ assert(inlineContent.includes("export function insertInlineEntity"), "Must expor
 assert(inlineContent.includes("export function formatMessageWithInlineEntities"), "Must export formatMessageWithInlineEntities");
 assert(inlineContent.includes("export function extractEntitiesFromText"), "Must export extractEntitiesFromText");
 assert(inlineContent.includes("export function registerEntity"), "Must export registerEntity");
+assert(inlineContent.includes("export function getEntityGlyph"), "Must export getEntityGlyph");
+assert(inlineContent.includes("export function formatElementDisplayLabel"), "Must export formatElementDisplayLabel");
+assert(inlineContent.includes("export function cleanPromptText"), "Must export cleanPromptText");
 
 // 6. Verify chat-ui imports inline entities for history render
 const chatUiPath = path.join(__dirname, "../UI/webui/src/components/chat-ui.js");
 const chatUiContent = fs.readFileSync(chatUiPath, "utf-8");
 assert(chatUiContent.includes("formatMessageWithInlineEntities"), "chat-ui.js must import and use formatMessageWithInlineEntities for loaded turns");
-console.log("✓ Universal inline entity module and history re-rendering verified.");
+
+// 7. Verify live syntax highlighter tokens in chatbox and composer.css
+const chatboxPath = path.join(__dirname, "../UI/webui/src/components/chatbox.js");
+const chatboxContent = fs.readFileSync(chatboxPath, "utf-8");
+assert(chatboxContent.includes("chatbox-entity-token"), "chatbox.js must highlight inline entity tokens in composerHighlighter");
+
+const compCssPath = path.join(__dirname, "../UI/webui/styles/composer.css");
+const compCssContent = fs.readFileSync(compCssPath, "utf-8");
+assert(compCssContent.includes(".chatbox-entity-token"), "composer.css must style .chatbox-entity-token");
+console.log("✓ Universal inline entity module, glyph support, and live highlighter verified.");
 
 console.log("\nALL ELEMENT INSPECTOR TESTS PASSED CLEANLY!");

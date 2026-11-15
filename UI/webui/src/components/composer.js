@@ -24,7 +24,8 @@ import {
 } from "./skills-menu.js";
 import {
     formatMessageWithInlineEntities,
-    extractEntitiesFromText
+    extractEntitiesFromText,
+    cleanPromptText
 } from "./inline-entity.js";
 import {
     stagedAttachments,
@@ -226,7 +227,7 @@ export async function send() {
 
     try {
         // Build multimodal payload or doc-augmented text
-        let promptText = skillCleanText || rawText;
+        let promptText = cleanPromptText(skillCleanText || rawText);
 
         if (docs.length > 0) {
             const docContexts = docs.map(d => {

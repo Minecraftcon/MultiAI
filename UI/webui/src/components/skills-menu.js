@@ -279,8 +279,8 @@ export function parseOnTextSkills(text) {
         const nameEsc = name ? name.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&') : null;
         const variants = nameEsc && nameEsc !== idEsc ? `${idEsc}|${nameEsc}` : idEsc;
 
-        // Match bracketed entity [skill-id], leading >, leading /, or delimited token
-        const pattern = `(?:\\[\\s*(${variants})\\s*\\]|(?:^|\\s)(?:\\/|&gt;|\\>)?\\s*(${variants})(?=\\s|$))`;
+        // Match glyph entity (⚛, 🔲, 🤖, etc.), bracketed entity [skill-id], leading >, leading /, or delimited token
+        const pattern = `(?:(?:^|\\s)(?:⚛|🔲|🤖|◈|🔍|⚡)\\s*(${variants})(?=\\s|$)|(?:\\[\\s*(${variants})\\s*\\])|(?:^|\\s)(?:\\/|&gt;|\\>)?\\s*(${variants})(?=\\s|$))`;
         const regex = new RegExp(pattern, "i");
 
         if (regex.test(text) && !skillIdsSeen.has(skill.id)) {
@@ -295,7 +295,8 @@ export function parseOnTextSkills(text) {
         const idEsc = skill.id.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
         const nameEsc = (skill.name || "").replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
         const variants = nameEsc && nameEsc !== idEsc ? `${idEsc}|${nameEsc}` : idEsc;
-        // Turn [skill-id] into skill-id, or remove isolated /skill or > skill
+        // Turn glyph skill or [skill-id] into skill-id, or remove isolated /skill or > skill
+        cleanText = cleanText.replace(new RegExp(`(?:^|\\s)(?:⚛|🔲|🤖|◈|🔍|⚡)\\s*(${variants})(?=\\s|$)`, "gi"), " $1 ");
         cleanText = cleanText.replace(new RegExp(`\\[\\s*(${variants})\\s*\\]`, "gi"), "$1");
         cleanText = cleanText.replace(new RegExp(`(?:^|\\s)(?:\\/|&gt;|\\>)\\s*(${variants})(?=\\s|$)`, "gi"), " $1 ");
     }
