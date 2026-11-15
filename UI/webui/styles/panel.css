@@ -9,7 +9,7 @@
     width: var(--panel-width);
     height: calc(100dvh / var(--ui-scale, 1));
     padding-top: env(safe-area-inset-top, 0px);
-    z-index: 40;
+    z-index: 80;
     display: flex;
     flex-direction: column;
     background: var(--surface);

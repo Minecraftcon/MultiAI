@@ -15,6 +15,7 @@
     background: linear-gradient(to bottom, transparent 0%, var(--bg) 35%, var(--bg) 100%);
     z-index: 50;
     box-sizing: border-box;
+    transition: opacity 0.2s ease, visibility 0.2s ease;
 }
 
 :root {

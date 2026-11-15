@@ -22,7 +22,7 @@
     border-left: 1px solid var(--border);
     display: flex;
     flex-direction: column;
-    z-index: 40;
+    z-index: 80;
     transform: translateX(100%);
     will-change: transform;
     font-family: inherit;
@@ -41,23 +41,30 @@ body.right-panel-open #rightPanel {
     transition: transform var(--panel-speed) var(--panel-ease), visibility 0s 0s;
 }
 
-/* ── Mobile/Tablet Backdrop (Below 900px) ─────────────────── */
+/* ── Mobile/Tablet Backdrop (Below 1025px) ─────────────────── */
 .right-panel-backdrop {
     position: fixed;
     inset: 0;
     background: var(--scrim);
     backdrop-filter: blur(2px);
     -webkit-backdrop-filter: blur(2px);
-    z-index: 39;
+    z-index: 75;
     opacity: 0;
     pointer-events: none;
     transition: opacity var(--panel-speed) var(--panel-ease);
 }
 
-@media (max-width: 899px) {
+@media (max-width: 1024px) {
     body.right-panel-open .right-panel-backdrop {
         opacity: 1;
         pointer-events: auto;
+    }
+
+    body.right-panel-open #inputArea,
+    body.right-panel-open .chat-scroll-btn {
+        opacity: 0 !important;
+        pointer-events: none !important;
+        visibility: hidden !important;
     }
 }
 
@@ -70,7 +77,7 @@ body.right-panel-open #rightPanel {
                 height var(--panel-speed) var(--panel-ease);
 }
 
-@media (min-width: 900px) {
+@media (min-width: 1025px) {
     body.right-panel-open #appShell {
         width: calc(100% - var(--right-panel-width));
         margin-right: var(--right-panel-width);
