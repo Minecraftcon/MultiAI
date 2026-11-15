@@ -6,6 +6,7 @@
 
 import { renderIcons } from "../utils/icons.js";
 import { escapeHTML } from "../utils/dom.js";
+import { insertInlineEntity } from "./inline-entity.js";
 
 let allSkills = [];
 let activeSkills = [];
@@ -278,8 +279,8 @@ export function parseOnTextSkills(text) {
         const nameEsc = name ? name.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&') : null;
         const variants = nameEsc && nameEsc !== idEsc ? `${idEsc}|${nameEsc}` : idEsc;
 
-        // Match with leading >, leading /, or delimited token
-        const pattern = `(?:^|\\s)(?:\\/|&gt;|\\>)?\\s*(${variants})(?=\\s|$)`;
+        // Match bracketed entity [skill-id], leading >, leading /, or delimited token
+        const pattern = `(?:\\[\\s*(${variants})\\s*\\]|(?:^|\\s)(?:\\/|&gt;|\\>)?\\s*(${variants})(?=\\s|$))`;
         const regex = new RegExp(pattern, "i");
 
         if (regex.test(text) && !skillIdsSeen.has(skill.id)) {
@@ -288,14 +289,15 @@ export function parseOnTextSkills(text) {
         }
     }
 
-    // Clean text by stripping out recognized skill tokens so model receives clean prompt
+    // Clean text by stripping or un-bracketing recognized skill tokens so model receives clean prompt
     let cleanText = text;
     for (const skill of matchedSkills) {
         const idEsc = skill.id.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
         const nameEsc = (skill.name || "").replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
         const variants = nameEsc && nameEsc !== idEsc ? `${idEsc}|${nameEsc}` : idEsc;
-        const pattern = `(?:^|\\s)(?:\\/|&gt;|\\>)?\\s*(?:${variants})(?=\\s|$)`;
-        cleanText = cleanText.replace(new RegExp(pattern, "gi"), " ");
+        // Turn [skill-id] into skill-id, or remove isolated /skill or > skill
+        cleanText = cleanText.replace(new RegExp(`\\[\\s*(${variants})\\s*\\]`, "gi"), "$1");
+        cleanText = cleanText.replace(new RegExp(`(?:^|\\s)(?:\\/|&gt;|\\>)\\s*(${variants})(?=\\s|$)`, "gi"), " $1 ");
     }
 
     cleanText = cleanText.replace(/\s+/g, " ").trim();
@@ -355,7 +357,7 @@ export function buildSkillsSystemPrompt(skills) {
 let isSelectingSkill = false;
 
 /**
- * Choose a skill from the menu: inserts the skill cleanly on-text (e.g. > android-cli )
+ * Choose a skill from the menu: inserts the skill cleanly on-text as an inline entity chip (e.g. [android-cli] )
  */
 export function chooseSkill(skill) {
     if (!skill) return;
@@ -363,43 +365,12 @@ export function chooseSkill(skill) {
     isSelectingSkill = true;
     closeSkillsMenu();
 
-    const input = document.getElementById("input");
-    if (input) {
-        const val = input.value || "";
-        const selStart = (typeof input.selectionStart === "number" && input.selectionStart >= 0)
-            ? input.selectionStart
-            : val.length;
-        const textBeforeCursor = val.slice(0, selStart);
-        const textAfterCursor = val.slice(selStart);
-
-        // Match the slash or query right before cursor (e.g. "/and" or "> and" or "and")
-        const match = textBeforeCursor.match(/(?:^|\s)(?:\/|&gt;|\\>)?([a-zA-Z0-9_\-]*)$/);
-        // Clean representation without slash: "> skill-id "
-        const skillText = `> ${skill.id} `;
-
-        let newVal = "";
-        let newCursorPos = 0;
-
-        if (match) {
-            const hasLeadingSpace = match[0].startsWith(" ");
-            const matchIndex = match.index + (hasLeadingSpace ? 1 : 0);
-            const prefix = textBeforeCursor.slice(0, matchIndex);
-            newVal = prefix + skillText + textAfterCursor.trimStart();
-            newCursorPos = prefix.length + skillText.length;
-        } else {
-            newVal = skillText + val.trimStart();
-            newCursorPos = skillText.length;
-        }
-
-        input.value = newVal;
-        input.focus();
-        if (typeof input.setSelectionRange === "function") {
-            input.setSelectionRange(newCursorPos, newCursorPos);
-        }
-
-        // Trigger input resize & highlighter sync
-        input.dispatchEvent(new Event("input", { bubbles: true }));
-    }
+    insertInlineEntity({
+        type: "skill",
+        id: skill.id,
+        label: skill.id,
+        data: skill
+    });
 
     setTimeout(() => {
         isSelectingSkill = false;

@@ -30,6 +30,7 @@ import {
 import { openImageLightbox } from "./composer-attachments.js";
 import { renderPlanApprovalActions, handlePlanApprovalClick } from "./plan-hitl.js";
 import { openTerminal } from "./terminal-drawer.js";
+import { formatMessageWithInlineEntities } from "./inline-entity.js";
 
 export {
     getToolBadgeConfig,
@@ -122,7 +123,7 @@ export function renderTurn(turn, session, compactionRef, isLastTurn) {
         }
 
         userDiv.dataset.rawText = rawText;
-        const textHtml = rawText ? `<div class="msg-bubble-text">${escapeHTML(rawText)}</div>` : "";
+        const textHtml = rawText ? `<div class="msg-bubble-text">${formatMessageWithInlineEntities(rawText)}</div>` : "";
         userDiv.innerHTML = `
             <div class="user-bubble-content">
                 ${imgsHtml}

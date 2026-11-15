@@ -47,11 +47,27 @@ assert(htmlContent.includes('id="pickElementBtn"'), "index.html must have #pickE
 assert(htmlContent.includes('id="browserInspectBtn"'), "index.html must have #browserInspectBtn in browser omnibox");
 console.log("✓ HTML attachment drawer & omnibox inspection buttons verified.");
 
-// 4. Verify Composer prompt context injection
+// 4. Verify Composer prompt context injection and Universal Inline Entity Module
 const composerPath = path.join(__dirname, "../UI/webui/src/components/composer.js");
 const composerContent = fs.readFileSync(composerPath, "utf-8");
 assert(composerContent.includes("<user_selected_ui_element>"), "Composer must format element into <user_selected_ui_element>");
-assert(composerContent.includes('type === "element"'), "Composer must detect element attachments");
-console.log("✓ Composer prompt context injection verified.");
+assert(composerContent.includes("formatMessageWithInlineEntities"), "Composer must format messages with inline entities");
+assert(composerContent.includes("extractEntitiesFromText"), "Composer must extract inline entities from prompt text");
+console.log("✓ Composer prompt context and inline entity integration verified.");
+
+// 5. Verify Universal Inline Entity module
+const inlineEntityPath = path.join(__dirname, "../UI/webui/src/components/inline-entity.js");
+assert(fs.existsSync(inlineEntityPath), "inline-entity.js must exist");
+const inlineContent = fs.readFileSync(inlineEntityPath, "utf-8");
+assert(inlineContent.includes("export function insertInlineEntity"), "Must export insertInlineEntity");
+assert(inlineContent.includes("export function formatMessageWithInlineEntities"), "Must export formatMessageWithInlineEntities");
+assert(inlineContent.includes("export function extractEntitiesFromText"), "Must export extractEntitiesFromText");
+assert(inlineContent.includes("export function registerEntity"), "Must export registerEntity");
+
+// 6. Verify chat-ui imports inline entities for history render
+const chatUiPath = path.join(__dirname, "../UI/webui/src/components/chat-ui.js");
+const chatUiContent = fs.readFileSync(chatUiPath, "utf-8");
+assert(chatUiContent.includes("formatMessageWithInlineEntities"), "chat-ui.js must import and use formatMessageWithInlineEntities for loaded turns");
+console.log("✓ Universal inline entity module and history re-rendering verified.");
 
 console.log("\nALL ELEMENT INSPECTOR TESTS PASSED CLEANLY!");

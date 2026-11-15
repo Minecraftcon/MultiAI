@@ -23,6 +23,10 @@ import {
     buildSkillsSystemPrompt 
 } from "./skills-menu.js";
 import {
+    formatMessageWithInlineEntities,
+    extractEntitiesFromText
+} from "./inline-entity.js";
+import {
     stagedAttachments,
     isImageFile,
     formatFileSize,
@@ -101,15 +105,19 @@ export async function send() {
 
     chatbox.clearInput();
 
-    // Parse on-text skills from the message (e.g. "/android-cli hello")
-    const { skills: onTextSkills, cleanText } = parseOnTextSkills(rawText);
+    // Parse on-text skills and inline entities from the message
+    const { skills: onTextSkills, cleanText: skillCleanText } = parseOnTextSkills(rawText);
+    const { elements: inlineElements, skills: inlineSkills } = extractEntitiesFromText(rawText);
 
-    // Merge on-text skills with any persistent active skills
+    // Merge all skills (on-text + inline + persistent)
     const skillsMap = new Map();
     for (const s of getActiveSkills()) {
         skillsMap.set(s.id, s);
     }
     for (const s of onTextSkills) {
+        skillsMap.set(s.id, s);
+    }
+    for (const s of inlineSkills) {
         skillsMap.set(s.id, s);
     }
     const mergedSkills = Array.from(skillsMap.values());
@@ -119,14 +127,24 @@ export async function send() {
     // RENDER USER MESSAGE BUBBLE:
     // Layout: On top of prompt bubble: (icon) doc name
     // Directly under: (image preview)
-    // Below that: prompt bubble text
+    // Inline in prompt text: [icon][element/skill](highlight)
     // -------------------------------------------------------------
     const userDiv = document.createElement("div");
     userDiv.className = "message user";
 
     const docs = currentAttachments.filter(a => a.type === "document");
     const images = currentAttachments.filter(a => a.type === "image");
-    const elements = currentAttachments.filter(a => a.type === "element");
+    const attachedElements = currentAttachments.filter(a => a.type === "element");
+
+    // Combine any attached elements with inline elements
+    const allElementsMap = new Map();
+    for (const el of attachedElements) {
+        allElementsMap.set(el.name.toLowerCase(), el);
+    }
+    for (const el of inlineElements) {
+        allElementsMap.set(el.name.toLowerCase(), el);
+    }
+    const allElements = Array.from(allElementsMap.values());
 
     let docsHtml = "";
     if (docs.length > 0) {
@@ -135,17 +153,6 @@ export async function send() {
                 <i data-lucide="file-text"></i>
                 <span class="msg-doc-name" title="${d.name}">${d.name}</span>
                 <span class="msg-doc-size">${formatFileSize(d.size)}</span>
-            </div>
-        `).join("") + `</div>`;
-    }
-
-    let elementsHtml = "";
-    if (elements.length > 0) {
-        elementsHtml = `<div class="msg-bubble-elements">` + elements.map(el => `
-            <div class="msg-element-pill">
-                <i data-lucide="mouse-pointer-click"></i>
-                <span class="msg-element-tag">${escapeHTML(el.name)}</span>
-                ${el.elementData?.rect ? `<span class="msg-element-size">${Math.round(el.elementData.rect.width)}×${Math.round(el.elementData.rect.height)}</span>` : ""}
             </div>
         `).join("") + `</div>`;
     }
@@ -159,20 +166,20 @@ export async function send() {
         `).join("") + `</div>`;
     }
 
-    // Format message text with minimized inline skill highlighting
-    const formattedText = formatMessageWithSkillHighlights(rawText, mergedSkills);
+    // Format message text with universal inline entity chips: [icon][text](background highlight)
+    const displayText = rawText || (allElements.length > 0 ? `[${allElements[0].name}]` : "");
+    const formattedText = formatMessageWithInlineEntities(displayText, mergedSkills);
     const textHtml = formattedText ? `<div class="msg-bubble-text">${formattedText}</div>` : "";
 
     userDiv.innerHTML = `
         <div class="user-bubble-content">
             ${docsHtml}
-            ${elementsHtml}
             ${imgsHtml}
             ${textHtml}
         </div>
     `;
 
-    userDiv.dataset.rawText = rawText || (elements.length > 0 ? `Inspected element: ${elements[0].name}` : (images.length > 0 ? "Attached image" : "Attached document"));
+    userDiv.dataset.rawText = displayText || (images.length > 0 ? "Attached image" : "Attached document");
     chat.appendChild(userDiv);
     renderIcons(userDiv);
     forceReengageAutoScroll(chat);
@@ -219,7 +226,7 @@ export async function send() {
 
     try {
         // Build multimodal payload or doc-augmented text
-        let promptText = cleanText || rawText;
+        let promptText = skillCleanText || rawText;
 
         if (docs.length > 0) {
             const docContexts = docs.map(d => {
@@ -231,11 +238,11 @@ export async function send() {
             promptText = promptText ? `${promptText}\n\n${docContexts}` : docContexts;
         }
 
-        if (elements.length > 0) {
-            const elContexts = elements.map(el => {
-                const d = el.elementData;
+        if (allElements.length > 0) {
+            const elContexts = allElements.map(el => {
+                const d = el.elementData || {};
                 return `<user_selected_ui_element>
-Selector: ${d.selector}
+Selector: ${d.selector || el.name}
 Tag: <${d.tagName?.toLowerCase() || "element"}>
 Dimensions: ${d.rect ? `${Math.round(d.rect.width)} × ${Math.round(d.rect.height)} px` : "unknown"}
 Computed Styles:

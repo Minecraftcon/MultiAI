@@ -3,7 +3,7 @@
    Hover highlights, popover specs, accessibility & attachment
    ========================================================= */
 import { escapeHTML } from "../utils/dom.js";
-import { addElementAttachment } from "./composer-attachments.js";
+import { insertInlineEntity } from "./inline-entity.js";
 import { showToast } from "./bottom-sheet.js";
 
 let isActive = false;
@@ -149,7 +149,12 @@ export function initElementInspector() {
 
         if (e.data.type === "MULTIAI_ELEMENT_SELECTED" && e.data.elementData) {
             stopElementInspection();
-            addElementAttachment(e.data.elementData);
+            insertInlineEntity({
+                type: "element",
+                id: e.data.elementData.selector,
+                label: e.data.elementData.selector,
+                data: e.data.elementData
+            });
         } else if (e.data.type === "MULTIAI_ELEMENT_HOVER" && e.data.elementData) {
             if (!isActive) return;
             const iframe = document.getElementById("rightPanelBrowserFrame");
@@ -299,7 +304,12 @@ function handleClick(e) {
 
     const data = extractElementData(target);
     stopElementInspection();
-    addElementAttachment(data);
+    insertInlineEntity({
+        type: "element",
+        id: data.selector,
+        label: data.selector,
+        data: data
+    });
 }
 
 export function startElementInspection() {
