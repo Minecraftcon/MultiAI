@@ -31,8 +31,11 @@ import { openImageLightbox } from "./composer-attachments.js";
 import { renderPlanApprovalActions, handlePlanApprovalClick } from "./plan-hitl.js";
 import { openTerminal } from "./terminal-drawer.js";
 import { formatMessageWithInlineEntities } from "./inline-entity.js";
+import { renderFilesChangedBar, extractTurnFilesChanged } from "./files-changed-bar.js";
 
 export {
+    renderFilesChangedBar,
+    extractTurnFilesChanged,
     getToolBadgeConfig,
     addToolBadge,
     showCheckpointModal,
@@ -306,6 +309,11 @@ export function renderTurn(turn, session, compactionRef, isLastTurn) {
                 }
                 renderPlanApprovalActions(aiDiv, rawText, true, session);
             }
+        }
+
+        const turnFiles = extractTurnFilesChanged(turn, finalAssistantMsg);
+        if (turnFiles && turnFiles.length > 0) {
+            renderFilesChangedBar(aiDiv, turnFiles, finalAssistantMsg);
         }
 
         if (searchContainer && searchContainer.children.length > 0) {

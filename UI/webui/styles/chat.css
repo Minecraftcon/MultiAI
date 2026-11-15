@@ -1343,3 +1343,201 @@
     height: 14px;
     opacity: 0.85;
 }
+
+/* =========================================================
+   Files Changed Review Bar (Turn End)
+   Clean, warm monochrome, technical aesthetic with spot pastels
+   ========================================================= */
+
+.files-changed-bar-container {
+    margin-top: 14px;
+    margin-bottom: 6px;
+    background: var(--surface, rgba(255, 255, 255, 0.02));
+    border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+    border-radius: 6px;
+    overflow: hidden;
+    user-select: none;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.files-changed-bar-container:hover {
+    border-color: var(--border-strong, rgba(255, 255, 255, 0.14));
+}
+
+.files-changed-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 7px 12px;
+    cursor: pointer;
+    background: transparent;
+    transition: background-color 0.12s ease;
+    outline: none;
+}
+
+.files-changed-header:hover {
+    background: var(--hover, rgba(255, 255, 255, 0.03));
+}
+
+.files-changed-header:focus-visible {
+    box-shadow: inset 0 0 0 1px var(--text-tertiary);
+}
+
+.files-changed-summary {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.files-changed-code-glyph {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    letter-spacing: -0.05em;
+    padding: 1px 4px;
+    border-radius: 3px;
+    background: var(--hover, rgba(255, 255, 255, 0.04));
+    border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
+}
+
+.files-changed-label {
+    letter-spacing: -0.01em;
+}
+
+.files-changed-chevron {
+    font-size: 11px;
+    color: var(--text-muted, #888);
+    transition: transform 0.18s ease;
+    margin-left: 2px;
+}
+
+.files-changed-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.files-changed-review-btn {
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    padding: 3px 10px;
+    border-radius: 4px;
+    border: 1px solid var(--border-strong, rgba(255, 255, 255, 0.15));
+    background: var(--surface-2, rgba(255, 255, 255, 0.08));
+    color: var(--text-primary);
+    cursor: pointer;
+    outline: none;
+    transition: background-color 0.12s ease, border-color 0.12s ease, transform 0.08s ease;
+}
+
+.files-changed-review-btn:hover {
+    background: var(--surface-3, rgba(255, 255, 255, 0.14));
+    border-color: var(--text-secondary);
+}
+
+.files-changed-review-btn:active {
+    transform: scale(0.97);
+}
+
+.files-changed-dropdown {
+    border-top: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+    background: var(--surface-2, rgba(0, 0, 0, 0.15));
+    animation: filesChangedDropIn 0.15s ease-out forwards;
+}
+
+@keyframes filesChangedDropIn {
+    from {
+        opacity: 0;
+        transform: translateY(-2px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.files-changed-file-list {
+    display: flex;
+    flex-direction: column;
+    padding: 4px 0;
+}
+
+.files-changed-file-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 14px;
+    font-size: 12.5px;
+    cursor: pointer;
+    transition: background-color 0.1s ease;
+    outline: none;
+}
+
+.files-changed-file-row:hover {
+    background: var(--hover-2, rgba(255, 255, 255, 0.06));
+}
+
+.files-changed-file-row:focus-visible {
+    box-shadow: inset 0 0 0 1px var(--text-tertiary);
+}
+
+.files-changed-file-info {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.files-changed-file-icon {
+    flex-shrink: 0;
+    color: var(--text-tertiary);
+}
+
+.files-changed-file-info .file-name {
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.files-changed-file-info .file-dir {
+    font-size: 11.5px;
+    color: var(--text-tertiary);
+    margin-left: 2px;
+}
+
+.files-changed-file-stats {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    flex-shrink: 0;
+    margin-left: 12px;
+}
+
+.diff-stat-add {
+    color: var(--success, #346538);
+    font-weight: 500;
+}
+
+.diff-stat-del {
+    color: var(--error, #9F2F2D);
+    font-weight: 500;
+}
+
+.diff-stat-modified {
+    font-size: 10.5px;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+

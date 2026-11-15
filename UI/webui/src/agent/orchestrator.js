@@ -14,6 +14,7 @@ import { shouldCompact, compactSessionContext, compileWorkingMessages } from "./
 import { isVerificationToolCall, shouldTriggerVerification, getVerificationPrompt } from "./verification-gate.js";
 import { rightPanel } from "../components/right-panel.js";
 import { terminalDrawer } from "../components/terminal-drawer.js";
+import { finalizeTurnFilesChanged } from "../components/files-changed-bar.js";
 
 function isPromissoryAnnouncement(text) {
     if (!text) return false;
@@ -137,6 +138,23 @@ export async function runAgent(userText, currentAIMessage, chatId, images = [], 
     let transientCorrectionNotice = null;
     let detachedStatusMessage = null;
     const fileReadCounts = new Map();
+    const turnModifiedFiles = new Set();
+    const initialChangesMap = new Map();
+    try {
+        const baseRes = await fetch(`/api/history/changes?chatId=${encodeURIComponent(chatId || "")}`);
+        if (baseRes.ok) {
+            const baseData = await baseRes.json();
+            if (Array.isArray(baseData.files)) {
+                for (const f of baseData.files) {
+                    initialChangesMap.set(f.path, {
+                        additions: f.additions || 0,
+                        deletions: f.deletions || 0,
+                        status: f.status || ""
+                    });
+                }
+            }
+        }
+    } catch (_) {}
 
     logEvent("REQUEST_START", { chatId, model: selectedModel, userText, isFirstUserTurn });
 
@@ -473,6 +491,7 @@ export async function runAgent(userText, currentAIMessage, chatId, images = [], 
                     elapsedSeconds: ((Date.now() - overallStartTime) / 1000).toFixed(1)
                 });
                 await updateAIStream(currentAIMessage, finalDisplay, true, overallStartTime, hasRunTools);
+                await finalizeTurnFilesChanged(session, currentAIMessage, turnModifiedFiles, initialChangesMap);
                 session.updatedAt = Date.now();
                 state.messages = session.messages;
                 saveStoredChats();
@@ -597,6 +616,15 @@ export async function runAgent(userText, currentAIMessage, chatId, images = [], 
                     if (result && (result.detached || result.status === "scheduled_detached")) {
                         detachedStatusMessage = result.status_message || detachedStatusMessage || (args.status_message || args.message || args.messege);
                     }
+                    if (result && !result.error) {
+                        const p = args.path || args.AbsolutePath || args.target_file || args.file_path || args.TargetFile;
+                        if (p && typeof p === "string") {
+                            const editingTools = ["write_file", "replace_file_content", "multi_replace_file_content", "edit_file", "search_and_replace"];
+                            if (editingTools.includes(toolName)) {
+                                turnModifiedFiles.add(p);
+                            }
+                        }
+                    }
                     if (isVerificationToolCall(toolName, args)) {
                         hasRunVerification = true;
                     }
@@ -662,6 +690,7 @@ export async function runAgent(userText, currentAIMessage, chatId, images = [], 
                         });
 
                         await updateAIStream(currentAIMessage, finalMsg, true, overallStartTime, true);
+                        await finalizeTurnFilesChanged(session, currentAIMessage, turnModifiedFiles, initialChangesMap);
                         return;
                     }
                 } catch (error) {
@@ -679,6 +708,9 @@ export async function runAgent(userText, currentAIMessage, chatId, images = [], 
                         }
                         state.messages = session.messages;
                         saveStoredChats();
+                        if (turnModifiedFiles.size > 0) {
+                            await finalizeTurnFilesChanged(session, currentAIMessage, turnModifiedFiles, initialChangesMap);
+                        }
                         finalizeStopped(currentAIMessage, overallStartTime, hasRunTools);
                         return;
                     }
@@ -696,6 +728,9 @@ export async function runAgent(userText, currentAIMessage, chatId, images = [], 
             }
 
             if (genState.abortRequested) {
+                if (turnModifiedFiles.size > 0) {
+                    await finalizeTurnFilesChanged(session, currentAIMessage, turnModifiedFiles, initialChangesMap);
+                }
                 finalizeStopped(currentAIMessage, overallStartTime, hasRunTools);
                 return;
             }
@@ -714,7 +749,8 @@ export async function runAgent(userText, currentAIMessage, chatId, images = [], 
         }
 
         logEvent("MAX_TOOL_ROUNDS_REACHED", { model: selectedModel, userText });
-        updateAIStream(currentAIMessage, "*(Max reasoning rounds reached)*", true, overallStartTime, true);
+        await updateAIStream(currentAIMessage, "*(Max reasoning rounds reached)*", true, overallStartTime, true);
+        await finalizeTurnFilesChanged(session, currentAIMessage, turnModifiedFiles, initialChangesMap);
     } finally {
         clearInterval(statusTimer);
         transientCorrectionNotice = null;
