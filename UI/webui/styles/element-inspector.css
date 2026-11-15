@@ -138,7 +138,7 @@
     background: #18181b;
     border: 1px solid rgba(255, 255, 255, 0.18);
     border-radius: 9999px;
-    padding: 7px 14px 7px 18px;
+    padding: 7px 14px 7px 16px;
     display: flex;
     align-items: center;
     gap: 12px;
@@ -162,26 +162,6 @@
     }
 }
 
-.inspector-pulse-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: #3b82f6;
-    box-shadow: 0 0 8px #3b82f6;
-    animation: inspectorPulse 1.3s infinite ease-in-out;
-}
-
-@keyframes inspectorPulse {
-    0%, 100% {
-        opacity: 1;
-        transform: scale(1);
-    }
-    50% {
-        opacity: 0.4;
-        transform: scale(0.85);
-    }
-}
-
 .inspector-cancel-btn {
     background: rgba(255, 255, 255, 0.1);
     border: 1px solid rgba(255, 255, 255, 0.15);
@@ -193,6 +173,20 @@
     font-weight: 500;
     cursor: pointer;
     transition: background 0.12s ease, transform 0.1s ease;
+}
+
+/* ── Classics Mode: Square Pill & Rectangular Cancel Button ── */
+[data-ui-style="classics"] .element-inspector-bar,
+.ui-style-classics .element-inspector-bar {
+    border-radius: 6px !important;
+    padding: 7px 12px 7px 14px !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45), 0 0 0 1px var(--border) !important;
+}
+
+[data-ui-style="classics"] .inspector-cancel-btn,
+.ui-style-classics .inspector-cancel-btn {
+    border-radius: 4px !important;
+    padding: 3px 8px !important;
 }
 
 .inspector-cancel-btn:hover {

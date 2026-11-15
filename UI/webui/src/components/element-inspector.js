@@ -133,7 +133,6 @@ export function initElementInspector() {
         barEl.className = "element-inspector-bar";
         barEl.style.display = "none";
         barEl.innerHTML = `
-            <span class="inspector-pulse-dot"></span>
             <span>Selecting element...</span>
             <button type="button" class="inspector-cancel-btn" id="elementInspectorCancelBtn">Cancel</button>
         `;

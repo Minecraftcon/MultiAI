@@ -136,7 +136,21 @@
     border-radius: 4px !important;
 }
 
-/* ── 4. Responsive & Mobile Viewports ── */
+/* ── 4. Element Inspector Bar & Buttons (Classics Style) ── */
+[data-ui-style="classics"] .element-inspector-bar,
+.ui-style-classics .element-inspector-bar {
+    border-radius: 6px !important;
+    padding: 7px 12px 7px 14px !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45), 0 0 0 1px var(--border) !important;
+}
+
+[data-ui-style="classics"] .inspector-cancel-btn,
+.ui-style-classics .inspector-cancel-btn {
+    border-radius: 4px !important;
+    padding: 3px 8px !important;
+}
+
+/* ── 5. Responsive & Mobile Viewports ── */
 @media (max-width: 768px) {
     [data-ui-style="classics"] .composer,
     [data-ui-style="classics"] .composer-dock,

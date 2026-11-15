@@ -13,12 +13,16 @@ assert(cssContent.includes(".element-inspector-tooltip"), "Must have .element-in
 assert(cssContent.includes(".element-inspector-bar"), "Must have .element-inspector-bar");
 assert(cssContent.includes(".staged-element-preview"), "Must have .staged-element-preview");
 assert(cssContent.includes(".msg-element-pill"), "Must have .msg-element-pill");
+assert(!cssContent.includes(".inspector-pulse-dot"), "Blinking blue indicator must be removed");
+assert(cssContent.includes('[data-ui-style="classics"] .element-inspector-bar'), "Must have classics style for element-inspector-bar");
+assert(cssContent.includes('[data-ui-style="classics"] .inspector-cancel-btn'), "Must have classics style for cancel button");
 console.log("✓ element-inspector.css rules verified cleanly.");
 
 // 2. Verify component JS exports
 const jsPath = path.join(__dirname, "../UI/webui/src/components/element-inspector.js");
 assert(fs.existsSync(jsPath), "element-inspector.js must exist");
 const jsContent = fs.readFileSync(jsPath, "utf-8");
+assert(!jsContent.includes("inspector-pulse-dot"), "Blinking blue indicator dot must be removed from inspector bar DOM");
 assert(jsContent.includes("export function startElementInspection"), "Must export startElementInspection");
 assert(jsContent.includes("export function stopElementInspection"), "Must export stopElementInspection");
 assert(jsContent.includes("export function toggleElementInspection"), "Must export toggleElementInspection");
