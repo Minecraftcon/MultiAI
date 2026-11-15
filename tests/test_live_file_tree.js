@@ -55,8 +55,10 @@ async function main() {
     console.log("✓ SSE init event received successfully");
 
     // 4. Test disk modification triggers live change event
-    const testFile = path.join("/tmp/work", `test_live_tree_${Date.now()}.txt`);
-    console.log("Creating test file on disk in /tmp/work:", testFile);
+    const { workspaceWatcher } = require("../src/core/workspace_watcher");
+    const activeWs = workspaceWatcher.getWorkspaceRoot();
+    const testFile = path.join(activeWs, `test_live_tree_${Date.now()}.txt`);
+    console.log("Creating test file on disk in active workspace:", testFile);
     fs.writeFileSync(testFile, "hello live watcher");
 
     // Wait for inotify debounce & event delivery

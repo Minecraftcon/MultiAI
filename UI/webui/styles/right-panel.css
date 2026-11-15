@@ -1840,8 +1840,6 @@ html.is-android .terminal-drawer.fused-mode {
 }
 
 .terminal-drawer.fused-mode .xterm {
-    width: 100% !important;
-    height: 100% !important;
     padding: 2px !important;
     touch-action: pan-y !important;
 }

@@ -536,12 +536,42 @@ class TerminalDrawerManager {
         // Enable touch drag & momentum scrolling on mobile / touch devices
         this.setupTouchScroll(session);
 
+        // Setup ResizeObserver on the container to automatically refit on any layout change
+        if (typeof ResizeObserver !== "undefined") {
+            let resizeTimer = null;
+            const ro = new ResizeObserver((entries) => {
+                for (const entry of entries) {
+                    if (entry.contentRect.width > 30 && entry.contentRect.height > 30) {
+                        clearTimeout(resizeTimer);
+                        resizeTimer = setTimeout(() => {
+                            this.fitSessionTerminal(session);
+                        }, 35);
+                    }
+                }
+            });
+            ro.observe(session.mount);
+            session._resizeObserver = ro;
+        }
+
+        // Font metric measurement synchronization:
+        // xterm.js caches character measurements on initial open. If web fonts (JetBrains Mono)
+        // are still loading, it measures fallback fonts, causing character overlap and spacing glitches.
+        if (typeof document !== "undefined" && document.fonts && document.fonts.ready) {
+            document.fonts.ready.then(() => {
+                if (session.term) {
+                    try {
+                        session.term.clearTextureAtlas();
+                        session.term.refresh(0, session.term.rows - 1);
+                    } catch (_) {}
+                    this.fitSessionTerminal(session);
+                }
+            }).catch(() => {});
+        }
+
         setTimeout(() => {
-            if (session.fitAddon) {
-                try { session.fitAddon.fit(); } catch (_) {}
-            }
+            this.fitSessionTerminal(session);
             this.connectSessionStream(session, options);
-        }, 50);
+        }, 60);
 
         // Keystroke forwarding
         term.onData((data) => {
@@ -585,11 +615,15 @@ class TerminalDrawerManager {
             ws.onmessage = (event) => {
                 try {
                     const msg = JSON.parse(event.data);
-                    if (msg.type === "spawned") {
+                    if (msg.type === "spawned" || msg.type === "init") {
                         session.ptyId = msg.pty_id;
-                    } else if (msg.type === "init") {
-                        session.ptyId = msg.pty_id;
-                        if (msg.history) session.term.write(msg.history);
+                        if (msg.type === "init" && msg.history) {
+                            session.term.write(msg.history);
+                        }
+                        // Re-sync current dimensions to the newly registered PTY
+                        if (session.term && session.term.cols && session.term.rows) {
+                            this.sendResize(session, session.term.cols, session.term.rows);
+                        }
                     } else if (msg.type === "data") {
                         session.term.write(msg.data);
                         this.syncScrollBottomButton();
@@ -702,15 +736,27 @@ class TerminalDrawerManager {
 
     sendResize(session, cols, rows) {
         if (!session) return;
-        if (session.ws && session.ws.readyState === WebSocket.OPEN) {
-            session.ws.send(JSON.stringify({ action: "resize", cols, rows }));
-        } else if (session.ptyId) {
-            fetch(`/api/pty/resize/${encodeURIComponent(session.ptyId)}`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ cols, rows })
-            }).catch(() => {});
-        }
+        const validCols = Math.max(10, Math.min(500, parseInt(cols, 10) || 80));
+        const validRows = Math.max(3, Math.min(200, parseInt(rows, 10) || 24));
+
+        // Coalesce rapid resize triggers (e.g. during panel drag)
+        clearTimeout(session._resizeDebounceTimer);
+        session._resizeDebounceTimer = setTimeout(() => {
+            if (session.ws && session.ws.readyState === WebSocket.OPEN) {
+                session.ws.send(JSON.stringify({
+                    action: "resize",
+                    pty_id: session.ptyId,
+                    cols: validCols,
+                    rows: validRows
+                }));
+            } else if (session.ptyId) {
+                fetch(`/api/pty/resize/${encodeURIComponent(session.ptyId)}`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ cols: validCols, rows: validRows })
+                }).catch(() => {});
+            }
+        }, 30);
     }
 
     renderTabs() {
@@ -755,6 +801,10 @@ class TerminalDrawerManager {
         if (idx === -1) return;
 
         const session = this.sessions[idx];
+        if (session._resizeObserver) {
+            try { session._resizeObserver.disconnect(); } catch (_) {}
+        }
+        clearTimeout(session._resizeDebounceTimer);
         if (typeof session._touchCleanup === "function") {
             try { session._touchCleanup(); } catch (_) {}
         }
@@ -807,24 +857,35 @@ class TerminalDrawerManager {
 
     fitActiveTerminal() {
         const active = this.getActiveSession();
-        if (!active || !active.term) return;
+        if (active) {
+            this.fitSessionTerminal(active);
+        }
+    }
 
-        if (active.fitAddon) {
+    fitSessionTerminal(session) {
+        if (!session || !session.term) return;
+
+        if (session.fitAddon) {
             try {
-                active.fitAddon.fit();
+                session.fitAddon.fit();
             } catch (_) {}
         }
 
         // Safety fallback: if cols or rows are suspiciously small (<= 2 or <= 1)
-        if (active.term.cols <= 2 || active.term.rows <= 1) {
-            const mount = active.mount;
+        if (session.term.cols <= 2 || session.term.rows <= 1) {
+            const mount = session.mount;
             const w = mount?.clientWidth || 460;
             const h = mount?.clientHeight || 400;
             const cols = Math.max(20, Math.floor((w - 16) / 8.5));
             const rows = Math.max(10, Math.floor((h - 16) / 17));
             try {
-                active.term.resize(cols, rows);
+                session.term.resize(cols, rows);
             } catch (_) {}
+        }
+
+        // Ensure backend PTY dimensions match whenever fitted
+        if (session.term.cols && session.term.rows) {
+            this.sendResize(session, session.term.cols, session.term.rows);
         }
     }
 
