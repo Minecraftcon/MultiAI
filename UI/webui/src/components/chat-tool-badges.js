@@ -10,6 +10,7 @@ import { requestScrollToBottom } from "./chat-ui.js";
 import { getTool } from "../tools/registry.js";
 import { openTerminal } from "./terminal-drawer.js";
 import { setBadgeDiffStats } from "../tools/badge-sync.js";
+import { renderCodeViewerCardHtml, bindDiffViewerCards } from "./diff-viewer.js";
 
 
 /**
@@ -509,7 +510,24 @@ export function addToolBadge(element, toolName, args) {
 
     searchContainer.appendChild(item);
 
-    if (isCommandTask) {
+    if (toolName === "write_file") {
+        const collapseDiv = document.createElement("div");
+        collapseDiv.className = "badge-collapse";
+        const filePath = args.path || args.TargetFile || args.file_path || "";
+        const initialContent = args.content || args.CodeContent || "";
+        collapseDiv.innerHTML = `
+            <div class="badge-collapse-inner">
+                ${renderCodeViewerCardHtml({
+                    code: initialContent || (filePath ? `// Writing ${filePath}...` : "// Writing content..."),
+                    filePath,
+                    startLine: 1
+                })}
+            </div>
+        `;
+        searchContainer.appendChild(collapseDiv);
+        item._collapseDiv = collapseDiv;
+        bindDiffViewerCards(collapseDiv);
+    } else if (isCommandTask) {
         const collapseDiv = document.createElement("div");
         collapseDiv.className = "badge-collapse";
         collapseDiv.innerHTML = `
@@ -666,6 +684,48 @@ export function extractStreamingDiffCounts(toolName, rawJson) {
 }
 
 /**
+ * Extracts partial or complete file text from in-flight streaming JSON arguments
+ * (e.g. "content" or "CodeContent" field).
+ *
+ * @param {string} rawJson
+ * @returns {string}
+ */
+export function extractStreamingContent(rawJson) {
+    if (!rawJson || typeof rawJson !== "string") return "";
+    const keyMatch = rawJson.match(/"(?:content|CodeContent)"\s*:\s*"/i);
+    if (!keyMatch) return "";
+    const startIdx = keyMatch.index + keyMatch[0].length;
+    let unescaped = "";
+    for (let i = startIdx; i < rawJson.length; i++) {
+        const ch = rawJson[i];
+        if (ch === '\\' && i + 1 < rawJson.length) {
+            const next = rawJson[i + 1];
+            if (next === '"') { unescaped += '"'; i++; }
+            else if (next === '\\') { unescaped += '\\'; i++; }
+            else if (next === 'n') { unescaped += '\n'; i++; }
+            else if (next === 'r') { unescaped += '\r'; i++; }
+            else if (next === 't') { unescaped += '\t'; i++; }
+            else if (next === 'u' && i + 5 < rawJson.length) {
+                const hex = rawJson.slice(i + 2, i + 6);
+                if (/^[0-9a-fA-F]{4}$/.test(hex)) {
+                    unescaped += String.fromCharCode(parseInt(hex, 16));
+                    i += 5;
+                } else {
+                    unescaped += ch;
+                }
+            } else {
+                unescaped += ch;
+            }
+        } else if (ch === '"') {
+            break;
+        } else {
+            unescaped += ch;
+        }
+    }
+    return unescaped;
+}
+
+/**
  * Updates or mounts a tool execution badge in real-time while tool calls and arguments are streaming.
  *
  * @param {HTMLElement} element
@@ -731,25 +791,28 @@ export function updateStreamingToolBadge(element, toolData, overallStartTime) {
         setBadgeDiffStats(badgeEl, queryEl, statHtml);
     }
 
-    // Update activity status label with live line counts and elapsed time
-    const activityLabel = element.querySelector(".activity-label");
-    if (activityLabel) {
-        const sec = overallStartTime ? ((Date.now() - overallStartTime) / 1000).toFixed(1) : "";
-        const secText = sec ? ` (${sec}s)` : "";
-        const fileDisplay = partialPath ? (partialPath.split("/").pop() || partialPath) : "";
-        let newLabel = "";
-        if (diffCounts && diffCounts.adds > 0) {
-            const countDisplay = diffCounts.dels > 0 ? `+${diffCounts.adds}/-${diffCounts.dels}` : `+${diffCounts.adds}`;
-            newLabel = fileDisplay
-                ? `Writing ${fileDisplay} [${countDisplay}]...${secText}`
-                : `Streaming ${toolName} [${countDisplay}]...${secText}`;
-        } else if (fileDisplay) {
-            newLabel = `Streaming ${toolName} (${fileDisplay})...${secText}`;
-        } else {
-            newLabel = `Streaming ${toolName}...${secText}`;
-        }
-        if (activityLabel.textContent !== newLabel) {
-            activityLabel.textContent = newLabel;
+    // Live update for write_file code viewer card if streaming content is arriving
+    if (toolName === "write_file" && badgeEl._collapseDiv) {
+        const streamingCode = extractStreamingContent(accumulatedArgs);
+        if (streamingCode && streamingCode !== badgeEl._lastStreamedCode) {
+            badgeEl._lastStreamedCode = streamingCode;
+            const collapseInner = badgeEl._collapseDiv.querySelector(".badge-collapse-inner");
+            if (collapseInner) {
+                collapseInner.innerHTML = renderCodeViewerCardHtml({
+                    code: streamingCode,
+                    filePath: partialPath,
+                    startLine: 1
+                });
+                bindDiffViewerCards(collapseInner);
+                renderIcons(collapseInner);
+            }
+        } else if (partialPath) {
+            const filenameEl = badgeEl._collapseDiv.querySelector(".mv-filename");
+            if (filenameEl && filenameEl.title !== partialPath) {
+                const baseName = partialPath.split("/").pop() || partialPath;
+                filenameEl.textContent = baseName;
+                filenameEl.title = partialPath;
+            }
         }
     }
 }
@@ -789,6 +852,23 @@ export function syncToolBadgeArgs(badgeEl, toolName, args) {
         if (editFilePath) {
             badgeEl.classList.add("file-edit-badge", "is-editing");
             badgeEl.dataset.editFile = editFilePath;
+        }
+    }
+    if (toolName === "write_file" && badgeEl._collapseDiv) {
+        const finalContent = args.content || args.CodeContent || "";
+        const filePath = args.path || args.TargetFile || args.file_path || "";
+        if (finalContent) {
+            badgeEl._lastStreamedCode = finalContent;
+            const collapseInner = badgeEl._collapseDiv.querySelector(".badge-collapse-inner");
+            if (collapseInner) {
+                collapseInner.innerHTML = renderCodeViewerCardHtml({
+                    code: finalContent,
+                    filePath,
+                    startLine: 1
+                });
+                bindDiffViewerCards(collapseInner);
+                renderIcons(collapseInner);
+            }
         }
     }
 }

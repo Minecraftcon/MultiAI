@@ -1,5 +1,30 @@
 const assert = require("assert");
 
+if (typeof global.localStorage === "undefined") {
+    global.localStorage = {
+        store: {},
+        getItem(k) { return this.store[k] || null; },
+        setItem(k, v) { this.store[k] = String(v); },
+        removeItem(k) { delete this.store[k]; },
+        clear() { this.store = {}; }
+    };
+}
+if (typeof global.window === "undefined") {
+    global.window = {
+        addEventListener() {},
+        removeEventListener() {}
+    };
+}
+if (typeof global.document === "undefined") {
+    global.document = {
+        documentElement: { style: { setProperty() {} }, classList: { contains() { return false; }, add() {}, remove() {} } },
+        body: { classList: { add() {}, remove() {}, contains() { return false; } } },
+        addEventListener() {},
+        removeEventListener() {},
+        getElementById() { return null; }
+    };
+}
+
 // Dynamic import for ES modules in Node.js
 async function runTests() {
     console.log("=== Running Characterization Tests for Chat Tool Badges ===");

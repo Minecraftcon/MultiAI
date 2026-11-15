@@ -9,8 +9,10 @@ const actCssPath = path.join(__dirname, "../UI/webui/styles/activity.css");
 assert(fs.existsSync(actCssPath), "activity.css must exist");
 const actCss = fs.readFileSync(actCssPath, "utf-8");
 assert(actCss.includes(".search-badge-item.is-streaming-tool"), "activity.css must contain .search-badge-item.is-streaming-tool");
-assert(actCss.includes("streamingToolPulse"), "activity.css must contain streamingToolPulse animation");
 assert(actCss.includes("tabular-nums"), "activity.css must contain tabular-nums for jitter-free numbers");
+assert(actCss.includes("#22c55e"), "activity.css must contain standard diff green #22c55e");
+assert(actCss.includes("#f87171"), "activity.css must contain standard diff red #f87171");
+assert(!actCss.includes(".badge-diff-stat.add {\n    color: var(--stat-add"), "activity.css must not bind diff stats to accent color");
 console.log("✓ activity.css streaming tool badge styles verified cleanly.");
 
 // 2. Verify orchestrator.js and chat-client.js integration
@@ -107,13 +109,13 @@ async function runTests() {
         set innerHTML(val) {
             this._innerHTML = val;
             this.children = [];
-            const regex = /<([a-z0-9]+)[^>]*class="([^"]+)"[^>]*>([^<]*)<\/\1>/gi;
-            let match;
-            while ((match = regex.exec(val)) !== null) {
-                const child = new MockElement(match[1]);
-                const classes = match[2].split(/\s+/).filter(Boolean);
+            const classRegex = /<([a-z0-9]+)[^>]*class="([^"]+)"[^>]*>(?:([^<]*))?/gi;
+            let m;
+            while ((m = classRegex.exec(val)) !== null) {
+                const child = new MockElement(m[1]);
+                const classes = m[2].split(/\s+/).filter(Boolean);
                 for (const c of classes) child.classList.add(c);
-                child.textContent = match[3];
+                if (m[3]) child.textContent = m[3].trim();
                 this.appendChild(child);
             }
         }
@@ -144,26 +146,33 @@ async function runTests() {
 
     const {
         extractStreamingPath,
+        extractStreamingContent,
         extractStreamingDiffCounts,
         updateStreamingToolBadge,
         syncToolBadgeArgs
     } = await import("../UI/webui/src/components/chat-tool-badges.js");
 
-    console.log("3. Testing extractStreamingPath...");
+    console.log("3. Testing extractStreamingPath and extractStreamingContent...");
     {
         const json1 = '{"path": "src/components/navbar.js", "content": "export default function() {}"}';
         assert.strictEqual(extractStreamingPath(json1), "src/components/navbar.js");
+        assert.strictEqual(extractStreamingContent(json1), "export default function() {}");
 
         const json2 = '{"path": "src/components/nav';
         assert.strictEqual(extractStreamingPath(json2), "src/components/nav");
 
-        const json3 = '{"TargetFile": "scratch/test_story.txt", "CodeContent": "Hello world"}';
+        const json3 = '{"TargetFile": "scratch/test_story.txt", "CodeContent": "Hello\\nworld\\n\\"quoted\\""}';
         assert.strictEqual(extractStreamingPath(json3), "scratch/test_story.txt");
+        assert.strictEqual(extractStreamingContent(json3), 'Hello\nworld\n"quoted"');
 
         const json4 = '{"file_path": "nested/dir/app.ts"}';
         assert.strictEqual(extractStreamingPath(json4), "nested/dir/app.ts");
 
-        console.log("✓ extractStreamingPath tests passed.");
+        // Partial in-flight string that hasn't closed yet
+        const json5 = '{"path": "foo.js", "content": "function test() {\\n  return 42;\\n';
+        assert.strictEqual(extractStreamingContent(json5), "function test() {\n  return 42;\n");
+
+        console.log("✓ extractStreamingPath and extractStreamingContent tests passed.");
     }
 
     console.log("4. Testing extractStreamingDiffCounts...");
@@ -225,6 +234,9 @@ async function runTests() {
         const badgeEl = currentAIMessage._streamingToolBadges.get("call_test_123");
         assert.ok(badgeEl, "Streaming badge should be registered under tool id");
         assert.strictEqual(badgeEl.classList.contains("is-streaming-tool"), true, "Badge should have is-streaming-tool class");
+        assert.ok(badgeEl._collapseDiv, "write_file badge must have _collapseDiv mounted from the start");
+        assert.strictEqual(badgeEl._collapseDiv.querySelector(".badge-open-pty-btn"), null, "write_file must NOT have terminal button");
+        assert.ok(badgeEl._collapseDiv.querySelector(".modern-viewer-window"), "write_file must have modern-viewer-window code card");
 
         // Chunk 2: More lines stream in
         updateStreamingToolBadge(currentAIMessage, {

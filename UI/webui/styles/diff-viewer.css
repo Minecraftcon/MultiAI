@@ -425,15 +425,23 @@
 }
 
 .badge-diff-stat.add {
-    color: var(--stat-add, var(--accent, #3b82f6));
+    color: #22c55e !important;
     background: transparent;
     border: none;
 }
 
 .badge-diff-stat.del {
-    color: var(--stat-del, rgba(255, 255, 255, 0.45));
+    color: #f87171 !important;
     background: transparent;
     border: none;
+}
+
+[data-theme="light"] .badge-diff-stat.add {
+    color: #2e7d32 !important;
+}
+
+[data-theme="light"] .badge-diff-stat.del {
+    color: #c62828 !important;
 }
 
 /* ---------------------------------------------------------

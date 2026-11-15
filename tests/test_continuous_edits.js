@@ -11,7 +11,21 @@ class MockElement {
         this.attributes = {};
         this._innerHTML = "";
         this._textContent = "";
-        this.style = {};
+        this.style = {
+            setProperty: (k, v) => { this.style[k] = v; },
+            getPropertyValue: (k) => this.style[k] || ""
+        };
+        this.listeners = {};
+    }
+
+    addEventListener(event, fn) {
+        if (!this.listeners[event]) this.listeners[event] = [];
+        this.listeners[event].push(fn);
+    }
+
+    removeEventListener(event, fn) {
+        if (!this.listeners[event]) return;
+        this.listeners[event] = this.listeners[event].filter(f => f !== fn);
     }
 
     get classList() {
@@ -164,9 +178,34 @@ class MockElement {
 async function runTests() {
     console.log("=== Testing Continuous File Editing Badges & Live Diff Ticker ===");
 
+    if (typeof global.localStorage === "undefined") {
+        global.localStorage = {
+            store: {},
+            getItem(k) { return this.store[k] || null; },
+            setItem(k, v) { this.store[k] = String(v); },
+            removeItem(k) { delete this.store[k]; },
+            clear() { this.store = {}; }
+        };
+    }
+    if (typeof global.window === "undefined") {
+        global.window = {
+            addEventListener() {},
+            removeEventListener() {}
+        };
+    }
+    if (typeof global.requestAnimationFrame === "undefined") {
+        global.requestAnimationFrame = (fn) => setTimeout(fn, 0);
+    }
+
+    const docEl = new MockElement("html");
+    const bodyEl = new MockElement("body");
     global.document = {
+        documentElement: docEl,
+        body: bodyEl,
         createElement: (tag) => new MockElement(tag),
-        getElementById: (id) => (id === "chat" ? chatEl : null)
+        getElementById: (id) => (id === "chat" ? chatEl : null),
+        addEventListener() {},
+        removeEventListener() {}
     };
 
     const chatEl = new MockElement("div");
@@ -293,6 +332,7 @@ async function runTests() {
     assert.strictEqual(otherBadge.querySelector(".search-label").textContent, "Edited file", "Single edit file gets 'Edited file'");
 
     console.log("✓ ALL CONTINUOUS EDIT BADGE TESTS PASSED!");
+    process.exit(0);
 }
 
 runTests().catch(err => {

@@ -347,15 +347,23 @@
 }
 
 .badge-diff-stat.add {
-    color: var(--stat-add, var(--accent, #3b82f6)) !important;
+    color: #22c55e !important;
     background: transparent !important;
     border: none !important;
 }
 
 .badge-diff-stat.del {
-    color: var(--stat-del, rgba(255, 255, 255, 0.45)) !important;
+    color: #f87171 !important;
     background: transparent !important;
     border: none !important;
+}
+
+[data-theme="light"] .badge-diff-stat.add {
+    color: #2e7d32 !important;
+}
+
+[data-theme="light"] .badge-diff-stat.del {
+    color: #c62828 !important;
 }
 
 .search-badge-item.clickable-badge:hover .badge-diff-stats,
@@ -431,14 +439,14 @@
    LIVE STREAMING TOOL BADGES & DIFF COUNTER
    ========================================================= */
 .search-badge-item.is-streaming-tool {
-    opacity: 0.95;
-    border-color: rgba(255, 255, 255, 0.14);
-    background: rgba(255, 255, 255, 0.03);
-    transition: border-color 0.2s ease, background 0.2s ease;
+    opacity: 1;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
 }
 
 .search-badge-item.is-streaming-tool .search-label {
-    color: var(--accent-light, #60a5fa);
+    color: var(--text-secondary);
     font-weight: 500;
 }
 
@@ -454,23 +462,6 @@
     opacity: 1 !important;
     transform: none !important;
     filter: none !important;
-}
-
-.search-badge-item.is-streaming-tool .search-icon-circle i,
-.search-badge-item.is-streaming-tool .search-icon-circle svg {
-    animation: streamingToolPulse 1.6s ease-in-out infinite;
-    will-change: transform, opacity;
-}
-
-@keyframes streamingToolPulse {
-    0%, 100% {
-        transform: scale(1);
-        opacity: 0.82;
-    }
-    50% {
-        transform: scale(1.08);
-        opacity: 1;
-    }
 }
 
 .file-edit-steps-summary {
