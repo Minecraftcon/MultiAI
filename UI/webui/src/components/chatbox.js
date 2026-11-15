@@ -12,7 +12,8 @@ import { renderIcons } from "../utils/icons.js";
 import { isMobileBrowser, escapeHTML } from "../utils/dom.js";
 import { onStartPageModeChange, isAndroidOrMobile } from "./aurora-theme.js";
 import { state, setDeepSearchActive } from "../state/index.js";
-import { getEntity } from "./inline-entity.js";
+import { getEntity, bindAtomicEntityDeletion } from "./inline-entity.js";
+import { getActiveSkills, removeActiveSkill } from "./skills-menu.js";
 
 class ChatBoxComponent {
     constructor() {
@@ -183,10 +184,23 @@ class ChatBoxComponent {
             this.isComposing = false;
         });
 
+        // Bind atomic deletion for inline entity tokens (removes whole entity in 1 keystroke)
+        bindAtomicEntityDeletion(this.inputEl);
+
         // Safe Enter handling:
         // On mobile browsers: Enter never sends; it inserts a newline instead.
         // On desktop browsers: Enter sends, Shift+Enter inserts a newline.
         this.inputEl.addEventListener("keydown", (e) => {
+            if (e.key === "Backspace" && !this.inputEl.value) {
+                // If input is empty, Backspace removes the most recent active skill at once
+                const active = getActiveSkills();
+                if (active.length > 0) {
+                    e.preventDefault();
+                    removeActiveSkill(active[active.length - 1].id);
+                }
+                return;
+            }
+
             if (e.key === "Enter") {
                 if (this.isComposing || e.isComposing) return;
 
@@ -448,27 +462,12 @@ class ChatBoxComponent {
 
         let html = escapeHTML(val);
 
-        // 1. Highlight glyph skills (e.g. "⚛ encode-ccres-database", "🔲 antigravity-guide", "⚡ android-cli")
-        html = html.replace(/(?:^|(?<=\s))(⚛|🔲|🤖|◈|🔍|⚡)\s*([a-zA-Z0-9_\-]+)(?=\s|$)/g, (fullMatch) => {
-            return `<mark class="chatbox-entity-token entity-skill">${fullMatch}</mark>`;
+        // 1. Highlight bracketed entity tokens: [ ... ]
+        html = html.replace(/\[\s*([^\]\n\r]+?)\s*\]/g, (fullMatch) => {
+            return `<mark class="chatbox-entity-token">${fullMatch}</mark>`;
         });
 
-        // 2. Highlight glyph elements (e.g. "⌖ selection", "⌖ button.followup-item")
-        html = html.replace(/(?:^|(?<=\s))⌖\s*([^\s\]\n\r]+)(?=\s|$)/g, (fullMatch) => {
-            return `<mark class="chatbox-entity-token entity-element">${fullMatch}</mark>`;
-        });
-
-        // 3. Highlight bracketed entity tokens: [ ... ]
-        html = html.replace(/\[\s*([^\]\n\r]+?)\s*\]/g, (fullMatch, rawInner) => {
-            const inner = rawInner.trim();
-            const stored = getEntity(inner);
-            const isSkill = (inner.startsWith("skill:") || (stored && stored.type === "skill"));
-            const isEl = (inner.startsWith("element:") || inner.startsWith("el:") || (stored && stored.type === "element"));
-            const cls = isEl ? "entity-element" : (isSkill ? "entity-skill" : "");
-            return `<mark class="chatbox-entity-token ${cls}">${fullMatch}</mark>`;
-        });
-
-        // 4. Highlight recognized skills with slash or arrow (> skill-id, /skill-id)
+        // 2. Highlight recognized skills with slash or arrow (> skill-id, /skill-id)
         const skills = (state && state.skills) ? state.skills : ((typeof window !== "undefined" && window.__knownSkills) ? window.__knownSkills : []);
         if (skills && skills.length > 0) {
             for (const skill of skills) {

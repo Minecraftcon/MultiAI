@@ -272,39 +272,19 @@
 
 .chatbox-skill-token,
 .chatbox-entity-token {
-    background: rgba(56, 189, 248, 0.16);
+    background: rgba(255, 255, 255, 0.06);
     color: transparent;
-    border: 1px solid rgba(56, 189, 248, 0.32);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 4px;
     padding: 1px 4px;
     box-sizing: border-box;
     display: inline;
 }
 
-.chatbox-entity-token.entity-element {
-    background: rgba(59, 130, 246, 0.16);
-    border-color: rgba(59, 130, 246, 0.35);
-}
-
-.chatbox-entity-token.entity-skill {
-    background: rgba(168, 85, 247, 0.16);
-    border-color: rgba(168, 85, 247, 0.35);
-}
-
 [data-theme="light"] .chatbox-skill-token,
 [data-theme="light"] .chatbox-entity-token {
-    background: #E1F3FE;
-    border-color: rgba(31, 108, 159, 0.25);
-}
-
-[data-theme="light"] .chatbox-entity-token.entity-element {
-    background: #E1F3FE;
-    border-color: rgba(31, 108, 159, 0.28);
-}
-
-[data-theme="light"] .chatbox-entity-token.entity-skill {
-    background: #EDF3EC;
-    border-color: rgba(52, 101, 56, 0.28);
+    background: #F4F4F2;
+    border: 1px solid #EAEAEA;
 }
 
 [data-ui-style="classics"] .chatbox-entity-token,

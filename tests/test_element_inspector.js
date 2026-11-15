@@ -63,23 +63,35 @@ assert(inlineContent.includes("export function insertInlineEntity"), "Must expor
 assert(inlineContent.includes("export function formatMessageWithInlineEntities"), "Must export formatMessageWithInlineEntities");
 assert(inlineContent.includes("export function extractEntitiesFromText"), "Must export extractEntitiesFromText");
 assert(inlineContent.includes("export function registerEntity"), "Must export registerEntity");
-assert(inlineContent.includes("export function getEntityGlyph"), "Must export getEntityGlyph");
+assert(inlineContent.includes("export function bindAtomicEntityDeletion"), "Must export bindAtomicEntityDeletion");
 assert(inlineContent.includes("export function formatElementDisplayLabel"), "Must export formatElementDisplayLabel");
 assert(inlineContent.includes("export function cleanPromptText"), "Must export cleanPromptText");
 
-// 6. Verify chat-ui imports inline entities for history render
+// 6. Verify icon removal & clean color hierarchy
+assert(!inlineContent.includes("<svg"), "Inline chips must not contain icons");
+assert(!cssContent.includes(".entity-icon"), "element-inspector.css must not have .entity-icon");
+assert(!cssContent.includes("rgba(168, 85, 247"), "element-inspector.css must not have purple highlight violating color hierarchy");
+
+// 7. Verify skills-menu removed sparkle icon
+const skillsMenuPath = path.join(__dirname, "../UI/webui/src/components/skills-menu.js");
+const skillsMenuContent = fs.readFileSync(skillsMenuPath, "utf-8");
+assert(!skillsMenuContent.includes('data-lucide="sparkles"'), "skills-menu.js must not include sparkles icon");
+
+// 8. Verify chat-ui imports inline entities for history render
 const chatUiPath = path.join(__dirname, "../UI/webui/src/components/chat-ui.js");
 const chatUiContent = fs.readFileSync(chatUiPath, "utf-8");
 assert(chatUiContent.includes("formatMessageWithInlineEntities"), "chat-ui.js must import and use formatMessageWithInlineEntities for loaded turns");
 
-// 7. Verify live syntax highlighter tokens in chatbox and composer.css
+// 9. Verify live syntax highlighter tokens and atomic deletion in chatbox
 const chatboxPath = path.join(__dirname, "../UI/webui/src/components/chatbox.js");
 const chatboxContent = fs.readFileSync(chatboxPath, "utf-8");
 assert(chatboxContent.includes("chatbox-entity-token"), "chatbox.js must highlight inline entity tokens in composerHighlighter");
+assert(chatboxContent.includes("bindAtomicEntityDeletion"), "chatbox.js must bind atomic entity deletion");
 
 const compCssPath = path.join(__dirname, "../UI/webui/styles/composer.css");
 const compCssContent = fs.readFileSync(compCssPath, "utf-8");
 assert(compCssContent.includes(".chatbox-entity-token"), "composer.css must style .chatbox-entity-token");
-console.log("✓ Universal inline entity module, glyph support, and live highlighter verified.");
+assert(!compCssContent.includes("rgba(168, 85, 247"), "composer.css must not have purple highlight violating color hierarchy");
+console.log("✓ Universal inline entity module, icon-free chips, atomic deletion, and neutral color hierarchy verified.");
 
 console.log("\nALL ELEMENT INSPECTOR TESTS PASSED CLEANLY!");

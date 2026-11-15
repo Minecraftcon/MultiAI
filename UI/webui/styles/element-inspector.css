@@ -284,13 +284,12 @@ body.is-element-inspecting * {
     color: #60a5fa;
 }
 
-/* ── Universal Chat Inline Entity Pills ([icon][text](background highlight)) ── */
+/* ── Universal Chat Inline Entity Pills (Clean text-only chips, neutral monochrome) ── */
 .chat-inline-entity {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
     vertical-align: baseline;
-    padding: 1px 7px 1px 6px;
+    padding: 1px 6px;
     margin: 0 2px;
     border-radius: 4px;
     font-family: 'JetBrains Mono', monospace;
@@ -299,15 +298,10 @@ body.is-element-inspecting * {
     line-height: 1.35;
     white-space: nowrap;
     user-select: text;
-    transition: background 0.12s ease, border-color 0.12s ease, transform 0.1s ease;
-}
-
-.chat-inline-entity .entity-icon {
-    flex-shrink: 0;
-    width: 12px;
-    height: 12px;
-    display: inline-block;
-    vertical-align: middle;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--text-primary, #f4f4f5);
+    transition: background 0.12s ease, border-color 0.12s ease;
 }
 
 .chat-inline-entity .entity-text {
@@ -318,57 +312,21 @@ body.is-element-inspecting * {
     vertical-align: middle;
 }
 
-/* Element Pill (Dark Theme: Pale Blue tint) */
-.chat-inline-entity.entity-element {
-    background: rgba(59, 130, 246, 0.12);
-    border: 1px solid rgba(59, 130, 246, 0.28);
-    color: #93c5fd;
+.chat-inline-entity:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.18);
 }
 
-.chat-inline-entity.entity-element .entity-icon {
-    color: #60a5fa;
+/* Light Theme: Warm neutral bone adhering to color hierarchy */
+[data-theme="light"] .chat-inline-entity {
+    background: #F4F4F2;
+    border: 1px solid #EAEAEA;
+    color: #111111;
 }
 
-.chat-inline-entity.entity-element:hover {
-    background: rgba(59, 130, 246, 0.22);
-    border-color: rgba(59, 130, 246, 0.45);
-}
-
-/* Skill Pill (Dark Theme: Pale Purple / Lavender tint) */
-.chat-inline-entity.entity-skill {
-    background: rgba(168, 85, 247, 0.12);
-    border: 1px solid rgba(168, 85, 247, 0.28);
-    color: #d8b4fe;
-}
-
-.chat-inline-entity.entity-skill .entity-icon {
-    color: #c084fc;
-}
-
-.chat-inline-entity.entity-skill:hover {
-    background: rgba(168, 85, 247, 0.22);
-    border-color: rgba(168, 85, 247, 0.45);
-}
-
-/* Light Theme: Desaturated Pastels adhering to Global Rule 4 */
-[data-theme="light"] .chat-inline-entity.entity-element {
-    background: #E1F3FE; /* Pale Blue */
-    border: 1px solid rgba(31, 108, 159, 0.28);
-    color: #1F6C9F;
-}
-
-[data-theme="light"] .chat-inline-entity.entity-element .entity-icon {
-    color: #1F6C9F;
-}
-
-[data-theme="light"] .chat-inline-entity.entity-skill {
-    background: #EDF3EC; /* Pale Green / Pastel */
-    border: 1px solid rgba(52, 101, 56, 0.28);
-    color: #346538;
-}
-
-[data-theme="light"] .chat-inline-entity.entity-skill .entity-icon {
-    color: #346538;
+[data-theme="light"] .chat-inline-entity:hover {
+    background: #EAEAE8;
+    border-color: #DDDDDA;
 }
 
 /* Classics Mode: Crisp rectangular styling */

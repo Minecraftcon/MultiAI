@@ -1,19 +1,14 @@
 /**
  * MultiAI Universal Inline Entity Module
  * =======================================
- * Universally imported for inserting and formatting inline entity chips in chat:
- * [icon][text](background highlight)
+ * Universally imported for inserting and formatting inline entity chips in chat.
  * 
- * Supports:
- * - Selected UI Elements (⌖ button.followup-item, ⌖ selection, etc.)
- * - Skills (⚛ encode-ccres-database, 🔲 antigravity-guide, 🤖 android-cli, etc.)
- * - Generic inline selections
- * 
- * Flow:
- * - In Composer input: renders clean unbracketed icon + name (e.g. "⚛ encode-ccres-database")
- *   with real-time live background highlight in composerHighlighter.
- * - In Chat bubbles: renders as styled inline chips with icon, text, and pastel background highlight.
- * - For LLM backend: extracts full context (<user_selected_ui_element> & activated skills).
+ * Clean, minimalist design:
+ * - NO random glyphs or emoji in text (pure clean text).
+ * - NO icons in the inline chips (pure text label).
+ * - Neutral monochrome highlighting adhering strictly to color hierarchy:
+ *   subtle off-white/bone #F4F4F2 in light mode, neutral rgba(255,255,255,0.06) in dark mode.
+ * - Atomic deletion: backspacing at or inside an entity chip deletes the whole chip at once.
  */
 
 import { escapeHTML } from "../utils/dom.js";
@@ -21,45 +16,6 @@ import { state } from "../state.js";
 
 // Session entity store: entityKey -> { type, id, label, data, timestamp }
 export const inlineEntityStore = new Map();
-
-/**
- * Determine the appropriate Unicode glyph for an entity
- */
-export function getEntityGlyph(type, id, data = {}) {
-    if (type === "element") {
-        return "⌖"; // Clean DevTools position / target selector crosshair
-    }
-
-    const cleanId = String(id || "").toLowerCase();
-
-    // Science, Bio, Chemistry, Database skills -> Atom ⚛
-    if (/database|alphafold|chem|bio|protein|genome|gene|pdb|dna|rna|blast|uniprot|ncbi|variant|encode|clinical|clinvar|gnomad|gtex|ols|jaspar|openfda|reactome|string|unibind|molecular/.test(cleanId)) {
-        return "⚛";
-    }
-
-    // Guides, Primers, Docs, Architecture, Customization -> Code Box 🔲
-    if (/guide|primer|docs|reference|customization|architecture|manual|system/.test(cleanId)) {
-        return "🔲";
-    }
-
-    // Mobile & Android skills -> 🤖
-    if (/android|mobile|compose/.test(cleanId)) {
-        return "🤖";
-    }
-
-    // Design, UI, Frontend -> ◈
-    if (/design|style|theme|css|frontend|minimalist|taste|visual/.test(cleanId)) {
-        return "◈";
-    }
-
-    // Research & Search -> 🔍
-    if (/research|search|literature|arxiv|pubmed/.test(cleanId)) {
-        return "🔍";
-    }
-
-    // Default skill glyph -> ⚡
-    return "⚡";
-}
 
 /**
  * Clean complex or hashed selectors into human-readable display labels
@@ -104,11 +60,9 @@ export function registerEntity(type, id, data = {}) {
         id: cleanId,
         label: data.label || cleanId,
         data: data.data || data,
-        glyph: data.glyph || getEntityGlyph(type, cleanId, data),
         timestamp: Date.now()
     };
     inlineEntityStore.set(cleanId.toLowerCase(), entry);
-    // Also index without leading hash or dot if applicable
     if (cleanId.startsWith("#") || cleanId.startsWith(".")) {
         inlineEntityStore.set(cleanId.slice(1).toLowerCase(), entry);
     }
@@ -127,7 +81,7 @@ export function getEntity(id) {
 }
 
 /**
- * Get all entities of a specific type (e.g. 'element' or 'skill')
+ * Get all entities of a specific type
  */
 export function getAllEntities(type) {
     const list = [];
@@ -145,8 +99,7 @@ export function getAllEntities(type) {
 
 /**
  * Universal insertion function:
- * Inserts the entity chip token (e.g. "⚛ encode-ccres-database " or "⌖ selection ")
- * directly at the user's cursor position in the composer textarea.
+ * Inserts the entity chip token [label] at the user's cursor position in the composer textarea.
  */
 export function insertInlineEntity({ type, id, label, data = {}, textareaId = "input" }) {
     const input = document.getElementById(textareaId);
@@ -154,13 +107,11 @@ export function insertInlineEntity({ type, id, label, data = {}, textareaId = "i
 
     const displayLabel = label || id || (type === "element" ? "selection" : "skill");
     const cleanId = id || displayLabel;
-    const glyph = getEntityGlyph(type, cleanId, data);
 
     // Register in global entity store
-    registerEntity(type, cleanId, { label: displayLabel, data, glyph });
+    registerEntity(type, cleanId, { label: displayLabel, data });
 
-    // Clean unbracketed entity token matching proper format: [glyph][text]
-    const token = `${glyph} ${displayLabel} `;
+    const token = `[${displayLabel}] `;
 
     const val = input.value || "";
     const selStart = (typeof input.selectionStart === "number" && input.selectionStart >= 0)
@@ -173,8 +124,8 @@ export function insertInlineEntity({ type, id, label, data = {}, textareaId = "i
     const textBefore = val.slice(0, selStart);
     const textAfter = val.slice(selEnd);
 
-    // If there is an incomplete query or prefix before cursor (e.g. "/" or ">" or "[" or "@" or an entity glyph), replace it cleanly
-    const match = textBefore.match(/(?:^|\s)(?:\[|\/|>|@|⚛|🔲|🤖|◈|🔍|⚡|⌖)([a-zA-Z0-9_.:#\-]*)$/);
+    // If there is an incomplete query or prefix before cursor (e.g. "/" or ">" or "[" or "@"), replace it cleanly
+    const match = textBefore.match(/(?:^|\s)(?:\[|\/|>|@)([a-zA-Z0-9_.:#\-]*)$/);
     let newVal = "";
     let newCursorPos = 0;
 
@@ -197,7 +148,7 @@ export function insertInlineEntity({ type, id, label, data = {}, textareaId = "i
         input.setSelectionRange(newCursorPos, newCursorPos);
     }
 
-    // Trigger auto-resize & input event handlers so live syntax highlighter updates immediately
+    // Trigger auto-resize & input event handlers
     input.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
@@ -238,61 +189,20 @@ function isElementToken(token) {
 }
 
 /**
- * Technical SVG primitive icons (no external dependency, pixel-crisp)
- */
-function getEntityIconSvg(type, glyph = "") {
-    if (glyph === "⚛") {
-        // Technical Atom SVG
-        return `<svg class="entity-icon" viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="2" fill="currentColor"/><ellipse cx="8" cy="8" rx="7" ry="3" transform="rotate(30 8 8)"/><ellipse cx="8" cy="8" rx="7" ry="3" transform="rotate(-30 8 8)"/></svg>`;
-    }
-    if (glyph === "🔲") {
-        // Technical Window / Code Box SVG
-        return `<svg class="entity-icon" viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="2.5" width="11" height="11" rx="2"/><polyline points="5.5 6.5 4 8 5.5 9.5"/><polyline points="10.5 6.5 12 8 10.5 9.5"/></svg>`;
-    }
-    if (type === "element" || glyph === "⌖") {
-        // DevTools Target Crosshair SVG
-        return `<svg class="entity-icon" viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="5"/><line x1="8" y1="1" x2="8" y2="4"/><line x1="8" y1="12" x2="8" y2="15"/><line x1="1" y1="8" x2="4" y2="8"/><line x1="12" y1="8" x2="15" y2="8"/></svg>`;
-    }
-    // Default Skill SVG: technical 4-point star
-    return `<svg class="entity-icon" viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="8 1.5 10 6 14.5 8 10 10 8 14.5 6 10 1.5 8 6 6 8 1.5"/></svg>`;
-}
-
-/**
  * Formats user message text so recognized entity tokens
- * (e.g. "⚛ encode-ccres-database", "🔲 antigravity-guide", "⌖ selection", or "[...]")
- * are replaced with inline [icon][text](background highlight) chips.
+ * are replaced with clean, icon-free inline entity chips adhering to the color hierarchy.
  */
 export function formatMessageWithInlineEntities(rawText, activeSkills = []) {
     if (!rawText) return "";
 
     let escaped = escapeHTML(rawText);
 
-    // 1. Replace unbracketed glyph entities: (⚛|🔲|🤖|◈|🔍|⚡)\s*([a-zA-Z0-9_\-]+)
-    escaped = escaped.replace(/(?:^|(?<=\s))(⚛|🔲|🤖|◈|🔍|⚡)\s*([a-zA-Z0-9_\-]+)(?=\s|$)/g, (match, glyph, skillId) => {
-        const iconSvg = getEntityIconSvg("skill", glyph);
-        return `<span class="chat-inline-entity entity-skill" data-entity-type="skill" data-entity-id="${skillId}" title="Skill: ${skillId}">${iconSvg}<span class="entity-text">${skillId}</span></span>`;
-    });
-
-    // 2. Replace unbracketed element entities: ⌖\s*([^\s\]\n\r]+)
-    escaped = escaped.replace(/(?:^|(?<=\s))⌖\s*([^\s\]\n\r]+)(?=\s|$)/g, (match, selector) => {
-        const iconSvg = getEntityIconSvg("element", "⌖");
-        return `<span class="chat-inline-entity entity-element" data-entity-type="element" data-entity-id="${selector}" title="Inspected element: ${selector}">${iconSvg}<span class="entity-text">${selector}</span></span>`;
-    });
-
-    // 3. Replace bracketed entity tokens: [ selection ], [button.followup-item], [android-cli] (backwards compat)
+    // 1. Replace bracketed entity tokens: [ selection ], [button.followup-item], [android-cli]
     escaped = escaped.replace(/\[\s*([^\]\n\r]+?)\s*\]/g, (match, rawInner) => {
         let inner = rawInner.trim();
         if (!inner) return match;
 
         let type = null;
-        let glyph = "";
-
-        // Check for glyph inside bracket
-        const glyphMatch = inner.match(/^(⚛|🔲|🤖|◈|🔍|⚡|⌖)\s*(.+)$/);
-        if (glyphMatch) {
-            glyph = glyphMatch[1];
-            inner = glyphMatch[2].trim();
-        }
 
         if (inner.startsWith("element:") || inner.startsWith("el:")) {
             type = "element";
@@ -300,9 +210,9 @@ export function formatMessageWithInlineEntities(rawText, activeSkills = []) {
         } else if (inner.startsWith("skill:")) {
             type = "skill";
             inner = inner.replace(/^skill:/, "").trim();
-        } else if (glyph === "⌖" || isElementToken(inner)) {
+        } else if (isElementToken(inner)) {
             type = "element";
-        } else if (glyph || isSkillToken(inner, activeSkills)) {
+        } else if (isSkillToken(inner, activeSkills)) {
             type = "skill";
         } else {
             const stored = getEntity(inner);
@@ -315,23 +225,19 @@ export function formatMessageWithInlineEntities(rawText, activeSkills = []) {
             return match;
         }
 
-        glyph = glyph || getEntityGlyph(type, inner);
-        const iconSvg = getEntityIconSvg(type, glyph);
         const titleAttr = type === "element" ? `Inspected element: ${inner}` : `Skill: ${inner}`;
-
-        return `<span class="chat-inline-entity entity-${type}" data-entity-type="${type}" data-entity-id="${inner}" title="${escapeHTML(titleAttr)}">${iconSvg}<span class="entity-text">${inner}</span></span>`;
+        // Clean text-only chip (NO ICONS) adhering to warm monochrome palette
+        return `<span class="chat-inline-entity entity-${type}" data-entity-type="${type}" data-entity-id="${inner}" title="${escapeHTML(titleAttr)}"><span class="entity-text">${inner}</span></span>`;
     });
 
-    // 4. Backward compatibility for legacy skill tokens (> skill-id)
+    // 2. Backward compatibility for legacy skill tokens (> skill-id)
     const skillsList = (state && state.skills) || activeSkills || [];
     for (const skill of skillsList) {
         const idEscaped = escapeHTML(skill.id).replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
         const pattern = `(?:^|(?<=\\s))(?:&gt;|\\>)\\s*(${idEscaped})(?=\\s|$)`;
         const regex = new RegExp(pattern, "gi");
         escaped = escaped.replace(regex, () => {
-            const glyph = getEntityGlyph("skill", skill.id);
-            const iconSvg = getEntityIconSvg("skill", glyph);
-            return `<span class="chat-inline-entity entity-skill" data-entity-type="skill" data-entity-id="${skill.id}" title="Skill: ${skill.id}">${iconSvg}<span class="entity-text">${escapeHTML(skill.id)}</span></span>`;
+            return `<span class="chat-inline-entity entity-skill" data-entity-type="skill" data-entity-id="${skill.id}" title="Skill: ${skill.id}"><span class="entity-text">${escapeHTML(skill.id)}</span></span>`;
         });
     }
 
@@ -340,7 +246,6 @@ export function formatMessageWithInlineEntities(rawText, activeSkills = []) {
 
 /**
  * Extracts entities mentioned in a prompt text (for LLM context assembly).
- * Supports glyph-prefixed ("⚛ skill-id", "⌖ element"), bracketed ("[skill-id]"), and slash/arrow formats.
  */
 export function extractEntitiesFromText(rawText) {
     const elements = [];
@@ -350,48 +255,11 @@ export function extractEntitiesFromText(rawText) {
     const seenElements = new Set();
     const seenSkills = new Set();
 
-    // 1. Extract glyph skills: (⚛|🔲|🤖|◈|🔍|⚡)\s*([a-zA-Z0-9_\-]+)
-    const skillGlyphRegex = /(?:^|\s)(?:⚛|🔲|🤖|◈|🔍|⚡)\s*([a-zA-Z0-9_\-]+)(?=\s|$)/g;
-    let m;
-    while ((m = skillGlyphRegex.exec(rawText)) !== null) {
-        const skillId = m[1].trim();
-        if (!seenSkills.has(skillId.toLowerCase())) {
-            seenSkills.add(skillId.toLowerCase());
-            const allSkills = (state && state.skills) || [];
-            const found = allSkills.find(s => s.id && s.id.toLowerCase() === skillId.toLowerCase());
-            skills.push(found || getEntity(skillId)?.data || { id: skillId, name: skillId });
-        }
-    }
-
-    // 2. Extract glyph elements: ⌖\s*([^\s\]\n\r]+)
-    const elGlyphRegex = /(?:^|\s)⌖\s*([^\s\]\n\r]+)(?=\s|$)/g;
-    while ((m = elGlyphRegex.exec(rawText)) !== null) {
-        const selector = m[1].trim();
-        if (!seenElements.has(selector.toLowerCase())) {
-            seenElements.add(selector.toLowerCase());
-            const stored = getEntity(selector);
-            elements.push({
-                type: "element",
-                id: selector,
-                name: selector,
-                elementData: stored?.data || { selector, tagName: selector }
-            });
-        }
-    }
-
-    // 3. Extract bracketed entities: [ ... ]
     const bracketRegex = /\[\s*([^\]\n\r]+?)\s*\]/g;
+    let m;
     while ((m = bracketRegex.exec(rawText)) !== null) {
         let token = m[1].trim();
         let explicitType = null;
-
-        // Check for glyph inside bracket
-        const glyphMatch = token.match(/^(⚛|🔲|🤖|◈|🔍|⚡|⌖)\s*(.+)$/);
-        if (glyphMatch) {
-            token = glyphMatch[2].trim();
-            if (glyphMatch[1] === "⌖") explicitType = "element";
-            else explicitType = "skill";
-        }
 
         if (token.startsWith("element:") || token.startsWith("el:")) {
             explicitType = "element";
@@ -424,22 +292,81 @@ export function extractEntitiesFromText(rawText) {
 }
 
 /**
- * Clean entity glyphs and bracket wrappers from prompt text before sending to LLM
+ * Clean entity bracket wrappers from prompt text before sending to LLM
  */
 export function cleanPromptText(rawText) {
     if (!rawText) return "";
     let clean = rawText;
 
-    // Strip glyphs before entity names: "⚛ encode-ccres-database" -> "encode-ccres-database"
-    clean = clean.replace(/(?:^|\s)(?:⚛|🔲|🤖|◈|🔍|⚡)\s*([a-zA-Z0-9_\-]+)(?=\s|$)/g, " $1 ");
-    // Strip element crosshair glyph: "⌖ button.followup-item" -> "button.followup-item"
-    clean = clean.replace(/(?:^|\s)⌖\s*([^\s\]\n\r]+)(?=\s|$)/g, " $1 ");
     // Strip brackets: "[encode-ccres-database]" -> "encode-ccres-database"
     clean = clean.replace(/\[\s*([^\]\n\r]+?)\s*\]/g, "$1");
     // Strip leading / or >
     clean = clean.replace(/(?:^|\s)(?:\/|&gt;|\\>)\s*([a-zA-Z0-9_\-]+)(?=\s|$)/g, " $1 ");
 
     return clean.replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Enables atomic removal of entity tokens [token] in the textarea.
+ * When the user presses Backspace or Delete near or inside a token, the entire token
+ * is removed in a single keystroke ("skills should be removable at once").
+ */
+export function bindAtomicEntityDeletion(inputEl) {
+    if (!inputEl || inputEl._atomicDeletionBound) return;
+    inputEl._atomicDeletionBound = true;
+
+    inputEl.addEventListener("keydown", (e) => {
+        if (e.key === "Backspace" && !e.ctrlKey && !e.metaKey && !e.altKey) {
+            const val = inputEl.value;
+            const selStart = inputEl.selectionStart;
+            const selEnd = inputEl.selectionEnd;
+            if (selStart !== selEnd) return; // Allow normal range deletion
+
+            const textBefore = val.slice(0, selStart);
+
+            // 1. Cursor is immediately after a bracketed token (e.g. "[android-cli]" or "[android-cli] ")
+            const trailingMatch = textBefore.match(/(?:^|\s)(\[[^\]\n\r]+\]\s?)$/);
+            if (trailingMatch) {
+                e.preventDefault();
+                const tokenLen = trailingMatch[1].length;
+                const newPos = selStart - tokenLen;
+                inputEl.value = val.slice(0, newPos) + val.slice(selStart);
+                inputEl.setSelectionRange(newPos, newPos);
+                inputEl.dispatchEvent(new Event("input", { bubbles: true }));
+                return;
+            }
+
+            // 2. Cursor is inside a bracketed token: [and|roid-cli]
+            const lastOpen = textBefore.lastIndexOf("[");
+            if (lastOpen !== -1 && !textBefore.slice(lastOpen).includes("]")) {
+                const nextClose = val.indexOf("]", selStart);
+                if (nextClose !== -1 && !val.slice(selStart, nextClose).includes("[")) {
+                    e.preventDefault();
+                    const endPos = (val[nextClose + 1] === " ") ? nextClose + 2 : nextClose + 1;
+                    inputEl.value = val.slice(0, lastOpen) + val.slice(endPos);
+                    inputEl.setSelectionRange(lastOpen, lastOpen);
+                    inputEl.dispatchEvent(new Event("input", { bubbles: true }));
+                    return;
+                }
+            }
+        } else if (e.key === "Delete" && !e.ctrlKey && !e.metaKey && !e.altKey) {
+            const val = inputEl.value;
+            const selStart = inputEl.selectionStart;
+            const selEnd = inputEl.selectionEnd;
+            if (selStart !== selEnd) return;
+
+            const textAfter = val.slice(selStart);
+            // Cursor is immediately before a bracketed token: |[android-cli]
+            const leadingMatch = textAfter.match(/^(\[[^\]\n\r]+\]\s?)/);
+            if (leadingMatch) {
+                e.preventDefault();
+                const tokenLen = leadingMatch[1].length;
+                inputEl.value = val.slice(0, selStart) + val.slice(selStart + tokenLen);
+                inputEl.setSelectionRange(selStart, selStart);
+                inputEl.dispatchEvent(new Event("input", { bubbles: true }));
+            }
+        }
+    });
 }
 
 /**

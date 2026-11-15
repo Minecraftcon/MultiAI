@@ -104,8 +104,7 @@ export function renderSkillPills() {
             pillEl.dataset.skillId = skill.id;
             pillEl.title = `Active Skill: ${skill.name} - ${skill.description} (Click X to remove)`;
             pillEl.innerHTML = `
-                <i data-lucide="sparkles"></i>
-                <span>Skill: ${escapeHTML(skill.name)}</span>
+                <span>${escapeHTML(skill.name || skill.id)}</span>
                 <button type="button" class="mode-pill-del" aria-label="Remove skill" title="Remove skill">
                     <i data-lucide="x"></i>
                 </button>
@@ -171,7 +170,6 @@ export async function openSkillsMenu(query = "") {
     const headerHtml = `
         <div class="skills-menu-header">
             <div class="skills-menu-header-left">
-                <i data-lucide="sparkles"></i>
                 <span>Skills (${countText})</span>
             </div>
             <div class="skills-menu-header-right">
@@ -279,8 +277,8 @@ export function parseOnTextSkills(text) {
         const nameEsc = name ? name.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&') : null;
         const variants = nameEsc && nameEsc !== idEsc ? `${idEsc}|${nameEsc}` : idEsc;
 
-        // Match glyph entity (⚛, 🔲, 🤖, etc.), bracketed entity [skill-id], leading >, leading /, or delimited token
-        const pattern = `(?:(?:^|\\s)(?:⚛|🔲|🤖|◈|🔍|⚡)\\s*(${variants})(?=\\s|$)|(?:\\[\\s*(${variants})\\s*\\])|(?:^|\\s)(?:\\/|&gt;|\\>)?\\s*(${variants})(?=\\s|$))`;
+        // Match bracketed entity [skill-id], leading >, leading /, or delimited token
+        const pattern = `(?:\\[\\s*(${variants})\\s*\\]|(?:^|\\s)(?:\\/|&gt;|\\>)?\\s*(${variants})(?=\\s|$))`;
         const regex = new RegExp(pattern, "i");
 
         if (regex.test(text) && !skillIdsSeen.has(skill.id)) {
@@ -295,8 +293,6 @@ export function parseOnTextSkills(text) {
         const idEsc = skill.id.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
         const nameEsc = (skill.name || "").replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
         const variants = nameEsc && nameEsc !== idEsc ? `${idEsc}|${nameEsc}` : idEsc;
-        // Turn glyph skill or [skill-id] into skill-id, or remove isolated /skill or > skill
-        cleanText = cleanText.replace(new RegExp(`(?:^|\\s)(?:⚛|🔲|🤖|◈|🔍|⚡)\\s*(${variants})(?=\\s|$)`, "gi"), " $1 ");
         cleanText = cleanText.replace(new RegExp(`\\[\\s*(${variants})\\s*\\]`, "gi"), "$1");
         cleanText = cleanText.replace(new RegExp(`(?:^|\\s)(?:\\/|&gt;|\\>)\\s*(${variants})(?=\\s|$)`, "gi"), " $1 ");
     }
@@ -365,6 +361,8 @@ export function chooseSkill(skill) {
 
     isSelectingSkill = true;
     closeSkillsMenu();
+
+    addActiveSkill(skill);
 
     insertInlineEntity({
         type: "skill",
