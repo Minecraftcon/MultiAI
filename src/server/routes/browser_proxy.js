@@ -11,11 +11,44 @@ const { URL } = require("url");
  * - Unwrapping search engine tracker redirect links (Bing, DuckDuckGo, Google)
  * - Automatic server-side following of client JS / meta-refresh redirect landing pages
  * - Client script injection to intercept link clicks, form submissions, and location navigation
+ * - Full client fetch() / XHR proxying so search engine suggestions and dynamic results work
+ * - <base href> always pointing to the proxy root so relative URLs never escape to the real domain
+ * - Cookie jar per domain (server-side forwarding) so search engines maintain session state
  * - Synchronizing current URL and title with the parent window via postMessage
- * - Full client SPA fetch/XHR proxying so search engine suggestions and dynamic results work
  * - Content-Encoding header normalization to avoid decoding corruption
  */
 
+// ─── Per-domain cookie jar (simple, in-memory) ───────────────────────────────
+const cookieJar = new Map(); // hostname → cookie string
+
+function storeCookies(hostname, setCookieHeaders) {
+    if (!setCookieHeaders) return;
+    const list = Array.isArray(setCookieHeaders) ? setCookieHeaders : [setCookieHeaders];
+    const existing = cookieJar.get(hostname) || "";
+    // Parse existing into a Map
+    const jar = new Map();
+    if (existing) {
+        for (const pair of existing.split("; ")) {
+            const idx = pair.indexOf("=");
+            if (idx > 0) jar.set(pair.slice(0, idx), pair.slice(idx + 1));
+        }
+    }
+    for (const header of list) {
+        // "name=value; Path=/; Secure; SameSite=Lax"
+        const firstPart = header.split(";")[0].trim();
+        const idx = firstPart.indexOf("=");
+        if (idx > 0) {
+            jar.set(firstPart.slice(0, idx), firstPart.slice(idx + 1));
+        }
+    }
+    cookieJar.set(hostname, Array.from(jar.entries()).map(([k, v]) => `${k}=${v}`).join("; "));
+}
+
+function getCookies(hostname) {
+    return cookieJar.get(hostname) || "";
+}
+
+// ─── Tracker URL unwrapping ───────────────────────────────────────────────────
 function unwrapTrackerUrl(targetUrl) {
     try {
         const u = new URL(targetUrl);
@@ -65,48 +98,27 @@ function extractClientRedirectTarget(html, baseUrl) {
     return null;
 }
 
+// ─── Injected client script ───────────────────────────────────────────────────
 function generateInjectedScript(currentUrl, proxyOrigin) {
     return `<script id="__multiai_browser_helper__">
 (function() {
+    'use strict';
     const CURRENT_URL = ${JSON.stringify(currentUrl)};
-    const PROXY_ORIGIN = (typeof window !== "undefined" && window.location && window.location.origin) ? window.location.origin : ${JSON.stringify(proxyOrigin || "http://localhost:4440")};
+    const PROXY_BASE  = ${JSON.stringify(proxyOrigin || "http://localhost:4440")} + "/api/browser/proxy?url=";
 
-    // 1. Notify parent frame of current URL and document title
-    function notifyParent(urlOverride, titleOverride) {
-        try {
-            const finalU = urlOverride || CURRENT_URL;
-            const finalT = titleOverride || document.title || finalU;
-            window.parent.postMessage({
-                type: "MULTIAI_BROWSER_NAVIGATED",
-                url: finalU,
-                title: finalT
-            }, "*");
-        } catch (_) {}
-    }
-    notifyParent();
-    if (document.readyState === "loading") {
-        document.addEventListener("DOMContentLoaded", function() { notifyParent(); });
-    }
-    window.addEventListener("load", function() { notifyParent(); });
-    setTimeout(function() { notifyParent(); }, 150);
-    setTimeout(function() { notifyParent(); }, 600);
-
-    // 2. Helper to resolve and route URLs through proxy
+    // ── Helper: resolve any URL and route through proxy ──────────────────────
     function toProxyUrl(rawHref) {
         if (!rawHref) return "";
+        // Already a proxy URL
+        if (typeof rawHref === "string" && rawHref.startsWith(PROXY_BASE)) return rawHref;
+
         let dest = rawHref;
-        try {
-            dest = new URL(rawHref, CURRENT_URL).href;
-        } catch (_) {
-            return rawHref;
-        }
+        try { dest = new URL(rawHref, CURRENT_URL).href; } catch (_) { return rawHref; }
 
-        // Already proxied to this server
-        if (dest.startsWith(PROXY_ORIGIN + "/api/browser/proxy")) {
-            return dest;
-        }
+        if (dest.startsWith("javascript:") || dest.startsWith("mailto:") ||
+            dest.startsWith("tel:") || dest.startsWith("data:")) return dest;
 
-        // Unwrap search tracker redirect links directly on client
+        // Unwrap tracker redirect links on the client side
         try {
             const u = new URL(dest);
             if (u.hostname.includes("duckduckgo.com") && u.searchParams.has("uddg")) {
@@ -121,29 +133,87 @@ function generateInjectedScript(currentUrl, proxyOrigin) {
             }
         } catch (_) {}
 
-        if (dest.startsWith("javascript:") || dest.startsWith("mailto:") || dest.startsWith("tel:") || dest.startsWith("data:")) {
-            return dest;
-        }
-
-        // ALWAYS prefix PROXY_ORIGIN so <base href="..."> cannot resolve this relative to the external site!
-        return PROXY_ORIGIN + "/api/browser/proxy?url=" + encodeURIComponent(dest);
+        return PROXY_BASE + encodeURIComponent(dest);
     }
 
-    // 3. Patch Location.prototype.assign and replace
+    // ── 1. Notify parent of current URL / title ───────────────────────────────
+    function notifyParent(urlOverride, titleOverride) {
+        try {
+            window.parent.postMessage({
+                type: "MULTIAI_BROWSER_NAVIGATED",
+                url:   urlOverride  || CURRENT_URL,
+                title: titleOverride || document.title || urlOverride || CURRENT_URL
+            }, "*");
+        } catch (_) {}
+    }
+    notifyParent();
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", function() { notifyParent(); });
+    }
+    window.addEventListener("load", function() { notifyParent(); });
+    setTimeout(function() { notifyParent(); }, 150);
+    setTimeout(function() { notifyParent(); }, 600);
+
+    // ── 2. Proxy window.fetch() ───────────────────────────────────────────────
+    (function patchFetch() {
+        if (typeof window.fetch !== "function") return;
+        const _fetch = window.fetch.bind(window);
+        window.fetch = function(resource, init) {
+            try {
+                let url;
+                if (resource instanceof Request) {
+                    url = resource.url;
+                } else {
+                    url = String(resource);
+                }
+                // Only intercept absolute http/https URLs that don't already go through proxy
+                let resolved;
+                try { resolved = new URL(url, CURRENT_URL).href; } catch (_) { resolved = url; }
+                if ((resolved.startsWith("http://") || resolved.startsWith("https://")) &&
+                    !resolved.startsWith(PROXY_BASE)) {
+                    const proxied = PROXY_BASE + encodeURIComponent(resolved);
+                    if (resource instanceof Request) {
+                        resource = new Request(proxied, { ...init, ...resource });
+                    } else {
+                        resource = proxied;
+                    }
+                }
+            } catch (_) {}
+            return _fetch(resource, init);
+        };
+    })();
+
+    // ── 3. Proxy XMLHttpRequest ───────────────────────────────────────────────
+    (function patchXHR() {
+        if (typeof XMLHttpRequest === "undefined") return;
+        const _open = XMLHttpRequest.prototype.open;
+        XMLHttpRequest.prototype.open = function(method, url, async, user, password) {
+            try {
+                let resolved;
+                try { resolved = new URL(String(url), CURRENT_URL).href; } catch (_) { resolved = String(url); }
+                if ((resolved.startsWith("http://") || resolved.startsWith("https://")) &&
+                    !resolved.startsWith(PROXY_BASE)) {
+                    url = PROXY_BASE + encodeURIComponent(resolved);
+                }
+            } catch (_) {}
+            return _open.call(this, method, url, async !== undefined ? async : true, user, password);
+        };
+    })();
+
+    // ── 4. Patch Location.prototype.assign / replace ──────────────────────────
     try {
         if (typeof Location !== "undefined" && Location.prototype) {
-            const _assign = Location.prototype.assign;
             Location.prototype.assign = function(url) {
                 window.location.href = toProxyUrl(url);
             };
-            const _replace = Location.prototype.replace;
             Location.prototype.replace = function(url) {
-                window.location.replace(toProxyUrl(url));
+                // Use native replace to avoid adding a history entry
+                Object.getPrototypeOf(window.location).replace.call(window.location, toProxyUrl(url));
             };
         }
     } catch (_) {}
 
-    // 4. Patch History.prototype.pushState and replaceState (SPA navigation)
+    // ── 5. Patch History.pushState / replaceState (SPA navigation) ───────────
     try {
         if (typeof History !== "undefined" && History.prototype) {
             const _pushState = History.prototype.pushState;
@@ -157,7 +227,6 @@ function generateInjectedScript(currentUrl, proxyOrigin) {
                 }
                 return _pushState.apply(this, arguments);
             };
-
             const _replaceState = History.prototype.replaceState;
             History.prototype.replaceState = function(state, unused, url) {
                 if (url) {
@@ -172,26 +241,60 @@ function generateInjectedScript(currentUrl, proxyOrigin) {
         }
     } catch (_) {}
 
-    // 5. Intercept all link clicks (capture phase)
-    document.addEventListener("click", function(e) {
-        const a = e.target.closest("a");
+    // ── 6. Intercept window.location setter ──────────────────────────────────
+    // DuckDuckGo and other sites set location.href directly from JS
+    try {
+        const locationDescriptor = Object.getOwnPropertyDescriptor(window, "location");
+        if (!locationDescriptor || locationDescriptor.configurable) {
+            let _locHref = window.location.href;
+            // We can't redefine window.location itself in modern browsers, but we patch assign/replace above.
+            // Additionally intercept document.location
+        }
+    } catch (_) {}
+
+    // ── 7. Intercept all link clicks (capture phase, mousedown + click) ───────
+    // mousedown handles DuckDuckGo-style links that set href on mousedown
+    function interceptAnchor(e) {
+        const a = e.target.closest("a[href]");
         if (!a) return;
         const href = a.getAttribute("href");
         if (!href || href.startsWith("#") || href.startsWith("javascript:") || href.startsWith("mailto:")) return;
         e.preventDefault();
-        e.stopPropagation();
-        window.location.href = toProxyUrl(a.href || href);
+        e.stopImmediatePropagation();
+        // Slight delay so DuckDuckGo's own mousedown handler can set data-url if needed
+        const finalHref = a.dataset.url || a.href || href;
+        window.location.href = toProxyUrl(finalHref);
+    }
+    document.addEventListener("mousedown", function(e) {
+        // Only intercept left-clicks on links
+        if (e.button !== 0) return;
+        const a = e.target.closest("a[href]");
+        if (!a) return;
+        const href = a.getAttribute("href");
+        if (!href || href.startsWith("#") || href.startsWith("javascript:") || href.startsWith("mailto:")) return;
+        // Store for the upcoming click handler
+        a._multiai_pending_href = a.href || href;
+    }, true);
+    document.addEventListener("click", function(e) {
+        const a = e.target.closest("a[href]");
+        if (!a) return;
+        const href = a.getAttribute("href");
+        if (!href || href.startsWith("#") || href.startsWith("javascript:") || href.startsWith("mailto:")) return;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        const finalHref = a._multiai_pending_href || a.dataset.url || a.href || href;
+        a._multiai_pending_href = null;
+        window.location.href = toProxyUrl(finalHref);
     }, true);
 
-    // 6. Intercept form submissions (e.g. search boxes)
+    // ── 8. Intercept form submissions ─────────────────────────────────────────
     document.addEventListener("submit", function(e) {
         const form = e.target;
         if (!form) return;
         const method = (form.getAttribute("method") || "GET").toUpperCase();
         const action = form.getAttribute("action") || CURRENT_URL;
         e.preventDefault();
-        e.stopPropagation();
-
+        e.stopImmediatePropagation();
         try {
             const actionUrl = new URL(action, CURRENT_URL);
             const formData = new FormData(form);
@@ -209,19 +312,14 @@ function generateInjectedScript(currentUrl, proxyOrigin) {
         }
     }, true);
 
-    // 7. Intercept window.open
+    // ── 9. Intercept window.open ──────────────────────────────────────────────
     try {
-        const _open = window.open;
         window.open = function(url, target, features) {
-            if (url) {
-                window.location.href = toProxyUrl(url);
-                return window;
-            }
-            return _open.apply(window, arguments);
+            if (url) { window.location.href = toProxyUrl(url); return window; }
         };
     } catch (_) {}
 
-    // 8. Intercept meta refresh
+    // ── 10. Intercept meta refresh ────────────────────────────────────────────
     try {
         const meta = document.querySelector('meta[http-equiv="refresh" i]');
         if (meta) {
@@ -234,7 +332,49 @@ function generateInjectedScript(currentUrl, proxyOrigin) {
         }
     } catch (_) {}
 
-    // 9. Embedded element inspector for iframe (Jetski Preview parity)
+    // ── 11. Rewrite all <a href> and <form action> in document on load ────────
+    // Covers statically rendered links that click handlers might miss
+    function rewriteStaticLinks() {
+        try {
+            document.querySelectorAll("a[href]").forEach(function(a) {
+                const href = a.getAttribute("href");
+                if (!href || href.startsWith("#") || href.startsWith("javascript:") ||
+                    href.startsWith("mailto:") || href.startsWith("data:")) return;
+                if (href.startsWith(PROXY_BASE)) return;
+                try {
+                    const abs = new URL(href, CURRENT_URL).href;
+                    if (abs.startsWith("http://") || abs.startsWith("https://")) {
+                        a.setAttribute("href", toProxyUrl(abs));
+                        a.setAttribute("target", "_self");
+                    }
+                } catch (_) {}
+            });
+            document.querySelectorAll("form[action]").forEach(function(form) {
+                const action = form.getAttribute("action");
+                if (!action || action.startsWith(PROXY_BASE)) return;
+                try {
+                    const abs = new URL(action, CURRENT_URL).href;
+                    if (abs.startsWith("http://") || abs.startsWith("https://")) {
+                        form.setAttribute("action", toProxyUrl(abs));
+                    }
+                } catch (_) {}
+            });
+        } catch (_) {}
+    }
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", rewriteStaticLinks);
+    } else {
+        rewriteStaticLinks();
+    }
+    // Also rewrite after any dynamic mutations (DDG injects results via JS)
+    try {
+        const mo = new MutationObserver(function() { rewriteStaticLinks(); });
+        mo.observe(document.documentElement, { childList: true, subtree: true });
+        // Don't observe forever — stop after 30 s to avoid overhead on stable pages
+        setTimeout(function() { mo.disconnect(); }, 30000);
+    } catch (_) {}
+
+    // ── 12. Embedded element inspector for iframe (Jetski Preview parity) ─────
     (function setupIframeInspector() {
         let iframeInspectActive = false;
         let iframeOverlay = null;
@@ -275,9 +415,6 @@ function generateInjectedScript(currentUrl, proxyOrigin) {
                 .slice(0, 2)
                 .map(function(c) { return "." + c; })
                 .join("");
-            const tagDisplay = tag + classes;
-            const dimsDisplay = r.width.toFixed(1) + " × " + r.height.toFixed(1);
-
             const a11yName = el.getAttribute("aria-label") ||
                              el.getAttribute("title") ||
                              el.getAttribute("alt") ||
@@ -285,33 +422,19 @@ function generateInjectedScript(currentUrl, proxyOrigin) {
                              (el.innerText ? el.innerText.trim().slice(0, 36) : "");
             const a11yRole = el.getAttribute("role") || tag;
             const isFocusable = el.tabIndex >= 0 || ["a", "button", "input", "textarea", "select"].includes(tag);
-
             return {
                 selector: buildSel(el),
                 tagName: el.tagName,
-                tagDisplay: tagDisplay,
-                dimsDisplay: dimsDisplay,
-                rect: {
-                    top: r.top,
-                    left: r.left,
-                    width: parseFloat(r.width.toFixed(2)),
-                    height: parseFloat(r.height.toFixed(2)),
-                    x: Math.round(r.x),
-                    y: Math.round(r.y)
-                },
+                tagDisplay: tag + classes,
+                dimsDisplay: r.width.toFixed(1) + " \u00d7 " + r.height.toFixed(1),
+                rect: { top: r.top, left: r.left, width: parseFloat(r.width.toFixed(2)), height: parseFloat(r.height.toFixed(2)), x: Math.round(r.x), y: Math.round(r.y) },
                 styles: {
-                    color: rgbToHex(cs.color),
-                    rawColor: cs.color,
-                    backgroundColor: rgbToHex(cs.backgroundColor),
-                    rawBg: cs.backgroundColor,
+                    color: rgbToHex(cs.color), rawColor: cs.color,
+                    backgroundColor: rgbToHex(cs.backgroundColor), rawBg: cs.backgroundColor,
                     font: cs.fontSize + " " + cs.fontFamily.split(",")[0].replace(/['"]/g, ""),
                     padding: (cs.paddingTop + " " + cs.paddingRight).replace(/px/g, "px ")
                 },
-                accessibility: {
-                    name: a11yName,
-                    role: a11yRole,
-                    focusable: isFocusable
-                },
+                accessibility: { name: a11yName, role: a11yRole, focusable: isFocusable },
                 outerHTML: (el.outerHTML || "").slice(0, 1500)
             };
         }
@@ -325,23 +448,13 @@ function generateInjectedScript(currentUrl, proxyOrigin) {
                 document.body.appendChild(iframeOverlay);
             }
             iframeOverlay.style.display = "block";
-            iframeOverlay.style.top = r.top + "px";
-            iframeOverlay.style.left = r.left + "px";
-            iframeOverlay.style.width = r.width + "px";
+            iframeOverlay.style.top    = r.top    + "px";
+            iframeOverlay.style.left   = r.left   + "px";
+            iframeOverlay.style.width  = r.width  + "px";
             iframeOverlay.style.height = r.height + "px";
-
             const data = extractData(el);
             try {
-                window.parent.postMessage({
-                    type: "MULTIAI_ELEMENT_HOVER",
-                    elementData: data,
-                    rect: {
-                        top: r.top,
-                        left: r.left,
-                        width: r.width,
-                        height: r.height
-                    }
-                }, "*");
+                window.parent.postMessage({ type: "MULTIAI_ELEMENT_HOVER", elementData: data, rect: { top: r.top, left: r.left, width: r.width, height: r.height } }, "*");
             } catch (_) {}
         }
 
@@ -358,48 +471,38 @@ function generateInjectedScript(currentUrl, proxyOrigin) {
             if (!iframeInspectActive) return;
             e.preventDefault();
             e.stopPropagation();
-
             const el = currentHoverEl || document.elementFromPoint(e.clientX, e.clientY);
             if (!el) return;
-
             const data = extractData(el);
             setInspectActive(false);
-            try {
-                window.parent.postMessage({ type: "MULTIAI_ELEMENT_SELECTED", elementData: data }, "*");
-            } catch (_) {}
+            try { window.parent.postMessage({ type: "MULTIAI_ELEMENT_SELECTED", elementData: data }, "*"); } catch (_) {}
         }
 
         function onIframeScroll() {
-            if (iframeInspectActive && currentHoverEl) {
-                sendHover(currentHoverEl);
-            }
+            if (iframeInspectActive && currentHoverEl) sendHover(currentHoverEl);
         }
 
         function onIframeLeave() {
             currentHoverEl = null;
             if (iframeOverlay) iframeOverlay.style.display = "none";
-            try {
-                window.parent.postMessage({ type: "MULTIAI_ELEMENT_UNHOVER" }, "*");
-            } catch (_) {}
+            try { window.parent.postMessage({ type: "MULTIAI_ELEMENT_UNHOVER" }, "*"); } catch (_) {}
         }
 
         function setInspectActive(active) {
             iframeInspectActive = active;
             if (active) {
-                document.addEventListener("mousemove", onIframeMove, true);
-                document.addEventListener("click", onIframeClick, true);
-                window.addEventListener("scroll", onIframeScroll, true);
-                document.addEventListener("mouseleave", onIframeLeave, true);
+                document.addEventListener("mousemove",  onIframeMove,  true);
+                document.addEventListener("click",      onIframeClick, true);
+                window.addEventListener("scroll",       onIframeScroll, true);
+                document.addEventListener("mouseleave", onIframeLeave,  true);
             } else {
                 currentHoverEl = null;
-                document.removeEventListener("mousemove", onIframeMove, true);
-                document.removeEventListener("click", onIframeClick, true);
-                window.removeEventListener("scroll", onIframeScroll, true);
-                document.removeEventListener("mouseleave", onIframeLeave, true);
+                document.removeEventListener("mousemove",  onIframeMove,  true);
+                document.removeEventListener("click",      onIframeClick, true);
+                window.removeEventListener("scroll",       onIframeScroll, true);
+                document.removeEventListener("mouseleave", onIframeLeave,  true);
                 if (iframeOverlay) iframeOverlay.style.display = "none";
-                try {
-                    window.parent.postMessage({ type: "MULTIAI_ELEMENT_UNHOVER" }, "*");
-                } catch (_) {}
+                try { window.parent.postMessage({ type: "MULTIAI_ELEMENT_UNHOVER" }, "*"); } catch (_) {}
             }
         }
 
@@ -413,7 +516,17 @@ function generateInjectedScript(currentUrl, proxyOrigin) {
 </script>`;
 }
 
+// ─── Main proxy route handler ─────────────────────────────────────────────────
 async function handleBrowserProxyRoute(req, res) {
+    // Handle CORS preflight so proxied XHR/fetch inside the iframe works
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Headers", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, HEAD, OPTIONS");
+    if (req.method === "OPTIONS") {
+        res.writeHead(204);
+        return res.end();
+    }
+
     try {
         const parsed = new URL(req.url, "http://localhost:4440");
         let rawTarget = parsed.searchParams.get("url");
@@ -442,31 +555,28 @@ async function handleBrowserProxyRoute(req, res) {
         const hostHeader = req.headers.host || "localhost:4440";
         const proxyOrigin = (req.connection && req.connection.encrypted ? "https://" : "http://") + hostHeader;
 
-        // Forward realistic browser headers
+        // Forward realistic browser headers + stored cookies for this domain
+        const cookies = getCookies(parsedTarget.hostname);
         const headers = {
-            "User-Agent": req.headers["user-agent"] || "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
-            "Accept": req.headers["accept"] || "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-            "Accept-Language": req.headers["accept-language"] || "en-US,en;q=0.9",
-            "sec-ch-ua": req.headers["sec-ch-ua"] || '"Chromium";v="128", "Not;A=Brand";v="24", "Google Chrome";v="128"',
-            "sec-ch-ua-mobile": req.headers["sec-ch-ua-mobile"] || "?0",
-            "sec-ch-ua-platform": req.headers["sec-ch-ua-platform"] || '"Linux"',
+            "User-Agent":          req.headers["user-agent"] || "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+            "Accept":              req.headers["accept"] || "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+            "Accept-Language":     req.headers["accept-language"] || "en-US,en;q=0.9",
+            "sec-ch-ua":           '"Chromium";v="128", "Not;A=Brand";v="24", "Google Chrome";v="128"',
+            "sec-ch-ua-mobile":    "?0",
+            "sec-ch-ua-platform":  '"Linux"',
             "upgrade-insecure-requests": "1",
-            "sec-fetch-dest": "document",
-            "sec-fetch-mode": "navigate",
-            "sec-fetch-site": "none",
-            "sec-fetch-user": "?1",
+            "sec-fetch-dest":      "document",
+            "sec-fetch-mode":      "navigate",
+            "sec-fetch-site":      "none",
+            "sec-fetch-user":      "?1",
         };
+        if (cookies) headers["Cookie"] = cookies;
+        if (req.headers["content-type"]) headers["Content-Type"] = req.headers["content-type"];
 
-        if (req.headers["content-type"]) {
-            headers["Content-Type"] = req.headers["content-type"];
-        }
-
-        let bodyBuffer = undefined;
+        let bodyBuffer;
         if (req.method === "POST") {
             const chunks = [];
-            for await (const chunk of req) {
-                chunks.push(chunk);
-            }
+            for await (const chunk of req) chunks.push(chunk);
             bodyBuffer = Buffer.concat(chunks);
         }
 
@@ -476,83 +586,92 @@ async function handleBrowserProxyRoute(req, res) {
         let response;
         try {
             response = await fetch(parsedTarget.href, {
-                method: req.method === "HEAD" ? "HEAD" : (req.method === "POST" ? "POST" : "GET"),
+                method:   req.method === "HEAD" ? "HEAD" : (req.method === "POST" ? "POST" : "GET"),
                 headers,
-                body: bodyBuffer,
+                body:     bodyBuffer,
                 redirect: "follow",
-                signal: controller.signal
+                signal:   controller.signal
             });
         } finally {
             clearTimeout(timeout);
         }
 
-        let finalUrl = response.url || parsedTarget.href;
+        // Persist cookies from the response
+        const setCookieHeader = response.headers.get("set-cookie");
+        if (setCookieHeader) storeCookies(parsedTarget.hostname, setCookieHeader);
+
+        let finalUrl    = response.url || parsedTarget.href;
         let contentType = response.headers.get("content-type") || "text/html";
-        let isHtml = contentType.toLowerCase().includes("text/html");
+        let isHtml      = contentType.toLowerCase().includes("text/html");
 
         let html = null;
         if (isHtml) {
             html = await response.text();
 
-            // Check if this is an intermediate client-side redirect landing page (e.g. Bing redirect)
+            // Follow server-side JS / meta-refresh redirects (e.g. Bing ad redirects)
             const intermediateTarget = extractClientRedirectTarget(html, finalUrl);
             if (intermediateTarget && intermediateTarget !== finalUrl) {
-                // Follow redirect immediately server-side
                 const subController = new AbortController();
                 const subTimeout = setTimeout(() => subController.abort(), 15000);
                 try {
                     const secondResponse = await fetch(intermediateTarget, {
-                        method: "GET",
-                        headers,
-                        redirect: "follow",
-                        signal: subController.signal
+                        method: "GET", headers, redirect: "follow", signal: subController.signal
                     });
-                    response = secondResponse;
-                    finalUrl = secondResponse.url || intermediateTarget;
+                    const sc2 = secondResponse.headers.get("set-cookie");
+                    if (sc2) storeCookies(parsedTarget.hostname, sc2);
+                    response    = secondResponse;
+                    finalUrl    = secondResponse.url || intermediateTarget;
                     contentType = secondResponse.headers.get("content-type") || "text/html";
-                    isHtml = contentType.toLowerCase().includes("text/html");
-                    if (isHtml) {
-                        html = await secondResponse.text();
-                    } else {
-                        html = null;
-                    }
+                    isHtml      = contentType.toLowerCase().includes("text/html");
+                    html        = isHtml ? await secondResponse.text() : null;
                 } catch (_) {
-                    // Fall back to original HTML if subfetch fails
+                    // Fall back to original HTML
                 } finally {
                     clearTimeout(subTimeout);
                 }
             }
         }
 
-        const resHeaders = {};
+        // Build safe response headers
+        const resHeaders = {
+            "Access-Control-Allow-Origin":  "*",
+            "Access-Control-Allow-Headers": "*",
+            "Access-Control-Allow-Methods": "GET, POST, HEAD, OPTIONS",
+            "X-Content-Type-Options": "nosniff",
+            "X-Final-URL": finalUrl,
+        };
 
-        // Copy safe headers from upstream response
         for (const [key, value] of response.headers.entries()) {
             const lKey = key.toLowerCase();
-            // Strip headers that prevent iframe embedding or block same-origin framing
-            if (
-                lKey === "x-frame-options" ||
-                lKey === "content-security-policy" ||
-                lKey === "content-security-policy-report-only" ||
-                lKey === "strict-transport-security"
-            ) {
-                continue;
-            }
+            // Strip headers that prevent iframe embedding, block CORS, or cause decoding issues
+            if ([
+                "x-frame-options",
+                "content-security-policy",
+                "content-security-policy-report-only",
+                "strict-transport-security",
+                "content-encoding",   // Node fetch auto-decompresses; re-sending causes double-decompress
+                "content-length",     // Length changes after our HTML injection
+                "set-cookie",         // We already stored it; re-sending breaks iframe same-origin rules
+                "access-control-allow-origin",  // We set our own
+            ].includes(lKey)) continue;
             resHeaders[key] = value;
         }
 
-        resHeaders["Access-Control-Allow-Origin"] = "*";
-        resHeaders["X-Content-Type-Options"] = "nosniff";
-        resHeaders["X-Final-URL"] = finalUrl;
-
-        // Node fetch automatically decompresses body (gzip/br/deflate).
-        // MUST strip content-encoding and content-length for ALL responses to prevent client decompression failures.
-        delete resHeaders["content-length"];
-        delete resHeaders["content-encoding"];
-
         if (isHtml && html !== null) {
-            // Inject <base href="..."> and helper script
+            // <base href> must resolve to the PROXY for relative paths (e.g. /ac/?q=hello → proxied)
+            // so we set it to the proxy URL for the current page — relative paths will be resolved by
+            // the browser against the base href, which now points to the proxy
+            const proxyBaseHref = `${proxyOrigin}/api/browser/proxy?url=${encodeURIComponent(finalUrl)}`;
+
+            // We use a custom base + injected script.
+            // The <base href> trick: we set it to the REAL url so the browser
+            // resolves relative hrefs. Then our MutationObserver + fetch/XHR patches catch those
+            // requests and reroute through the proxy.
+            // Setting base href to the proxy URL itself breaks relative paths like "/ac/?q=" because
+            // the browser would send them to localhost:4440/ac/?q= (not proxied).
+            // BEST approach: set base href = real finalUrl, but intercept all network at the JS level.
             const injectedSnippet = `<base href="${finalUrl}">${generateInjectedScript(finalUrl, proxyOrigin)}`;
+
             if (html.includes("<head>")) {
                 html = html.replace("<head>", `<head>${injectedSnippet}`);
             } else if (html.includes("<HEAD>")) {
@@ -561,23 +680,22 @@ async function handleBrowserProxyRoute(req, res) {
                 html = injectedSnippet + html;
             }
 
+            resHeaders["Content-Type"] = contentType.includes("charset") ? contentType : (contentType + "; charset=utf-8");
             res.writeHead(response.status, resHeaders);
             return res.end(html);
         } else {
-            // Binary or streaming content (images, fonts, stylesheets, non-HTML)
             res.writeHead(response.status, resHeaders);
-            if (html !== null) {
-                return res.end(html);
-            }
+            if (html !== null) return res.end(html);
             const arrayBuf = await response.arrayBuffer();
             return res.end(Buffer.from(arrayBuf));
         }
+
     } catch (err) {
         console.error("[BROWSER PROXY ERROR]", err.message);
         if (!res.headersSent) {
             res.writeHead(502, { "Content-Type": "text/html; charset=utf-8" });
             res.end(`
-                <div style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;padding:32px 24px;color:#a1a1aa;background:#18181b;height:100vh;box-sizing:border-box;">
+                <div style="font-family:ui-monospace,monospace;padding:32px 24px;color:#a1a1aa;background:#18181b;height:100vh;box-sizing:border-box;">
                     <div style="max-width:540px;margin:0 auto;text-align:center;">
                         <h3 style="color:#ef4444;margin-bottom:8px;font-size:18px;">Unable to load page</h3>
                         <p style="font-size:14px;line-height:1.6;color:#71717a;margin-bottom:20px;">${err.message || "Target server did not respond or connection was refused."}</p>
