@@ -26,7 +26,8 @@ assert(jsContent.includes("export function extractTurnFilesChanged"), "Must expo
 assert(jsContent.includes("export function renderFilesChangedBar"), "Must export renderFilesChangedBar");
 assert(jsContent.includes("export async function finalizeTurnFilesChanged"), "Must export finalizeTurnFilesChanged");
 assert(jsContent.includes("files-changed-review-btn"), "Must have review button");
-assert(jsContent.includes("files-changed-code-glyph"), "Must have { } code glyph");
+assert(!jsContent.includes("files-changed-code-glyph"), "Must not have { } code glyph");
+assert(jsContent.includes("followupContainer.nextSibling"), "Must place bar under followup suggestions");
 assert(jsContent.includes("openDiffTab"), "Must open diff tab on file click and review click");
 console.log("✓ files-changed-bar.js exports and markup verified cleanly.");
 

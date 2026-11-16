@@ -104,18 +104,40 @@ export function renderFilesChangedBar(aiDiv, files, messageRef = null) {
     if (!barContainer) {
         barContainer = document.createElement("div");
         barContainer.className = "files-changed-bar-container";
+    }
 
-        // Place directly beneath .final-content
-        const finalContent = aiDiv.querySelector(".final-content");
-        const followupContainer = aiDiv.querySelector(".followup-suggestions");
+    // Place directly under .followup-suggestions (next message suggestions)
+    // If followup suggestions or plan approval are present, place after them; otherwise after .final-content
+    const followupContainer = aiDiv.querySelector(".followup-suggestions");
+    const planContainer = aiDiv.querySelector(".plan-approval-container");
+    const finalContent = aiDiv.querySelector(".final-content");
 
-        if (followupContainer && followupContainer.parentNode === aiDiv) {
-            aiDiv.insertBefore(barContainer, followupContainer);
-        } else if (finalContent && finalContent.nextSibling) {
-            aiDiv.insertBefore(barContainer, finalContent.nextSibling);
-        } else {
-            aiDiv.appendChild(barContainer);
+    if (followupContainer && followupContainer.parentNode === aiDiv) {
+        if (followupContainer.nextSibling !== barContainer) {
+            if (followupContainer.nextSibling) {
+                aiDiv.insertBefore(barContainer, followupContainer.nextSibling);
+            } else {
+                aiDiv.appendChild(barContainer);
+            }
         }
+    } else if (planContainer && planContainer.parentNode === aiDiv) {
+        if (planContainer.nextSibling !== barContainer) {
+            if (planContainer.nextSibling) {
+                aiDiv.insertBefore(barContainer, planContainer.nextSibling);
+            } else {
+                aiDiv.appendChild(barContainer);
+            }
+        }
+    } else if (finalContent && finalContent.parentNode === aiDiv) {
+        if (finalContent.nextSibling !== barContainer) {
+            if (finalContent.nextSibling) {
+                aiDiv.insertBefore(barContainer, finalContent.nextSibling);
+            } else {
+                aiDiv.appendChild(barContainer);
+            }
+        }
+    } else if (barContainer.parentNode !== aiDiv) {
+        aiDiv.appendChild(barContainer);
     }
 
     const count = files.length;
@@ -127,7 +149,6 @@ export function renderFilesChangedBar(aiDiv, files, messageRef = null) {
     barContainer.innerHTML = `
         <div class="files-changed-header" role="button" tabindex="0" aria-expanded="${isExpanded ? "true" : "false"}">
             <div class="files-changed-summary">
-                <span class="files-changed-code-glyph" aria-hidden="true">{ }</span>
                 <span class="files-changed-label">${count} ${fileWord} changed</span>
                 <span class="files-changed-chevron" aria-hidden="true">${isExpanded ? "▾" : "▸"}</span>
             </div>

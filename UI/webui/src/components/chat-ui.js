@@ -916,15 +916,26 @@ export function updateAIStream(element, fullText, isDone, startTime, hasTools) {
 export function renderFollowupSuggestions(element, followups, isDone) {
     if (!element) return;
     let container = element.querySelector(".followup-suggestions");
+    const barContainer = element.querySelector(".files-changed-bar-container");
     if (!container) {
         container = document.createElement("div");
         container.className = "followup-suggestions";
         container.style.display = "none";
         const cursor = element.querySelector(".blinking-cursor");
-        if (cursor) {
+        if (barContainer && barContainer.parentNode === element) {
+            element.insertBefore(container, barContainer);
+        } else if (cursor) {
             element.insertBefore(container, cursor);
         } else {
             element.appendChild(container);
+        }
+    } else if (barContainer && barContainer.parentNode === element) {
+        if (container.nextSibling !== barContainer) {
+            if (container.nextSibling) {
+                element.insertBefore(barContainer, container.nextSibling);
+            } else {
+                element.appendChild(barContainer);
+            }
         }
     }
 
