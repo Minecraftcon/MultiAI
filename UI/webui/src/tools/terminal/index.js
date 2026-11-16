@@ -1,6 +1,5 @@
 import { toolFetch } from "../http.js";
 import { parseTerminalAnsi, cleanTerminalScreen } from "./term-emulator.js";
-import { watchBackgroundTask } from "./task-watcher.js";
 
 /* =========================================================
    TERMINAL & TASK MANAGEMENT TOOLS (CLEAN & MINIMAL)
@@ -305,11 +304,8 @@ export const manageTasksTool = {
 };
 
 /**
- * Schedules a sleep timer or hooks onto a background task.
- * Supports:
- * - just-wait (sleep timer): Provide time / sleep_time. Waits for the duration and continues.
- * - hook-on-task-and-wait: Provide time and task (task_id or shell command to run and monitor).
- * - optional end_response: Text / response to return when the timer completes, allowing the model to auto-start or continue.
+ * Schedules a one-shot timer or a recurring cron job that notifies via Prompt.
+ * Full Antigravity schedule capability integrated into MultiAI.
  */
 export const scheduleTool = {
     name: "schedule",
@@ -317,71 +313,69 @@ export const scheduleTool = {
         type: "function",
         function: {
             name: "schedule",
-            description: "Schedule a sleep timer, pause execution, or monitor a background task. For long-running background jobs, set 'detach: true' to conclude your turn immediately; MultiAI will monitor the task in the background and re-awaken you when it finishes.",
+            description: "Schedule a one-shot timer (DurationSeconds) or a recurring cron job (CronExpression) that notifies you via Prompt. This tool call runs as a background task and returns immediately; end your turn (call no more tools) to wait for notifications. A timer with a TimerCondition is cancelled early by a matching message or task completion, which is itself your wakeup. Set IsDaemon only for a cron that should keep firing after the current task is done. Set ExactTiming only when a cron must fire at the exact wall-clock time without jitter. Use manage_tasks to cancel active schedules, and never use a shell sleep command as a timer.",
             parameters: {
                 type: "object",
                 properties: {
-                    time: {
-                        type: "number",
-                        description: "Duration in seconds to sleep, pause, or wait (e.g. 5, 30, 60, 300). Also accepts 'seconds'."
+                    CronExpression: {
+                        type: "string",
+                        description: "Standard 5-field cron expression for a recurring schedule (e.g. '*/5 * * * *' for every 5 minutes). Mutually exclusive with DurationSeconds."
+                    },
+                    DurationSeconds: {
+                        type: "integer",
+                        description: "Seconds to wait for a one-shot timer. Mutually exclusive with CronExpression."
+                    },
+                    Prompt: {
+                        type: "string",
+                        description: "Message sent to you as a high-priority notification when the timer fires or the cron triggers."
+                    },
+                    TimerCondition: {
+                        type: "string",
+                        description: "Timer only. Cancels the timer early when a matching message arrives or task finishes: 'never' (default), 'any' (any message/task event), or a sender/task ID."
+                    },
+                    IsDaemon: {
+                        type: "boolean",
+                        description: "Cron only. Set true only for an independent standing job that should keep firing after the current task is done."
+                    },
+                    MaxIterations: {
+                        type: "integer",
+                        description: "Cron only. Maximum number of triggers before the schedule stops; defaults to unlimited."
+                    },
+                    ExactTiming: {
+                        type: "boolean",
+                        description: "Cron only. Set true only when the user explicitly requires the schedule to fire at the exact wall-clock time without jitter."
                     },
                     task: {
                         type: "string",
-                        description: "Optional background task_id (e.g. 't_...') or shell command to start and monitor in the background. If omitted, performs a pure sleep timer."
+                        description: "Optional background task_id (e.g. 't_...') or shell command to run and monitor in the background."
                     },
                     detach: {
                         type: "boolean",
-                        description: "Set to true for long-running background jobs to detach from the current turn immediately, deliver your status message, and conclude your response cleanly. MultiAI will monitor in background and re-awaken you when complete."
-                    },
-                    status_message: {
-                        type: "string",
-                        description: "Optional status message for the user explaining that the task/timer is running in background (e.g. 'The download is running in background; I will notify you when finished.')."
-                    },
-                    end_response: {
-                        type: "string",
-                        description: "Optional response or prompt for the agent to continue reasoning with when the timer or task completes."
-                    },
-                    wake_on: {
-                        type: "string",
-                        enum: ["exit", "output", "any", "never"],
-                        description: "When monitoring a task, early wake condition: 'exit' (default: wakes when task exits), 'output' (wakes on new output), 'any' (exit or output), 'never' (waits full duration)."
-                    },
-                    reason: {
-                        type: "string",
-                        description: "Optional explanation of what is being scheduled or waited for."
+                        description: "Set to true to conclude your turn immediately; MultiAI will monitor in background and re-awaken you when complete (default: true)."
                     }
-                },
-                required: ["time"]
+                }
             }
         }
     },
-    handler: async (args, { genState }) => {
-        const rawTime = args.time ?? args.seconds ?? args.sleep_time ?? 5;
-        const time = Math.max(0.1, parseFloat(rawTime) || 5);
+    handler: async (args, { genState } = {}) => {
+        // Resolve Cron vs Duration
+        const cronExpr = args.CronExpression || args.cron_expression || args.cron || null;
+        const rawDuration = args.DurationSeconds ?? args.duration_seconds ?? args.time ?? args.seconds ?? args.sleep_time;
+        const durationSec = rawDuration !== undefined ? Math.max(0.1, parseFloat(rawDuration)) : (cronExpr ? null : 5);
+        const prompt = args.Prompt || args.prompt || args.end_response || args["end-response"] || null;
+        const timerCondition = args.TimerCondition || args.timer_condition || args.wake_on || "never";
+        const isDaemon = Boolean(args.IsDaemon ?? args.is_daemon ?? args.daemon);
+        const maxIterations = args.MaxIterations ?? args.max_iterations ?? null;
+        const exactTiming = Boolean(args.ExactTiming ?? args.exact_timing);
         const task = (args.task || args.task_id || "").trim();
-        const endResponse = args.end_response ?? args["end-response"] ?? null;
-        const wakeOn = args.wake_on || "exit";
-        const reason = args.reason || (task ? `Monitoring ${task}` : `Sleeping for ${time}s`);
-        const explicitlyBlocking = (args.detach === false || args.exit === false || args.Exit === false);
-        const isDetached = !explicitlyBlocking && Boolean(
-            args.detach || 
-            args.exit || 
-            args.Exit || 
-            args.background || 
-            args.async || 
-            (task && time >= 45) || 
-            (typeof reason === "string" && /\b(detach|background)\b/i.test(reason))
-        );
-        const statusMessage = args.status_message || args.statusMessage || args.message || args.messege || args.exit_message || args.exitMessage || "";
+        const reason = args.reason || (cronExpr ? `Cron: ${cronExpr}` : (task ? `Monitoring ${task}` : `Timer: ${durationSec}s`));
 
         let taskId = null;
         if (task) {
-            // Task IDs generated by MultiAI start with "t_" or "task_" or "task-"
             const isTaskIdPattern = /^(t_|task[_-])[a-zA-Z0-9_-]+$/i.test(task);
             if (isTaskIdPattern) {
                 taskId = task;
             } else {
-                // Shell command to spawn and monitor!
                 try {
                     const spawnRes = await toolFetch("/api/task/idle", {
                         method: "POST",
@@ -395,50 +389,60 @@ export const scheduleTool = {
             }
         }
 
-        // If detached mode is requested, register background watcher and yield immediately!
-        if (isDetached) {
+        const isDetached = args.detach !== false && args.blocking !== true;
+
+        if (isDetached || cronExpr) {
+            const { watchBackgroundTask } = await import("./task-watcher.js");
             watchBackgroundTask({
                 chatId: genState?.chatId,
                 taskId,
-                time,
-                wakeOn,
-                endResponse,
-                reason,
-                statusMessage
+                time: durationSec || 0,
+                cronExpression: cronExpr,
+                maxIterations,
+                isDaemon,
+                exactTiming,
+                timerCondition,
+                wakeOn: timerCondition,
+                prompt,
+                endResponse: prompt,
+                reason
             });
 
-            const defaultStatus = taskId
-                ? `Task '${taskId}' running in background (${time}s observation, wake on ${wakeOn}). I will monitor it and notify you when finished.`
-                : `Scheduled a ${time}s timer${reason ? ` for ${reason}` : ""}. I will resume when the timer completes.`;
+            if (cronExpr) {
+                return {
+                    status: "scheduled_cron",
+                    CronExpression: cronExpr,
+                    IsDaemon: isDaemon,
+                    MaxIterations: maxIterations,
+                    Prompt: prompt || `Cron schedule '${cronExpr}' triggered`,
+                    message: `Recurring cron job '${cronExpr}' scheduled as background task. Notification prompt: "${prompt || 'Cron trigger'}"`
+                };
+            }
 
             return {
-                status: "scheduled_detached",
-                detached: true,
-                task_id: taskId,
-                time,
-                wake_on: wakeOn,
-                reason,
-                status_message: statusMessage || defaultStatus
+                status: "scheduled_timer",
+                DurationSeconds: durationSec,
+                TimerCondition: timerCondition,
+                Prompt: prompt || `Timer completed after ${durationSec}s`,
+                task_id: taskId || undefined,
+                message: `One-shot timer of ${durationSec}s scheduled as background task. Returns immediately; will notify via Prompt.`
             };
         }
 
+        // Inline blocking timer fallback for short waits if explicitly requested (detach: false)
         const res = await toolFetch("/api/task/idle", {
             method: "POST",
             body: {
-                seconds: time,
+                seconds: durationSec || 5,
                 task_id: taskId,
-                wake_on: wakeOn,
+                wake_on: timerCondition === "never" ? "never" : "exit",
                 reason
             },
             genState
         });
 
-        if (endResponse) {
-            res.end_response = endResponse;
-        }
-        if (taskId) {
-            res.task_id = taskId;
-        }
+        if (prompt) res.Prompt = prompt;
+        if (taskId) res.task_id = taskId;
         return res;
     }
 };

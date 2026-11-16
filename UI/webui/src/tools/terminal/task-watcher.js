@@ -17,6 +17,54 @@ const STORAGE_KEY = "multiai_active_task_watches";
 let watcherInterval = null;
 let turnRunnerFn = null;
 
+function matchField(expr, val, min, max) {
+    if (!expr || expr === "*") return true;
+    for (const part of expr.split(",")) {
+        if (part.includes("/")) {
+            const [range, stepStr] = part.split("/");
+            const step = parseInt(stepStr, 10);
+            if (!step || step <= 0) continue;
+            let start = min;
+            let end = max;
+            if (range !== "*") {
+                if (range.includes("-")) {
+                    const [s, e] = range.split("-").map(Number);
+                    start = s; end = e;
+                } else {
+                    start = parseInt(range, 10);
+                }
+            }
+            if (val >= start && val <= end && (val - start) % step === 0) {
+                return true;
+            }
+        } else if (part.includes("-")) {
+            const [s, e] = part.split("-").map(Number);
+            if (val >= s && val <= e) return true;
+        } else {
+            if (parseInt(part, 10) === val) return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * Evaluates standard 5-field cron expression: (minute hour dom month dow).
+ */
+export function matchesCron(cronExpr, date = new Date()) {
+    if (!cronExpr || typeof cronExpr !== "string") return false;
+    const parts = cronExpr.trim().split(/\s+/);
+    if (parts.length !== 5) return false;
+
+    const [minExpr, hourExpr, domExpr, monthExpr, dowExpr] = parts;
+    return (
+        matchField(minExpr, date.getMinutes(), 0, 59) &&
+        matchField(hourExpr, date.getHours(), 0, 23) &&
+        matchField(domExpr, date.getDate(), 1, 31) &&
+        matchField(monthExpr, date.getMonth() + 1, 1, 12) &&
+        matchField(dowExpr, date.getDay(), 0, 6)
+    );
+}
+
 /**
  * Registers the agent execution function (runAgent) to avoid circular imports.
  */
@@ -46,13 +94,19 @@ function saveActiveWatches(watches) {
 }
 
 /**
- * Adds a background task or timer to the autonomous watcher.
+ * Adds a background task, timer, or recurring cron job to the autonomous watcher.
  */
 export function watchBackgroundTask({
     chatId,
     taskId = null,
     time = 60,
+    cronExpression = null,
+    maxIterations = null,
+    isDaemon = false,
+    exactTiming = false,
+    timerCondition = "never",
     wakeOn = "exit",
+    prompt = null,
     endResponse = null,
     reason = "",
     statusMessage = ""
@@ -67,12 +121,20 @@ export function watchBackgroundTask({
         id: `watch_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
         chatId,
         taskId,
-        time: parseFloat(time) || 60,
+        time: parseFloat(time) || 0,
+        cronExpression: cronExpression ? cronExpression.trim() : null,
+        maxIterations: maxIterations ? parseInt(maxIterations, 10) : null,
+        iterationCount: 0,
+        isDaemon: Boolean(isDaemon),
+        exactTiming: Boolean(exactTiming),
+        timerCondition: timerCondition || (wakeOn === "never" ? "never" : (taskId ? taskId : "any")),
         wakeOn,
-        endResponse,
+        prompt: prompt || endResponse,
+        endResponse: prompt || endResponse,
         reason,
         statusMessage,
-        startedAt: Date.now()
+        startedAt: Date.now(),
+        lastFiredMinute: null
     });
 
     saveActiveWatches(filtered);
@@ -148,6 +210,31 @@ async function checkWatchesTick() {
         const { chatId, taskId, time, startedAt, endResponse, reason } = watch;
         const elapsedSec = (Date.now() - startedAt) / 1000;
 
+        // 1. Cron Expression Evaluation
+        if (watch.cronExpression) {
+            const currentMinuteKey = Math.floor(Date.now() / 60000);
+            if (watch.lastFiredMinute !== currentMinuteKey && matchesCron(watch.cronExpression, new Date())) {
+                watch.lastFiredMinute = currentMinuteKey;
+                watch.iterationCount = (watch.iterationCount || 0) + 1;
+                const iterationInfo = watch.maxIterations ? ` (${watch.iterationCount}/${watch.maxIterations})` : ` (#${watch.iterationCount})`;
+                let notifyMsg = watch.prompt || watch.endResponse || `[Recurring Cron Trigger]: Cron '${watch.cronExpression}' triggered${iterationInfo}.`;
+                const badgeInfo = {
+                    taskName: `Cron: ${watch.cronExpression}`,
+                    taskId: null,
+                    duration: 0,
+                    isTimer: true
+                };
+                triggerTaskNotificationTurn(chatId, notifyMsg, badgeInfo);
+
+                if (watch.maxIterations && watch.iterationCount >= watch.maxIterations) {
+                    continue; // Reached max iterations, stop
+                }
+            }
+            remainingWatches.push(watch);
+            continue;
+        }
+
+        // 2. Monitored Background Task or Timer with TimerCondition
         if (taskId) {
             try {
                 const res = await fetch(`/api/task/stdout/${encodeURIComponent(taskId)}`);
@@ -160,10 +247,17 @@ async function checkWatchesTick() {
                         const stderr = cleanTerminalScreen(data.stderr || "").trim();
                         const duration = data.elapsed_seconds || elapsedSec.toFixed(1);
 
-                        let notifyMsg = `[Background Task Notification]: Task '${taskId}' (${reason || "background job"}) completed with exit code ${exitCode} after ${duration}s.`;
-                        if (stdout) notifyMsg += `\n\nStandard Output:\n\`\`\`\n${stdout.slice(0, 3000)}\n\`\`\``;
-                        if (stderr) notifyMsg += `\n\nStandard Error:\n\`\`\`\n${stderr.slice(0, 1500)}\n\`\`\``;
-                        if (endResponse) notifyMsg += `\n\nPrompt: ${endResponse}`;
+                        // If timerCondition is 'never', ignore early exit and wait full duration
+                        if (watch.timerCondition === "never" && time > 0 && elapsedSec < time) {
+                            remainingWatches.push(watch);
+                            continue;
+                        }
+
+                        let notifyMsg = watch.prompt || watch.endResponse || `[Background Task Notification]: Task '${taskId}' (${reason || "background job"}) completed with exit code ${exitCode} after ${duration}s.`;
+                        if (!watch.prompt) {
+                            if (stdout) notifyMsg += `\n\nStandard Output:\n\`\`\`\n${stdout.slice(0, 3000)}\n\`\`\``;
+                            if (stderr) notifyMsg += `\n\nStandard Error:\n\`\`\`\n${stderr.slice(0, 1500)}\n\`\`\``;
+                        }
 
                         const taskName = reason || taskId;
                         const badgeInfo = {
@@ -184,8 +278,7 @@ async function checkWatchesTick() {
 
             // If a timeout was set and has elapsed while task is still running
             if (time > 0 && elapsedSec >= time) {
-                let notifyMsg = `[Background Task Timeout]: Monitored task '${taskId}' (${reason || "background job"}) has reached its observation limit of ${time}s and is still running in the background.`;
-                if (endResponse) notifyMsg += `\n\nPrompt: ${endResponse}`;
+                let notifyMsg = watch.prompt || watch.endResponse || `[Background Task Timeout]: Monitored task '${taskId}' (${reason || "background job"}) has reached its observation limit of ${time}s and is still running in the background.`;
                 const taskName = reason || taskId;
                 const badgeInfo = {
                     taskName,
@@ -199,9 +292,8 @@ async function checkWatchesTick() {
         } else {
             // Pure timer
             if (elapsedSec >= time) {
-                let notifyMsg = `[Timer Notification]: Scheduled timer (${time}s${reason ? ` for ${reason}` : ""}) has completed.`;
-                if (endResponse) notifyMsg += `\n\nPrompt: ${endResponse}`;
-                const taskName = reason || (taskId ? `task ${taskId}` : "");
+                let notifyMsg = watch.prompt || watch.endResponse || `[Timer Notification]: Scheduled timer (${time}s${reason ? ` for ${reason}` : ""}) has completed.`;
+                const taskName = reason || (taskId ? `task ${taskId}` : "Schedule timer");
                 const badgeInfo = {
                     taskName,
                     taskId,
