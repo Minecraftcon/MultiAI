@@ -123,7 +123,7 @@
     <!-- Normal Panel View: Navigation & Modes (Collapses when search is active) -->
     <div id="panelNormalView" class="panel-normal-view">
 
-        <!-- Mode Switcher Pill (Chat / Build) -->
+        <!-- Mode Switcher Pill (Chat / Build / Subagents) -->
         <div class="panel-mode-wrap">
             <div class="mode-pill" role="tablist" aria-label="Mode selector">
                 <div class="mode-pill-thumb" aria-hidden="true"></div>
@@ -134,6 +134,10 @@
                 <button type="button" id="modeBuildBtn" class="mode-pill-item" role="tab" aria-selected="false" data-mode="build" tabindex="-1">
                     <i data-lucide="hammer"></i>
                     <span>Build</span>
+                </button>
+                <button type="button" id="modeSubagentsBtn" class="mode-pill-item" role="tab" aria-selected="false" data-mode="subagents" tabindex="-1" title="Subagents">
+                    <i data-lucide="bot"></i>
+                    <span>Agents</span>
                 </button>
             </div>
         </div>
@@ -161,9 +165,17 @@
                 <span>Add Project</span>
             </button>
         </div>
+
+        <!-- Subagents Navigation Actions (Visible in Subagents Mode) -->
+        <div id="panelSubagentsNav" class="panel-nav" style="display: none;">
+            <button id="newSubagentChatBtn" class="panel-nav-btn" type="button" title="Start subagent chat">
+                <i data-lucide="square-pen"></i>
+                <span>New Agent Chat</span>
+            </button>
+        </div>
     </div>
 
-    <!-- Chats & Projects Section -->
+    <!-- Chats, Projects & Subagents Section -->
     <div class="panel-body">
         <div id="panelSectionHeader" class="panel-section-header">
             <span id="panelSectionLabel" class="panel-section-label">Chats</span>
@@ -182,6 +194,8 @@
         </div>
 
         <div id="projectList" class="project-list" style="display: none;"></div>
+
+        <div id="subagentList" class="subagent-panel-list" style="display: none;"></div>
     </div>
 
     <!-- Footer: Settings & More with Dark Gradient Fade -->

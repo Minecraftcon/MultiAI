@@ -11,6 +11,7 @@ import { filesystemTools } from "./filesystem/index.js";
 import { planningTools } from "./planning/index.js";
 import { designTools } from "./design/index.js";
 import { McpActiveTools } from "./mcp/index.js";
+import { SUBAGENT_ALLOWED_TOOLS } from "../agent/subagent.js";
 
 // Register terminal, web, media, filesystem, planning, and design tools
 terminalTools.forEach(registerTool);
@@ -36,8 +37,25 @@ export function syncToolsArray() {
 
 /**
  * Returns dynamic tool schemas filtering out tools disabled by configuration.
+ * When in a dedicated subagent chat session, returns the persona's allowed tools.
  */
-function getActiveToolSchemas() {
+function getActiveToolSchemas(session = null) {
+    const currentSession = session || (state.currentChatId ? state.chatSessions[state.currentChatId] : null);
+
+    // If active conversation is a dedicated subagent chat session, provide that persona's allowed tools
+    if (currentSession?.isSubagent && currentSession?.subagentType) {
+        const allowedNames = SUBAGENT_ALLOWED_TOOLS[currentSession.subagentType] || SUBAGENT_ALLOWED_TOOLS["general-purpose"] || [];
+        const allowedSet = new Set(allowedNames);
+        const list = [];
+        for (const name of allowedSet) {
+            const registered = getTool(name);
+            if (registered && registered.schema) {
+                list.push(registered.schema);
+            }
+        }
+        return list;
+    }
+
     const toolsConfig = state.config?.Tools || {};
     return getAllToolSchemas().filter(schema => {
         const name = schema?.function?.name || "";

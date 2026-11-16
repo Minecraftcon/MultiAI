@@ -6,7 +6,7 @@ import { sanitizeMessage } from "./sanitizer.js";
 import { getTool, executeTool } from "../tools/index.js";
 import { extractText } from "../utils/dom.js";
 
-const SUBAGENT_PERSONAS = {
+export const SUBAGENT_PERSONAS = {
     "designer": "You are an expert UI/UX and web designer subagent. You design, create, style, and iterate on interfaces, HTML/CSS, modern responsive layouts, web components, and visual prototypes. You inspect existing code, write clean modern styling, and use show_html_preview to render live previews directly in the user's browser pane.",
     "general-purpose": "You are a focused, autonomous subagent executing a dedicated task. Complete the requested objective thoroughly using available tools and return a structured, comprehensive final report.",
     "researcher": "You are an expert research subagent. Use web search and page fetching to investigate the query thoroughly and return a well-cited, clear summary report.",
@@ -14,7 +14,7 @@ const SUBAGENT_PERSONAS = {
     "tester": "You are a testing and validation subagent. Run test commands and verify behavior using terminal tasks, returning detailed failure or success reports."
 };
 
-const SUBAGENT_ALLOWED_TOOLS = {
+export const SUBAGENT_ALLOWED_TOOLS = {
     "designer": [
         "read_file", "write_file", "replace_file_content", "multi_replace_file_content",
         "list_dir", "grep_search", "run_task", "show_html_preview", "open_browser_tab", "toggle_panel"

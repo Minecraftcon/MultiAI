@@ -1,5 +1,5 @@
 /* =========================================================
-   APPLICATION MODE SWITCHER (CHAT VS BUILD)
+   APPLICATION MODE SWITCHER (CHAT VS BUILD VS SUBAGENTS)
    Uses Modern Web Guidance View Transitions & Accessible Tabs
    ========================================================= */
 import { state, setAppMode, getAppMode } from "../state/index.js";
@@ -7,8 +7,10 @@ import { state, setAppMode, getAppMode } from "../state/index.js";
 const STORAGE_KEY = "multiai_app_mode";
 
 function focusActiveBtn(mode) {
-    const btn = mode === "build" ? document.getElementById("modeBuildBtn") : document.getElementById("modeChatBtn");
-    btn?.focus();
+    let id = "modeChatBtn";
+    if (mode === "build") id = "modeBuildBtn";
+    else if (mode === "subagents") id = "modeSubagentsBtn";
+    document.getElementById(id)?.focus();
 }
 
 /**
@@ -17,25 +19,31 @@ function focusActiveBtn(mode) {
 export function updateModePillUI(mode) {
     const chatBtn = document.getElementById("modeChatBtn");
     const buildBtn = document.getElementById("modeBuildBtn");
+    const subagentsBtn = document.getElementById("modeSubagentsBtn");
     if (!chatBtn || !buildBtn) return;
 
-    const isBuild = mode === "build";
-    chatBtn.classList.toggle("active", !isBuild);
-    chatBtn.setAttribute("aria-selected", isBuild ? "false" : "true");
-    chatBtn.setAttribute("tabindex", isBuild ? "-1" : "0");
+    chatBtn.classList.toggle("active", mode === "chat");
+    chatBtn.setAttribute("aria-selected", mode === "chat" ? "true" : "false");
+    chatBtn.setAttribute("tabindex", mode === "chat" ? "0" : "-1");
 
-    buildBtn.classList.toggle("active", isBuild);
-    buildBtn.setAttribute("aria-selected", isBuild ? "true" : "false");
-    buildBtn.setAttribute("tabindex", isBuild ? "0" : "-1");
+    buildBtn.classList.toggle("active", mode === "build");
+    buildBtn.setAttribute("aria-selected", mode === "build" ? "true" : "false");
+    buildBtn.setAttribute("tabindex", mode === "build" ? "0" : "-1");
+
+    if (subagentsBtn) {
+        subagentsBtn.classList.toggle("active", mode === "subagents");
+        subagentsBtn.setAttribute("aria-selected", mode === "subagents" ? "true" : "false");
+        subagentsBtn.setAttribute("tabindex", mode === "subagents" ? "0" : "-1");
+    }
 }
 
 /**
  * Switches the active app mode using View Transitions API and progressive enhancement.
  *
- * @param {'chat' | 'build'} newMode
+ * @param {'chat' | 'build' | 'subagents'} newMode
  */
 export function switchAppMode(newMode) {
-    if (newMode !== "chat" && newMode !== "build") return;
+    if (newMode !== "chat" && newMode !== "build" && newMode !== "subagents") return;
     if (getAppMode() === newMode) return;
 
     const previousMode = getAppMode();
@@ -64,6 +72,7 @@ export function initModeSwitcher() {
 
     const chatBtn = document.getElementById("modeChatBtn");
     const buildBtn = document.getElementById("modeBuildBtn");
+    const subagentsBtn = document.getElementById("modeSubagentsBtn");
     const container = document.querySelector(".mode-pill, .mode-pill-container");
 
     if (chatBtn) {
@@ -72,22 +81,29 @@ export function initModeSwitcher() {
     if (buildBtn) {
         buildBtn.addEventListener("click", () => switchAppMode("build"));
     }
+    if (subagentsBtn) {
+        subagentsBtn.addEventListener("click", () => switchAppMode("subagents"));
+    }
 
     // Keyboard navigation conforming to WAI-ARIA Tabs pattern
     if (container) {
+        const modes = ["chat", "build", "subagents"];
         container.addEventListener("keydown", (e) => {
+            const currentIdx = modes.indexOf(getAppMode());
             if (e.key === "ArrowRight" || e.key === "ArrowDown") {
                 e.preventDefault();
-                switchAppMode("build");
+                const next = (currentIdx + 1) % modes.length;
+                switchAppMode(modes[next]);
             } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
                 e.preventDefault();
-                switchAppMode("chat");
+                const prev = (currentIdx - 1 + modes.length) % modes.length;
+                switchAppMode(modes[prev]);
             } else if (e.key === "Home") {
                 e.preventDefault();
-                switchAppMode("chat");
+                switchAppMode(modes[0]);
             } else if (e.key === "End") {
                 e.preventDefault();
-                switchAppMode("build");
+                switchAppMode(modes[modes.length - 1]);
             }
         });
     }

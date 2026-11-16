@@ -591,6 +591,13 @@ export const chatbox = new ChatBoxComponent();
 export function updateStartPageHeroTitle() {
     const titleEl = document.getElementById("startPageTitle");
     if (!titleEl) return;
+    const curSession = state.currentChatId ? state.chatSessions[state.currentChatId] : null;
+    if (curSession?.isSubagent && curSession?.subagentType) {
+        const pretty = curSession.subagentType.charAt(0).toUpperCase() + curSession.subagentType.slice(1);
+        titleEl.innerHTML = `<span>${pretty} Subagent</span> <i data-lucide="bot" class="start-page-title-icon"></i>`;
+        renderIcons(titleEl);
+        return;
+    }
     const isBuild = (state && state.appMode === "build") || (document.documentElement.getAttribute("data-app-mode") === "build");
     if (isBuild) {
         titleEl.innerHTML = `<span>Lets Build</span> <i data-lucide="hammer" class="start-page-title-icon"></i>`;

@@ -62,10 +62,10 @@ export function updateSessionMessages(chatId, messages) {
 }
 
 /**
- * Sets the active application mode ('chat' | 'build').
+ * Sets the active application mode ('chat' | 'build' | 'subagents').
  */
 export function setAppMode(mode) {
-    if (mode !== "chat" && mode !== "build") return;
+    if (mode !== "chat" && mode !== "build" && mode !== "subagents") return;
     state.appMode = mode;
 }
 

@@ -216,7 +216,7 @@ export async function runAgent(userText, currentAIMessage, chatId, images = [], 
                 activityLabel.textContent = `${stageStatus}... (${sec}s)`;
             }
 
-            const activeTools = getActiveToolSchemas();
+            const activeTools = getActiveToolSchemas(session);
 
             let response;
             try {

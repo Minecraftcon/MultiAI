@@ -271,7 +271,9 @@ export async function switchToChat(id) {
         ? structuredClone(session.messages)
         : [{ role: "system", content: state.activeSystemPrompt }];
 
-    if (state.messages[0]?.role === "system") {
+    if (session.isSubagent && session.subagentType) {
+        // Keep the specialized subagent persona prompt
+    } else if (state.messages[0]?.role === "system") {
         state.messages[0].content = state.activeSystemPrompt;
     }
 
@@ -388,9 +390,24 @@ export async function switchToChat(id) {
         setDeepSearchActive(Boolean(session.isDeepSearch));
     }
 
+    const input = document.getElementById("input");
+    if (input) {
+        if (session.isSubagent && session.subagentType) {
+            const pretty = session.subagentType.charAt(0).toUpperCase() + session.subagentType.slice(1);
+            input.placeholder = `Message ${pretty} subagent...`;
+        } else if (session.isBuildChat || session.projectId) {
+            input.placeholder = `Build task...`;
+        } else {
+            input.placeholder = `Message AI…`;
+        }
+    }
+
     saveStoredChats();
     syncPlanDock(id);
     renderChatList();
+    if (state.appMode === "subagents") {
+        import("./subagents-panel.js").then(m => m.renderSubagentsList());
+    }
 }
 
 /**

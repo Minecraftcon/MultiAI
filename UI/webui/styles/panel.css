@@ -121,7 +121,7 @@
 .mode-pill {
     position: relative;
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr 1fr 1fr;
     width: 100%;
     background: var(--surface-2);
     border: 1px solid var(--border);
@@ -139,7 +139,7 @@
     top: 3px;
     left: 3px;
     bottom: 3px;
-    width: calc(50% - 3px);
+    width: calc(33.333% - 2px);
     background: linear-gradient(180deg, var(--surface-3) 0%, rgba(42, 42, 44, 0.95) 100%);
     border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 9999px;
@@ -157,8 +157,16 @@
     view-transition-name: none !important;
 }
 
+[data-app-mode="chat"] .mode-pill-thumb {
+    transform: translateX(0%);
+}
+
 [data-app-mode="build"] .mode-pill-thumb {
     transform: translateX(100%);
+}
+
+[data-app-mode="subagents"] .mode-pill-thumb {
+    transform: translateX(200%);
 }
 
 /* Micro-squish physics when clicking or holding pill */
@@ -168,6 +176,10 @@
 
 [data-app-mode="build"] .mode-pill:active .mode-pill-thumb {
     transform: translateX(100%) scaleX(0.96) scaleY(0.95);
+}
+
+[data-app-mode="subagents"] .mode-pill:active .mode-pill-thumb {
+    transform: translateX(200%) scaleX(0.96) scaleY(0.95);
 }
 
 .mode-pill-item {
@@ -1687,4 +1699,191 @@ html.is-android .side-panel .panel-footer {
     background: var(--surface) !important;
     flex-shrink: 0 !important;
     pointer-events: auto !important;
+}
+
+/* =========================================================
+   SUBAGENTS SIDEBAR PANEL & PERSONA CARDS
+   ========================================================= */
+.subagent-panel-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 4px 0 16px;
+}
+
+.subagent-section-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--text-tertiary);
+    margin: 4px 0 8px 2px;
+}
+
+.subagent-cards-container {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.subagent-persona-card {
+    display: flex;
+    flex-direction: column;
+    padding: 9px 10px;
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    cursor: pointer;
+    transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+    user-select: none;
+}
+
+.subagent-persona-card:hover {
+    background: var(--surface-2);
+    border-color: rgba(255, 255, 255, 0.15);
+    transform: translateY(-1px);
+}
+
+.subagent-persona-card.active {
+    background: var(--surface-2);
+    border-color: var(--accent-primary, #6366f1);
+    box-shadow: 0 0 0 1px var(--accent-primary, #6366f1);
+}
+
+.subagent-card-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.subagent-card-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.subagent-icon-badge {
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    background: var(--surface-3);
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-primary);
+    flex-shrink: 0;
+}
+
+.subagent-icon-badge svg {
+    width: 13px;
+    height: 13px;
+}
+
+.subagent-name-text {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.subagent-pill-tag {
+    font-size: 10px;
+    font-weight: 500;
+    padding: 1px 6px;
+    border-radius: 9999px;
+    background: var(--surface-3);
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+    letter-spacing: 0.02em;
+    flex-shrink: 0;
+}
+
+.subagent-card-summary {
+    font-size: 11px;
+    color: var(--text-secondary);
+    line-height: 1.35;
+    margin-top: 4px;
+    padding-left: 32px;
+}
+
+.subagent-chats-container {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-top: 4px;
+}
+
+.subagent-chat-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 7px 9px;
+    border-radius: 7px;
+    cursor: pointer;
+    background: transparent;
+    border: 1px solid transparent;
+    transition: all 0.15s ease;
+}
+
+.subagent-chat-row:hover {
+    background: var(--surface-2);
+    border-color: var(--border);
+}
+
+.subagent-chat-row.active {
+    background: var(--surface-2);
+    border-color: var(--border);
+}
+
+.subagent-chat-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    overflow: hidden;
+}
+
+.subagent-chat-info svg {
+    width: 14px;
+    height: 14px;
+    color: var(--text-secondary);
+    flex-shrink: 0;
+}
+
+.subagent-chat-title-text {
+    font-size: 12.5px;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.subagent-chat-del-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    padding: 3px;
+    border-radius: 4px;
+    opacity: 0;
+    transition: all 0.15s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.subagent-chat-row:hover .subagent-chat-del-btn {
+    opacity: 1;
+}
+
+.subagent-chat-del-btn:hover {
+    color: var(--danger, #ef4444);
+    background: rgba(239, 68, 68, 0.1);
+}
+
+.subagent-empty-hint {
+    font-size: 12px;
+    color: var(--text-tertiary);
+    font-style: italic;
+    padding: 6px 4px;
 }
