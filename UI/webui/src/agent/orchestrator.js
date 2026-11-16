@@ -131,6 +131,7 @@ export async function runAgent(userText, currentAIMessage, chatId, images = [], 
     let hasRunTools = false;
     let emptyRetryUsed = false;
     let emptyAfterToolsRetries = 0;
+    let thoughtContinuationRetries = 0;
     let promissoryRetries = 0;
     let todoContinueRetries = 0;
     let hasRunVerification = false;
@@ -393,10 +394,13 @@ export async function runAgent(userText, currentAIMessage, chatId, images = [], 
 
                 let finalDisplay = roundText.trim();
 
-                // If the response is purely reasoning/thinking with no answer content during an agent loop,
+                // If the response is purely reasoning/thinking with no answer content,
                 // route to activity thought trace and prompt the model via system_server to proceed with action
                 const { thoughtHtml, content: actualContent } = extractThoughtAndContent(finalDisplay);
-                if ((hasRunTools || round > 0) && thoughtHtml && !actualContent && (maxRounds === Infinity || round < maxRounds - 1)) {
+                const hasVisibleAnswer = Boolean(actualContent && actualContent.trim());
+                if (thoughtHtml && !hasVisibleAnswer && thoughtContinuationRetries < 3 && (maxRounds === Infinity || round < maxRounds - 1)) {
+                    thoughtContinuationRetries++;
+                    logEvent("THOUGHT_CONTINUATION", { round, model: selectedModel, attempt: thoughtContinuationRetries });
                     addThoughtTrace(currentAIMessage, finalDisplay);
                     ephemeralServerDirective = {
                         scope: "thought_continuation",
@@ -467,12 +471,10 @@ export async function runAgent(userText, currentAIMessage, chatId, images = [], 
                     continue;
                 }
 
-
-
                 // If model returns an empty completion after tools have executed:
                 // Remove the empty assistant message so it doesn't pollute history,
                 // and re-send the tool results to the model before the empty call happened.
-                if (hasRunTools && finalDisplay.length === 0 && emptyAfterToolsRetries < 2) {
+                if (hasRunTools && !hasVisibleAnswer && emptyAfterToolsRetries < 2) {
                     emptyAfterToolsRetries++;
                     logEvent("EMPTY_AFTER_TOOLS_RETRY", { model: selectedModel, round, attempt: emptyAfterToolsRetries });
 
@@ -499,7 +501,7 @@ export async function runAgent(userText, currentAIMessage, chatId, images = [], 
                     }
                 }
 
-                if (!emptyRetryUsed && finalDisplay.length === 0) {
+                if (!emptyRetryUsed && !hasVisibleAnswer) {
                     if (detachedStatusMessage) {
                         finalDisplay = detachedStatusMessage;
                     } else {
@@ -507,7 +509,7 @@ export async function runAgent(userText, currentAIMessage, chatId, images = [], 
                         logEvent("EMPTY_REPLY_RETRY", { model: selectedModel, userText, round, hasRunTools });
                         const retryPrompt = hasRunTools
                             ? "All requested tool actions have finished executing. Please provide a clear summary of the results and your final answer."
-                            : "Your previous reply was empty. Provide an immediate direct answer or perform the required tool action.";
+                            : "Your previous reply contained reasoning but no final answer. Provide an immediate direct answer or perform the required tool action.";
                         ephemeralServerDirective = {
                             scope: "empty_retry",
                             priority: "high",
@@ -517,10 +519,14 @@ export async function runAgent(userText, currentAIMessage, chatId, images = [], 
                     }
                 }
 
-                if (finalDisplay.length === 0 && !hasRunTools) {
-                    const err = new Error("Model returned an empty response.");
-                    err.statusCode = 204;
-                    throw err;
+                if (!hasVisibleAnswer && !hasRunTools) {
+                    if (thoughtHtml) {
+                        finalDisplay = "*(Thinking completed without response text)*";
+                    } else {
+                        const err = new Error("Model returned an empty response.");
+                        err.statusCode = 204;
+                        throw err;
+                    }
                 }
 
                 if (finalDisplay.length === 0 && detachedStatusMessage) {
