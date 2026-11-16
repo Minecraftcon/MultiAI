@@ -47,7 +47,7 @@ export function renderChatList(filterQuery = "") {
 
     let ids = Object.keys(state.chatSessions || {}).filter(id => {
         const s = state.chatSessions[id];
-        return s && !s.projectId && s.mode !== "build";
+        return s && !s.projectId && s.mode !== "build" && !s.isSubagent && !s.parentChatId;
     });
 
     // Clear the keyed-diff map if we had an empty state placeholder
@@ -421,9 +421,20 @@ export function deleteChatSession(id) {
     hideChatItemMenu();
     fetch("/api/chats/" + encodeURIComponent(id), { method: "DELETE" }).catch(() => {});
 
+    // Cascade delete any child subagents bound to this main chat
+    for (const [subId, sess] of Object.entries(state.chatSessions)) {
+        if (sess && (sess.isSubagent || sess.parentChatId) && sess.parentChatId === id) {
+            delete state.chatSessions[subId];
+            fetch("/api/chats/" + encodeURIComponent(subId), { method: "DELETE" }).catch(() => {});
+        }
+    }
+
     if (state.currentChatId === id) {
         state.currentChatId = null;
-        const remaining = Object.keys(state.chatSessions);
+        const remaining = Object.keys(state.chatSessions).filter(cid => {
+            const s = state.chatSessions[cid];
+            return s && !s.projectId && s.mode !== "build" && !s.isSubagent && !s.parentChatId;
+        });
         if (remaining.length > 0) {
             remaining.sort((a, b) => (state.chatSessions[b].updatedAt || 0) - (state.chatSessions[a].updatedAt || 0));
             switchToChat(remaining[0]);
