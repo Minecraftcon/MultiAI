@@ -405,9 +405,6 @@ export async function switchToChat(id) {
     saveStoredChats();
     syncPlanDock(id);
     renderChatList();
-    if (state.appMode === "subagents") {
-        import("./subagents-panel.js").then(m => m.renderSubagentsList());
-    }
 }
 
 /**

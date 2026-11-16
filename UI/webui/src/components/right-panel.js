@@ -7,6 +7,12 @@ import { renderIcons } from "../utils/icons.js";
 import { renderDiffCardHtml, renderCodeViewerCardHtml, bindDiffViewerCards, getLanguageMeta } from "./diff-viewer.js";
 import { terminalDrawer } from "./terminal-drawer.js";
 import { closePanel, getIsPanelOpen } from "./gestures.js";
+import { state } from "../state/index.js";
+import { saveStoredChats } from "../services/storage.js";
+import { switchToChat } from "./chat-history-list.js";
+import { renderSessionMessages } from "./chat-ui.js";
+import { getActiveSubagents, onSubagentsChange, continueSubagentChat } from "../agent/subagent.js";
+import { getActiveMainChatId, recoverPastSubagentsFromMainChat } from "./subagents-panel.js";
 
 function getFileBadgeInfo(fileName = "") {
     const ext = fileName.split(".").pop()?.toLowerCase() || "";
@@ -159,7 +165,12 @@ class RightPanelManager {
         this.itemOpenFile = document.getElementById("launcherItemOpenFile");
         this.itemTerminal = document.getElementById("launcherItemTerminal");
         this.itemBrowser = document.getElementById("launcherItemBrowser");
+        this.itemSubagents = document.getElementById("launcherItemSubagents");
+        this.subagentsBadgeEl = document.getElementById("launcherSubagentsBadge");
         this.itemExtensions = document.getElementById("launcherItemExtensions");
+
+        this.subagentsCountBadgeEl = document.getElementById("launcherSubagentsCountBadge");
+        this.subagentsListEl = document.getElementById("launcherSubagentsList");
 
         this.tasksBadgeEl = document.getElementById("launcherTasksCountBadge");
         this.tasksListEl = document.getElementById("launcherTasksList");
@@ -169,6 +180,15 @@ class RightPanelManager {
         this.terminalMountEl = document.getElementById("rightPanelTerminalMount");
         this.fusedTerminalContainer = document.getElementById("fusedTerminalContainer");
         this.browserMountEl = document.getElementById("rightPanelBrowserMount");
+        this.subagentMountEl = document.getElementById("rightPanelSubagentMount");
+        this.subagentBackBtn = document.getElementById("rpSubagentBackBtn");
+        this.subagentPersonaBadge = document.getElementById("rpSubagentPersonaBadge");
+        this.subagentStatusBadge = document.getElementById("rpSubagentStatusBadge");
+        this.subagentTaskTitle = document.getElementById("rpSubagentTaskTitle");
+        this.subagentOpenFullBtn = document.getElementById("rpSubagentOpenFullBtn");
+        this.subagentMessagesList = document.getElementById("rpSubagentMessagesList");
+        this.subagentInput = document.getElementById("rpSubagentInput");
+        this.subagentSendBtn = document.getElementById("rpSubagentSendBtn");
         this.browserUrlInput = document.getElementById("browserUrlInput");
         this.browserIframe = document.getElementById("rightPanelBrowserFrame");
         this.browserBackBtn = document.getElementById("browserBackBtn");
@@ -308,9 +328,47 @@ class RightPanelManager {
         if (this.itemBrowser) {
             this.itemBrowser.addEventListener("click", () => this.openBrowserTab("https://duckduckgo.com"));
         }
+        if (this.itemSubagents) {
+            this.itemSubagents.addEventListener("click", () => this.openSubagentsTab());
+        }
         if (this.itemExtensions) {
             this.itemExtensions.addEventListener("click", () => this.openExtensionsTab());
         }
+
+        // Subagent Tab controls
+        if (this.subagentBackBtn) {
+            this.subagentBackBtn.addEventListener("click", () => this.switchToLauncher());
+        }
+        if (this.subagentOpenFullBtn) {
+            this.subagentOpenFullBtn.addEventListener("click", () => this.openCurrentSubagentInFullChat());
+        }
+        if (this.subagentSendBtn) {
+            this.subagentSendBtn.addEventListener("click", () => this.sendSubagentDirectMessage());
+        }
+        if (this.subagentInput) {
+            this.subagentInput.addEventListener("keydown", (e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    this.sendSubagentDirectMessage();
+                }
+            });
+        }
+
+        // Live Subagent state updates
+        document.addEventListener("chatsUpdated", () => {
+            this.loadSubagents(true);
+            const activeTab = this.tabs.find(t => t.id === this.activeTabId);
+            if (activeTab && activeTab.type === "subagent") {
+                this.renderSubagentTab(activeTab);
+            }
+        });
+        onSubagentsChange(() => {
+            this.loadSubagents(true);
+            const activeTab = this.tabs.find(t => t.id === this.activeTabId);
+            if (activeTab && activeTab.type === "subagent") {
+                this.renderSubagentTab(activeTab);
+            }
+        });
 
         // See all tasks button
         if (this.seeAllBtn) {
@@ -498,6 +556,7 @@ class RightPanelManager {
         this.renderTabStrip();
         this.renderActiveTab();
         this.loadTasks();
+        this.loadSubagents();
         this.checkWorkspaceChanges();
         this.debouncedRefreshFileTree();
         this.startPolling();
@@ -594,6 +653,7 @@ class RightPanelManager {
         this.pollTimer = setInterval(() => {
             if (!this.isOpen) return;
             this.loadTasks(true);
+            this.loadSubagents(true);
             this.checkWorkspaceChanges();
         }, 3000);
     }
@@ -647,6 +707,8 @@ class RightPanelManager {
                 iconOrBadgeHtml = '<i data-lucide="square-terminal"></i>';
             } else if (tab.type === "browser") {
                 iconOrBadgeHtml = '<i data-lucide="globe"></i>';
+            } else if (tab.type === "subagent") {
+                iconOrBadgeHtml = '<i data-lucide="bot" style="color: #38bdf8;"></i>';
             } else if (tab.type === "extensions") {
                 iconOrBadgeHtml = '<i data-lucide="puzzle" style="color: #fca5a5;"></i>';
             } else if (tab.path) {
@@ -750,6 +812,7 @@ class RightPanelManager {
             this.searchInputEl.focus();
         }
         this.loadTasks();
+        this.loadSubagents();
     }
 
     renderActiveTab() {
@@ -760,6 +823,7 @@ class RightPanelManager {
             this.launcherViewEl.style.display = "flex";
             this.tabContentEl.style.display = "none";
             this.loadTasks();
+            this.loadSubagents();
             return;
         }
 
@@ -777,6 +841,7 @@ class RightPanelManager {
         if (this.viewerMountEl) this.viewerMountEl.style.display = "none";
         if (this.terminalMountEl) this.terminalMountEl.style.display = "none";
         if (this.browserMountEl) this.browserMountEl.style.display = "none";
+        if (this.subagentMountEl) this.subagentMountEl.style.display = "none";
 
         if (activeTab.type === "diff") {
             if (this.viewerMountEl) {
@@ -797,6 +862,11 @@ class RightPanelManager {
             if (this.browserMountEl) {
                 this.browserMountEl.style.display = "flex";
                 this.renderBrowserTab(activeTab);
+            }
+        } else if (activeTab.type === "subagent") {
+            if (this.subagentMountEl) {
+                this.subagentMountEl.style.display = "flex";
+                this.renderSubagentTab(activeTab);
             }
         } else if (activeTab.type === "extensions") {
             if (this.viewerMountEl) {
@@ -2817,6 +2887,253 @@ class RightPanelManager {
             } else {
                 this.hideSearchResults();
             }
+        }
+    }
+
+    // ── Subagents Management & Direct Chat ─────────────────────
+    loadSubagents(isBackground = false) {
+        try {
+            const mainChatId = getActiveMainChatId();
+            if (mainChatId) {
+                recoverPastSubagentsFromMainChat(mainChatId);
+            }
+
+            const allSessions = Object.values(state.chatSessions || {});
+            const boundSubagents = allSessions.filter(s => s && s.isSubagent && (s.parentChatId === mainChatId || !mainChatId));
+
+            const liveActive = getActiveSubagents().filter(a => !mainChatId || a.parentChatId === mainChatId);
+            const liveMap = new Map(liveActive.map(a => [a.id, a]));
+
+            const subagentsList = boundSubagents.map(s => {
+                const live = liveMap.get(s.id);
+                const isRunning = s.subagentStatus === "running" || Boolean(live);
+                return {
+                    id: s.id,
+                    type: s.subagentType || "designer",
+                    task: s.task || s.title || "Subagent task",
+                    status: isRunning ? "running" : "completed",
+                    updatedAt: s.updatedAt || s.createdAt || 0
+                };
+            });
+
+            // Also include any live active that aren't yet in chatSessions
+            liveActive.forEach(a => {
+                if (!subagentsList.some(s => s.id === a.id)) {
+                    subagentsList.unshift({
+                        id: a.id,
+                        type: a.type || "designer",
+                        task: a.task || "Subagent running...",
+                        status: "running",
+                        updatedAt: Date.now()
+                    });
+                }
+            });
+
+            subagentsList.sort((a, b) => {
+                if (a.status === "running" && b.status !== "running") return -1;
+                if (a.status !== "running" && b.status === "running") return 1;
+                return b.updatedAt - a.updatedAt;
+            });
+
+            const runningCount = subagentsList.filter(s => s.status === "running").length;
+
+            if (this.subagentsBadgeEl) {
+                if (runningCount > 0) {
+                    this.subagentsBadgeEl.textContent = String(runningCount);
+                    this.subagentsBadgeEl.style.display = "inline-block";
+                } else {
+                    this.subagentsBadgeEl.style.display = "none";
+                }
+            }
+
+            if (this.subagentsCountBadgeEl) {
+                if (subagentsList.length > 0) {
+                    this.subagentsCountBadgeEl.textContent = String(subagentsList.length);
+                    this.subagentsCountBadgeEl.style.display = "inline-block";
+                } else {
+                    this.subagentsCountBadgeEl.style.display = "none";
+                }
+            }
+
+            this.renderSubagentsList(subagentsList);
+        } catch (err) {
+            if (!isBackground) console.error("[RightPanel] Load subagents error:", err);
+        }
+    }
+
+    renderSubagentsList(subagents = []) {
+        if (!this.subagentsListEl) return;
+
+        if (!subagents || subagents.length === 0) {
+            this.subagentsListEl.innerHTML = '<div class="launcher-subagents-empty">No active subagents.</div>';
+            return;
+        }
+
+        let html = "";
+        subagents.slice(0, 5).forEach((sub) => {
+            const isRunning = sub.status === "running";
+            html += `
+                <div class="launcher-subagent-row ${isRunning ? 'running' : ''}" data-subagent-id="${escapeHTML(sub.id)}" role="button" tabindex="0">
+                    <div class="launcher-subagent-left">
+                        <i data-lucide="bot"></i>
+                        <div class="launcher-subagent-info">
+                            <span class="launcher-subagent-type">${escapeHTML(sub.type)}</span>
+                            <span class="launcher-subagent-task" title="${escapeHTML(sub.task)}">${escapeHTML(sub.task)}</span>
+                        </div>
+                    </div>
+                    <div class="launcher-subagent-right">
+                        ${isRunning ? `
+                            <span class="launcher-subagent-status running">
+                                <span class="pulse-dot"></span>
+                                <span>Running</span>
+                            </span>
+                        ` : `
+                            <span class="launcher-subagent-status completed">Completed</span>
+                        `}
+                    </div>
+                </div>
+            `;
+        });
+
+        this.subagentsListEl.innerHTML = html;
+        renderIcons(this.subagentsListEl);
+
+        this.subagentsListEl.querySelectorAll(".launcher-subagent-row").forEach(row => {
+            row.addEventListener("click", () => {
+                const sid = row.getAttribute("data-subagent-id");
+                if (sid) {
+                    this.openSubagentTab(sid);
+                }
+            });
+        });
+    }
+
+    openSubagentsTab() {
+        const allSessions = Object.values(state.chatSessions || {});
+        const mainChatId = getActiveMainChatId();
+        const bound = allSessions.filter(s => s && s.isSubagent && (s.parentChatId === mainChatId || !mainChatId));
+        const live = getActiveSubagents().filter(a => !mainChatId || a.parentChatId === mainChatId);
+
+        let targetId = live[0]?.id;
+        if (!targetId && bound.length > 0) {
+            bound.sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
+            targetId = bound[0].id;
+        }
+
+        if (targetId) {
+            this.openSubagentTab(targetId);
+        } else {
+            this.switchToLauncher();
+            this.subagentsListEl?.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+    }
+
+    openSubagentTab(subagentId) {
+        if (!this.isOpen) {
+            this.open();
+        }
+
+        const subSession = state.chatSessions[subagentId];
+        const subType = subSession?.subagentType || "designer";
+        const tabTitle = `Subagent: ${subType}`;
+        const tabId = `subagent_${subagentId}`;
+
+        let tab = this.tabs.find(t => t.id === tabId);
+        if (!tab) {
+            tab = {
+                id: tabId,
+                type: "subagent",
+                subagentId: subagentId,
+                title: tabTitle
+            };
+            this.tabs.push(tab);
+        }
+
+        this.switchTab(tabId);
+    }
+
+    renderSubagentTab(tab) {
+        if (!this.subagentMountEl) return;
+        const subagentId = tab.subagentId;
+        const subSession = state.chatSessions[subagentId];
+
+        const subType = subSession?.subagentType || "designer";
+        const isRunning = subSession?.subagentStatus === "running" || getActiveSubagents().some(a => a.id === subagentId);
+        const taskText = subSession?.task || subSession?.title || "Direct Subagent Session";
+
+        if (this.subagentPersonaBadge) {
+            this.subagentPersonaBadge.textContent = subType;
+            this.subagentPersonaBadge.className = `subagent-persona-chip ${subType}`;
+        }
+        if (this.subagentStatusBadge) {
+            this.subagentStatusBadge.textContent = isRunning ? "Running" : "Completed";
+            this.subagentStatusBadge.className = `subagent-status-tag ${isRunning ? 'running' : 'completed'}`;
+        }
+        if (this.subagentTaskTitle) {
+            this.subagentTaskTitle.textContent = taskText;
+            this.subagentTaskTitle.title = taskText;
+        }
+        if (this.subagentInput) {
+            this.subagentInput.placeholder = `Message ${subType} subagent directly...`;
+        }
+
+        if (this.subagentMessagesList) {
+            if (subSession) {
+                renderSessionMessages(subSession, this.subagentMessagesList);
+                renderIcons(this.subagentMessagesList);
+                this.subagentMessagesList.scrollTop = this.subagentMessagesList.scrollHeight;
+            } else {
+                this.subagentMessagesList.innerHTML = '<div class="launcher-subagents-empty">Subagent session not found.</div>';
+            }
+        }
+    }
+
+    async sendSubagentDirectMessage() {
+        const activeTab = this.tabs.find(t => t.id === this.activeTabId);
+        if (!activeTab || activeTab.type !== "subagent") return;
+
+        const subagentId = activeTab.subagentId;
+        const text = this.subagentInput?.value?.trim();
+        if (!text) return;
+
+        if (this.subagentInput) {
+            this.subagentInput.value = "";
+        }
+
+        const subSession = state.chatSessions[subagentId];
+        if (!subSession) return;
+
+        // Render optimistic user message
+        subSession.messages = subSession.messages || [];
+        subSession.messages.push({ role: "user", content: text });
+        subSession.updatedAt = Date.now();
+        saveStoredChats();
+
+        this.renderSubagentTab(activeTab);
+
+        try {
+            if (this.subagentSendBtn) this.subagentSendBtn.disabled = true;
+            await continueSubagentChat(subagentId, text);
+        } catch (err) {
+            console.error("[RightPanel] Send subagent message error:", err);
+            subSession.messages.push({
+                role: "assistant",
+                content: `Error communicating with subagent: ${err.message || String(err)}`
+            });
+            saveStoredChats();
+        } finally {
+            if (this.subagentSendBtn) this.subagentSendBtn.disabled = false;
+            this.renderSubagentTab(activeTab);
+            this.loadSubagents(true);
+        }
+    }
+
+    async openCurrentSubagentInFullChat() {
+        const activeTab = this.tabs.find(t => t.id === this.activeTabId);
+        if (!activeTab || activeTab.type !== "subagent") return;
+        const subagentId = activeTab.subagentId;
+        if (subagentId) {
+            await switchToChat(subagentId);
         }
     }
 

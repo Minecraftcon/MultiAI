@@ -705,15 +705,18 @@ class OpenCodeProvider extends BaseProvider {
             const parsedUrl = new URL(service.url);
 
             const writeDelta = (deltaObj, finishReason = null) => {
-                const chunk = {
-                    choices: [{
-                        index: 0,
-                        delta: deltaObj,
-                        finish_reason: finishReason
-                    }]
-                };
-                res.write(`data: ${JSON.stringify(chunk)}\n\n`);
-                if (typeof res.flush === "function") res.flush();
+                if (!res || res.writableEnded || res.destroyed) return;
+                try {
+                    const chunk = {
+                        choices: [{
+                            index: 0,
+                            delta: deltaObj,
+                            finish_reason: finishReason
+                        }]
+                    };
+                    res.write(`data: ${JSON.stringify(chunk)}\n\n`);
+                    if (typeof res.flush === "function") res.flush();
+                } catch (_) {}
             };
 
             await new Promise((resolve, reject) => {
@@ -1017,15 +1020,18 @@ class OpenCodeProvider extends BaseProvider {
             if (typeof res.flushHeaders === "function") res.flushHeaders();
 
             const writeDelta = (deltaObj, finishReason = null) => {
-                const chunk = {
-                    choices: [{
-                        index: 0,
-                        delta: deltaObj,
-                        finish_reason: finishReason
-                    }]
-                };
-                res.write(`data: ${JSON.stringify(chunk)}\n\n`);
-                if (typeof res.flush === "function") res.flush();
+                if (!res || res.writableEnded || res.destroyed) return;
+                try {
+                    const chunk = {
+                        choices: [{
+                            index: 0,
+                            delta: deltaObj,
+                            finish_reason: finishReason
+                        }]
+                    };
+                    res.write(`data: ${JSON.stringify(chunk)}\n\n`);
+                    if (typeof res.flush === "function") res.flush();
+                } catch (_) {}
             };
 
             if (req) {

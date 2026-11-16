@@ -100,13 +100,16 @@ async function executeSubagentLoop(subagentId, instruction, subagentType, genSta
         .map(name => getTool(name)?.schema)
         .filter(Boolean);
 
-    const messages = [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: instruction.trim() }
-    ];
+    let subSession = state.chatSessions[subagentId];
+    let messages = subSession?.messages;
+    if (!messages || messages.length === 0) {
+        messages = [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: instruction.trim() }
+        ];
+    }
 
     const cleanTitle = `${subagentType.charAt(0).toUpperCase() + subagentType.slice(1)}: ${instruction.trim().slice(0, 36)}${instruction.trim().length > 36 ? '…' : ''}`;
-    let subSession = state.chatSessions[subagentId];
     if (!subSession) {
         subSession = {
             id: subagentId,
@@ -123,10 +126,14 @@ async function executeSubagentLoop(subagentId, instruction, subagentType, genSta
             messages: messages
         };
         state.chatSessions[subagentId] = subSession;
-        saveStoredChats();
-        if (typeof document !== "undefined" && typeof document.dispatchEvent === "function") {
-            document.dispatchEvent(new CustomEvent("chatsUpdated"));
-        }
+    } else {
+        subSession.subagentStatus = "running";
+        subSession.updatedAt = Date.now();
+        subSession.messages = messages;
+    }
+    saveStoredChats();
+    if (typeof document !== "undefined" && typeof document.dispatchEvent === "function") {
+        document.dispatchEvent(new CustomEvent("chatsUpdated"));
     }
 
     const maxRounds = 6;
@@ -324,4 +331,37 @@ export async function runSubagent(instruction, subagentType = "designer", genSta
 
     // Synchronous execution (with automatic background detachment if main turn stops)
     return await executeSubagentLoop(subagentId, instruction, cleanType, genState, options);
+}
+
+/**
+ * Continues an existing subagent conversation with a new user message.
+ */
+export async function continueSubagentChat(subagentId, userMessage) {
+    const subSession = state.chatSessions[subagentId];
+    if (!subSession) throw new Error("Subagent session not found: " + subagentId);
+
+    subSession.messages = subSession.messages || [];
+    subSession.messages.push({ role: "user", content: userMessage.trim() });
+    subSession.subagentStatus = "running";
+    subSession.updatedAt = Date.now();
+    saveStoredChats();
+
+    const subagentEntry = {
+        id: subagentId,
+        type: subSession.subagentType || "designer",
+        task: userMessage.trim(),
+        parentChatId: subSession.parentChatId,
+        status: "running",
+        startTime: Date.now(),
+        rounds: 0,
+        background: false
+    };
+    activeSubagents.set(subagentId, subagentEntry);
+    notifySubagentsChange();
+
+    if (typeof document !== "undefined" && typeof document.dispatchEvent === "function") {
+        document.dispatchEvent(new CustomEvent("chatsUpdated"));
+    }
+
+    return await executeSubagentLoop(subagentId, userMessage, subSession.subagentType || "designer", null, { session: subSession });
 }

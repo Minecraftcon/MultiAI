@@ -29,7 +29,7 @@ export function getActiveMainChatId() {
  * Recovers any past subagents from the main conversation's messages
  * (e.g. from tool_calls to invoke_subagent or task) so past subagents are preserved.
  */
-function recoverPastSubagentsFromMainChat(mainChatId) {
+export function recoverPastSubagentsFromMainChat(mainChatId) {
     if (!mainChatId || !state.chatSessions[mainChatId]) return;
     const mainSession = state.chatSessions[mainChatId];
     const msgs = mainSession.messages || [];

@@ -45,12 +45,6 @@ import {
     initChatListListeners
 } from "./chat-history-list.js";
 
-import {
-    renderSubagentsList,
-    startFreshSubagentChat,
-    initSubagentsPanelListeners
-} from "./subagents-panel.js";
-
 import { ACTIVE_BUILD_PROJECT_KEY, ACTIVE_BUILD_CHAT_KEY, ACTIVE_CHAT_KEY } from "../config.js";
 
 // Re-export for seamless backward compatibility across the entire app
@@ -76,9 +70,7 @@ export {
     deleteChatSession,
     renameChatSession,
     showChatItemMenu,
-    hideChatItemMenu,
-    renderSubagentsList,
-    startFreshSubagentChat
+    hideChatItemMenu
 };
 
 let currentSearchFilter = "";
@@ -112,28 +104,23 @@ export function setPanelSearchMode(enabled) {
 }
 
 /**
- * Switches the side panel's visible tab between standard Chat history, Build Mode projects, and Subagents.
+ * Switches the side panel's visible tab between standard Chat history and Build Mode projects.
  */
 export function updateSidePanelView(mode = state.appMode) {
     const isBuild = mode === "build";
-    const isSubagents = mode === "subagents";
     const panelChatNav = document.getElementById("panelChatNav");
     const panelBuildNav = document.getElementById("panelBuildNav");
-    const panelSubagentsNav = document.getElementById("panelSubagentsNav");
     const panelSectionLabel = document.getElementById("panelSectionLabel");
     const panelSearchToggle = document.getElementById("panelSearchToggle");
     const panelAddProjectHeaderBtn = document.getElementById("panelAddProjectHeaderBtn");
     const chatList = document.getElementById("chatList");
     const projectList = document.getElementById("projectList");
-    const subagentList = document.getElementById("subagentList");
 
     if (panelChatNav) panelChatNav.style.display = (mode === "chat") ? "" : "none";
     if (panelBuildNav) panelBuildNav.style.display = isBuild ? "" : "none";
-    if (panelSubagentsNav) panelSubagentsNav.style.display = isSubagents ? "" : "none";
 
     if (panelSectionLabel) {
         if (isBuild) panelSectionLabel.textContent = "Projects";
-        else if (isSubagents) panelSectionLabel.textContent = "Subagents";
         else panelSectionLabel.textContent = "Chats";
     }
 
@@ -142,12 +129,9 @@ export function updateSidePanelView(mode = state.appMode) {
 
     if (chatList) chatList.style.display = (mode === "chat") ? "" : "none";
     if (projectList) projectList.style.display = isBuild ? "" : "none";
-    if (subagentList) subagentList.style.display = isSubagents ? "" : "none";
 
     if (isBuild) {
         renderProjectList(currentSearchFilter);
-    } else if (isSubagents) {
-        renderSubagentsList();
     } else {
         renderChatList(currentSearchFilter);
     }
@@ -237,23 +221,6 @@ export async function syncActiveModeConversation(mode = state.appMode) {
         state.messages = [{ role: "system", content: state.activeSystemPrompt }];
         setStartPageMode(true);
         updateSidePanelView("build");
-    } else if (mode === "subagents") {
-        const curSession = state.currentChatId ? state.chatSessions[state.currentChatId] : null;
-        if (curSession?.isSubagent) {
-            updateSidePanelView("subagents");
-            return;
-        }
-
-        const subagentSessions = Object.values(state.chatSessions).filter(s => s && s.isSubagent);
-        if (subagentSessions.length > 0) {
-            subagentSessions.sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
-            state.currentChatId = null;
-            await switchToChat(subagentSessions[0].id);
-            updateSidePanelView("subagents");
-            return;
-        }
-
-        updateSidePanelView("subagents");
     } else {
         const activeId = localStorage.getItem(ACTIVE_CHAT_KEY);
         if (activeId && state.chatSessions[activeId] && !state.chatSessions[activeId].projectId && state.chatSessions[activeId].mode !== "build") {
