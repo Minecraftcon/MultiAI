@@ -702,14 +702,67 @@ class OpenCodeProvider extends BaseProvider {
             await new Promise((resolve, reject) => {
                 let finished = false;
                 let overallTimeout = null;
+                let streamedContent = "";
+                let streamedReasoning = "";
 
-                const finishStream = (err) => {
+                const finishStream = async (err) => {
                     if (finished) return;
                     finished = true;
                     if (overallTimeout) clearTimeout(overallTimeout);
                     if (eventReq) {
                         try { eventReq.destroy(); } catch (_) {}
                     }
+
+                    if (!err && sessionId) {
+                        try {
+                            const msgRes = await fetch(`${service.url}/api/session/${sessionId}/message`, {
+                                headers: auth ? { Authorization: auth } : {},
+                                signal: AbortSignal.timeout(4000)
+                            });
+                            if (msgRes.ok) {
+                                const msgData = await msgRes.json();
+                                const items = msgData?.data || [];
+                                const assistantMsg = items.find(m => m.type === "assistant" && Array.isArray(m.content));
+                                if (assistantMsg) {
+                                    let fullText = "";
+                                    const toolCalls = [];
+                                    for (const part of assistantMsg.content) {
+                                        if (part.type === "text" && part.text) {
+                                            fullText += part.text;
+                                        } else if (part.type === "tool") {
+                                            toolCalls.push(mapOpenCodeSentinelToolCall(part));
+                                        }
+                                    }
+
+                                    if (fullText && fullText.length > streamedContent.length) {
+                                        const missing = fullText.slice(streamedContent.length);
+                                        writeDelta({ content: missing });
+                                        streamedContent = fullText;
+                                    }
+
+                                    if (toolCalls.length > 0) {
+                                        const mappedCalls = toolCalls.map((tc, idx) => ({
+                                            index: idx,
+                                            id: tc.id,
+                                            type: "function",
+                                            function: {
+                                                name: tc.function?.name || "",
+                                                arguments: tc.function?.arguments || "{}"
+                                            }
+                                        }));
+                                        writeDelta({ tool_calls: mappedCalls }, "tool_calls");
+                                    } else if (!streamedContent && streamedReasoning) {
+                                        writeDelta({ content: streamedReasoning });
+                                    }
+                                }
+                            }
+                        } catch (_) {}
+                    }
+
+                    writeDelta({}, "stop");
+                    res.write("data: [DONE]\n\n");
+                    res.end();
+
                     if (err) reject(err);
                     else resolve();
                 };
@@ -738,13 +791,12 @@ class OpenCodeProvider extends BaseProvider {
                                 if (evt.data?.sessionID !== sessionId) continue;
 
                                 if (evt.type === "session.reasoning.delta" && evt.data?.delta) {
+                                    streamedReasoning += evt.data.delta;
                                     writeDelta({ reasoning_content: evt.data.delta });
                                 } else if (evt.type === "session.text.delta" && evt.data?.delta) {
+                                    streamedContent += evt.data.delta;
                                     writeDelta({ content: evt.data.delta });
                                 } else if (evt.type === "session.execution.succeeded" || evt.type === "session.step.ended") {
-                                    writeDelta({}, "stop");
-                                    res.write("data: [DONE]\n\n");
-                                    res.end();
                                     finishStream();
                                 } else if (evt.type === "session.step.failed" || evt.type === "session.execution.failed") {
                                     const errMsg = evt.data?.error?.message || "Execution failed";
