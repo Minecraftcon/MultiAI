@@ -379,7 +379,7 @@ export async function switchToChat(id) {
         (chat && chat.querySelector(".message.user")) ||
         session.messages?.some(m => m.role === "user")
     );
-    setStartPageMode(!hasUserMsg);
+    setStartPageMode(!hasUserMsg && !session.isSubagent);
     if (session && session.isDeepSearch) {
         setDeepSearchActive(true);
     } else if (hasUserMsg) {

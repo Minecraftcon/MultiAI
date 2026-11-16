@@ -1881,9 +1881,301 @@ html.is-android .side-panel .panel-footer {
     background: rgba(239, 68, 68, 0.1);
 }
 
-.subagent-empty-hint {
+/* Subagents Bound Panel & Cards */
+.subagent-parent-context-bar {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px 10px;
+    margin-bottom: 10px;
+    background: var(--surface-2, rgba(255, 255, 255, 0.03));
+    border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+    border-radius: 8px;
+}
+
+.subagent-parent-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-tertiary, #888);
+}
+
+.subagent-back-to-main-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: transparent;
+    border: none;
+    color: var(--text-primary, #eee);
+    font-size: 12.5px;
+    font-weight: 500;
+    cursor: pointer;
+    padding: 0;
+    text-align: left;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    transition: color 0.15s ease;
+}
+
+.subagent-back-to-main-btn:hover {
+    color: var(--accent, #60a5fa);
+}
+
+.subagent-back-to-main-btn svg {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+}
+
+.subagent-section {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 12px;
+}
+
+.subagent-section-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary, #aaa);
+    padding: 2px 4px;
+}
+
+.subagent-running-pulse {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #34d399;
+    animation: subagentPulse 1.8s infinite;
+}
+
+@keyframes subagentPulse {
+    0% { transform: scale(0.9); opacity: 0.8; }
+    50% { transform: scale(1.3); opacity: 1; }
+    100% { transform: scale(0.9); opacity: 0.8; }
+}
+
+.subagent-bound-card {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 9px 11px;
+    border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+    border-radius: 8px;
+    background: var(--surface-1, rgba(255, 255, 255, 0.02));
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.subagent-bound-card:hover {
+    background: var(--surface-2, rgba(255, 255, 255, 0.05));
+    border-color: var(--border-hover, rgba(255, 255, 255, 0.15));
+}
+
+.subagent-bound-card.active {
+    background: var(--surface-2, rgba(255, 255, 255, 0.07));
+    border-color: var(--accent, #60a5fa);
+}
+
+.subagent-card-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.subagent-card-title-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.subagent-persona-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-primary, #ddd);
+}
+
+.subagent-persona-chip.designer {
+    background: rgba(147, 197, 253, 0.15);
+    color: #93c5fd;
+}
+
+.subagent-persona-chip.researcher {
+    background: rgba(167, 243, 208, 0.15);
+    color: #6ee7b7;
+}
+
+.subagent-persona-chip.auditor {
+    background: rgba(253, 230, 138, 0.15);
+    color: #fcd34d;
+}
+
+.subagent-persona-chip.tester {
+    background: rgba(244, 114, 182, 0.15);
+    color: #f472b6;
+}
+
+.subagent-status-tag {
+    font-size: 11px;
+    color: var(--text-tertiary, #888);
+}
+
+.subagent-status-tag.running {
+    color: #34d399;
+    font-weight: 500;
+}
+
+.subagent-item-del-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-tertiary, #888);
+    cursor: pointer;
+    padding: 3px;
+    border-radius: 4px;
+    opacity: 0;
+    transition: all 0.15s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.subagent-bound-card:hover .subagent-item-del-btn {
+    opacity: 0.7;
+}
+
+.subagent-item-del-btn:hover {
+    opacity: 1 !important;
+    color: var(--danger, #ef4444);
+    background: rgba(239, 68, 68, 0.1);
+}
+
+.subagent-item-del-btn svg {
+    width: 13px;
+    height: 13px;
+}
+
+.subagent-task-excerpt {
     font-size: 12px;
-    color: var(--text-tertiary);
-    font-style: italic;
-    padding: 6px 4px;
+    line-height: 1.4;
+    color: var(--text-secondary, #bbb);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.subagent-card-footer-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--text-tertiary, #777);
+    margin-top: 2px;
+}
+
+.subagent-action-hint {
+    color: var(--accent, #60a5fa);
+    opacity: 0;
+    transition: opacity 0.15s ease;
+}
+
+.subagent-bound-card:hover .subagent-action-hint {
+    opacity: 0.9;
+}
+
+.subagent-empty-hint {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 24px 12px;
+    font-size: 12px;
+    color: var(--text-tertiary, #888);
+    line-height: 1.5;
+}
+
+/* Chat view header when viewing subagent */
+.subagent-chat-view-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 14px;
+    margin-bottom: 12px;
+    background: var(--surface-2, rgba(255, 255, 255, 0.04));
+    border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+    border-radius: 8px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    backdrop-filter: blur(8px);
+}
+
+.subagent-back-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: transparent;
+    border: none;
+    color: var(--text-primary, #ddd);
+    font-size: 13px;
+    cursor: pointer;
+    padding: 4px 6px;
+    border-radius: 6px;
+    transition: all 0.15s ease;
+}
+
+.subagent-back-btn:hover {
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--accent, #60a5fa);
+}
+
+.subagent-back-btn svg {
+    width: 15px;
+    height: 15px;
+}
+
+.subagent-header-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.subagent-empty-chat-hint {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    margin: 40px auto 20px auto;
+    max-width: 480px;
+    padding: 24px 20px;
+    border: 1px dashed var(--border, rgba(255, 255, 255, 0.1));
+    border-radius: 8px;
+    background: var(--surface-1, rgba(255, 255, 255, 0.02));
+}
+
+.subagent-empty-chat-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary, #ddd);
+    margin-bottom: 6px;
+}
+
+.subagent-empty-chat-sub {
+    font-size: 12.5px;
+    color: var(--text-tertiary, #888);
+    line-height: 1.5;
 }

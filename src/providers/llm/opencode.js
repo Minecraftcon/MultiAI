@@ -75,6 +75,21 @@ function mapOpenCodeSentinelToolCall(tc) {
 
     const id = tc.id || ("call_" + Math.random().toString(36).substring(2, 9));
 
+    if (name === "subagent" || name === "agent" || name === "invoke_subagent" || name === "task") {
+        const subType = args.subagent_type || (args.agent && args.agent !== "general" ? args.agent : "designer");
+        const subTask = args.task || args.prompt || args.description || args.instruction || "";
+        return {
+            id,
+            type: "function",
+            function: {
+                name: "invoke_subagent",
+                arguments: JSON.stringify({
+                    task: subTask,
+                    subagent_type: subType
+                })
+            }
+        };
+    }
     if (name === "todowrite" || name === "write_todos") {
         return { id, type: "function", function: { name: "write_todos", arguments: JSON.stringify(args) } };
     }
@@ -796,7 +811,7 @@ class OpenCodeProvider extends BaseProvider {
                                 } else if (evt.type === "session.text.delta" && evt.data?.delta) {
                                     streamedContent += evt.data.delta;
                                     writeDelta({ content: evt.data.delta });
-                                } else if (evt.type === "session.execution.succeeded" || evt.type === "session.step.ended") {
+                                } else if (evt.type === "session.execution.succeeded") {
                                     finishStream();
                                 } else if (evt.type === "session.step.failed" || evt.type === "session.execution.failed") {
                                     const errMsg = evt.data?.error?.message || "Execution failed";
@@ -998,8 +1013,19 @@ class OpenCodeProvider extends BaseProvider {
                             writeDelta({ reasoning_content: parsed.part.text });
                         } else if (parsed.type === "text" && parsed.part?.text) {
                             writeDelta({ content: parsed.part.text });
-                        } else if (parsed.type === "step_finish") {
-                            writeDelta({}, parsed.part?.reason || "stop");
+                        } else if (parsed.type === "tool_use" && parsed.part) {
+                            const tc = mapOpenCodeSentinelToolCall(parsed.part);
+                            writeDelta({
+                                tool_calls: [{
+                                    index: 0,
+                                    id: tc.id,
+                                    type: "function",
+                                    function: {
+                                        name: tc.function?.name || "",
+                                        arguments: tc.function?.arguments || "{}"
+                                    }
+                                }]
+                            }, "tool_calls");
                         }
                     } catch (_) {}
                 }

@@ -127,6 +127,7 @@ export async function runAgent(userText, currentAIMessage, chatId, images = [], 
     } catch (_) {}
 
     const selectedModel = session.model || (modelSelect ? modelSelect.value : "gemini-2.5-flash");
+    const effectiveProvider = session.provider || (modelSelect?.value === selectedModel ? modelSelect?.selectedOptions?.[0]?.dataset?.provider : undefined);
     let overallStartTime = Date.now();
     let hasRunTools = false;
     let emptyRetryUsed = false;
@@ -245,6 +246,7 @@ export async function runAgent(userText, currentAIMessage, chatId, images = [], 
                 const isStreamingEnabled = state.config?.Agent?.StreamResponse !== false;
                 response = await callChatModel(workingMessages, {
                     model: selectedModel,
+                    provider: effectiveProvider,
                     tools: activeTools,
                     signal: genState?.abortController?.signal,
                     system_server: currentSystemServer,
@@ -317,6 +319,7 @@ export async function runAgent(userText, currentAIMessage, chatId, images = [], 
                             const isStreamingEnabledRetry = state.config?.Agent?.StreamResponse !== false;
                             response = await callChatModel(workingMessagesRetry, {
                                 model: selectedModel,
+                                provider: effectiveProvider,
                                 tools: activeTools,
                                 signal: genState?.abortController?.signal,
                                 onChunk: isStreamingEnabledRetry ? (chunk, accumulated) => {

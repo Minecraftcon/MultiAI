@@ -5,6 +5,8 @@ import { callChatModel } from "./chat-client.js";
 import { sanitizeMessage } from "./sanitizer.js";
 import { getTool, executeTool } from "../tools/index.js";
 import { extractText } from "../utils/dom.js";
+import { state } from "../state/index.js";
+import { saveStoredChats } from "../services/storage.js";
 
 export const SUBAGENT_PERSONAS = {
     "designer": "You are an expert UI/UX and web designer subagent. You design, create, style, and iterate on interfaces, HTML/CSS, modern responsive layouts, web components, and visual prototypes. You inspect existing code, write clean modern styling, and use show_html_preview to render live previews directly in the user's browser pane.",
@@ -80,8 +82,11 @@ function notifySubagentsChange() {
  */
 async function executeSubagentLoop(subagentId, instruction, subagentType, genState, options = {}) {
     const persona = SUBAGENT_PERSONAS[subagentType] || SUBAGENT_PERSONAS["general-purpose"];
-    const subagentModel = options?.model;
-    const subagentProvider = options?.provider;
+    const modelSelect = typeof document !== "undefined" ? document.getElementById("modelSelect") : null;
+    const parentChatId = options?.parentChatId || genState?.chatId || state.currentChatId || null;
+    const parentSession = parentChatId ? state.chatSessions[parentChatId] : null;
+    const subagentModel = options?.model || parentSession?.model || modelSelect?.value || "gemini-2.5-flash";
+    const subagentProvider = options?.provider || parentSession?.provider || modelSelect?.selectedOptions?.[0]?.dataset?.provider || null;
 
     const systemPrompt = `${persona}\n\n[SUBAGENT GUIDELINES]:
 1. You run in an isolated execution loop with access to specialized tools for your persona.
@@ -99,6 +104,30 @@ async function executeSubagentLoop(subagentId, instruction, subagentType, genSta
         { role: "system", content: systemPrompt },
         { role: "user", content: instruction.trim() }
     ];
+
+    const cleanTitle = `${subagentType.charAt(0).toUpperCase() + subagentType.slice(1)}: ${instruction.trim().slice(0, 36)}${instruction.trim().length > 36 ? '…' : ''}`;
+    let subSession = state.chatSessions[subagentId];
+    if (!subSession) {
+        subSession = {
+            id: subagentId,
+            title: cleanTitle,
+            isSubagent: true,
+            subagentType: subagentType,
+            subagentStatus: "running",
+            parentChatId: parentChatId,
+            task: instruction.trim(),
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+            model: subagentModel,
+            provider: subagentProvider,
+            messages: messages
+        };
+        state.chatSessions[subagentId] = subSession;
+        saveStoredChats();
+        if (typeof document !== "undefined" && typeof document.dispatchEvent === "function") {
+            document.dispatchEvent(new CustomEvent("chatsUpdated"));
+        }
+    }
 
     const maxRounds = 6;
     let rounds = 0;
@@ -145,6 +174,14 @@ async function executeSubagentLoop(subagentId, instruction, subagentType, genSta
 
             const assistantMsg = sanitizeMessage(rawAssistant);
             messages.push(assistantMsg);
+            if (subSession) {
+                subSession.updatedAt = Date.now();
+                subSession.rounds = rounds;
+                saveStoredChats();
+                if (typeof document !== "undefined" && typeof document.dispatchEvent === "function") {
+            document.dispatchEvent(new CustomEvent("chatsUpdated"));
+        }
+            }
 
             const toolCalls = assistantMsg.tool_calls || [];
             if (toolCalls.length === 0) {
@@ -190,6 +227,13 @@ async function executeSubagentLoop(subagentId, instruction, subagentType, genSta
                     name,
                     content
                 });
+                if (subSession) {
+                    subSession.updatedAt = Date.now();
+                    saveStoredChats();
+                    if (typeof document !== "undefined" && typeof document.dispatchEvent === "function") {
+            document.dispatchEvent(new CustomEvent("chatsUpdated"));
+        }
+                }
             }
         }
 
@@ -205,6 +249,16 @@ async function executeSubagentLoop(subagentId, instruction, subagentType, genSta
     } finally {
         activeSubagents.delete(subagentId);
         notifySubagentsChange();
+
+        if (subSession) {
+            subSession.subagentStatus = "completed";
+            subSession.updatedAt = Date.now();
+            subSession.rounds = rounds;
+            saveStoredChats();
+            if (typeof document !== "undefined" && typeof document.dispatchEvent === "function") {
+            document.dispatchEvent(new CustomEvent("chatsUpdated"));
+        }
+        }
 
         // Update badge if provided
         if (options?.badgeEl) {
