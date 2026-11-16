@@ -127,7 +127,7 @@ export async function runAgent(userText, currentAIMessage, chatId, images = [], 
     } catch (_) {}
 
     const selectedModel = session.model || (modelSelect ? modelSelect.value : "gemini-2.5-flash");
-    const overallStartTime = Date.now();
+    let overallStartTime = Date.now();
     let hasRunTools = false;
     let emptyRetryUsed = false;
     let emptyAfterToolsRetries = 0;
@@ -659,12 +659,21 @@ export async function runAgent(userText, currentAIMessage, chatId, images = [], 
                     }
                 }
 
+                const isInteractivePrompt = (toolName === "ask_question" || toolName === "ask_questions");
+                if (isInteractivePrompt) {
+                    stageStatus = "Waiting for your input";
+                }
+                const pauseStart = Date.now();
+
                 try {
                     if (!result) {
                         result = await executeTool(toolName, args, badgeEl, genState);
                     } else {
                         onToolStart(toolName, args, badgeEl);
                         onToolComplete(toolName, args, badgeEl, result);
+                    }
+                    if (isInteractivePrompt) {
+                        overallStartTime += (Date.now() - pauseStart);
                     }
                     if (result && (result.detached || result.status === "scheduled_detached")) {
                         detachedStatusMessage = result.status_message || detachedStatusMessage || (args.status_message || args.message || args.messege);

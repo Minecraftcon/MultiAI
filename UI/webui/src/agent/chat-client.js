@@ -151,6 +151,42 @@ export async function callChatModel(messages, { model, tools, signal, onChunk, o
     // Stream when onChunk callback is provided
     const shouldStream = Boolean(onChunk);
 
+    let accumulatedContent = "";
+    let accumulatedReasoning = "";
+    const toolCallsMap = {};
+    let buffer = "";
+
+    // Client-side Dead Man's Watchdog (Stall Detection)
+    const initialTimeoutMs = Number(state.config?.Agent?.StreamInitialTimeoutMs) || 45000;
+    const stallTimeoutMs = Number(state.config?.Agent?.StreamStallTimeoutMs) || 20000;
+    let isStalled = false;
+
+    const armWatchdog = (timeoutMs) => {
+        if (watchdogTimer) clearTimeout(watchdogTimer);
+        watchdogTimer = setTimeout(() => {
+            isStalled = true;
+            logEvent("STREAM_STALL_WATCHDOG_TRIGGERED", {
+                model: effectiveModel,
+                timeoutMs,
+                receivedContentLength: accumulatedContent.length,
+                receivedReasoningLength: accumulatedReasoning.length
+            });
+            try {
+                if (currentReader) {
+                    currentReader.cancel("Stream stalled: no data received within timeout window").catch(() => {});
+                }
+            } catch (_) {}
+            try {
+                const stallReason = new Error("Stream connection stalled");
+                stallReason.isStall = true;
+                streamController.abort(stallReason);
+            } catch (_) {}
+        }, timeoutMs);
+    };
+
+    // Arm watchdog immediately so stalls before HTTP headers arrive are intercepted
+    armWatchdog(initialTimeoutMs);
+
     let res;
     try {
         res = await fetch("/api/chat", {
@@ -167,13 +203,22 @@ export async function callChatModel(messages, { model, tools, signal, onChunk, o
             signal: streamController.signal
         });
     } catch (netErr) {
+        disarmWatchdog();
         if (activeSignal) {
             activeSignal.removeEventListener("abort", onParentAbort);
         }
-        if (activeSignal?.aborted || (netErr.name === "AbortError" && !streamController.signal.reason?.isStall)) {
+        if (activeSignal?.aborted || (netErr.name === "AbortError" && !isStalled && !streamController.signal.reason?.isStall)) {
             const err = new Error("Generation stopped by user");
             err.name = "AbortError";
             throw err;
+        }
+        if (isStalled || streamController.signal.reason?.isStall) {
+            throw new StreamStallError("Stream connection stalled: initial response timed out before headers arrived.", {
+                partialText: "",
+                partialContent: "",
+                accumulatedReasoning: "",
+                toolCalls: []
+            });
         }
         const err = new Error("Network connection failed or backend server unreachable.");
         err.statusCode = 0;
@@ -182,6 +227,7 @@ export async function callChatModel(messages, { model, tools, signal, onChunk, o
 
     // Intercept ANY HTTP status code other than 200 OK (e.g. 429, 400, 401, 403, 404, 500, 502, 503)
     if (!res.ok) {
+        disarmWatchdog();
         if (activeSignal) {
             activeSignal.removeEventListener("abort", onParentAbort);
         }
@@ -199,45 +245,6 @@ export async function callChatModel(messages, { model, tools, signal, onChunk, o
         const reader = res.body.getReader();
         currentReader = reader;
         const decoder = new TextDecoder("utf-8");
-        let accumulatedContent = "";
-        let accumulatedReasoning = "";
-        const toolCallsMap = {};
-        let buffer = "";
-
-        // Client-side Dead Man's Watchdog (Stall Detection)
-        const initialTimeoutMs = Number(state.config?.Agent?.StreamInitialTimeoutMs) || 45000;
-        const stallTimeoutMs = Number(state.config?.Agent?.StreamStallTimeoutMs) || 20000;
-        let isStalled = false;
-
-        const armWatchdog = (timeoutMs) => {
-            if (watchdogTimer) clearTimeout(watchdogTimer);
-            watchdogTimer = setTimeout(() => {
-                isStalled = true;
-                logEvent("STREAM_STALL_WATCHDOG_TRIGGERED", {
-                    model: effectiveModel,
-                    timeoutMs,
-                    receivedContentLength: accumulatedContent.length,
-                    receivedReasoningLength: accumulatedReasoning.length
-                });
-                try {
-                    reader.cancel("Stream stalled: no data received within timeout window").catch(() => {});
-                } catch (_) {}
-                try {
-                    const stallReason = new Error("Stream connection stalled");
-                    stallReason.isStall = true;
-                    streamController.abort(stallReason);
-                } catch (_) {}
-            }, timeoutMs);
-        };
-
-        const disarmWatchdog = () => {
-            if (watchdogTimer) {
-                clearTimeout(watchdogTimer);
-                watchdogTimer = null;
-            }
-        };
-
-        armWatchdog(initialTimeoutMs);
 
         try {
             while (true) {
