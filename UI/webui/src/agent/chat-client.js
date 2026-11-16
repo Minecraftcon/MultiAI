@@ -158,7 +158,7 @@ export async function callChatModel(messages, { model, provider: explicitProvide
 
     // Client-side Dead Man's Watchdog (Stall Detection)
     const initialTimeoutMs = Number(state.config?.Agent?.StreamInitialTimeoutMs) || 45000;
-    const stallTimeoutMs = Number(state.config?.Agent?.StreamStallTimeoutMs) || 20000;
+    const stallTimeoutMs = Number(state.config?.Agent?.StreamStallTimeoutMs) || 45000;
     let isStalled = false;
 
     const armWatchdog = (timeoutMs) => {

@@ -572,6 +572,9 @@ class OpenCodeProvider extends BaseProvider {
             const deadline = Date.now() + timeoutMs;
             let assistantMsg = null;
             let errorMsg = null;
+            let fullContent = "";
+            let fullReasoning = "";
+            const toolCalls = [];
 
             while (Date.now() < deadline) {
                 if (options.signal?.aborted) throw new Error("Client cancelled request");
@@ -593,9 +596,22 @@ class OpenCodeProvider extends BaseProvider {
                     break;
                 }
 
-                const found = items.find(m => m.type === "assistant" && m.time?.completed);
-                if (found) {
-                    assistantMsg = found;
+                const assistantMsgs = items.filter(m => m.type === "assistant" && Array.isArray(m.content));
+                const lastMsg = assistantMsgs[assistantMsgs.length - 1];
+                const hasTool = assistantMsgs.some(m => m.content?.some(p => p.type === "tool"));
+                if (lastMsg && (lastMsg.time?.completed || hasTool || items.some(m => m.type === "idle"))) {
+                    assistantMsg = lastMsg;
+                    for (const asst of assistantMsgs) {
+                        for (const part of (asst.content || [])) {
+                            if (part.type === "reasoning" && part.text) {
+                                fullReasoning += (fullReasoning ? "\n" : "") + part.text;
+                            } else if (part.type === "text" && part.text) {
+                                fullContent += (fullContent ? "\n\n" : "") + part.text;
+                            } else if (part.type === "tool") {
+                                toolCalls.push(mapOpenCodeSentinelToolCall(part));
+                            }
+                        }
+                    }
                     break;
                 }
             }
@@ -605,20 +621,6 @@ class OpenCodeProvider extends BaseProvider {
             }
             if (!assistantMsg) {
                 return { ok: false, status: 504, error: "OpenCode daemon turn timed out" };
-            }
-
-            let fullContent = "";
-            let fullReasoning = "";
-            const toolCalls = [];
-
-            for (const part of (assistantMsg.content || [])) {
-                if (part.type === "reasoning" && part.text) {
-                    fullReasoning += part.text;
-                } else if (part.type === "text" && part.text) {
-                    fullContent += part.text;
-                } else if (part.type === "tool") {
-                    toolCalls.push(mapOpenCodeSentinelToolCall(part));
-                }
             }
 
             if (!fullContent && fullReasoning) {
@@ -720,9 +722,19 @@ class OpenCodeProvider extends BaseProvider {
                 let streamedContent = "";
                 let streamedReasoning = "";
 
+                const keepaliveInterval = setInterval(() => {
+                    if (!finished && res && !res.writableEnded) {
+                        try {
+                            res.write(": keepalive\n\n");
+                            if (typeof res.flush === "function") res.flush();
+                        } catch (_) {}
+                    }
+                }, 2500);
+
                 const finishStream = async (err) => {
                     if (finished) return;
                     finished = true;
+                    clearInterval(keepaliveInterval);
                     if (overallTimeout) clearTimeout(overallTimeout);
                     if (eventReq) {
                         try { eventReq.destroy(); } catch (_) {}
@@ -737,38 +749,38 @@ class OpenCodeProvider extends BaseProvider {
                             if (msgRes.ok) {
                                 const msgData = await msgRes.json();
                                 const items = msgData?.data || [];
-                                const assistantMsg = items.find(m => m.type === "assistant" && Array.isArray(m.content));
-                                if (assistantMsg) {
-                                    let fullText = "";
-                                    const toolCalls = [];
-                                    for (const part of assistantMsg.content) {
+                                const assistantMsgs = items.filter(m => m.type === "assistant" && Array.isArray(m.content));
+                                let fullText = "";
+                                const toolCalls = [];
+                                for (const asst of assistantMsgs) {
+                                    for (const part of asst.content) {
                                         if (part.type === "text" && part.text) {
-                                            fullText += part.text;
+                                            fullText += (fullText ? "\n\n" : "") + part.text;
                                         } else if (part.type === "tool") {
                                             toolCalls.push(mapOpenCodeSentinelToolCall(part));
                                         }
                                     }
+                                }
 
-                                    if (fullText && fullText.length > streamedContent.length) {
-                                        const missing = fullText.slice(streamedContent.length);
-                                        writeDelta({ content: missing });
-                                        streamedContent = fullText;
-                                    }
+                                if (fullText && fullText.length > streamedContent.length) {
+                                    const missing = fullText.slice(streamedContent.length);
+                                    writeDelta({ content: missing });
+                                    streamedContent = fullText;
+                                }
 
-                                    if (toolCalls.length > 0) {
-                                        const mappedCalls = toolCalls.map((tc, idx) => ({
-                                            index: idx,
-                                            id: tc.id,
-                                            type: "function",
-                                            function: {
-                                                name: tc.function?.name || "",
-                                                arguments: tc.function?.arguments || "{}"
-                                            }
-                                        }));
-                                        writeDelta({ tool_calls: mappedCalls }, "tool_calls");
-                                    } else if (!streamedContent && streamedReasoning) {
-                                        writeDelta({ content: streamedReasoning });
-                                    }
+                                if (toolCalls.length > 0) {
+                                    const mappedCalls = toolCalls.map((tc, idx) => ({
+                                        index: idx,
+                                        id: tc.id,
+                                        type: "function",
+                                        function: {
+                                            name: tc.function?.name || "",
+                                            arguments: tc.function?.arguments || "{}"
+                                        }
+                                    }));
+                                    writeDelta({ tool_calls: mappedCalls }, "tool_calls");
+                                } else if (!streamedContent && streamedReasoning) {
+                                    writeDelta({ content: streamedReasoning });
                                 }
                             }
                         } catch (_) {}
@@ -811,8 +823,32 @@ class OpenCodeProvider extends BaseProvider {
                                 } else if (evt.type === "session.text.delta" && evt.data?.delta) {
                                     streamedContent += evt.data.delta;
                                     writeDelta({ content: evt.data.delta });
-                                } else if (evt.type === "session.execution.succeeded") {
+                                } else if (evt.type === "session.tool.called" && evt.data) {
+                                    const rawTool = evt.data;
+                                    const mapped = mapOpenCodeSentinelToolCall({
+                                        id: rawTool.id,
+                                        name: rawTool.name || rawTool.tool || "invoke_subagent",
+                                        input: rawTool.input
+                                    });
+                                    writeDelta({
+                                        tool_calls: [{
+                                            index: 0,
+                                            id: mapped.id,
+                                            type: "function",
+                                            function: {
+                                                name: mapped.function?.name || "",
+                                                arguments: mapped.function?.arguments || "{}"
+                                            }
+                                        }]
+                                    }, "tool_calls");
                                     finishStream();
+                                    return;
+                                } else if ((evt.type === "session.text.ended" || evt.type === "session.step.ended") && streamedContent) {
+                                    finishStream();
+                                    return;
+                                } else if (evt.type === "session.execution.succeeded" || evt.type === "session.idle") {
+                                    finishStream();
+                                    return;
                                 } else if (evt.type === "session.step.failed" || evt.type === "session.execution.failed") {
                                     const errMsg = evt.data?.error?.message || "Execution failed";
                                     writeDelta({ content: `\n[OpenCode error: ${errMsg}]` }, "stop");
