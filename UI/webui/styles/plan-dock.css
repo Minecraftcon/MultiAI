@@ -1220,3 +1220,39 @@ svg.plan-lucide-spin,
     color: var(--text-primary);
     background: var(--hover-3, rgba(255, 255, 255, 0.14));
 }
+
+/* =========================================================
+   SUBAGENTS RUNNING INDICATOR (GREY UNDER/IN-PLACE OF CHANGES)
+   ========================================================= */
+.dock-subagents-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 3px 6px;
+    font-size: 11.5px;
+    color: var(--text-tertiary, #888888);
+    user-select: none;
+    line-height: 1.2;
+}
+
+.dock-subagents-indicator.under-changes {
+    margin-top: 4px;
+    padding-left: 2px;
+}
+
+.dock-subagents-text {
+    color: var(--text-tertiary, #888888);
+    font-size: 11.5px;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+}
+
+.dock-subagents-standalone-bar {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    padding: 2px 4px;
+}

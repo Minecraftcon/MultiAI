@@ -96,6 +96,7 @@ export function getToolBadgeConfig(toolName, args = {}) {
     let detailHtml = null;
     let diffStatsHtml = "";
     let isCommandTask = false;
+    let isSubagent = false;
 
     if (toolName === "web_search") {
         const isFetch = String(args.type || "").toLowerCase() === "fetch" || /^https?:\/\//i.test(args.query || "");
@@ -273,12 +274,13 @@ export function getToolBadgeConfig(toolName, args = {}) {
         const inProgText = inProg ? ` • In progress: ${inProg.content}` : (todos.length > 0 && completed === todos.length ? " • All completed" : "");
         detail = `${completed}/${todos.length} completed${inProgText}`;
         isCommandTask = true;
-    } else if (toolName === "task") {
+    } else if (toolName === "task" || toolName === "invoke_subagent") {
         icon = "bot";
-        const subType = args.subagent_type || "general-purpose";
+        const subType = args.subagent_type || args.type || "designer";
         label = `Subagent [${subType}]`;
-        detail = args.instruction || "subagent task";
+        detail = args.task || args.instruction || args.prompt || "subagent task";
         isCommandTask = true;
+        isSubagent = true;
     } else if (toolName === "ask_question" || toolName === "ask_questions") {
         icon = "help-circle";
         label = "Asked question";
@@ -317,8 +319,10 @@ export function getToolBadgeConfig(toolName, args = {}) {
             return `${sym} ${t.content}`;
         }).join("\n");
         displayCmd = `PLAN (${completed}/${todos.length} completed):\n${items}`;
-    } else if (toolName === "task") {
-        displayCmd = `SUBAGENT [${args.subagent_type || "general-purpose"}]:\n${args.instruction || ""}`;
+    } else if (toolName === "task" || toolName === "invoke_subagent") {
+        const subType = args.subagent_type || args.type || "designer";
+        const taskText = args.task || args.instruction || args.prompt || "";
+        displayCmd = `SUBAGENT [${subType}]:\n${taskText}`;
     } else if (toolName === "ask_question" || toolName === "ask_questions") {
         const qList = Array.isArray(args.questions) ? args.questions : (args.question ? [args] : []);
         displayCmd = qList.map((q, idx) => {
@@ -376,6 +380,7 @@ export function getToolBadgeConfig(toolName, args = {}) {
         hasRing,
         isArtifact,
         isRunTaskWithTitle,
+        isSubagent,
         displayCmd,
         compactCmd,
         isCmdMulti,
@@ -413,6 +418,7 @@ export function addToolBadge(element, toolName, args) {
         hasRing,
         isArtifact,
         isRunTaskWithTitle,
+        isSubagent,
         displayCmd,
         compactCmd,
         isCmdMulti,
@@ -488,7 +494,14 @@ export function addToolBadge(element, toolName, args) {
                 <circle class="timer-ring-bar" cx="18" cy="18" r="17.25" transform="rotate(-90 18 18)" />
             </svg>
             ` : ''}
-            <i data-lucide="${icon}" aria-hidden="true"></i>
+            ${isSubagent ? `
+            <div class="subagent-spinner-dots" aria-hidden="true">
+                <span class="subagent-spinner-dot"></span>
+                <span class="subagent-spinner-dot"></span>
+                <span class="subagent-spinner-dot"></span>
+                <span class="subagent-spinner-dot"></span>
+            </div>
+            ` : `<i data-lucide="${icon}" aria-hidden="true"></i>`}
         </div>
         <div>
             <span class="search-label">${isFileEditTool ? "Editing" : label}</span>

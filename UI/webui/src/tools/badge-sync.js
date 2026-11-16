@@ -484,12 +484,22 @@ export function onToolComplete(name, args, badgeEl, data, options = {}) {
         }
     }
 
-    if (name === "task" && data) {
+    if ((name === "task" || name === "invoke_subagent") && data) {
+        const iconCircle = badgeEl.querySelector(".search-icon-circle");
+        if (iconCircle) {
+            iconCircle.innerHTML = `<i data-lucide="bot" aria-hidden="true"></i>`;
+            renderIcons(iconCircle);
+        }
         const labelEl = badgeEl.querySelector(".search-label");
         const queryEl = badgeEl.querySelector(".search-query");
-        if (labelEl) labelEl.textContent = `Subagent [${data.subagent_type || args.subagent_type || "task"}]`;
+        const subType = data.subagent_type || args.subagent_type || args.type || "designer";
+        if (labelEl) labelEl.textContent = `Subagent [${subType}]`;
         if (queryEl) {
-            queryEl.textContent = `Completed (${data.rounds || 1} round${data.rounds === 1 ? '' : 's'})`;
+            if (data.background || data.status === "running") {
+                queryEl.textContent = "Running in background...";
+            } else {
+                queryEl.textContent = `Completed (${data.rounds || 1} round${data.rounds === 1 ? '' : 's'})`;
+            }
         }
     }
 
@@ -630,8 +640,11 @@ export function onToolComplete(name, args, badgeEl, data, options = {}) {
             let outText = "";
             const isRunning = data.running === true || data.status === "running" || data.status === "in_progress";
             const isLarge = data.is_large_output || (data.stdout && data.stdout.split("\n").length > 150);
-            if (name === "task") {
-                outText = `[Subagent: ${data.subagent_type || args.subagent_type || "general-purpose"}] (${data.rounds || 1} rounds)\nInstruction: ${args.instruction || ""}\n\nReport:\n${data.report || "(No report provided)"}`;
+            if (name === "task" || name === "invoke_subagent") {
+                const subType = data.subagent_type || args.subagent_type || args.type || "designer";
+                const taskText = args.task || args.instruction || args.prompt || "";
+                const repText = data.report || (data.status === "running" ? "Subagent running in background..." : "(No report provided)");
+                outText = `[Subagent: ${subType}] (${data.rounds || 1} rounds)\nTask: ${taskText}\n\nReport:\n${repText}`;
             } else if (name === "run_task" || name === "run_command") {
                 const rawOutput = data.truncated_lines || data.stdout || "";
                 outText = `id: ${data.task_id || args.task_id || args.task_name || "task"}\n`;

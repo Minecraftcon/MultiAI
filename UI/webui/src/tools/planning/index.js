@@ -165,9 +165,61 @@ export const askQuestionTool = {
     handler: askQuestionsTool.handler
 };
 
+/**
+ * Spawns an isolated subagent (e.g. designer, researcher, auditor, tester)
+ * with a specialized toolset without cluttering the main conversation context.
+ */
+export const invokeSubagentTool = {
+    name: "invoke_subagent",
+    schema: {
+        type: "function",
+        function: {
+            name: "invoke_subagent",
+            description: "Spawn an isolated subagent with dedicated persona tools (e.g. 'designer' for UI/UX, styling, HTML/CSS, and live browser previews; 'researcher', 'auditor', 'tester', or 'general-purpose') to execute a task without cluttering the main conversation context. Can run synchronously or in the background.",
+            parameters: {
+                type: "object",
+                properties: {
+                    task: {
+                        type: "string",
+                        description: "Clear, specific description of the objective or design task for the subagent to execute."
+                    },
+                    subagent_type: {
+                        type: "string",
+                        enum: ["designer", "general-purpose", "researcher", "auditor", "tester"],
+                        description: "Specialized subagent persona: 'designer' (for UI/UX, web design, HTML/CSS, layout, live preview in browser panel), 'general-purpose', 'researcher', 'auditor', or 'tester'."
+                    },
+                    background: {
+                        type: "boolean",
+                        description: "Set to true to launch the subagent asynchronously in the background so the main model can finish or continue immediately."
+                    }
+                },
+                required: ["task"]
+            }
+        }
+    },
+    handler: async (args, { badgeEl, genState }) => {
+        const task = args?.task || args?.instruction || args?.prompt || "";
+        const subagentType = args?.subagent_type || args?.type || "designer";
+        const isBackground = args?.background === true;
+        const { runSubagent } = await import("../../agent/subagent.js");
+        return await runSubagent(task, subagentType, genState, { background: isBackground, badgeEl, args });
+    }
+};
+
+/**
+ * Convenience alias for invoke_subagent so calls to 'task' resolve directly.
+ */
+export const taskTool = {
+    name: "task",
+    schema: null, // Omit duplicate schema in LLM prompt
+    handler: invokeSubagentTool.handler
+};
+
 export const planningTools = [
     writeTodosTool,
     askQuestionsTool,
-    askQuestionTool
+    askQuestionTool,
+    invokeSubagentTool,
+    taskTool
 ];
 

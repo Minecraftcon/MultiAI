@@ -49,7 +49,7 @@ TASK PLANNING, DUAL-TRACK ARCHITECTURE & SUBAGENTS:
 - ask_questions: Ask clarifying questions to the user with an interactive multiple-choice prompt. Execution pauses until the user answers or skips.
   * Single question: ask_questions(question: "Which styling approach?", options: ["Tailwind CSS", "Vanilla CSS", "CSS Modules"])
   * Multiple questions: ask_questions(questions: [{question: "...", options: [...]}, {question: "...", options: [...]}])
-- Subagents: task(instruction: "...", subagent_type: "general-purpose"|"researcher"|"auditor"|"tester").
+- Subagents: invoke_subagent(task: "...", subagent_type: "designer"|"general-purpose"|"researcher"|"auditor"|"tester", background: false). (Alias 'task' is supported). For UI, web design, HTML/CSS styling, or live browser preview tasks (or when the user runs /render), invoke the 'designer' subagent to keep your main conversation context lightweight. The Designer subagent has dedicated tools to inspect, code, and live-preview in the browser panel.
 COMPOSITE STORAGE & FILE ARCHIVAL ($SCRATCH & $ARTIFACTS):
 - Ephemeral Scratchpad ($SCRATCH): For one-off test scripts, scratch notes, temporary data, working outputs, or benchmarks, write them using '$SCRATCH/<filename>'.
 - Persistent Artifacts ($ARTIFACTS): For milestone archives, architectural design docs, compaction snapshots, or permanent state briefs, write them using '$ARTIFACTS/<filename>'.

@@ -129,13 +129,23 @@ export function renderSkillPills() {
     }
 }
 
+const BUILTIN_SLASH_COMMANDS = [
+    {
+        id: "render",
+        name: "/render",
+        description: "Launch Designer subagent to create, style, and preview UI in live browser panel",
+        source: "command"
+    }
+];
+
 /**
  * Get filtered skills based on search query.
  */
 function getFilteredSkills(query = "") {
     const q = query.trim().toLowerCase();
-    if (!q) return allSkills;
-    return allSkills.filter(s => {
+    const combined = [...BUILTIN_SLASH_COMMANDS, ...allSkills];
+    if (!q) return combined;
+    return combined.filter(s => {
         const nameMatch = (s.name || "").toLowerCase().includes(q) || (s.id || "").toLowerCase().includes(q);
         const descMatch = (s.description || "").toLowerCase().includes(q);
         return nameMatch || descMatch;
@@ -358,6 +368,25 @@ let isSelectingSkill = false;
  */
 export function chooseSkill(skill) {
     if (!skill) return;
+
+    if (skill.source === "command") {
+        isSelectingSkill = true;
+        closeSkillsMenu();
+        const input = document.getElementById("input");
+        if (input) {
+            const val = input.value || "";
+            input.value = val.replace(/(?:^|\s)\/[a-zA-Z0-9_-]*$/, `$1${skill.name} `);
+            input.focus();
+            if (typeof input.setSelectionRange === "function") {
+                input.setSelectionRange(input.value.length, input.value.length);
+            }
+            input.dispatchEvent(new Event("input", { bubbles: true }));
+        }
+        setTimeout(() => {
+            isSelectingSkill = false;
+        }, 120);
+        return;
+    }
 
     isSelectingSkill = true;
     closeSkillsMenu();

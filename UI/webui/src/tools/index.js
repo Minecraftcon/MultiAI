@@ -9,14 +9,16 @@ import { webTools } from "./web/index.js";
 import { mediaTools } from "./media/index.js";
 import { filesystemTools } from "./filesystem/index.js";
 import { planningTools } from "./planning/index.js";
+import { designTools } from "./design/index.js";
 import { McpActiveTools } from "./mcp/index.js";
 
-// Register terminal, web, media, filesystem, and planning tools
+// Register terminal, web, media, filesystem, planning, and design tools
 terminalTools.forEach(registerTool);
 webTools.forEach(registerTool);
 mediaTools.forEach(registerTool);
 filesystemTools.forEach(registerTool);
 planningTools.forEach(registerTool);
+designTools.forEach(registerTool);
 
 /**
  * Array of all tool schemas provided to LLM chat requests.

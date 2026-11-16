@@ -229,6 +229,14 @@ export async function send() {
         // Build multimodal payload or doc-augmented text
         let promptText = cleanPromptText(cleanText || rawText);
 
+        const isRenderCommand = /^\/render(?:\s+|$)/i.test((rawText || "").trim());
+        if (isRenderCommand) {
+            const userPrompt = (rawText || "").trim().replace(/^\/render\s*/i, "").trim();
+            const renderTask = userPrompt || "Design a modern, minimalist interface prototype with clean responsive layout and live preview";
+            const renderInstruction = `[RENDER COMMAND]: Launch the Designer subagent immediately using invoke_subagent(task: "${renderTask.replace(/"/g, '\\"')}", subagent_type: "designer") to inspect, create, style, and preview the requested interface live in the workspace browser panel.`;
+            promptText = userPrompt ? `${renderInstruction}\n\nUser Design Request: ${userPrompt}` : renderInstruction;
+        }
+
         if (docs.length > 0) {
             const docContexts = docs.map(d => {
                 if (d.textContent) {

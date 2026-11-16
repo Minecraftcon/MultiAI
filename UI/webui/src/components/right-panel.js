@@ -42,6 +42,24 @@ function getFileBadgeInfo(fileName = "") {
     }
 }
 
+function safeGetStorage(key, fallback = null) {
+    try {
+        if (typeof localStorage !== "undefined") {
+            const val = localStorage.getItem(key);
+            return val !== null ? val : fallback;
+        }
+    } catch (_) {}
+    return fallback;
+}
+
+function safeSetStorage(key, val) {
+    try {
+        if (typeof localStorage !== "undefined") {
+            localStorage.setItem(key, String(val));
+        }
+    } catch (_) {}
+}
+
 class RightPanelManager {
     constructor() {
         this.isOpen = false;
@@ -51,11 +69,13 @@ class RightPanelManager {
         this.isResizing = false;
         this.justFinishedResizing = false;
         this.width = 500;
-        const savedSplit = parseFloat(localStorage.getItem("multiai_search_split_percent") || "52");
+        const savedSplit = parseFloat(safeGetStorage("multiai_search_split_percent", "52"));
         this.searchSplitPercent = (!isNaN(savedSplit) && savedSplit >= 15 && savedSplit <= 85) ? savedSplit : 52;
-        const savedViewerSidebarW = parseInt(localStorage.getItem("multiai_viewer_sidebar_width") || "240", 10);
+        const savedViewerSidebarW = parseInt(safeGetStorage("multiai_viewer_sidebar_width", "240"), 10);
         this.viewerSidebarWidth = (!isNaN(savedViewerSidebarW) && savedViewerSidebarW >= 140 && savedViewerSidebarW <= 500) ? savedViewerSidebarW : 240;
-        document.documentElement.style.setProperty("--viewer-sidebar-width", `${this.viewerSidebarWidth}px`);
+        if (typeof document !== "undefined" && document.documentElement) {
+            document.documentElement.style.setProperty("--viewer-sidebar-width", `${this.viewerSidebarWidth}px`);
+        }
         this.viewerSidebarScrollTop = 0;
         this.launcherTreeScrollTop = 0;
         this.launcherDetailsScrollTop = 0;
@@ -65,8 +85,8 @@ class RightPanelManager {
         this.showAllTasks = false;
         this.lastActiveTasks = [];
         this.lastCompletedTasks = [];
-        const isMobileDevice = typeof window !== "undefined" && (window.innerWidth <= 768 || document.documentElement.classList.contains("is-android"));
-        this.isSidebarOpen = isMobileDevice ? false : (localStorage.getItem("multiai_right_panel_sidebar") !== "0");
+        const isMobileDevice = typeof window !== "undefined" && typeof document !== "undefined" && (window.innerWidth <= 768 || document.documentElement?.classList?.contains("is-android"));
+        this.isSidebarOpen = isMobileDevice ? false : (safeGetStorage("multiai_right_panel_sidebar", "1") !== "0");
         this.hideWhitespace = false;
 
         // Elements cache
@@ -157,10 +177,12 @@ class RightPanelManager {
         this.browserOpenExternalBtn = document.getElementById("browserOpenExternalBtn");
 
         // Load persisted width
-        const savedW = parseInt(localStorage.getItem("multiai_right_panel_width") || "500", 10);
+        const savedW = parseInt(safeGetStorage("multiai_right_panel_width", "500"), 10);
         if (!isNaN(savedW) && savedW >= 320 && savedW <= 1200) {
             this.width = savedW;
-            document.documentElement.style.setProperty("--right-panel-width", `${this.width}px`);
+            if (typeof document !== "undefined" && document.documentElement) {
+                document.documentElement.style.setProperty("--right-panel-width", `${this.width}px`);
+            }
         }
 
         renderIcons(this.panelEl);
@@ -1916,7 +1938,43 @@ class RightPanelManager {
         this.switchTab(tabId);
     }
 
+    openHtmlPreview(html, title = "HTML Preview") {
+        const cleanTitle = title || "HTML Preview";
+        const tabId = `preview_${Date.now()}`;
+        const existingIdx = this.tabs.findIndex(t => t.id?.startsWith("preview_") || t.title === cleanTitle);
+        const tabObj = {
+            id: existingIdx !== -1 ? this.tabs[existingIdx].id : tabId,
+            type: "browser",
+            title: cleanTitle,
+            url: "about:srcdoc",
+            html: html
+        };
+
+        if (existingIdx !== -1) {
+            this.tabs[existingIdx] = tabObj;
+        } else {
+            this.tabs.push(tabObj);
+        }
+
+        this.open();
+        this.switchTab(tabObj.id);
+        if (this.browserIframe) {
+            this.browserIframe.removeAttribute("data-src");
+            this.browserIframe.srcdoc = html;
+        }
+    }
+
     renderBrowserTab(tab) {
+        if (tab.html) {
+            if (this.browserUrlInput) this.browserUrlInput.value = tab.title || "HTML Preview";
+            if (this.browserIframe) {
+                this.browserIframe.removeAttribute("data-src");
+                this.browserIframe.srcdoc = tab.html;
+            }
+            renderIcons(this.browserMountEl);
+            return;
+        }
+
         if (this.browserUrlInput) this.browserUrlInput.value = tab.url;
         const targetSrc = this.resolveIframeSrc(tab.url);
         if (this.browserIframe && this.browserIframe.getAttribute("data-src") !== targetSrc) {
