@@ -38,20 +38,20 @@ export class StreamDroppedError extends Error {
  * @param {Array<Object>} options.tools
  * @returns {Promise<Object>}
  */
-export async function callChatModel(messages, { model, tools, signal, onChunk, onToolChunk, system_server } = {}) {
-    let effectiveModel = model;
+export async function callChatModel(messages, { model, provider: explicitProvider, tools, signal, onChunk, onToolChunk, system_server } = {}) {
+    const modelSelect = typeof document !== "undefined" ? document.getElementById("modelSelect") : null;
+    const selectedOption = modelSelect?.selectedOptions?.[0];
+    const currentSession = (state.currentChatId && state.chatSessions[state.currentChatId]) ? state.chatSessions[state.currentChatId] : null;
+
+    let effectiveModel = model || currentSession?.model || modelSelect?.value || "gemini-2.5-flash";
     if (effectiveModel === "dots-3-note-preview:free") {
         effectiveModel = "dots-studio/dots-3-note-preview:free";
     }
 
-    const modelSelect = typeof document !== "undefined" ? document.getElementById("modelSelect") : null;
-    const selectedOption = modelSelect?.selectedOptions?.[0];
-    const providerFromSelect = (selectedOption && selectedOption.value === model) ? selectedOption.dataset.provider : null;
-    const currentSession = (state.currentChatId && state.chatSessions[state.currentChatId]) ? state.chatSessions[state.currentChatId] : null;
-
-    const mappedProvider = modelProviderMap[model] || modelProviderMap[effectiveModel];
-    const provider = providerFromSelect || currentSession?.provider || mappedProvider || (
-        (typeof model === "string" && (model.startsWith("claude-") || model.startsWith("gpt-") || model.startsWith("deepseek-"))) ? "puter" : null
+    const providerFromSelect = (selectedOption && (selectedOption.value === effectiveModel || !model)) ? selectedOption.dataset.provider : null;
+    const mappedProvider = modelProviderMap[effectiveModel];
+    const provider = explicitProvider || providerFromSelect || currentSession?.provider || mappedProvider || (
+        (typeof effectiveModel === "string" && (effectiveModel.startsWith("claude-") || effectiveModel.startsWith("gpt-") || effectiveModel.startsWith("deepseek-"))) ? "puter" : null
     );
 
     let rawCleaned = Array.isArray(messages) ? messages.map(sanitizeMessage).filter(Boolean) : [];
@@ -193,7 +193,7 @@ export async function callChatModel(messages, { model, tools, signal, onChunk, o
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-                model,
+                model: effectiveModel,
                 provider,
                 messages: cleanedMessages,
                 tools,

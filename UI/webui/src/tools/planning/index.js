@@ -201,8 +201,14 @@ export const invokeSubagentTool = {
         const task = args?.task || args?.instruction || args?.prompt || "";
         const subagentType = args?.subagent_type || args?.type || "designer";
         const isBackground = args?.background === true;
+        const chatId = genState?.chatId || state.currentChatId;
+        const session = chatId ? state.chatSessions?.[chatId] : null;
+        const modelSelect = typeof document !== "undefined" ? document.getElementById("modelSelect") : null;
+        const model = session?.model || modelSelect?.value || null;
+        const provider = session?.provider || modelSelect?.selectedOptions?.[0]?.dataset?.provider || null;
+
         const { runSubagent } = await import("../../agent/subagent.js");
-        return await runSubagent(task, subagentType, genState, { background: isBackground, badgeEl, args });
+        return await runSubagent(task, subagentType, genState, { background: isBackground, badgeEl, args, model, provider });
     }
 };
 

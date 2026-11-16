@@ -312,9 +312,15 @@ export function renderTurn(turn, session, compactionRef, isLastTurn) {
             }
         }
 
-        const turnFiles = extractTurnFilesChanged(turn, finalAssistantMsg);
-        if (turnFiles && turnFiles.length > 0) {
-            renderFilesChangedBar(aiDiv, turnFiles, finalAssistantMsg);
+        // Only render files changed review bar if the turn is finished (not actively generating)
+        const isChatGenerating = Boolean(session?.id ? state.activeGenerations[session.id]?.isGenerating : state.activeGenerations[state.currentChatId]?.isGenerating);
+        const isTurnInProgress = isLastTurn && isChatGenerating;
+
+        if (!isTurnInProgress) {
+            const turnFiles = extractTurnFilesChanged(turn, finalAssistantMsg);
+            if (turnFiles && turnFiles.length > 0) {
+                renderFilesChangedBar(aiDiv, turnFiles, finalAssistantMsg);
+            }
         }
 
         if (searchContainer && searchContainer.children.length > 0) {

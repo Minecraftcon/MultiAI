@@ -80,11 +80,15 @@ function notifySubagentsChange() {
  */
 async function executeSubagentLoop(subagentId, instruction, subagentType, genState, options = {}) {
     const persona = SUBAGENT_PERSONAS[subagentType] || SUBAGENT_PERSONAS["general-purpose"];
+    const subagentModel = options?.model;
+    const subagentProvider = options?.provider;
+
     const systemPrompt = `${persona}\n\n[SUBAGENT GUIDELINES]:
 1. You run in an isolated execution loop with access to specialized tools for your persona.
-2. Fulfill the user's instruction directly, cleanly, and systematically.
-3. If designing or creating an interface, write the code and call show_html_preview to render it live for the user.
-4. Conclude with a clear, structured summary report of your findings, results, or actions taken.`;
+2. Fulfill the instruction directly, cleanly, and systematically.
+3. If designing or creating an interface, write the code using write_file and call show_html_preview to render it live for the user.
+4. EXECUTION MANDATE: You are an autonomous execution agent. You MUST call tools (e.g. read_file, write_file, show_html_preview, run_task) to perform the requested actions. NEVER output text merely acknowledging or describing the prompt without executing the appropriate tool calls.
+5. Conclude with a clear, structured summary report of your findings, results, or actions taken.`;
 
     const allowedToolNames = SUBAGENT_ALLOWED_TOOLS[subagentType] || SUBAGENT_ALLOWED_TOOLS["general-purpose"];
     const subagentTools = allowedToolNames
@@ -123,6 +127,8 @@ async function executeSubagentLoop(subagentId, instruction, subagentType, genSta
                 // When detached, do not pass parent abort signal so background completion succeeds
                 const signal = isDetached ? null : genState?.abortController?.signal;
                 response = await callChatModel(messages, {
+                    model: subagentModel,
+                    provider: subagentProvider,
                     tools: subagentTools,
                     signal
                 });
@@ -143,6 +149,14 @@ async function executeSubagentLoop(subagentId, instruction, subagentType, genSta
             const toolCalls = assistantMsg.tool_calls || [];
             if (toolCalls.length === 0) {
                 const reportText = (assistantMsg.content || extractText(response) || "").trim();
+                const needsAction = /create|write|read|design|render|inspect|build|save/i.test(instruction);
+                if (rounds === 1 && needsAction && maxRounds > 1) {
+                    messages.push({
+                        role: "user",
+                        content: "Please execute the appropriate tool calls (e.g. write_file, read_file, show_html_preview, run_task) now to perform this work rather than only describing it."
+                    });
+                    continue;
+                }
                 const finalResult = {
                     status: "completed",
                     subagent_id: subagentId,
