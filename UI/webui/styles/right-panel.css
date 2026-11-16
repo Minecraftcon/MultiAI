@@ -1178,61 +1178,82 @@ body.right-panel-resizing #rightPanel {
     gap: 12px;
 }
 
-.subagent-panel-composer {
-    display: flex;
-    align-items: flex-end;
-    gap: 8px;
-    padding: 8px 12px;
-    border-top: 1px solid var(--border);
+/* Subagent Chatbox Dock (Shared from Main Agent Chatbox) */
+.subagent-composer-container {
+    padding: 10px 12px 14px;
     background: var(--surface);
+    border-top: 1px solid var(--border);
     flex-shrink: 0;
+    box-sizing: border-box;
+    width: 100%;
 }
 
-.subagent-composer-input {
-    flex: 1;
+.subagent-composer-container .rp-subagent-chatbox {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box;
+    border-radius: 18px;
+    padding: 6px 10px;
+    background: var(--input-bg, var(--bg-primary));
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
     border: 1px solid var(--border);
-    border-radius: 6px;
-    background: var(--bg-primary);
+    position: relative;
+    z-index: 10;
+}
+
+.subagent-composer-container .rp-subagent-chatbox:focus-within {
+    border-color: var(--border-strong, rgba(255, 255, 255, 0.3));
+}
+
+.subagent-composer-container .composer-textarea {
+    font-size: 13px;
+    line-height: 1.45;
+    min-height: 24px;
+    max-height: 160px;
+    padding: 4px 6px;
     color: var(--text-primary);
-    padding: 7px 10px;
-    font-size: 12.5px;
-    font-family: inherit;
-    resize: none;
-    max-height: 120px;
-    outline: none;
-    line-height: 1.4;
+    box-sizing: border-box;
+    width: 100%;
 }
 
-.subagent-composer-input:focus {
-    border-color: var(--text-secondary);
-}
-
-.subagent-composer-send-btn {
-    width: 32px;
-    height: 32px;
-    border-radius: 6px;
-    background: #111111;
-    color: #ffffff;
-    border: none;
-    cursor: pointer;
+.subagent-composer-container .composer-toolbar {
+    margin-top: 4px;
+    padding-top: 2px;
     display: flex;
     align-items: center;
-    justify-content: center;
+    justify-content: space-between;
+    width: 100%;
+    box-sizing: border-box;
+    gap: 6px;
+}
+
+.subagent-composer-container .composer-toolbar-left {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+}
+
+.subagent-composer-container .chatbox-model-btn {
+    max-width: 150px;
+    min-width: 0;
+    flex-shrink: 1;
+}
+
+.subagent-composer-container .model-picker-name {
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.subagent-composer-container .composer-toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 6px;
     flex-shrink: 0;
-    transition: background 0.1s ease, transform 0.05s ease;
-}
-
-.subagent-composer-send-btn:hover {
-    background: #282828;
-}
-
-.subagent-composer-send-btn:active {
-    transform: scale(0.96);
-}
-
-.subagent-composer-send-btn i {
-    width: 14px;
-    height: 14px;
 }
 
 /* Background Tasks Section */
