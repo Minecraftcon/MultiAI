@@ -1355,7 +1355,23 @@ export function addThoughtTrace(element, text) {
     item.innerHTML = parseMarkdown(commentary);
     wrapTablesForScroll(item);
 
-    searchContainer.appendChild(item);
+    // If streaming tool badges were created during this round before thought trace was finalized,
+    // ensure pre-tool reasoning / commentary is inserted BEFORE the tool badges of this round.
+    let insertRef = null;
+    if (element._streamingToolBadges && element._streamingToolBadges.size > 0) {
+        for (const badge of element._streamingToolBadges.values()) {
+            if (badge && badge.parentNode === searchContainer) {
+                insertRef = badge;
+                break;
+            }
+        }
+    }
+
+    if (insertRef) {
+        searchContainer.insertBefore(item, insertRef);
+    } else {
+        searchContainer.appendChild(item);
+    }
     requestScrollToBottom(chat);
     return item;
 }
