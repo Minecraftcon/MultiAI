@@ -150,11 +150,11 @@ export function extractChatTitleAndContent(rawText) {
     } catch (e) {}
 
     // 2. Try regex match for JSON snippet: {"chatname": "..."}
-    const jsonMatch = trimmed.match(/(?:```(?:json)?\s*)?(\{[\s\S]*?["\x27]chatname["\x27]\s*:\s*["\x27][^"\x27]+["\x27][\s\S]*?\})(?:\s*```)?/i);
+    const jsonMatch = trimmed.match(/(?:```(?:json)?\s*)?(\{[\s\S]*?["\x27](?:chatname|chat_name|chatName|title)["\x27]\s*:\s*["\x27][^"\x27]+["\x27][\s\S]*?\})(?:\s*```)?/i);
     if (jsonMatch) {
         try {
             const parsed = JSON.parse(jsonMatch[1]);
-            const title = parsed.chatname || parsed.chat_name || parsed.chatName;
+            const title = parsed.chatname || parsed.chat_name || parsed.chatName || parsed.title;
             if (title && typeof title === "string") {
                 let cleanContent = trimmed.replaceAll(jsonMatch[0], "").trim();
                 if (!cleanContent && (parsed.reply || parsed.response || parsed.content)) {
@@ -166,7 +166,7 @@ export function extractChatTitleAndContent(rawText) {
                 };
             }
         } catch (e) {
-            const titleMatch = jsonMatch[1].match(/["\x27]chatname["\x27]\s*:\s*["\x27]([^"\x27]+)["\x27]/i);
+            const titleMatch = jsonMatch[1].match(/["\x27](?:chatname|chat_name|chatName|title)["\x27]\s*:\s*["\x27]([^"\x27]+)["\x27]/i);
             if (titleMatch) {
                 let cleanContent = trimmed.replaceAll(jsonMatch[0], "").trim();
                 return {
@@ -178,5 +178,24 @@ export function extractChatTitleAndContent(rawText) {
     }
 
     return { title: null, content: rawText };
+}
+
+/**
+ * Hides in-flight unclosed chat title JSON while streaming.
+ *
+ * @param {string} rawText
+ * @returns {string}
+ */
+export function stripInFlightChatTitle(rawText) {
+    if (!rawText || typeof rawText !== "string") return rawText;
+    const partialMatch = rawText.match(/^\s*(?:```(?:json)?\s*)?\{[\s\S]*?["\x27](?:chatname|chat_name|chatName|title)["\x27][^}]*$/i);
+    if (partialMatch) {
+        return "";
+    }
+    const minimalStart = rawText.match(/^\s*(?:```(?:json)?\s*)?\{\s*(?:["\x27](?:c|ch|cha|chat|chatn|chatna|chatnam|chatname|title)?)?$/i);
+    if (minimalStart) {
+        return "";
+    }
+    return rawText;
 }
 

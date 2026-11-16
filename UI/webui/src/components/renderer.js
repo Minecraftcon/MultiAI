@@ -1,7 +1,7 @@
 /* =========================================================
    MARKDOWN, CODE, SYNTAX HIGHLIGHTING & MERMAID RENDERER
    ========================================================= */
-import { escapeHTML } from "../utils/dom.js";
+import { escapeHTML, extractChatTitleAndContent, stripInFlightChatTitle } from "../utils/dom.js";
 import { renderIcons } from "../utils/icons.js";
 import { renderDiffCardHtml, bindDiffViewerCards } from "./diff-viewer.js";
 
@@ -399,10 +399,25 @@ export function extractFollowups(text) {
     return { cleanText: cleanText.trimEnd(), followups };
 }
 
+function filterTitleFromContent(content) {
+    if (!content) return { content: "", title: null };
+    const extracted = extractChatTitleAndContent(content);
+    if (extracted.title) {
+        return {
+            content: extracted.content,
+            title: extracted.title
+        };
+    }
+    return {
+        content: stripInFlightChatTitle(extracted.content),
+        title: null
+    };
+}
+
 export function extractThoughtAndContent(text) {
     let raw = text || "";
     if (!raw.trim()) {
-        return { thoughtHtml: "", content: "", duration: "", followups: [] };
+        return { thoughtHtml: "", content: "", title: null, duration: "", followups: [] };
     }
 
     const { cleanText, followups } = extractFollowups(raw);
@@ -429,9 +444,11 @@ export function extractThoughtAndContent(text) {
     }
     if (thoughts.length > 0) {
         const cleanContent = raw.replace(thoughtBoxRegex, "").trim();
+        const filtered = filterTitleFromContent(cleanContent);
         return {
             thoughtHtml: thoughts.join("\n\n"),
-            content: cleanContent,
+            content: filtered.content,
+            title: filtered.title,
             duration,
             followups
         };
@@ -449,9 +466,11 @@ export function extractThoughtAndContent(text) {
     if (thinkMatches.length > 0) {
         const html = formatThoughtHtml(thinkMatches.join("\n\n"), duration);
         if (html) {
+            const filtered = filterTitleFromContent(raw.trim());
             return {
                 thoughtHtml: html,
-                content: raw.trim(),
+                content: filtered.content,
+                title: filtered.title,
                 duration,
                 followups
             };
@@ -472,18 +491,22 @@ export function extractThoughtAndContent(text) {
     if (detailsMatches.length > 0) {
         const html = formatThoughtHtml(detailsMatches.join("\n\n"), duration);
         if (html) {
+            const filtered = filterTitleFromContent(raw.trim());
             return {
                 thoughtHtml: html,
-                content: raw.trim(),
+                content: filtered.content,
+                title: filtered.title,
                 duration,
                 followups
             };
         }
     }
 
+    const filtered = filterTitleFromContent(raw.trim());
     return {
         thoughtHtml: "",
-        content: raw.trim(),
+        content: filtered.content,
+        title: filtered.title,
         duration: "",
         followups
     };

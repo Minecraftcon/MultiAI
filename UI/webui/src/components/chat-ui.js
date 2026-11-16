@@ -1,13 +1,14 @@
 /* =========================================================
    CHAT UI, BADGES, STREAM UPDATER & ACCORDIONS
    ========================================================= */
-import { escapeHTML, wrapTablesForScroll } from "../utils/dom.js";
+import { escapeHTML, wrapTablesForScroll, extractChatTitleAndContent } from "../utils/dom.js";
 import { renderIcons } from "../utils/icons.js";
 import { logEvent } from "../utils/logger.js";
 import { state } from "../state.js";
 import { chatbox } from "./chatbox.js";
 import { parseMarkdown, extractThoughtAndContent, bindInteractiveCodeBlocks, renderMermaidInElement, renderMath, bindAIImageCards } from "./renderer.js";
-import { saveCurrentChatState } from "../services/storage.js";
+import { saveCurrentChatState, saveStoredChats } from "../services/storage.js";
+import { renderChatList } from "./side-panel.js";
 import { onToolComplete } from "../tools/badge-sync.js";
 import { isAndroidOrMobile } from "./aurora-theme.js";
 import {
@@ -700,10 +701,28 @@ export function updateAIStream(element, fullText, isDone, startTime, hasTools) {
         return Promise.resolve();
     }
 
-    const { thoughtHtml, content, followups: extractedFollowups } = extractThoughtAndContent(answerText);
+    const { thoughtHtml, content, title: extractedTitle, followups: extractedFollowups } = extractThoughtAndContent(answerText);
     const followups = extractedFollowups || [];
     element.dataset.rawText = content ? content.trim() : answerText;
     const sanitizedThought = thoughtHtml || "";
+
+    if (extractedTitle) {
+        element.dataset.streamedTitle = extractedTitle;
+        if (state.currentChatId && state.chatSessions[state.currentChatId]) {
+            const session = state.chatSessions[state.currentChatId];
+            const firstUserMsg = session.messages && session.messages.find(m => m.role === "user");
+            const firstUserText = (firstUserMsg && typeof firstUserMsg.content === "string") ? firstUserMsg.content.trim() : "";
+            const isDefaultTitle = !session.title || session.title === "New Chat" || session.title === "Conversation" || session.title.startsWith(firstUserText.slice(0, 30));
+            if (isDefaultTitle) {
+                const newTitle = extractedTitle.slice(0, 36);
+                if (session.title !== newTitle) {
+                    session.title = newTitle;
+                    saveStoredChats();
+                    renderChatList();
+                }
+            }
+        }
+    }
 
     const isStreamingEnabled = state.config?.Agent?.StreamResponse !== false;
     let streamer = activeStreamers.get(element);
@@ -950,16 +969,36 @@ export function finalizeStopped(element, startTime, hasTools) {
     }
     finalizeFileEditBadges(element);
 
-    const targetContent = hasTools ? finalContent : (preContent || finalContent);
-    if (targetContent) {
-        const text = targetContent.innerHTML.trim();
-        if (!text) {
-            targetContent.innerHTML = "<em>(Generation stopped)</em>";
-        } else {
-            targetContent.innerHTML += "<p><em>(Generation stopped)</em></p>";
+    // Apply any streamed title to session if available
+    const titleToUse = element.dataset.streamedTitle || extractChatTitleAndContent(element.dataset.rawText || "").title;
+    if (titleToUse && state.currentChatId && state.chatSessions[state.currentChatId]) {
+        const session = state.chatSessions[state.currentChatId];
+        const firstUserMsg = session.messages && session.messages.find(m => m.role === "user");
+        const firstUserText = (firstUserMsg && typeof firstUserMsg.content === "string") ? firstUserMsg.content.trim() : "";
+        const isDefaultTitle = !session.title || session.title === "New Chat" || session.title === "Conversation" || session.title.startsWith(firstUserText.slice(0, 30));
+        if (isDefaultTitle) {
+            session.title = titleToUse.slice(0, 36);
+            saveStoredChats();
+            renderChatList();
         }
     }
-    element.dataset.rawText = (targetContent?.innerText || targetContent?.textContent || "").trim();
+
+    // Always append (Generation stopped) to finalContent, never inside preContent reasoning
+    if (finalContent) {
+        // Strip any residual chatname JSON if present
+        const text = finalContent.innerHTML.trim();
+        const extracted = extractChatTitleAndContent(text);
+        if (extracted.title) {
+            finalContent.innerHTML = extracted.content;
+        }
+        const updatedText = finalContent.innerHTML.trim();
+        if (!updatedText) {
+            finalContent.innerHTML = "<em>(Generation stopped)</em>";
+        } else {
+            finalContent.innerHTML += "<p><em>(Generation stopped)</em></p>";
+        }
+        element.dataset.rawText = (finalContent.innerText || finalContent.textContent || "").trim();
+    }
     requestScrollToBottom(chat);
 }
 

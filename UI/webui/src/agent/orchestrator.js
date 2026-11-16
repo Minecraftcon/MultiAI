@@ -261,6 +261,20 @@ export async function runAgent(userText, currentAIMessage, chatId, images = [], 
             } catch (err) {
                 if (genState.abortRequested || err.name === "AbortError" || err.message === "Generation stopped by user") {
                     finalizeStopped(currentAIMessage, overallStartTime, hasRunTools);
+                    const partialText = currentAIMessage?.dataset?.rawText || "";
+                    if (partialText && session) {
+                        const existingLast = session.messages[session.messages.length - 1];
+                        if (existingLast && existingLast.role === "assistant") {
+                            existingLast.content = partialText;
+                        } else {
+                            session.messages.push({
+                                role: "assistant",
+                                content: partialText
+                            });
+                        }
+                        state.messages = session.messages;
+                        saveStoredChats();
+                    }
                     return;
                 }
                 // Emergency context compaction if upstream model rejects due to genuine context window limits
@@ -332,17 +346,18 @@ export async function runAgent(userText, currentAIMessage, chatId, images = [], 
             if (roundText) {
                 const extractedTitle = extractChatTitleAndContent(roundText);
                 if (extractedTitle.title) {
-                    const isDefaultTitle = !session.title || session.title === "New Chat" || session.title === "Conversation" || session.title === (userText || "").trim().slice(0, 34);
+                    const firstUserMsg = session.messages && session.messages.find(m => m.role === "user");
+                    const firstUserText = (firstUserMsg && typeof firstUserMsg.content === "string") ? firstUserMsg.content.trim() : (userText || "").trim();
+                    const isDefaultTitle = !session.title || session.title === "New Chat" || session.title === "Conversation" || session.title.startsWith(firstUserText.slice(0, 30));
                     if (isDefaultTitle) {
                         session.title = extractedTitle.title.slice(0, 36);
-                        saveStoredChats();
-                        renderChatList();
                     }
                     roundText = extractedTitle.content;
-                    assistantMessage.content = roundText;
-                    state.messages = session.messages;
-                    saveStoredChats();
                 }
+                assistantMessage.content = roundText;
+                state.messages = session.messages;
+                saveStoredChats();
+                renderChatList();
             }
 
             logEvent("ROUND_COMPLETE", {
