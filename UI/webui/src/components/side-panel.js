@@ -277,7 +277,6 @@ export function initSidePanel() {
     // Initialize sub-component event listeners
     initBuildProjectsListeners();
     initChatListListeners();
-    initSubagentsPanelListeners();
 
     // 1. New Chat
     if (newChatButton) {

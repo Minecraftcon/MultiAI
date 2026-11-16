@@ -121,7 +121,7 @@
 .mode-pill {
     position: relative;
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-columns: 1fr 1fr;
     width: 100%;
     background: var(--surface-2);
     border: 1px solid var(--border);
@@ -139,7 +139,7 @@
     top: 3px;
     left: 3px;
     bottom: 3px;
-    width: calc(33.333% - 2px);
+    width: calc(50% - 3px);
     background: linear-gradient(180deg, var(--surface-3) 0%, rgba(42, 42, 44, 0.95) 100%);
     border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 9999px;
@@ -165,10 +165,6 @@
     transform: translateX(100%);
 }
 
-[data-app-mode="subagents"] .mode-pill-thumb {
-    transform: translateX(200%);
-}
-
 /* Micro-squish physics when clicking or holding pill */
 .mode-pill:active .mode-pill-thumb {
     transform: scaleX(0.96) scaleY(0.95);
@@ -176,10 +172,6 @@
 
 [data-app-mode="build"] .mode-pill:active .mode-pill-thumb {
     transform: translateX(100%) scaleX(0.96) scaleY(0.95);
-}
-
-[data-app-mode="subagents"] .mode-pill:active .mode-pill-thumb {
-    transform: translateX(200%) scaleX(0.96) scaleY(0.95);
 }
 
 .mode-pill-item {
