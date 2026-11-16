@@ -6,7 +6,7 @@ import { sanitizeMessage } from "./sanitizer.js";
 import { getTool, executeTool } from "../tools/index.js";
 import { extractText } from "../utils/dom.js";
 import { state } from "../state/index.js";
-import { saveStoredChats } from "../services/storage.js";
+import { saveStoredChats, persistChatToDisk } from "../services/storage.js";
 
 export const SUBAGENT_PERSONAS = {
     "designer": "You are an expert UI/UX and web designer subagent. You design, create, style, and iterate on interfaces, HTML/CSS, modern responsive layouts, web components, and visual prototypes. You inspect existing code, write clean modern styling, and use show_html_preview to render live previews directly in the user's browser pane.",
@@ -262,6 +262,7 @@ async function executeSubagentLoop(subagentId, instruction, subagentType, genSta
             subSession.updatedAt = Date.now();
             subSession.rounds = rounds;
             saveStoredChats();
+            persistChatToDisk(subSession);
             if (typeof document !== "undefined" && typeof document.dispatchEvent === "function") {
             document.dispatchEvent(new CustomEvent("chatsUpdated"));
         }

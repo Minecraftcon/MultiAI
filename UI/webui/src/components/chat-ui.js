@@ -354,7 +354,8 @@ export function renderSessionMessages(session, chat) {
     if (!chat || !session) return;
     chat.innerHTML = "";
 
-    if (session.isSubagent && session.parentChatId) {
+    const isInRightPanel = chat.id === "rpSubagentMessagesList" || (typeof chat.closest === "function" && chat.closest("#rightPanel"));
+    if (session.isSubagent && session.parentChatId && !isInRightPanel) {
         const parentSession = state.chatSessions ? state.chatSessions[session.parentChatId] : null;
         const parentTitle = parentSession?.title || "Main Conversation";
         const prettyType = (session.subagentType || "subagent").charAt(0).toUpperCase() + (session.subagentType || "subagent").slice(1);

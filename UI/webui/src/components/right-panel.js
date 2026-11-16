@@ -8,7 +8,7 @@ import { renderDiffCardHtml, renderCodeViewerCardHtml, bindDiffViewerCards, getL
 import { terminalDrawer } from "./terminal-drawer.js";
 import { closePanel, getIsPanelOpen } from "./gestures.js";
 import { state } from "../state/index.js";
-import { saveStoredChats } from "../services/storage.js";
+import { saveStoredChats, persistChatToDisk } from "../services/storage.js";
 import { switchToChat } from "./chat-history-list.js";
 import { renderSessionMessages, createAIMessageShell, finalizeStopped } from "./chat-ui.js";
 import { runAgent } from "../agent/orchestrator.js";
@@ -3390,6 +3390,7 @@ class RightPanelManager {
                 subSession.subagentStatus = "completed";
                 subSession.updatedAt = Date.now();
                 saveStoredChats();
+                persistChatToDisk(subSession);
                 if (this.subagentStatusBadge) {
                     this.subagentStatusBadge.textContent = "Completed";
                     this.subagentStatusBadge.className = "subagent-status-tag completed";
