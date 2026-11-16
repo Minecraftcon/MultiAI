@@ -249,6 +249,7 @@ async function runTests() {
     console.log("✓ finalizeStalled successfully rendered preserved output and minimal stall status badge.");
 
     console.log("\n=== ALL DEAD MAN'S WATCHDOG TESTS PASSED SUCCESSFULLY! ===");
+    process.exit(0);
 }
 
 runTests().catch(err => {

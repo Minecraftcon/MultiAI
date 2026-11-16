@@ -10,7 +10,7 @@ import { requestScrollToBottom } from "./chat-ui.js";
 import { getTool } from "../tools/registry.js";
 import { openTerminal } from "./terminal-drawer.js";
 import { setBadgeDiffStats } from "../tools/badge-sync.js";
-import { renderCodeViewerCardHtml, bindDiffViewerCards } from "./diff-viewer.js";
+import { renderCodeViewerCardHtml, renderCodeViewerRowsHtml, bindDiffViewerCards } from "./diff-viewer.js";
 
 
 /**
@@ -756,6 +756,18 @@ export function updateStreamingToolBadge(element, toolData, overallStartTime) {
     const partialPath = extractStreamingPath(accumulatedArgs);
     const diffCounts = extractStreamingDiffCounts(toolName, accumulatedArgs);
 
+    // Update activity status label so it doesn't stay frozen on "Thinking..."
+    const activityLabel = element.querySelector(".activity-label");
+    if (activityLabel && overallStartTime) {
+        const elapsed = ((Date.now() - overallStartTime) / 1000).toFixed(1);
+        if (toolName === "write_file") {
+            const isArtifact = partialPath.startsWith("$ARTIFACTS/") || partialPath.startsWith("${ARTIFACTS}/");
+            activityLabel.textContent = isArtifact ? `Writing artifact (${elapsed}s)` : `Writing file (${elapsed}s)`;
+        } else if (toolName === "replace_file_content" || toolName === "multi_replace_file_content") {
+            activityLabel.textContent = `Editing file (${elapsed}s)`;
+        }
+    }
+
     if (!badgeEl) {
         const initialArgs = { path: partialPath };
         badgeEl = addToolBadge(element, toolName, initialArgs);
@@ -791,20 +803,62 @@ export function updateStreamingToolBadge(element, toolData, overallStartTime) {
         setBadgeDiffStats(badgeEl, queryEl, statHtml);
     }
 
-    // Live update for write_file code viewer card if streaming content is arriving
+    // Live update for write_file code viewer card with smooth in-place streaming (no whole-card destruction or highlight flicker)
     if (toolName === "write_file" && badgeEl._collapseDiv) {
         const streamingCode = extractStreamingContent(accumulatedArgs);
         if (streamingCode && streamingCode !== badgeEl._lastStreamedCode) {
             badgeEl._lastStreamedCode = streamingCode;
-            const collapseInner = badgeEl._collapseDiv.querySelector(".badge-collapse-inner");
-            if (collapseInner) {
-                collapseInner.innerHTML = renderCodeViewerCardHtml({
-                    code: streamingCode,
-                    filePath: partialPath,
-                    startLine: 1
+            badgeEl._pendingStreamCode = streamingCode;
+            badgeEl._pendingStreamPath = partialPath;
+
+            if (!badgeEl._streamRafId) {
+                const scheduleUpdate = (typeof requestAnimationFrame === "function")
+                    ? requestAnimationFrame
+                    : (fn) => setTimeout(fn, 16);
+
+                badgeEl._streamRafId = scheduleUpdate(() => {
+                    badgeEl._streamRafId = null;
+                    const codeToRender = badgeEl._pendingStreamCode;
+                    const pathToRender = badgeEl._pendingStreamPath;
+                    const collapseDiv = badgeEl._collapseDiv;
+                    if (!collapseDiv) return;
+
+                    const windowEl = collapseDiv.querySelector(".modern-viewer-window");
+                    if (windowEl) {
+                        const { rowsHtml, lineCount } = renderCodeViewerRowsHtml({
+                            code: codeToRender,
+                            filePath: pathToRender,
+                            startLine: 1,
+                            isStreaming: true
+                        });
+                        const tableEl = windowEl.querySelector(".mv-table");
+                        if (tableEl) tableEl.innerHTML = rowsHtml;
+
+                        const statEl = windowEl.querySelector(".mv-stat");
+                        if (statEl) statEl.textContent = `${lineCount} lines`;
+
+                        if (pathToRender) {
+                            const filenameEl = windowEl.querySelector(".mv-filename");
+                            if (filenameEl && filenameEl.title !== pathToRender) {
+                                const baseName = pathToRender.split("/").pop() || pathToRender;
+                                filenameEl.textContent = baseName;
+                                filenameEl.title = pathToRender;
+                            }
+                        }
+                    } else {
+                        const collapseInner = collapseDiv.querySelector(".badge-collapse-inner");
+                        if (collapseInner) {
+                            collapseInner.innerHTML = renderCodeViewerCardHtml({
+                                code: codeToRender,
+                                filePath: pathToRender,
+                                startLine: 1,
+                                isStreaming: true
+                            });
+                            bindDiffViewerCards(collapseInner);
+                            renderIcons(collapseInner);
+                        }
+                    }
                 });
-                bindDiffViewerCards(collapseInner);
-                renderIcons(collapseInner);
             }
         } else if (partialPath) {
             const filenameEl = badgeEl._collapseDiv.querySelector(".mv-filename");
@@ -826,6 +880,10 @@ export function updateStreamingToolBadge(element, toolData, overallStartTime) {
  */
 export function syncToolBadgeArgs(badgeEl, toolName, args) {
     if (!badgeEl || !args) return;
+    if (badgeEl._streamRafId) {
+        if (typeof cancelAnimationFrame === "function") cancelAnimationFrame(badgeEl._streamRafId);
+        badgeEl._streamRafId = null;
+    }
     badgeEl.classList.remove("is-streaming-tool");
     const isFileEditTool = (toolName === "replace_file_content" || toolName === "multi_replace_file_content" || toolName === "search_and_replace");
     const config = getToolBadgeConfig(toolName, args);

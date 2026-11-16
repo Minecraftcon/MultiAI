@@ -249,31 +249,39 @@ export function renderDiffCardHtml({
 }
 
 /**
- * Builds HTML for viewing file content with a modern UI.
+ * Renders the rows HTML and line count for a code viewer table.
  */
-export function renderCodeViewerCardHtml({
+export function renderCodeViewerRowsHtml({
     code = "",
     filePath = "",
     startLine = 1,
-    maxHeight = 600
+    isStreaming = false
 } = {}) {
     const rawLines = String(code).split(/\r?\n/);
     const displayPath = filePath || "file";
-    const baseName = displayPath.split("/").pop() || displayPath;
     const langMeta = getLanguageMeta(displayPath);
 
     let highlightedLines = rawLines.map(l => (l ? escapeHTML(l) : "&nbsp;"));
     if (typeof window !== "undefined" && typeof window.hljs !== "undefined" && code) {
         try {
             const ext = displayPath.split(".").pop()?.toLowerCase() || "";
-            const langCandidate = (langMeta?.label || ext || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-            const lang = (langCandidate && window.hljs.getLanguage(langCandidate)) ? langCandidate : (window.hljs.getLanguage(ext) ? ext : "");
-            const res = lang
-                ? window.hljs.highlight(code, { language: lang, ignoreIllegals: true }).value
-                : window.hljs.highlightAuto(code).value;
-            const splitHl = res.split(/\r?\n/);
-            if (splitHl.length === rawLines.length) {
-                highlightedLines = splitHl.map(l => (l ? l : "&nbsp;"));
+            const isPlainText = ["txt", "text", "log", "out", "plain", "csv", "tsv", "env", "diff", "patch"].includes(ext);
+            if (!isPlainText) {
+                const langCandidate = (langMeta?.label || ext || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+                const lang = (langCandidate && window.hljs.getLanguage(langCandidate)) ? langCandidate : (window.hljs.getLanguage(ext) ? ext : "");
+                if (lang) {
+                    const res = window.hljs.highlight(code, { language: lang, ignoreIllegals: true }).value;
+                    const splitHl = res.split(/\r?\n/);
+                    if (splitHl.length === rawLines.length) {
+                        highlightedLines = splitHl.map(l => (l ? l : "&nbsp;"));
+                    }
+                } else if (!isStreaming) {
+                    const res = window.hljs.highlightAuto(code).value;
+                    const splitHl = res.split(/\r?\n/);
+                    if (splitHl.length === rawLines.length) {
+                        highlightedLines = splitHl.map(l => (l ? l : "&nbsp;"));
+                    }
+                }
             }
         } catch (_) {}
     }
@@ -292,6 +300,28 @@ export function renderCodeViewerCardHtml({
         `;
     });
 
+    return { rowsHtml, lineCount: rawLines.length, langMeta };
+}
+
+/**
+ * Builds HTML for viewing file content with a modern UI.
+ */
+export function renderCodeViewerCardHtml({
+    code = "",
+    filePath = "",
+    startLine = 1,
+    maxHeight = 600,
+    isStreaming = false
+} = {}) {
+    const displayPath = filePath || "file";
+    const baseName = displayPath.split("/").pop() || displayPath;
+    const { rowsHtml, lineCount, langMeta } = renderCodeViewerRowsHtml({
+        code,
+        filePath,
+        startLine,
+        isStreaming
+    });
+
     const encodedRaw = encodeURIComponent(code);
 
     return `
@@ -302,7 +332,7 @@ export function renderCodeViewerCardHtml({
                         <i data-lucide="${langMeta.icon}"></i>
                     </span>
                     <span class="mv-filename" title="${escapeHTML(displayPath)}">${escapeHTML(baseName)}</span>
-                    <span class="mv-stat neutral">${rawLines.length} lines</span>
+                    <span class="mv-stat neutral">${lineCount} lines</span>
                 </div>
                 <div class="mv-header-actions">
                     <button type="button" class="mv-btn mv-wrap-btn" title="Toggle Word Wrap" aria-label="Toggle word wrap">
