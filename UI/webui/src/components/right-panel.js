@@ -330,22 +330,31 @@ class RightPanelManager {
         if (this.browserReloadBtn && this.browserIframe) {
             this.browserReloadBtn.addEventListener("click", () => {
                 const u = this.normalizeUrl(this.browserUrlInput?.value || "http://localhost:4440");
+                this.browserIframe.removeAttribute("srcdoc");
                 this.browserIframe.src = this.resolveIframeSrc(u);
             });
         }
         if (this.browserUrlInput && this.browserIframe) {
             this.browserUrlInput.addEventListener("keydown", (e) => {
                 if (e.key === "Enter") {
-                    const u = this.normalizeUrl(this.browserUrlInput.value);
-                    this.browserUrlInput.value = u;
+                    const rawVal = this.browserUrlInput.value;
+                    const u = this.normalizeUrl(rawVal);
                     const activeTab = this.tabs.find(t => t.id === this.activeTabId);
                     if (activeTab && activeTab.type === "browser") {
                         activeTab.url = u;
+                        delete activeTab.html;
                         try {
-                            activeTab.title = new URL(u).host || "Browser";
+                            if (u.startsWith("/api/file/raw")) {
+                                const uObj = new URL(u, window.location.origin);
+                                const p = uObj.searchParams.get("path") || rawVal;
+                                activeTab.title = p.split("/").filter(Boolean).pop() || "Preview";
+                            } else {
+                                activeTab.title = new URL(u).host || "Browser";
+                            }
                             this.renderTabStrip();
                         } catch (_) {}
                     }
+                    this.browserIframe.removeAttribute("srcdoc");
                     this.browserIframe.src = this.resolveIframeSrc(u);
                 }
             });
@@ -1883,7 +1892,31 @@ class RightPanelManager {
             return u;
         }
 
-        // 3. Localhost or private IP address with optional port
+        // 3. about: URLs
+        if (/^about:/i.test(u)) {
+            return u;
+        }
+
+        // 4. Internal API routes (e.g. /api/file/raw?path=...)
+        if (u.startsWith("/api/")) {
+            return u;
+        }
+
+        // 5. File URLs or local paths (e.g. file:///home/..., /home/..., ./..., ~/..., C:\...)
+        if (
+            u.startsWith("file://") ||
+            u.startsWith("/") ||
+            u.startsWith("./") ||
+            u.startsWith("../") ||
+            u.startsWith("~/") ||
+            /^[a-zA-Z]:[\\/]/.test(u) ||
+            /\.(html|htm|svg|xhtml|php|txt|md)$/i.test(u.split("?")[0])
+        ) {
+            const cleanPath = u.replace(/^file:\/\//, "");
+            return `/api/file/raw?path=${encodeURIComponent(cleanPath)}`;
+        }
+
+        // 6. Localhost or private IP address with optional port
         if (
             u.startsWith("localhost") ||
             u.startsWith("127.0.0.1") ||
@@ -1895,23 +1928,26 @@ class RightPanelManager {
             return "http://" + u;
         }
 
-        // 4. Port only pattern like :3000
+        // 7. Port only pattern like :3000
         if (/^:\d+/.test(u)) {
             return "http://localhost" + u;
         }
 
-        // 5. Valid domain (no spaces, contains a dot with 2+ letter TLD)
+        // 8. Valid domain (no spaces, contains a dot with 2+ letter TLD)
         const domainPattern = /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+(\/.*)?$/;
         if (!/\s/.test(u) && domainPattern.test(u)) {
             return "https://" + u;
         }
 
-        // 6. Otherwise: Web Search Query!
+        // 9. Otherwise: Web Search Query!
         return `https://duckduckgo.com/?q=${encodeURIComponent(u)}`;
     }
 
     resolveIframeSrc(cleanUrl) {
         if (!cleanUrl) return "about:blank";
+        if (cleanUrl.startsWith("/") || cleanUrl.startsWith("./") || cleanUrl.startsWith("about:")) {
+            return cleanUrl;
+        }
         const isLocal = cleanUrl.includes("localhost") || cleanUrl.includes("127.0.0.1") || cleanUrl.includes("0.0.0.0");
         if (isLocal) {
             return cleanUrl;
@@ -1922,31 +1958,40 @@ class RightPanelManager {
     openBrowserTab(url) {
         const cleanUrl = this.normalizeUrl(url);
 
-        let hostname = cleanUrl;
-        try {
-            hostname = new URL(cleanUrl).host;
-        } catch (_) {}
+        let title = "Browser";
+        if (cleanUrl.startsWith("/api/file/raw") || cleanUrl.startsWith("file://") || url.startsWith("/")) {
+            const raw = url.replace(/^file:\/\//, "");
+            const basename = raw.split("/").filter(Boolean).pop();
+            title = basename || "Preview";
+        } else {
+            try {
+                title = new URL(cleanUrl).host || "Browser";
+            } catch (_) {}
+        }
 
         const tabId = `browser_${Date.now()}`;
         this.tabs.push({
             id: tabId,
             type: "browser",
-            title: hostname || "Browser",
+            title: title,
             url: cleanUrl
         });
 
+        this.open();
         this.switchTab(tabId);
     }
 
-    openHtmlPreview(html, title = "HTML Preview") {
-        const cleanTitle = title || "HTML Preview";
+    openHtmlPreview(html, title = "HTML Preview", filePath = "") {
+        const cleanTitle = title || (filePath ? filePath.split("/").filter(Boolean).pop() : "HTML Preview");
         const tabId = `preview_${Date.now()}`;
         const existingIdx = this.tabs.findIndex(t => t.id?.startsWith("preview_") || t.title === cleanTitle);
         const tabObj = {
             id: existingIdx !== -1 ? this.tabs[existingIdx].id : tabId,
             type: "browser",
             title: cleanTitle,
-            url: "about:srcdoc",
+            url: filePath ? (filePath.startsWith("/") || filePath.startsWith("./") ? filePath : `/${filePath}`) : "about:srcdoc",
+            displayUrl: filePath || cleanTitle,
+            rawUrl: filePath ? `/api/file/raw?path=${encodeURIComponent(filePath)}` : undefined,
             html: html
         };
 
@@ -1966,7 +2011,9 @@ class RightPanelManager {
 
     renderBrowserTab(tab) {
         if (tab.html) {
-            if (this.browserUrlInput) this.browserUrlInput.value = tab.title || "HTML Preview";
+            if (this.browserUrlInput) {
+                this.browserUrlInput.value = tab.displayUrl || (tab.url !== "about:srcdoc" ? tab.url : (tab.title || "HTML Preview"));
+            }
             if (this.browserIframe) {
                 this.browserIframe.removeAttribute("data-src");
                 this.browserIframe.srcdoc = tab.html;
@@ -1975,9 +2022,22 @@ class RightPanelManager {
             return;
         }
 
-        if (this.browserUrlInput) this.browserUrlInput.value = tab.url;
+        if (this.browserUrlInput) {
+            if (tab.url?.startsWith("/api/file/raw")) {
+                try {
+                    const uObj = new URL(tab.url, window.location.origin);
+                    const p = uObj.searchParams.get("path");
+                    this.browserUrlInput.value = p || tab.url;
+                } catch (_) {
+                    this.browserUrlInput.value = tab.url;
+                }
+            } else {
+                this.browserUrlInput.value = tab.url;
+            }
+        }
         const targetSrc = this.resolveIframeSrc(tab.url);
         if (this.browserIframe && this.browserIframe.getAttribute("data-src") !== targetSrc) {
+            this.browserIframe.removeAttribute("srcdoc");
             this.browserIframe.setAttribute("data-src", targetSrc);
             this.browserIframe.src = targetSrc;
         }

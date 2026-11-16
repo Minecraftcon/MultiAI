@@ -37,15 +37,36 @@ export const showHtmlPreviewTool = {
     },
     handler: async (args) => {
         const title = args?.title || "HTML Preview";
-        const html = args?.html || "";
+        let html = args?.html || "";
         const path = args?.path || "";
 
         if (typeof window !== "undefined" && window.rightPanel) {
+            // Unconditionally auto-open the right preview panel
+            window.rightPanel.open();
+
+            // If a file path is provided and html content is missing, try reading it
+            if (!html && path) {
+                try {
+                    const res = await fetch("/api/file/read", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ path })
+                    });
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data && typeof data.content === "string") {
+                            html = data.content;
+                        }
+                    }
+                } catch (_) {}
+            }
+
             if (html) {
                 if (window.rightPanel.openHtmlPreview) {
-                    window.rightPanel.openHtmlPreview(html, title);
+                    window.rightPanel.openHtmlPreview(html, title, path);
                 } else if (window.rightPanel.openBrowserTab) {
-                    window.rightPanel.openBrowserTab("about:srcdoc");
+                    const previewUrl = path ? `/api/file/raw?path=${encodeURIComponent(path)}` : "about:srcdoc";
+                    window.rightPanel.openBrowserTab(previewUrl);
                     if (window.rightPanel.browserIframe) {
                         window.rightPanel.browserIframe.srcdoc = html;
                     }
@@ -54,13 +75,12 @@ export const showHtmlPreviewTool = {
                 if (window.rightPanel.openBrowserTab) {
                     window.rightPanel.openBrowserTab(path);
                 }
-            } else {
-                window.rightPanel.open();
             }
 
             return {
                 status: "rendered",
                 title,
+                path: path || undefined,
                 mode: html ? "html" : "url",
                 message: `Preview '${title}' rendered live in browser preview pane.`
             };

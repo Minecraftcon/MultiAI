@@ -194,6 +194,59 @@ async function handleFilesRoute(req, res) {
             });
         }
 
+        if ((req.method === "GET" || req.method === "HEAD") && (reqUrl === "/api/file/raw" || reqUrl.startsWith("/api/file/raw/"))) {
+            const urlObj = new URL(req.url, `http://${req.headers.host || "localhost"}`);
+            let rawPath = urlObj.searchParams.get("path") || urlObj.searchParams.get("file");
+            if (!rawPath && reqUrl.startsWith("/api/file/raw/")) {
+                rawPath = decodeURIComponent(reqUrl.slice("/api/file/raw/".length));
+                if (rawPath && !rawPath.startsWith("/") && !/^[a-zA-Z]:/.test(rawPath)) {
+                    rawPath = "/" + rawPath;
+                }
+            }
+            if (!rawPath) {
+                return sendJSON(res, 400, { error: "Missing required parameter 'path'." });
+            }
+            rawPath = rawPath.replace(/^file:\/\//, "");
+
+            const chatId = req.headers["x-chat-id"] || urlObj.searchParams.get("chatId") || "";
+            let targetPath = resolveSafePath(rawPath, chatId);
+
+            if (!fs.existsSync(targetPath)) {
+                return sendJSON(res, 404, { error: `File not found: ${rawPath}` });
+            }
+
+            let stat = await fs.promises.stat(targetPath);
+            if (stat.isDirectory()) {
+                const indexFile = path.join(targetPath, "index.html");
+                if (fs.existsSync(indexFile)) {
+                    targetPath = indexFile;
+                    stat = await fs.promises.stat(targetPath);
+                } else {
+                    return sendJSON(res, 400, { error: `Path '${rawPath}' is a directory without index.html.` });
+                }
+            }
+
+            const ext = path.extname(targetPath).toLowerCase();
+            let mimeType = getMimeType(ext) || "application/octet-stream";
+            if (mimeType.startsWith("text/") || mimeType === "application/javascript" || mimeType === "application/json") {
+                if (!mimeType.includes("charset")) {
+                    mimeType += "; charset=utf-8";
+                }
+            }
+
+            res.writeHead(200, {
+                "Content-Type": mimeType,
+                "Content-Length": stat.size,
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Access-Control-Allow-Origin": "*"
+            });
+            if (req.method === "HEAD") {
+                return res.end();
+            }
+            const stream = fs.createReadStream(targetPath);
+            return stream.pipe(res);
+        }
+
         let body = "";
         for await (const chunk of req) body += chunk;
         const args = JSON.parse(body || "{}");
