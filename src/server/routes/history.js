@@ -8,11 +8,25 @@ const { sendJSON, getChatWorkspace } = require("../utils");
 const shadowGit = require("../../core/shadow_git_manager");
 const { workspaceWatcher } = require("../../core/workspace_watcher");
 
-function resolveWorkspacesForChat(chatId) {
+function getActiveWorkspaceRoot(chatId = null) {
     if (chatId) {
-        return shadowGit.getWorkspacesForChat(chatId);
+        try {
+            const wsContext = getChatWorkspace(chatId);
+            if (wsContext && wsContext.project && wsContext.project.rootPath) {
+                return path.resolve(wsContext.project.rootPath);
+            }
+        } catch (_) {}
     }
-    return [process.cwd()];
+    const envWs = process.env.MULTIAI_WORKSPACE_DIR;
+    if (envWs) {
+        return path.resolve(envWs);
+    }
+    return path.resolve(process.cwd());
+}
+
+function resolveWorkspacesForChat(chatId) {
+    const activeRoot = getActiveWorkspaceRoot(chatId);
+    return [activeRoot];
 }
 
 async function handleHistoryRoute(req, res) {
@@ -77,19 +91,31 @@ async function handleHistoryRoute(req, res) {
 
         // 3. POST /api/history/revert - revert single file or all files
         if (req.method === "POST" && reqPath === "/api/history/revert") {
-            const targetRel = body.path || body.relativePath || "";
-            const targetWs = body.workspace || null;
-            const targetWorkspaces = targetWs ? [targetWs] : workspaces;
+            const rawTarget = body.path || body.relativePath || "";
+            let targetRel = rawTarget;
+            const activeWs = workspaces[0];
+
+            if (targetRel && activeWs) {
+                if (path.isAbsolute(targetRel)) {
+                    const rel = path.relative(activeWs, targetRel);
+                    if (rel.startsWith("..") || path.isAbsolute(rel)) {
+                        return sendJSON(res, 200, { status: "ignored_outside_workspace", reverted: null });
+                    }
+                    targetRel = rel;
+                } else if (targetRel.startsWith("..")) {
+                    return sendJSON(res, 200, { status: "ignored_outside_workspace", reverted: null });
+                }
+            }
 
             if (targetRel) {
-                for (const ws of targetWorkspaces) {
+                for (const ws of workspaces) {
                     try {
                         shadowGit.revertFile(ws, targetRel);
                     } catch (_) {}
                 }
                 return sendJSON(res, 200, { status: "success", reverted: targetRel });
             } else {
-                for (const ws of targetWorkspaces) {
+                for (const ws of workspaces) {
                     try {
                         shadowGit.revertAll(ws);
                     } catch (_) {}
@@ -100,11 +126,24 @@ async function handleHistoryRoute(req, res) {
 
         // 4. GET /api/history/diff - unified diff for unaccepted changes
         if (req.method === "GET" && reqPath === "/api/history/diff") {
-            const targetRel = parsedUrl.searchParams.get("path") || "";
-            const targetWs = parsedUrl.searchParams.get("workspace") || null;
-            const targetWorkspaces = targetWs ? [targetWs] : workspaces;
+            const rawTarget = parsedUrl.searchParams.get("path") || "";
+            let targetRel = rawTarget;
+            const activeWs = workspaces[0];
+
+            if (targetRel && activeWs) {
+                if (path.isAbsolute(targetRel)) {
+                    const rel = path.relative(activeWs, targetRel);
+                    if (rel.startsWith("..") || path.isAbsolute(rel)) {
+                        return sendJSON(res, 200, { status: "success", path: rawTarget, diff: "" });
+                    }
+                    targetRel = rel;
+                } else if (targetRel.startsWith("..")) {
+                    return sendJSON(res, 200, { status: "success", path: rawTarget, diff: "" });
+                }
+            }
+
             let diff = "";
-            for (const ws of targetWorkspaces) {
+            for (const ws of workspaces) {
                 try {
                     const d = shadowGit.getUnifiedDiff(ws, targetRel);
                     if (d) { diff = d; break; }

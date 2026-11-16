@@ -52,9 +52,25 @@ function getChatWorkspacesFilePath() {
     return path.join(getUserHome(), ".MultiAI", "shadow_git", "chat_workspaces.json");
 }
 
+function getActivePrimaryWorkspace() {
+    const envWs = process.env.MULTIAI_WORKSPACE_DIR;
+    if (envWs && fs.existsSync(envWs)) {
+        return path.resolve(envWs);
+    }
+    return path.resolve(process.cwd());
+}
+
 function recordChatWorkspace(chatId, workspaceRoot) {
     if (!chatId || !workspaceRoot) return;
     try {
+        const activePrimary = getActivePrimaryWorkspace();
+        const norm = path.resolve(workspaceRoot);
+        const rel = path.relative(activePrimary, norm);
+        // Do not record any workspace that is outside the active primary workspace!
+        if (rel.startsWith("..") && rel !== "") {
+            return;
+        }
+
         const filePath = getChatWorkspacesFilePath();
         let map = {};
         if (fs.existsSync(filePath)) {
@@ -63,7 +79,6 @@ function recordChatWorkspace(chatId, workspaceRoot) {
         if (!Array.isArray(map[chatId])) {
             map[chatId] = [];
         }
-        const norm = path.resolve(workspaceRoot);
         if (!map[chatId].includes(norm)) {
             map[chatId].push(norm);
             fs.mkdirSync(path.dirname(filePath), { recursive: true });
@@ -75,6 +90,7 @@ function recordChatWorkspace(chatId, workspaceRoot) {
 }
 
 function getWorkspacesForChat(chatId) {
+    const activePrimary = getActivePrimaryWorkspace();
     const list = new Set();
     if (chatId) {
         try {
@@ -83,50 +99,20 @@ function getWorkspacesForChat(chatId) {
                 const map = JSON.parse(fs.readFileSync(filePath, "utf8"));
                 if (Array.isArray(map[chatId])) {
                     map[chatId].forEach(w => {
-                        if (fs.existsSync(w)) list.add(w);
+                        const norm = path.resolve(w);
+                        const rel = path.relative(activePrimary, norm);
+                        // Only include workspaces that are inside or equal to activePrimary
+                        if (!rel.startsWith("..") && fs.existsSync(norm)) {
+                            list.add(norm);
+                        }
                     });
                 }
             }
         } catch (_) {}
-
-        // If not yet recorded, inspect chat messages retroactively:
-        if (list.size === 0) {
-            try {
-                const cm = require("./conversations_manager");
-                const wsInfo = cm.ensureChatWorkspace ? cm.ensureChatWorkspace(chatId) : null;
-                const messagesFile = wsInfo ? wsInfo.messagesFile : null;
-                if (messagesFile && fs.existsSync(messagesFile)) {
-                    const content = fs.readFileSync(messagesFile, "utf8");
-                    const lines = content.split("\n").filter(Boolean);
-                    for (const line of lines) {
-                        try {
-                            const msg = JSON.parse(line);
-                            if (msg.role === "assistant" && Array.isArray(msg.tool_calls)) {
-                                for (const tc of msg.tool_calls) {
-                                    const fnName = tc.function?.name;
-                                    if (fnName === "write_file" || fnName === "replace_file_content" || fnName === "multi_replace_file_content") {
-                                        const args = JSON.parse(tc.function.arguments || "{}");
-                                        const p = args.path || args.TargetFile;
-                                        if (p) {
-                                            const resolved = path.resolve(p);
-                                            const wsRoot = findWorkspaceRoot(resolved);
-                                            if (fs.existsSync(wsRoot)) {
-                                                list.add(wsRoot);
-                                                recordChatWorkspace(chatId, wsRoot);
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        } catch (_) {}
-                    }
-                }
-            } catch (_) {}
-        }
     }
 
     if (list.size === 0) {
-        list.add(process.cwd());
+        list.add(activePrimary);
     }
     return Array.from(list);
 }

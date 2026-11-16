@@ -62,7 +62,7 @@ export function extractTurnFilesChanged(turn, finalAssistantMsg = null) {
                             args = {};
                         }
                         const p = args.path || args.TargetFile || args.target_file || args.file_path || args.AbsolutePath;
-                        if (p && typeof p === "string" && !fileMap.has(p)) {
+                        if (p && typeof p === "string" && !p.startsWith("$SCRATCH") && !p.startsWith("$ARTIFACTS") && !p.startsWith("..") && !fileMap.has(p)) {
                             fileMap.set(p, {
                                 path: p,
                                 displayPath: p,
@@ -283,12 +283,14 @@ export async function finalizeTurnFilesChanged(session, currentAIMessage, turnMo
     const filesMap = new Map();
 
     // 1. Fetch current unaccepted changes from the Shadow Git endpoint
+    let allowedWorkspaces = [];
     try {
         const chatId = session.id || state.currentChatId || "";
         const res = await fetch(`/api/history/changes?chatId=${encodeURIComponent(chatId)}`);
         if (res.ok) {
             const data = await res.json();
             const currentFiles = Array.isArray(data.files) ? data.files : [];
+            allowedWorkspaces = Array.isArray(data.workspaces) ? data.workspaces : [];
 
             for (const f of currentFiles) {
                 const init = initialChangesMap?.get(f.path);
@@ -309,9 +311,24 @@ export async function finalizeTurnFilesChanged(session, currentAIMessage, turnMo
         }
     } catch (_) {}
 
-    // 2. Include any directly modified files from tools that may not be tracked by Shadow Git
+    // 2. Include any directly modified files from tools only if they belong to the active workspace
     if (turnModifiedFiles && turnModifiedFiles.size > 0) {
         for (const p of turnModifiedFiles) {
+            if (!p || typeof p !== "string") continue;
+            // Never track scratch or artifacts as workspace diffs
+            if (p.startsWith("$SCRATCH") || p.startsWith("$ARTIFACTS") || p.startsWith("..")) continue;
+
+            // If path is absolute, ensure it is inside the active workspace
+            if (p.startsWith("/") || p.match(/^[a-zA-Z]:[\\/]/)) {
+                if (allowedWorkspaces.length > 0) {
+                    const isInside = allowedWorkspaces.some(ws => {
+                        const cleanWs = ws.endsWith("/") ? ws.slice(0, -1) : ws;
+                        return p === cleanWs || p.startsWith(cleanWs + "/");
+                    });
+                    if (!isInside) continue; // Outside workspace, skip!
+                }
+            }
+
             if (!filesMap.has(p)) {
                 filesMap.set(p, {
                     path: p,

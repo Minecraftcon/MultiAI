@@ -10,41 +10,38 @@ function getWorkspaceForFile(targetPath, chatId) {
             const { getChatWorkspace } = require("../../server/utils");
             const wsContext = getChatWorkspace(chatId);
             if (wsContext && wsContext.project && wsContext.project.rootPath) {
-                ws = wsContext.project.rootPath;
+                ws = path.resolve(wsContext.project.rootPath);
             }
         } catch (_) {}
     }
     const resolvedTarget = path.resolve(targetPath);
 
-    // 1. If chat is bound to a specific project and target is inside it:
+    // 1. If chat is bound to a specific build project:
     if (ws) {
-        const resolvedWs = path.resolve(ws);
-        const rel = path.relative(resolvedWs, resolvedTarget);
+        const rel = path.relative(ws, resolvedTarget);
         if (!rel.startsWith("..") && !path.isAbsolute(rel)) {
             return {
-                workspaceRoot: resolvedWs,
+                workspaceRoot: ws,
                 relativePath: rel
             };
         }
+        // Target is outside build project workspace: do not track
+        return null;
     }
 
-    // 2. If target is inside server's process.cwd():
-    const cwdWs = path.resolve(process.cwd());
-    const cwdRel = path.relative(cwdWs, resolvedTarget);
+    // 2. Active server workspace (configured by --workspace or MULTIAI_WORKSPACE_DIR or process.cwd()):
+    const primaryWs = path.resolve(process.env.MULTIAI_WORKSPACE_DIR || process.cwd());
+    const cwdRel = path.relative(primaryWs, resolvedTarget);
     if (!cwdRel.startsWith("..") && !path.isAbsolute(cwdRel)) {
         return {
-            workspaceRoot: cwdWs,
+            workspaceRoot: primaryWs,
             relativePath: cwdRel
         };
     }
 
-    // 3. Target is outside cwdWs (e.g. /tmp/turbo-beacon or user-specified folder):
-    const extWs = shadowGit.findWorkspaceRoot(resolvedTarget);
-    const extRel = path.relative(extWs, resolvedTarget);
-    return {
-        workspaceRoot: extWs,
-        relativePath: extRel
-    };
+    // 3. Target is outside the active workspace:
+    // Do NOT track files outside the workspace for diffs!
+    return null;
 }
 
 let rgBinaryPath = null;
@@ -498,13 +495,13 @@ async function handleReplaceFileContent(args, chatId, { resolveSafePath }) {
 
     const finalContent = hasCRLF ? newContent.replace(/\n/g, "\r\n") : newContent;
     const wsInfo = getWorkspaceForFile(targetPath, chatId);
-    if (wsInfo.relativePath) {
+    if (wsInfo && wsInfo.relativePath) {
         try { shadowGit.recordPreEditBaseline(wsInfo.workspaceRoot, wsInfo.relativePath); } catch (_) {}
     }
 
     await fs.promises.writeFile(targetPath, finalContent, "utf-8");
 
-    if (wsInfo.relativePath) {
+    if (wsInfo && wsInfo.relativePath) {
         try {
             shadowGit.recordPostEditCommit(wsInfo.workspaceRoot, wsInfo.relativePath, {
                 chatId,
@@ -677,13 +674,13 @@ async function handleMultiReplaceFileContent(args, chatId, { resolveSafePath }) 
 
     const finalContent = hasCRLF ? currentContent.replace(/\n/g, "\r\n") : currentContent;
     const wsInfo = getWorkspaceForFile(targetPath, chatId);
-    if (wsInfo.relativePath) {
+    if (wsInfo && wsInfo.relativePath) {
         try { shadowGit.recordPreEditBaseline(wsInfo.workspaceRoot, wsInfo.relativePath); } catch (_) {}
     }
 
     await fs.promises.writeFile(targetPath, finalContent, "utf-8");
 
-    if (wsInfo.relativePath) {
+    if (wsInfo && wsInfo.relativePath) {
         try {
             shadowGit.recordPostEditCommit(wsInfo.workspaceRoot, wsInfo.relativePath, {
                 chatId,
@@ -738,13 +735,13 @@ async function handleWriteFile(args, chatId, { resolveSafePath }) {
 
     const contentStr = String(args.content);
     const wsInfo = getWorkspaceForFile(targetPath, chatId);
-    if (wsInfo.relativePath && isOverwrite) {
+    if (wsInfo && wsInfo.relativePath && isOverwrite) {
         try { shadowGit.recordPreEditBaseline(wsInfo.workspaceRoot, wsInfo.relativePath); } catch (_) {}
     }
 
     await fs.promises.writeFile(targetPath, contentStr, "utf-8");
 
-    if (wsInfo.relativePath) {
+    if (wsInfo && wsInfo.relativePath) {
         try {
             shadowGit.recordPostEditCommit(wsInfo.workspaceRoot, wsInfo.relativePath, {
                 chatId,
