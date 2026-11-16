@@ -4,7 +4,7 @@ import { logEvent } from "../utils/logger.js";
 import { extractText, formatToolResult, extractChatTitleAndContent } from "../utils/dom.js";
 import { tools, getActiveToolSchemas, executeTool, onToolStart, onToolComplete, onToolError, hasTool, McpActiveTools } from "../tools/index.js";
 import { registerAgentRunner } from "../tools/terminal/task-watcher.js";
-import { addToolBadge, addThoughtTrace, clearAIStream, updateAIStream, finalizeStopped } from "../components/chat-ui.js";
+import { addToolBadge, addThoughtTrace, clearAIStream, updateAIStream, finalizeStopped, finalizeStalled } from "../components/chat-ui.js";
 import { updateStreamingToolBadge, syncToolBadgeArgs } from "../components/chat-tool-badges.js";
 import { saveStoredChats } from "../services/storage.js";
 import { renderChatList } from "../components/side-panel.js";
@@ -274,6 +274,25 @@ export async function runAgent(userText, currentAIMessage, chatId, images = [], 
                         }
                         state.messages = session.messages;
                         saveStoredChats();
+                    }
+                    return;
+                }
+                if (err.isStall || err.isDropped || err.name === "StreamStallError" || err.name === "StreamDroppedError") {
+                    finalizeStalled(currentAIMessage, overallStartTime, hasRunTools, err);
+                    const partialText = err.partialText || currentAIMessage?.dataset?.rawText || "";
+                    if (partialText && session) {
+                        const existingLast = session.messages[session.messages.length - 1];
+                        if (existingLast && existingLast.role === "assistant") {
+                            existingLast.content = partialText;
+                        } else {
+                            session.messages.push({
+                                role: "assistant",
+                                content: partialText
+                            });
+                        }
+                        state.messages = session.messages;
+                        saveStoredChats();
+                        renderChatList();
                     }
                     return;
                 }

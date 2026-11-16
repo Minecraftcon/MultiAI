@@ -2,6 +2,31 @@ import { state } from "../state/index.js";
 import { modelProviderMap } from "../components/side-panel.js";
 import { sanitizeMessage, cleanErrorMessage } from "./sanitizer.js";
 import { getActiveContextFilterer } from "./context-filter.js";
+import { logEvent } from "../utils/logger.js";
+
+export class StreamStallError extends Error {
+    constructor(message = "Stream connection stalled: no data received within expected window.", details = {}) {
+        super(message);
+        this.name = "StreamStallError";
+        this.isStall = true;
+        this.partialText = details.partialText || "";
+        this.partialContent = details.partialContent || "";
+        this.accumulatedReasoning = details.accumulatedReasoning || "";
+        this.toolCalls = details.toolCalls || [];
+    }
+}
+
+export class StreamDroppedError extends Error {
+    constructor(message = "Stream connection dropped mid-response.", details = {}) {
+        super(message);
+        this.name = "StreamDroppedError";
+        this.isDropped = true;
+        this.partialText = details.partialText || "";
+        this.partialContent = details.partialContent || "";
+        this.accumulatedReasoning = details.accumulatedReasoning || "";
+        this.toolCalls = details.toolCalls || [];
+    }
+}
 
 /**
  * Sends messages to LLM backends (either Puter.js in-browser or /api/chat backend endpoint)
@@ -91,6 +116,38 @@ export async function callChatModel(messages, { model, tools, signal, onChunk, o
 
     const activeSignal = signal || (state.currentChatId && state.activeGenerations[state.currentChatId]?.abortController?.signal);
 
+    // Composite abort controller to abort stream either on user cancellation or watchdog timeout
+    const streamController = new AbortController();
+    let currentReader = null;
+    let watchdogTimer = null;
+
+    const disarmWatchdog = () => {
+        if (watchdogTimer) {
+            clearTimeout(watchdogTimer);
+            watchdogTimer = null;
+        }
+    };
+
+    const onParentAbort = () => {
+        disarmWatchdog();
+        try {
+            if (currentReader) {
+                currentReader.cancel("Generation stopped by user").catch(() => {});
+            }
+        } catch (_) {}
+        try {
+            streamController.abort();
+        } catch (_) {}
+    };
+    if (activeSignal) {
+        if (activeSignal.aborted) {
+            const err = new Error("Generation stopped by user");
+            err.name = "AbortError";
+            throw err;
+        }
+        activeSignal.addEventListener("abort", onParentAbort, { once: true });
+    }
+
     // Stream when onChunk callback is provided
     const shouldStream = Boolean(onChunk);
 
@@ -107,10 +164,13 @@ export async function callChatModel(messages, { model, tools, signal, onChunk, o
                 stream: shouldStream,
                 system_server
             }),
-            signal: activeSignal
+            signal: streamController.signal
         });
     } catch (netErr) {
-        if (netErr.name === "AbortError" || activeSignal?.aborted) {
+        if (activeSignal) {
+            activeSignal.removeEventListener("abort", onParentAbort);
+        }
+        if (activeSignal?.aborted || (netErr.name === "AbortError" && !streamController.signal.reason?.isStall)) {
             const err = new Error("Generation stopped by user");
             err.name = "AbortError";
             throw err;
@@ -122,6 +182,9 @@ export async function callChatModel(messages, { model, tools, signal, onChunk, o
 
     // Intercept ANY HTTP status code other than 200 OK (e.g. 429, 400, 401, 403, 404, 500, 502, 503)
     if (!res.ok) {
+        if (activeSignal) {
+            activeSignal.removeEventListener("abort", onParentAbort);
+        }
         const errorData = await res.json().catch(() => ({}));
         const rawErr = errorData.error || `HTTP error ${res.status}: ${res.statusText || "Request failed"}`;
         const cleanErr = cleanErrorMessage(rawErr);
@@ -134,90 +197,200 @@ export async function callChatModel(messages, { model, tools, signal, onChunk, o
     const contentType = res.headers.get("content-type") || "";
     if (contentType.includes("text/event-stream") && res.body) {
         const reader = res.body.getReader();
+        currentReader = reader;
         const decoder = new TextDecoder("utf-8");
         let accumulatedContent = "";
         let accumulatedReasoning = "";
         const toolCallsMap = {};
         let buffer = "";
 
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split("\n");
-            buffer = lines.pop();
+        // Client-side Dead Man's Watchdog (Stall Detection)
+        const initialTimeoutMs = Number(state.config?.Agent?.StreamInitialTimeoutMs) || 45000;
+        const stallTimeoutMs = Number(state.config?.Agent?.StreamStallTimeoutMs) || 20000;
+        let isStalled = false;
 
-            for (const line of lines) {
-                const trimmed = line.trim();
-                if (!trimmed || !trimmed.startsWith("data:")) continue;
-                const dataStr = trimmed.replace(/^data:\s*/, "");
-                if (dataStr === "[DONE]") break;
+        const armWatchdog = (timeoutMs) => {
+            if (watchdogTimer) clearTimeout(watchdogTimer);
+            watchdogTimer = setTimeout(() => {
+                isStalled = true;
+                logEvent("STREAM_STALL_WATCHDOG_TRIGGERED", {
+                    model: effectiveModel,
+                    timeoutMs,
+                    receivedContentLength: accumulatedContent.length,
+                    receivedReasoningLength: accumulatedReasoning.length
+                });
                 try {
-                    const parsed = JSON.parse(dataStr);
-                    const choice = parsed.choices?.[0] || parsed;
-                    const delta = choice?.delta || choice;
-                    if (!delta) continue;
-
-                    // 1. Thinking / Reasoning delta (DeepSeek-R1, OpenRouter, Qwen, o1/o3, etc.)
-                    const reasoningDelta = delta.reasoning_content || delta.reasoning || "";
-                    if (reasoningDelta) {
-                        accumulatedReasoning += reasoningDelta;
-                        const isReasoningStreamEnabled = state.config?.Agent?.StreamReasoning !== false;
-                        if (isReasoningStreamEnabled && onChunk) {
-                            const fullDisplay = `<think>\n${accumulatedReasoning}\n</think>\n\n${accumulatedContent}`;
-                            onChunk(reasoningDelta, fullDisplay);
-                        }
-                    }
-
-                    // 2. Content delta
-                    const contentDelta = delta.content || (typeof delta.text === "string" ? delta.text : "");
-                    if (contentDelta) {
-                        accumulatedContent += contentDelta;
-                        const isReasoningStreamEnabled = state.config?.Agent?.StreamReasoning !== false;
-                        const fullDisplay = (accumulatedReasoning && isReasoningStreamEnabled)
-                            ? `<think>\n${accumulatedReasoning}\n</think>\n\n${accumulatedContent}`
-                            : accumulatedContent;
-                        if (onChunk) onChunk(contentDelta, fullDisplay);
-                    }
-
-                    // 3. Tool Calls streaming delta aggregation
-                    if (Array.isArray(delta.tool_calls)) {
-                        for (const tc of delta.tool_calls) {
-                            const idx = typeof tc.index === "number" ? tc.index : 0;
-                            if (!toolCallsMap[idx]) {
-                                toolCallsMap[idx] = {
-                                    id: tc.id || ("call_" + Math.random().toString(36).slice(2, 10)),
-                                    type: tc.type || "function",
-                                    function: {
-                                        name: tc.function?.name || "",
-                                        arguments: tc.function?.arguments || ""
-                                    }
-                                };
-                            } else {
-                                if (tc.id) toolCallsMap[idx].id = tc.id;
-                                if (tc.function?.name) toolCallsMap[idx].function.name += tc.function.name;
-                                if (tc.function?.arguments) toolCallsMap[idx].function.arguments += tc.function.arguments;
-                            }
-                            const sig = tc.thoughtSignature || tc.thought_signature || tc.function?.thoughtSignature || tc.function?.thought_signature;
-                            if (sig) {
-                                toolCallsMap[idx].thoughtSignature = sig;
-                                toolCallsMap[idx].thought_signature = sig;
-                            }
-
-                            if (onToolChunk) {
-                                onToolChunk({
-                                    index: idx,
-                                    id: toolCallsMap[idx].id,
-                                    name: toolCallsMap[idx].function.name,
-                                    deltaName: tc.function?.name || "",
-                                    deltaArgs: tc.function?.arguments || "",
-                                    accumulatedArgs: toolCallsMap[idx].function.arguments
-                                });
-                            }
-                        }
-                    }
+                    reader.cancel("Stream stalled: no data received within timeout window").catch(() => {});
                 } catch (_) {}
+                try {
+                    const stallReason = new Error("Stream connection stalled");
+                    stallReason.isStall = true;
+                    streamController.abort(stallReason);
+                } catch (_) {}
+            }, timeoutMs);
+        };
+
+        const disarmWatchdog = () => {
+            if (watchdogTimer) {
+                clearTimeout(watchdogTimer);
+                watchdogTimer = null;
             }
+        };
+
+        armWatchdog(initialTimeoutMs);
+
+        try {
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) {
+                    disarmWatchdog();
+                    break;
+                }
+
+                // Chunks received: reset watchdog for next expected chunk
+                if (value && value.length > 0) {
+                    armWatchdog(stallTimeoutMs);
+                }
+
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split("\n");
+                buffer = lines.pop();
+
+                for (const line of lines) {
+                    const trimmed = line.trim();
+                    if (!trimmed || !trimmed.startsWith("data:")) continue;
+                    const dataStr = trimmed.replace(/^data:\s*/, "");
+                    if (dataStr === "[DONE]") {
+                        disarmWatchdog();
+                        break;
+                    }
+                    try {
+                        const parsed = JSON.parse(dataStr);
+                        const choice = parsed.choices?.[0] || parsed;
+                        const delta = choice?.delta || choice;
+                        if (!delta) continue;
+
+                        // 1. Thinking / Reasoning delta (DeepSeek-R1, OpenRouter, Qwen, o1/o3, etc.)
+                        const reasoningDelta = delta.reasoning_content || delta.reasoning || "";
+                        if (reasoningDelta) {
+                            accumulatedReasoning += reasoningDelta;
+                            const isReasoningStreamEnabled = state.config?.Agent?.StreamReasoning !== false;
+                            if (isReasoningStreamEnabled && onChunk) {
+                                const fullDisplay = `<think>\n${accumulatedReasoning}\n</think>\n\n${accumulatedContent}`;
+                                onChunk(reasoningDelta, fullDisplay);
+                            }
+                        }
+
+                        // 2. Content delta
+                        const contentDelta = delta.content || (typeof delta.text === "string" ? delta.text : "");
+                        if (contentDelta) {
+                            accumulatedContent += contentDelta;
+                            const isReasoningStreamEnabled = state.config?.Agent?.StreamReasoning !== false;
+                            const fullDisplay = (accumulatedReasoning && isReasoningStreamEnabled)
+                                ? `<think>\n${accumulatedReasoning}\n</think>\n\n${accumulatedContent}`
+                                : accumulatedContent;
+                            if (onChunk) onChunk(contentDelta, fullDisplay);
+                        }
+
+                        // 3. Tool Calls streaming delta aggregation
+                        if (Array.isArray(delta.tool_calls)) {
+                            for (const tc of delta.tool_calls) {
+                                const idx = typeof tc.index === "number" ? tc.index : 0;
+                                if (!toolCallsMap[idx]) {
+                                    toolCallsMap[idx] = {
+                                        id: tc.id || ("call_" + Math.random().toString(36).slice(2, 10)),
+                                        type: tc.type || "function",
+                                        function: {
+                                            name: tc.function?.name || "",
+                                            arguments: tc.function?.arguments || ""
+                                        }
+                                    };
+                                } else {
+                                    if (tc.id) toolCallsMap[idx].id = tc.id;
+                                    if (tc.function?.name) toolCallsMap[idx].function.name += tc.function.name;
+                                    if (tc.function?.arguments) toolCallsMap[idx].function.arguments += tc.function.arguments;
+                                }
+                                const sig = tc.thoughtSignature || tc.thought_signature || tc.function?.thoughtSignature || tc.function?.thought_signature;
+                                if (sig) {
+                                    toolCallsMap[idx].thoughtSignature = sig;
+                                    toolCallsMap[idx].thought_signature = sig;
+                                }
+
+                                if (onToolChunk) {
+                                    onToolChunk({
+                                        index: idx,
+                                        id: toolCallsMap[idx].id,
+                                        name: toolCallsMap[idx].function.name,
+                                        deltaName: tc.function?.name || "",
+                                        deltaArgs: tc.function?.arguments || "",
+                                        accumulatedArgs: toolCallsMap[idx].function.arguments
+                                    });
+                                }
+                            }
+                        }
+                    } catch (_) {}
+                }
+            }
+        } catch (streamErr) {
+            disarmWatchdog();
+            const finalContent = accumulatedReasoning
+                ? `<think>\n${accumulatedReasoning}\n</think>\n\n${accumulatedContent}`.trim()
+                : accumulatedContent;
+            const finalTools = Object.keys(toolCallsMap)
+                .sort((a, b) => Number(a) - Number(b))
+                .map(k => toolCallsMap[k])
+                .filter(tc => Boolean(tc.function?.name));
+
+            if (activeSignal?.aborted || (streamErr.name === "AbortError" && !isStalled && !streamController.signal.reason?.isStall)) {
+                const err = new Error("Generation stopped by user");
+                err.name = "AbortError";
+                throw err;
+            }
+
+            if (isStalled || streamController.signal.reason?.isStall) {
+                throw new StreamStallError("Stream connection stalled: no data received from server within expected window.", {
+                    partialText: finalContent,
+                    partialContent: accumulatedContent,
+                    accumulatedReasoning,
+                    toolCalls: finalTools
+                });
+            }
+
+            // Connection severed mid-stream
+            throw new StreamDroppedError("Stream connection dropped mid-response.", {
+                partialText: finalContent,
+                partialContent: accumulatedContent,
+                accumulatedReasoning,
+                toolCalls: finalTools
+            });
+        } finally {
+            disarmWatchdog();
+            if (activeSignal) {
+                activeSignal.removeEventListener("abort", onParentAbort);
+            }
+        }
+
+        if (activeSignal?.aborted) {
+            const err = new Error("Generation stopped by user");
+            err.name = "AbortError";
+            throw err;
+        }
+
+        if (isStalled || streamController.signal.reason?.isStall) {
+            const finalContent = accumulatedReasoning
+                ? `<think>\n${accumulatedReasoning}\n</think>\n\n${accumulatedContent}`.trim()
+                : accumulatedContent;
+            const finalTools = Object.keys(toolCallsMap)
+                .sort((a, b) => Number(a) - Number(b))
+                .map(k => toolCallsMap[k])
+                .filter(tc => Boolean(tc.function?.name));
+
+            throw new StreamStallError("Stream connection stalled: no data received from server within expected window.", {
+                partialText: finalContent,
+                partialContent: accumulatedContent,
+                accumulatedReasoning,
+                toolCalls: finalTools
+            });
         }
 
         const finalToolCalls = Object.keys(toolCallsMap)

@@ -1013,6 +1013,77 @@ export function finalizeStopped(element, startTime, hasTools) {
     requestScrollToBottom(chat);
 }
 
+export function finalizeStalled(element, startTime, hasTools, errorInfo) {
+    const chat = document.getElementById("chat");
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    logEvent("GENERATION_STREAM_STALLED", { elapsed, error: errorInfo?.message, isStall: errorInfo?.isStall });
+
+    const streamer = activeStreamers.get(element);
+    if (streamer) {
+        streamer.stop();
+        activeStreamers.delete(element);
+    }
+
+    const cursor = element.querySelector(".blinking-cursor");
+    if (cursor) cursor.remove();
+
+    const finalContent = element.querySelector(".final-content");
+    const activityWrapper = element.querySelector(".activity-wrapper");
+    const activityLabel = element.querySelector(".activity-label");
+
+    if (activityLabel) {
+        activityLabel.textContent = `Stalled after ${elapsed}s`;
+    }
+    if (activityWrapper && activityWrapper.classList.contains("open") && !element.dataset.manuallyToggled) {
+        activityWrapper.classList.remove("open");
+    }
+    finalizeFileEditBadges(element);
+
+    // Apply any streamed title to session if available
+    const titleToUse = element.dataset.streamedTitle || extractChatTitleAndContent(element.dataset.rawText || "").title;
+    if (titleToUse && state.currentChatId && state.chatSessions[state.currentChatId]) {
+        const session = state.chatSessions[state.currentChatId];
+        const firstUserMsg = session.messages && session.messages.find(m => m.role === "user");
+        const firstUserText = (firstUserMsg && typeof firstUserMsg.content === "string") ? firstUserMsg.content.trim() : "";
+        const isDefaultTitle = !session.title || session.title === "New Chat" || session.title === "Conversation" || session.title.startsWith(firstUserText.slice(0, 30));
+        if (isDefaultTitle) {
+            session.title = titleToUse.slice(0, 36);
+            saveStoredChats();
+            renderChatList();
+        }
+    }
+
+    if (finalContent) {
+        const partialRaw = errorInfo?.partialText || (element.dataset.rawText || "").trim();
+        const extracted = extractChatTitleAndContent(partialRaw);
+        const cleanContent = extracted.content || partialRaw;
+
+        if (cleanContent) {
+            finalContent.innerHTML = parseMarkdown(cleanContent);
+            wrapTablesForScroll(finalContent);
+            finalContent.innerHTML += `
+                <div class="stream-interrupted-banner" role="status" aria-live="polite">
+                    <span class="stream-interrupted-info">
+                        <span class="stream-interrupted-badge">Connection stalled</span>
+                        <span class="stream-interrupted-desc">Stream stalled mid-response. Output preserved.</span>
+                    </span>
+                </div>
+            `;
+            element.dataset.rawText = cleanContent;
+        } else {
+            finalContent.innerHTML = `
+                <div class="ai-error-notice" role="alert">
+                    <span class="ai-error-badge"><i data-lucide="wifi-off"></i> Connection timed out</span>
+                    <span class="ai-error-text">No response was received from the server within the expected window (${elapsed}s). Please verify your connection or try again.</span>
+                </div>
+            `;
+            renderIcons(finalContent);
+            element.dataset.rawText = "";
+        }
+    }
+    requestScrollToBottom(chat);
+}
+
 export function initChatDelegation() {
     const chat = document.getElementById("chat");
     if (!chat) return;
