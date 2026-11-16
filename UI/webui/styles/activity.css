@@ -464,6 +464,61 @@
     filter: none !important;
 }
 
+/* Live Rolling Diff Ticker Animation ("scroll up fade") */
+.diff-ticker-box {
+    display: inline-flex;
+    position: relative;
+    overflow: hidden;
+    vertical-align: middle;
+    height: 1.35em;
+    line-height: 1.35em;
+}
+
+.diff-ticker-item {
+    display: inline-block;
+    will-change: transform, opacity;
+    font-variant-numeric: tabular-nums;
+}
+
+.diff-ticker-exit {
+    position: absolute;
+    top: 0;
+    left: 0;
+    animation: tickerScrollUpExit 0.24s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+    pointer-events: none;
+}
+
+.diff-ticker-enter {
+    display: inline-block;
+    animation: tickerScrollUpEnter 0.24s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+}
+
+@keyframes tickerScrollUpExit {
+    0% {
+        transform: translateY(0);
+        opacity: 1;
+        filter: blur(0);
+    }
+    100% {
+        transform: translateY(-100%);
+        opacity: 0;
+        filter: blur(0.8px);
+    }
+}
+
+@keyframes tickerScrollUpEnter {
+    0% {
+        transform: translateY(100%);
+        opacity: 0;
+        filter: blur(0.8px);
+    }
+    100% {
+        transform: translateY(0);
+        opacity: 1;
+        filter: blur(0);
+    }
+}
+
 .file-edit-steps-summary {
     background: var(--surface-2);
     border: 1px solid var(--border);

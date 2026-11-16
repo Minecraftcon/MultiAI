@@ -13,6 +13,12 @@ assert(actCss.includes("tabular-nums"), "activity.css must contain tabular-nums 
 assert(actCss.includes("#22c55e"), "activity.css must contain standard diff green #22c55e");
 assert(actCss.includes("#f87171"), "activity.css must contain standard diff red #f87171");
 assert(!actCss.includes(".badge-diff-stat.add {\n    color: var(--stat-add"), "activity.css must not bind diff stats to accent color");
+assert(actCss.includes(".diff-ticker-box"), "activity.css must contain .diff-ticker-box");
+assert(actCss.includes(".diff-ticker-item"), "activity.css must contain .diff-ticker-item");
+assert(actCss.includes(".diff-ticker-exit"), "activity.css must contain .diff-ticker-exit");
+assert(actCss.includes(".diff-ticker-enter"), "activity.css must contain .diff-ticker-enter");
+assert(actCss.includes("tickerScrollUpExit"), "activity.css must contain tickerScrollUpExit animation");
+assert(actCss.includes("tickerScrollUpEnter"), "activity.css must contain tickerScrollUpEnter animation");
 console.log("✓ activity.css streaming tool badge styles verified cleanly.");
 
 // 2. Verify orchestrator.js and chat-client.js integration
@@ -35,7 +41,6 @@ async function runTests() {
     class MockElement {
         constructor(tagName = "div") {
             this.tagName = tagName.toUpperCase();
-            this.className = "";
             this.classList = {
                 classes: new Set(),
                 add: (c) => this.classList.classes.add(c),
@@ -50,8 +55,22 @@ async function runTests() {
             };
             this.children = [];
             this.parentNode = null;
-            this.textContent = "";
+            this._textContent = "";
             this._innerHTML = "";
+        }
+        get className() { return Array.from(this.classList.classes).join(" "); }
+        set className(val) {
+            this.classList.classes.clear();
+            if (val) {
+                val.split(/\s+/).filter(Boolean).forEach(c => this.classList.classes.add(c));
+            }
+        }
+        get textContent() {
+            if (this.children.length === 0) return this._textContent || "";
+            return this.children.map(c => c.textContent).join("");
+        }
+        set textContent(v) {
+            this._textContent = String(v);
         }
         setAttribute(k, v) { this.attributes.set(k, String(v)); }
         getAttribute(k) { return this.attributes.get(k) || null; }
@@ -70,8 +89,9 @@ async function runTests() {
         }
         querySelector(sel) {
             if (sel.startsWith(".")) {
-                const cls = sel.slice(1);
-                if (this.classList.contains(cls)) return this;
+                const classes = sel.split(".").filter(Boolean);
+                const hasAll = classes.every(cls => this.classList.contains(cls));
+                if (hasAll) return this;
                 for (const c of this.children) {
                     const found = c.querySelector(sel);
                     if (found) return found;
@@ -89,8 +109,9 @@ async function runTests() {
         querySelectorAll(sel) {
             const results = [];
             if (sel.startsWith(".")) {
-                const cls = sel.slice(1);
-                if (this.classList.contains(cls)) results.push(this);
+                const classes = sel.split(".").filter(Boolean);
+                const hasAll = classes.every(cls => this.classList.contains(cls));
+                if (hasAll) results.push(this);
             }
             for (const c of this.children) {
                 results.push(...c.querySelectorAll(sel));
@@ -248,7 +269,17 @@ async function runTests() {
 
         const diffStatEl = badgeEl.querySelector(".badge-diff-stat");
         assert.ok(diffStatEl, "Diff stat element should be mounted");
-        assert.strictEqual(diffStatEl.textContent, "+5", "Diff count should roll up to +5 lines");
+        assert.strictEqual(diffStatEl.dataset.count, "+5", "Diff count dataset should roll up to +5 lines");
+        const exitItem = diffStatEl.querySelector(".diff-ticker-exit");
+        const enterItem = diffStatEl.querySelector(".diff-ticker-enter");
+        assert.ok(exitItem, "Previous count should have diff-ticker-exit class");
+        assert.strictEqual(exitItem.textContent, "+1", "Exiting ticker item should be +1");
+        assert.ok(enterItem, "Incoming count should have diff-ticker-enter class");
+        assert.strictEqual(enterItem.textContent, "+5", "Entering ticker item should be +5");
+
+        // Wait for exit unmount after ticker animation
+        await new Promise(r => setTimeout(r, 280));
+        assert.strictEqual(diffStatEl.textContent, "+5", "After transition finishes, only incoming count remains");
 
         // Chunk 3: Stream finishes, hand off to orchestrator
         syncToolBadgeArgs(badgeEl, "write_file", {

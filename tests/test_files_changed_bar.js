@@ -16,6 +16,7 @@ assert(chatCss.includes(".files-changed-dropdown"), "chat.css must contain .file
 assert(chatCss.includes(".files-changed-file-row"), "chat.css must contain .files-changed-file-row");
 assert(chatCss.includes(".diff-stat-add"), "chat.css must contain .diff-stat-add");
 assert(chatCss.includes(".diff-stat-del"), "chat.css must contain .diff-stat-del");
+assert(chatCss.includes(".files-changed-total-stats"), "chat.css must contain .files-changed-total-stats");
 console.log("✓ chat.css files-changed-bar styles verified cleanly.");
 
 // 2. Verify component JS file and exports
@@ -27,6 +28,9 @@ assert(jsContent.includes("export function renderFilesChangedBar"), "Must export
 assert(jsContent.includes("export async function finalizeTurnFilesChanged"), "Must export finalizeTurnFilesChanged");
 assert(jsContent.includes("files-changed-review-btn"), "Must have review button");
 assert(!jsContent.includes("files-changed-code-glyph"), "Must not have { } code glyph");
+assert(jsContent.includes("files-changed-total-stats"), "Must have total stats in bar summary");
+assert(jsContent.includes("files-changed-total-add"), "Must have total additions badge");
+assert(jsContent.includes("files-changed-total-del"), "Must have total deletions badge");
 assert(jsContent.includes("followupContainer.nextSibling"), "Must place bar under followup suggestions");
 assert(jsContent.includes("openDiffTab"), "Must open diff tab on file click and review click");
 console.log("✓ files-changed-bar.js exports and markup verified cleanly.");
@@ -58,7 +62,7 @@ async function testLogic() {
         removeEventListener() {}
     };
 
-    const { extractTurnFilesChanged } = await import("../UI/webui/src/components/files-changed-bar.js");
+    const { extractTurnFilesChanged, renderFilesChangedBar } = await import("../UI/webui/src/components/files-changed-bar.js");
 
     // Case A: Explicit filesChanged on final assistant message
     const turnA = {
@@ -137,6 +141,37 @@ async function testLogic() {
     const filesC = extractTurnFilesChanged(turnC, turnC.aiMessages[2]);
     assert.strictEqual(filesC.length, 0, "Read-only tools must not produce changed files");
     console.log("✓ Logic Case C passed: Read-only turns produce no files changed bar.");
+
+    // Case D: renderFilesChangedBar produces aggregated totals (+11 and -2)
+    const createMockEl = (tag = "div") => ({
+        tagName: tag.toUpperCase(),
+        className: "",
+        dataset: {},
+        innerHTML: "",
+        querySelector() {
+            return {
+                addEventListener() {},
+                classList: { toggle() {} }
+            };
+        },
+        querySelectorAll() { return []; },
+        addEventListener() {}
+    });
+    const mockAiDiv = {
+        children: [],
+        appendChild(child) {
+            this.children.push(child);
+            return child;
+        },
+        querySelector() { return null; }
+    };
+    global.document.createElement = (tag) => createMockEl(tag);
+    const bar = renderFilesChangedBar(mockAiDiv, filesA);
+    assert.ok(bar, "Bar element must be created");
+    assert(bar.innerHTML.includes("files-changed-total-stats"), "Bar must include total stats container");
+    assert(bar.innerHTML.includes("+11"), "Bar must include total additions sum +11");
+    assert(bar.innerHTML.includes("-2"), "Bar must include total deletions sum -2");
+    console.log("✓ Logic Case D passed: Total additions (+11) and deletions (-2) rendered correctly in bar header.");
 
     console.log("\n=== ALL FILES CHANGED REVIEW BAR TESTS PASSED SUCCESSFULLY! ===");
 }

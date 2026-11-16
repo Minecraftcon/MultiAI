@@ -1409,6 +1409,16 @@
     letter-spacing: -0.01em;
 }
 
+.files-changed-total-stats {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    margin-left: 2px;
+}
+
 .files-changed-chevron {
     font-size: 11px;
     color: var(--text-muted, #888);

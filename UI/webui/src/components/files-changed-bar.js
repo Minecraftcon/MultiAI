@@ -146,10 +146,21 @@ export function renderFilesChangedBar(aiDiv, files, messageRef = null) {
 
     barContainer.dataset.expanded = isExpanded ? "true" : "false";
 
+    let totalAdditions = 0;
+    let totalDeletions = 0;
+    for (const f of files) {
+        totalAdditions += (Number(f.additions) || 0);
+        totalDeletions += (Number(f.deletions) || 0);
+    }
+    const totalAddStr = totalAdditions > 0 ? `<span class="diff-stat-add files-changed-total-add">+${totalAdditions}</span>` : "";
+    const totalDelStr = totalDeletions > 0 ? `<span class="diff-stat-del files-changed-total-del">-${totalDeletions}</span>` : "";
+    const totalStatsHtml = (totalAddStr || totalDelStr) ? `<span class="files-changed-total-stats">${totalAddStr}${totalDelStr}</span>` : "";
+
     barContainer.innerHTML = `
         <div class="files-changed-header" role="button" tabindex="0" aria-expanded="${isExpanded ? "true" : "false"}">
             <div class="files-changed-summary">
                 <span class="files-changed-label">${count} ${fileWord} changed</span>
+                ${totalStatsHtml}
                 <span class="files-changed-chevron" aria-hidden="true">${isExpanded ? "▾" : "▸"}</span>
             </div>
             <div class="files-changed-actions">

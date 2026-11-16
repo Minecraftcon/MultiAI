@@ -126,8 +126,52 @@ export function onToolStart(name, args, badgeEl) {
     }
 }
 
+function extractStatText(html, type) {
+    if (!html) return "";
+    const match = html.match(new RegExp(`<span[^>]*class=["'][^"']*\\b${type}\\b[^"']*["'][^>]*>([^<]+)</span>`, "i"));
+    return match ? match[1].trim() : "";
+}
+
+function updateTickerPill(pillEl, newText) {
+    pillEl.dataset.count = newText;
+    let tickerBox = pillEl.querySelector(".diff-ticker-box");
+    if (!tickerBox) {
+        tickerBox = document.createElement("span");
+        tickerBox.className = "diff-ticker-box";
+        const initialItem = document.createElement("span");
+        initialItem.className = "diff-ticker-item";
+        initialItem.textContent = newText;
+        tickerBox.appendChild(initialItem);
+        pillEl.innerHTML = "";
+        pillEl.appendChild(tickerBox);
+        return;
+    }
+
+    const items = tickerBox.querySelectorAll(".diff-ticker-item");
+    const itemList = Array.from(items || []);
+    const currentItem = itemList.find(el => !el.classList.contains("diff-ticker-exit")) || itemList[itemList.length - 1];
+    const prevText = currentItem ? (currentItem.textContent || "").trim() : (pillEl.dataset.count || "").trim();
+    if (prevText === newText) return;
+
+    // Immediately remove any prior exit animations
+    const priorExits = tickerBox.querySelectorAll(".diff-ticker-exit");
+    (Array.from(priorExits || [])).forEach(el => el.remove());
+
+    if (currentItem) {
+        currentItem.classList.add("diff-ticker-exit");
+        setTimeout(() => {
+            if (currentItem.parentNode) currentItem.remove();
+        }, 260);
+    }
+
+    const nextItem = document.createElement("span");
+    nextItem.className = "diff-ticker-item diff-ticker-enter";
+    nextItem.textContent = newText;
+    tickerBox.appendChild(nextItem);
+}
+
 /**
- * Sets or updates the diff stats pill (+N / -N) on a tool badge with rollup animation.
+ * Sets or updates the diff stats pill (+N / -N) on a tool badge with synchronized scroll-up fade animation.
  */
 export function setBadgeDiffStats(badgeEl, queryEl, statHtml) {
     if (!badgeEl || !queryEl) return;
@@ -143,14 +187,39 @@ export function setBadgeDiffStats(badgeEl, queryEl, statHtml) {
             queryEl.insertAdjacentElement("afterend", statsEl);
         }
     }
-    if (statsEl.innerHTML === (statHtml || "")) return;
-    statsEl.innerHTML = statHtml || "";
-    if (!statHtml && statsEl.parentNode) {
-        statsEl.remove();
-    } else if (statsEl && !badgeEl.classList.contains("is-streaming-tool")) {
-        statsEl.classList.remove("stat-updated");
-        void statsEl.offsetWidth; // retrigger reflow
-        statsEl.classList.add("stat-updated");
+
+    if (!statHtml) {
+        if (statsEl.parentNode) statsEl.remove();
+        return;
+    }
+
+    const addText = extractStatText(statHtml, "add");
+    const delText = extractStatText(statHtml, "del");
+
+    // 1. Synchronized Additions Pill (+N)
+    let addPill = statsEl.querySelector(".badge-diff-stat.add");
+    if (addText) {
+        if (!addPill) {
+            addPill = document.createElement("span");
+            addPill.className = "badge-diff-stat add";
+            statsEl.appendChild(addPill);
+        }
+        updateTickerPill(addPill, addText);
+    } else if (addPill) {
+        addPill.remove();
+    }
+
+    // 2. Synchronized Deletions Pill (-N)
+    let delPill = statsEl.querySelector(".badge-diff-stat.del");
+    if (delText) {
+        if (!delPill) {
+            delPill = document.createElement("span");
+            delPill.className = "badge-diff-stat del";
+            statsEl.appendChild(delPill);
+        }
+        updateTickerPill(delPill, delText);
+    } else if (delPill) {
+        delPill.remove();
     }
 }
 
