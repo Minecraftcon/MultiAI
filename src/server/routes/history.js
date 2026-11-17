@@ -3,6 +3,7 @@
  * Backed by the Shadow Git Manager.
  */
 
+const fs = require("fs");
 const path = require("path");
 const { sendJSON, getChatWorkspace } = require("../utils");
 const shadowGit = require("../../core/shadow_git_manager");
@@ -48,6 +49,13 @@ async function handleHistoryRoute(req, res) {
 
         const chatId = req.headers["x-chat-id"] || body.chatId || queryChatId;
         const workspaces = resolveWorkspacesForChat(chatId);
+        const queryWs = parsedUrl.searchParams.get("workspace") || body.workspace || "";
+        if (queryWs && fs.existsSync(queryWs)) {
+            const resolvedQueryWs = path.resolve(queryWs);
+            if (!workspaces.includes(resolvedQueryWs)) {
+                workspaces.unshift(resolvedQueryWs);
+            }
+        }
 
         // 1. GET /api/history/changes - current unaccepted changes
         if (req.method === "GET" && reqPath === "/api/history/changes") {
@@ -79,19 +87,36 @@ async function handleHistoryRoute(req, res) {
             });
         }
 
-        // 2. POST /api/history/accept - mark all unaccepted changes accepted
+        // 2. POST /api/history/accept - mark unaccepted changes accepted (all or single file)
         if (req.method === "POST" && reqPath === "/api/history/accept") {
+            const rawTarget = body.path || body.file || body.relativePath || "";
+            let targetRel = rawTarget;
+            const activeWs = workspaces[0];
+
+            if (targetRel && activeWs) {
+                if (path.isAbsolute(targetRel)) {
+                    const rel = path.relative(activeWs, targetRel);
+                    if (!rel.startsWith("..") && !path.isAbsolute(rel)) {
+                        targetRel = rel;
+                    }
+                }
+            }
+
             for (const ws of workspaces) {
                 try {
-                    shadowGit.acceptChanges(ws);
+                    if (targetRel) {
+                        shadowGit.acceptFile(ws, targetRel);
+                    } else {
+                        shadowGit.acceptChanges(ws);
+                    }
                 } catch (_) {}
             }
-            return sendJSON(res, 200, { status: "success", accepted: true });
+            return sendJSON(res, 200, { status: "success", accepted: true, path: targetRel || null });
         }
 
         // 3. POST /api/history/revert - revert single file or all files
         if (req.method === "POST" && reqPath === "/api/history/revert") {
-            const rawTarget = body.path || body.relativePath || "";
+            const rawTarget = body.path || body.file || body.relativePath || "";
             let targetRel = rawTarget;
             const activeWs = workspaces[0];
 

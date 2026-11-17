@@ -51,6 +51,18 @@
 
     <!-- Syntax highlighting -->
     <link id="hljsTheme" rel="stylesheet" href="/vendor/highlightjs/github-dark.min.css">
+    <script>
+        (function() {
+            try {
+                var t = localStorage.getItem("multiai_theme") || "dark";
+                var isLight = (t === "light") || (t === "system" && window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches);
+                if (isLight) {
+                    var link = document.getElementById("hljsTheme");
+                    if (link) link.setAttribute("href", "/vendor/highlightjs/github.min.css");
+                }
+            } catch (_) {}
+        })();
+    </script>
     <script src="/vendor/highlightjs/highlight.min.js"></script>
 
     <!-- Ace Code Editor -->

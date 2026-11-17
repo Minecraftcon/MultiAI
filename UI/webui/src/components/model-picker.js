@@ -178,6 +178,16 @@ function formatContextTokens(tokens) {
     return `${tokens} ctx`;
 }
 
+function getCurrentSelectedModelValue() {
+    if (currentOpenSource === "subagent" && typeof window !== "undefined" && window.rightPanel) {
+        const activeTab = window.rightPanel.tabs.find(t => t.id === window.rightPanel.activeTabId);
+        const subSession = activeTab?.subagentId ? state?.chatSessions?.[activeTab.subagentId] : null;
+        if (subSession?.model) return subSession.model;
+    }
+    const modelSelect = document.getElementById("modelSelect");
+    return modelSelect?.value || "";
+}
+
 function selectModel(modelValue) {
     const modelSelect = document.getElementById("modelSelect");
 
@@ -192,6 +202,14 @@ function selectModel(modelValue) {
                 });
             });
         }
+        return;
+    }
+
+    if (currentOpenSource === "subagent") {
+        if (typeof window !== "undefined" && window.rightPanel && typeof window.rightPanel.setSubagentModel === "function") {
+            window.rightPanel.setSubagentModel(modelValue);
+        }
+        closeModelPicker();
         return;
     }
 
@@ -213,7 +231,7 @@ function renderMobileModelPickerList(filter = "") {
 
     listEl.innerHTML = "";
     const filterLower = filter.trim().toLowerCase();
-    const currentVal = modelSelect.value;
+    const currentVal = getCurrentSelectedModelValue();
 
     const optgroups = modelSelect.querySelectorAll("optgroup");
     let totalRendered = 0;
@@ -615,7 +633,7 @@ function renderDesktopModelPicker(filter = "") {
     const activeModelNameEl = container.querySelector("#desktopActiveModelName");
     const activeProviderNameEl = container.querySelector("#desktopActiveProviderName");
 
-    const currentVal = modelSelect.value;
+    const currentVal = getCurrentSelectedModelValue();
     const { providers, allModels } = getModelData();
     const filterLower = filter.trim().toLowerCase();
 

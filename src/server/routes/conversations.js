@@ -98,6 +98,29 @@ async function handleConversationsRoute(req, res) {
         }
     }
 
+    if (req.method === "GET" && reqUrl === "/api/artifacts/list") {
+        try {
+            const urlObj = new URL(req.url, `http://${req.headers.host || "localhost"}`);
+            const chatId = urlObj.searchParams.get("chatId");
+            if (!chatId) {
+                return sendJSON(res, 400, { error: "Parameter 'chatId' is required." });
+            }
+            const { getChatArtifactsDir } = require("../utils");
+            const artifactsDir = getChatArtifactsDir(chatId);
+            const catalogPath = require("path").join(artifactsDir, "artifacts.json");
+            let artifacts = [];
+            if (require("fs").existsSync(catalogPath)) {
+                try {
+                    const catalog = JSON.parse(require("fs").readFileSync(catalogPath, "utf-8"));
+                    artifacts = Array.isArray(catalog.artifacts) ? catalog.artifacts : [];
+                } catch (_) {}
+            }
+            return sendJSON(res, 200, { success: true, artifacts });
+        } catch (err) {
+            return sendJSON(res, 500, { error: err.message });
+        }
+    }
+
     res.writeHead(404);
     res.end();
 }

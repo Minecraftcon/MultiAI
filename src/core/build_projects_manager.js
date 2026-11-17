@@ -140,43 +140,79 @@ function createBuildProjectsManager(getBuildProjectsRoot, resolveHome) {
         const chatDir = path.join(chatsDir, chatId);
         const scratchDir = path.join(chatDir, "scratch");
         const artifactsDir = path.join(chatDir, "artifacts");
+        const artifactsCatalogFile = path.join(artifactsDir, "artifacts.json");
         const imagesDir = path.join(chatDir, "images");
         const metaFile = path.join(chatDir, "meta.json");
+        const metadataFile = path.join(chatDir, "metadata.json");
         const messagesFile = path.join(chatDir, "messages.jsonl");
+        const rootPath = project.rootPath || "";
 
         try {
+            if (!fs.existsSync(chatDir)) fs.mkdirSync(chatDir, { recursive: true });
             if (!fs.existsSync(scratchDir)) fs.mkdirSync(scratchDir, { recursive: true });
             if (!fs.existsSync(artifactsDir)) fs.mkdirSync(artifactsDir, { recursive: true });
             if (!fs.existsSync(imagesDir)) fs.mkdirSync(imagesDir, { recursive: true });
+            if (!fs.existsSync(artifactsCatalogFile)) {
+                fs.writeFileSync(artifactsCatalogFile, JSON.stringify({ artifacts: [] }, null, 2), "utf8");
+            }
+
+            let existingMeta = {};
+            if (fs.existsSync(metadataFile)) {
+                existingMeta = readJsonFile(metadataFile, {});
+            } else if (fs.existsSync(metaFile)) {
+                existingMeta = readJsonFile(metaFile, {});
+            }
+
+            const updatedWorkspace = {
+                chatDir,
+                artifactsDir,
+                scratchDir,
+                imagesDir,
+                projectRoot: rootPath,
+                ...(existingMeta.workspace || {})
+            };
+            updatedWorkspace.artifactsDir = artifactsDir;
+            updatedWorkspace.scratchDir = scratchDir;
+            updatedWorkspace.chatDir = chatDir;
+
+            const updatedMeta = {
+                id: chatId,
+                projectId,
+                mode: "build",
+                title: existingMeta.title || "Build Task",
+                createdAt: existingMeta.createdAt || Date.now(),
+                updatedAt: existingMeta.updatedAt || Date.now(),
+                ...existingMeta,
+                workspace: updatedWorkspace
+            };
+
+            writeJsonFile(metadataFile, updatedMeta);
+            writeJsonFile(metaFile, updatedMeta);
         } catch (err) {
             console.error(`[BUILD] Error creating workspace for project chat ${chatId}:`, err.message);
         }
 
-        const rootPath = project.rootPath || "";
         const workspacePrompt = [
             `[BUILD WORKSPACE - PROJECT CONTEXT]:`,
             `- Mode: Autonomous State-Based Builder`,
             `- Active Project: ${project.name || projectId}`,
-            `- Project Root Directory: ${rootPath}`,
-            `- Conversation Scratch Directory ($SCRATCH): ${scratchDir}`,
-            `- Conversation Artifacts Directory ($ARTIFACTS): ${artifactsDir}`,
-            `- Images Directory: ${imagesDir}`,
+            `- Project Root: ${rootPath}`,
+            `- Scratch ($SCRATCH): ${scratchDir}`,
+            `- Artifacts ($ARTIFACTS): ${artifactsDir}`,
+            `- Images: ${imagesDir}`,
             `- BUILD MODE AGENTIC GUIDELINES:`,
-            `  1. You are operating directly within the user's project directory (${rootPath}). Execute tasks, modify files, and run commands relative to this project root.`,
-            `  2. SCRATCHPAD & ISOLATED PROTOTYPING ($SCRATCH):`,
-            `     - You have a dedicated, isolated scratchpad directory (${scratchDir}) for this conversation accessible via '$SCRATCH' or 'scratch/'.`,
-            `     - Whenever the user asks you to build, test, explore, or prototype something in scratch (e.g., 'do that in scratch dir', 'create a prototype in scratch'), or when writing one-off experiment scripts, you MUST write them into '$SCRATCH/<subfolder>/...' (e.g. '$SCRATCH/fashion-site/index.html'). NEVER overwrite existing project files (like client/index.html or project code) when requested to build in scratch!`,
-            `     - In tool calls (write_file, read_file, list_dir), paths like '$SCRATCH/...' or 'scratch/...' automatically resolve safely to this dedicated scratchpad directory.`,
+            `  1. Execute all file operations and commands relative to the project root (${rootPath}).`,
+            `  2. SCRATCH ISOLATION: Write one-off experiments, prototype builds, and test scripts into '$SCRATCH/<subfolder>/...' (resolves to ${scratchDir}). NEVER overwrite project source files when asked to build in scratch.`,
             `  3. DUAL-TRACK EXECUTION:`,
-            `     - Track A (Easy Task / Quick Fix): Investigate (read_file, list_dir, grep_search), form a quick plan with write_todos, execute surgical edits immediately, verify with run_task, and summarize.`,
-            `     - Track B (Building Plan / Complex Task): Investigate thoroughly, formulate a structured implementation plan specifying created files, components, and open questions / user preferences. Call write_todos (persisting $ARTIFACTS/Tasklist-{name}.md), and pause for user review/approval before major changes. Upon proceed, autonomously execute tasks step by step.`,
-            `  4. MODULAR ARCHITECTURE: Start modular. Do not create monolithic files. Separate concerns into dedicated single-purpose modules and components.`,
-            `  5. BUG FINDING RULES: Never guess a bug or apply blind fixes on assumptions. Track down every execution point: locate where the behavior is handled, read the code, and trace the logic internally until the root cause is found. Once found, explain what causes what, and apply the surgical fix.`,
-            `  6. CLARIFICATIONS (ask_questions): If requirements, architectural decisions, or preferences are ambiguous, call ask_questions to present interactive multiple-choice options to the user before proceeding. Supports both single question (question: "...", options: [...]) and multi-question (questions: [{question, options}, ...]).`,
-            `  7. SUBAGENT DELEGATION (task): Use 'task' to spawn isolated subagents for deep research, scanning large directories, or running tests without bloating your main conversation context.`,
-            `  8. SURGICAL CODE EDITS: Inspect files before editing. Use 'replace_file_content' or 'multi_replace_file_content' for surgical edits, and 'write_file' for new files.`,
-            `  9. VERIFICATION & COMMANDS: Use 'run_task' to run tests, linters, or build commands. Always specify a concise 2-4 word 'task_name' (e.g. 'Check git status', 'Run tests') for command name tagging in the UI.`,
-            `  10. EXECUTION DISCIPLINE: Never stop after merely announcing an action intent. Always execute the necessary tool calls in the same turn.`
+            `     - Track A (Quick Fix): read_file/list_dir/grep_search → write_todos → surgical edit → verify → done.`,
+            `     - Track B (Complex Build): investigate → structured plan + open questions → write_todos ($ARTIFACTS/Tasklist-{name}.md) → pause for approval → execute step by step.`,
+            `  4. MODULAR ARCHITECTURE: Single-purpose ES modules only. Never create monolithic files.`,
+            `  5. BUG FINDING: Trace every execution point to root cause. Never apply blind fixes — explain what causes what, then apply the surgical fix.`,
+            `  6. CLARIFICATIONS: When requirements or preferences are ambiguous, call ask_questions before proceeding.`,
+            `  7. SUBAGENT DELEGATION: Use invoke_subagent for deep research, large directory scans, or test runs to avoid bloating main context.`,
+            `  8. SURGICAL EDITS: Inspect before editing. Use replace_file_content or multi_replace_file_content for targeted changes; write_file for new files only.`,
+            `  9. VERIFICATION: Run tests, linters, or build commands with run_task. Always set a concise 2–4 word task_name for UI tagging.`,
+            `  10. EXECUTION DISCIPLINE: Never stop after announcing an action. Issue the tool call in the same turn.`
         ].join("\n");
 
         return {
@@ -187,8 +223,10 @@ function createBuildProjectsManager(getBuildProjectsRoot, resolveHome) {
             chatDir,
             scratchDir,
             artifactsDir,
+            artifactsCatalogFile,
             imagesDir,
             metaFile,
+            metadataFile,
             messagesFile,
             contextFile: path.join(chatDir, "context.json"),
             workspacePrompt
@@ -298,6 +336,7 @@ function createBuildProjectsManager(getBuildProjectsRoot, resolveHome) {
             compactionState: chatSession.compactionState || existingMeta.compactionState || null,
             workspace: {
                 chatDir: ws.chatDir,
+                artifactsDir: ws.artifactsDir,
                 scratchDir: ws.scratchDir,
                 imagesDir: ws.imagesDir,
                 projectRoot: ws.projectRoot
@@ -309,6 +348,9 @@ function createBuildProjectsManager(getBuildProjectsRoot, resolveHome) {
         const actualMsgCount = safelyWriteMessages(ws.messagesFile, messages, hasMeaningfulMessages);
         metaPayload.messageCount = Math.max(actualMsgCount || 0, existingMeta.messageCount || 0, messages.length);
         writeJsonFile(ws.metaFile, metaPayload);
+        if (ws.metadataFile) {
+            writeJsonFile(ws.metadataFile, metaPayload);
+        }
 
         if (chatSession.compactionState) {
             try {
@@ -391,6 +433,41 @@ function createBuildProjectsManager(getBuildProjectsRoot, resolveHome) {
     };
 }
 
+function getDefaultBuildProjectsRoot() {
+    const { getConfig, getUserHome } = require("./config_manager");
+    const cfg = getConfig();
+    const raw = cfg.General?.StorageDir || "~/.MultiAI";
+    let base = raw;
+    if (base.startsWith("~/") || base === "~") {
+        base = path.join(getUserHome(), base.slice(1));
+    }
+    const resolved = path.resolve(base);
+    return path.join(resolved, "build", "projects");
+}
+
+function defaultResolveHome(p) {
+    if (!p || typeof p !== "string") return "";
+    const { getUserHome } = require("./config_manager");
+    if (p.startsWith("~/") || p === "~") {
+        return path.join(getUserHome(), p.slice(1));
+    }
+    return path.resolve(p);
+}
+
+const defaultManager = createBuildProjectsManager(getDefaultBuildProjectsRoot, defaultResolveHome);
+
 module.exports = {
-    createBuildProjectsManager
+    createBuildProjectsManager,
+    ensureProjectChatWorkspace: defaultManager.ensureProjectChatWorkspace,
+    ensureBuildProjectWorkspace: defaultManager.ensureProjectChatWorkspace,
+    generateProjectId: defaultManager.generateProjectId,
+    addProject: defaultManager.addProject,
+    listProjects: defaultManager.listProjects,
+    removeProject: defaultManager.removeProject,
+    listProjectChats: defaultManager.listProjectChats,
+    getProjectChat: defaultManager.getProjectChat,
+    saveProjectChat: defaultManager.saveProjectChat,
+    deleteProjectChat: defaultManager.deleteProjectChat,
+    findProjectForChat: defaultManager.findProjectForChat,
+    defaultManager
 };

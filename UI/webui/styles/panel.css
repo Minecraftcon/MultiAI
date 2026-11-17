@@ -1996,37 +1996,38 @@ html.is-android .side-panel .panel-footer {
     font-weight: 500;
     text-transform: uppercase;
     letter-spacing: 0.03em;
-    background: rgba(255, 255, 255, 0.08);
-    color: var(--text-primary, #ddd);
+    background: var(--surface-2);
+    color: var(--text-primary);
+    border: 1px solid var(--border-subtle, transparent);
 }
 
 .subagent-persona-chip.designer {
-    background: rgba(147, 197, 253, 0.15);
-    color: #93c5fd;
+    background: var(--pastel-blue-bg);
+    color: var(--pastel-blue-text);
 }
 
 .subagent-persona-chip.researcher {
-    background: rgba(167, 243, 208, 0.15);
-    color: #6ee7b7;
+    background: var(--pastel-green-bg);
+    color: var(--pastel-green-text);
 }
 
 .subagent-persona-chip.auditor {
-    background: rgba(253, 230, 138, 0.15);
-    color: #fcd34d;
+    background: var(--pastel-yellow-bg);
+    color: var(--pastel-yellow-text);
 }
 
 .subagent-persona-chip.tester {
-    background: rgba(244, 114, 182, 0.15);
-    color: #f472b6;
+    background: var(--pastel-red-bg);
+    color: var(--pastel-red-text);
 }
 
 .subagent-status-tag {
     font-size: 11px;
-    color: var(--text-tertiary, #888);
+    color: var(--text-tertiary);
 }
 
 .subagent-status-tag.running {
-    color: #34d399;
+    color: var(--success, #16a34a);
     font-weight: 500;
 }
 
@@ -2106,8 +2107,8 @@ html.is-android .side-panel .panel-footer {
     justify-content: space-between;
     padding: 8px 14px;
     margin-bottom: 12px;
-    background: var(--surface-2, rgba(255, 255, 255, 0.04));
-    border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+    background: var(--surface);
+    border: 1px solid var(--border);
     border-radius: 8px;
     position: sticky;
     top: 0;
@@ -2121,7 +2122,7 @@ html.is-android .side-panel .panel-footer {
     gap: 8px;
     background: transparent;
     border: none;
-    color: var(--text-primary, #ddd);
+    color: var(--text-primary);
     font-size: 13px;
     cursor: pointer;
     padding: 4px 6px;
@@ -2130,8 +2131,8 @@ html.is-android .side-panel .panel-footer {
 }
 
 .subagent-back-btn:hover {
-    background: rgba(255, 255, 255, 0.06);
-    color: var(--accent, #60a5fa);
+    background: var(--hover);
+    color: var(--accent);
 }
 
 .subagent-back-btn svg {

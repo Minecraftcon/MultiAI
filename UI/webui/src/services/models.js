@@ -71,7 +71,7 @@ export async function loadAvailableModels() {
 
                 const placeholder = document.createElement("option");
                 placeholder.value = `__rolling_connect__${provider.id}`;
-                placeholder.textContent = `⚡ Connect ${provider.name}…`;
+                placeholder.textContent = `Connect ${provider.name}…`;
                 placeholder.dataset.provider = provider.id;
                 placeholder.dataset.rolling = "true";
                 group.appendChild(placeholder);

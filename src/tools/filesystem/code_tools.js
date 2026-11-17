@@ -396,21 +396,239 @@ async function handleCodeGrep(args, chatId, { resolveSafePath }) {
     });
 }
 
+function extractArtifactMetadata(args) {
+    if (!args || typeof args !== "object") return null;
+    return args.ArtifactMetadata || args.artifact_metadata || args.metadata || args.Metadata || null;
+}
+
+function isArtifactTarget(rawPath, resolvedPath, chatId, metadata) {
+    const raw = String(rawPath || "").trim();
+    if (
+        raw === "$SCRATCH" ||
+        raw === "${SCRATCH}" ||
+        raw.startsWith("$SCRATCH/") ||
+        raw.startsWith("${SCRATCH}/") ||
+        raw.startsWith("$SCRATCH\\") ||
+        raw.startsWith("${SCRATCH}\\")
+    ) {
+        return false;
+    }
+    const normLower = raw.replace(/\\/g, "/").toLowerCase();
+    if (normLower === "scratch" || normLower.startsWith("scratch/") || normLower.startsWith("./scratch/")) {
+        return false;
+    }
+    if (resolvedPath) {
+        const normRes = path.resolve(resolvedPath).replace(/\\/g, "/");
+        if (normRes.includes("/scratch/")) {
+            return false;
+        }
+    }
+
+    if (metadata && typeof metadata === "object") return true;
+    if (
+        raw === "$ARTIFACTS" ||
+        raw === "${ARTIFACTS}" ||
+        raw.startsWith("$ARTIFACTS/") ||
+        raw.startsWith("${ARTIFACTS}/") ||
+        raw.startsWith("$ARTIFACTS\\") ||
+        raw.startsWith("${ARTIFACTS}\\")
+    ) {
+        return true;
+    }
+    if (normLower === "artifacts" || normLower.startsWith("artifacts/") || normLower.startsWith("./artifacts/")) {
+        return true;
+    }
+    if (chatId) {
+        try {
+            const { getChatArtifactsDir } = require("../../server/utils");
+            const artifactsDir = path.resolve(getChatArtifactsDir(chatId));
+            if (resolvedPath) {
+                const res = path.resolve(resolvedPath);
+                if (res === artifactsDir || res.startsWith(artifactsDir + path.sep)) {
+                    return true;
+                }
+            }
+        } catch (_) {}
+    }
+    if (resolvedPath) {
+        const normRes = path.resolve(resolvedPath).replace(/\\/g, "/");
+        if (normRes.includes("/artifacts/")) {
+            return true;
+        }
+    }
+    return false;
+}
+
+const isArtifactPath = isArtifactTarget;
+
+async function recordArtifactInCatalog({ rawPath, resolvedPath, chatId, metadata, content }) {
+    try {
+        let artifactsDir = null;
+        if (chatId) {
+            try {
+                const { getChatArtifactsDir } = require("../../server/utils");
+                artifactsDir = getChatArtifactsDir(chatId);
+            } catch (_) {}
+        }
+        if (!artifactsDir && resolvedPath) {
+            const dir = path.dirname(path.resolve(resolvedPath));
+            if (path.basename(dir) === "artifacts") {
+                artifactsDir = dir;
+            } else {
+                const norm = path.resolve(resolvedPath).replace(/\\/g, "/");
+                const artIdx = norm.lastIndexOf("/artifacts/");
+                if (artIdx !== -1) {
+                    artifactsDir = norm.slice(0, artIdx + "/artifacts".length);
+                }
+            }
+        }
+        if (!artifactsDir) {
+            try {
+                const conversationsManager = require("../../core/conversations_manager");
+                artifactsDir = path.join(conversationsManager.getStorageRoot(), "artifacts");
+            } catch (_) {}
+        }
+        if (!artifactsDir) return null;
+
+        if (!fs.existsSync(artifactsDir)) {
+            await fs.promises.mkdir(artifactsDir, { recursive: true });
+        }
+
+        const catalogPath = path.join(artifactsDir, "artifacts.json");
+        let catalog = { artifacts: [] };
+        if (fs.existsSync(catalogPath)) {
+            try {
+                const raw = await fs.promises.readFile(catalogPath, "utf-8");
+                catalog = JSON.parse(raw);
+                if (!Array.isArray(catalog.artifacts)) {
+                    catalog.artifacts = [];
+                }
+            } catch (_) {
+                catalog = { artifacts: [] };
+            }
+        }
+
+        const resolved = path.resolve(resolvedPath || rawPath);
+        const filename = path.basename(resolved);
+        const relToArtifacts = path.relative(path.resolve(artifactsDir), resolved).replace(/\\/g, "/");
+        const canonicalPath = (rawPath && (rawPath.startsWith("$ARTIFACTS") || rawPath.startsWith("${ARTIFACTS}")))
+            ? rawPath
+            : `$ARTIFACTS/${relToArtifacts.startsWith("./") ? relToArtifacts.slice(2) : relToArtifacts}`;
+
+        const rawMeta = (metadata && typeof metadata === "object") ? metadata : {};
+        const userFacing = rawMeta.UserFacing !== undefined
+            ? Boolean(rawMeta.UserFacing)
+            : (rawMeta.userFacing !== undefined ? Boolean(rawMeta.userFacing) : true);
+        const summary = (rawMeta.Summary !== undefined && rawMeta.Summary !== null && String(rawMeta.Summary).trim() !== "")
+            ? String(rawMeta.Summary)
+            : ((rawMeta.summary !== undefined && rawMeta.summary !== null && String(rawMeta.summary).trim() !== "")
+                ? String(rawMeta.summary)
+                : filename);
+        const requestFeedback = rawMeta.RequestFeedback !== undefined
+            ? Boolean(rawMeta.RequestFeedback)
+            : (rawMeta.requestFeedback !== undefined ? Boolean(rawMeta.requestFeedback) : false);
+
+        let size = 0;
+        if (content !== undefined && content !== null) {
+            size = Buffer.byteLength(String(content), "utf-8");
+        } else if (fs.existsSync(resolved)) {
+            const stat = await fs.promises.stat(resolved);
+            size = stat.size;
+        }
+
+        const updatedAt = Date.now();
+
+        // Check if artifact already exists in catalog
+        const existingIdx = catalog.artifacts.findIndex(a =>
+            a.resolvedPath === resolved ||
+            a.name === filename ||
+            a.path === canonicalPath
+        );
+
+        let artifactId;
+        const entryRecord = {
+            id: "",
+            name: filename,
+            path: canonicalPath,
+            resolvedPath: resolved,
+            summary,
+            Summary: summary,
+            userFacing,
+            UserFacing: userFacing,
+            requestFeedback,
+            RequestFeedback: requestFeedback,
+            size,
+            updatedAt
+        };
+
+        if (existingIdx >= 0) {
+            artifactId = catalog.artifacts[existingIdx].id || `art-${existingIdx + 1}`;
+            entryRecord.id = artifactId;
+            catalog.artifacts[existingIdx] = entryRecord;
+        } else {
+            let maxNum = 0;
+            for (const a of catalog.artifacts) {
+                const m = String(a.id || "").match(/^art-(\d+)$/);
+                if (m) {
+                    const n = parseInt(m[1], 10);
+                    if (!isNaN(n) && n > maxNum) maxNum = n;
+                }
+            }
+            artifactId = `art-${maxNum + 1}`;
+            entryRecord.id = artifactId;
+            catalog.artifacts.push(entryRecord);
+        }
+
+        await fs.promises.writeFile(catalogPath, JSON.stringify(catalog, null, 2), "utf-8");
+
+        return {
+            id: artifactId,
+            UserFacing: userFacing,
+            Summary: summary,
+            RequestFeedback: requestFeedback,
+            userFacing,
+            summary,
+            requestFeedback
+        };
+    } catch (err) {
+        console.error(`[ARTIFACTS] Error updating catalog:`, err.message);
+        return null;
+    }
+}
+
 async function handleReplaceFileContent(args, chatId, { resolveSafePath }) {
-    const rawPath = args.path || args.TargetFile || args.target_file;
+    const rawPath = args.path || args.Path || args.TargetFile || args.target_file || args.targetFile;
     if (!rawPath) {
         throw new Error("Missing required parameter 'path'.");
     }
 
-    const targetContent = args.target_content !== undefined ? args.target_content : args.TargetContent;
+    const targetContent = args.target_content !== undefined
+        ? args.target_content
+        : (args.TargetContent !== undefined
+            ? args.TargetContent
+            : (args.target !== undefined
+                ? args.target
+                : (args.Target !== undefined
+                    ? args.Target
+                    : (args.targetContent !== undefined ? args.targetContent : undefined))));
     if (targetContent === undefined || targetContent === null) {
         throw new Error("Missing required parameter 'target_content'.");
     }
 
-    const replacementContent = args.replacement_content !== undefined ? args.replacement_content : args.ReplacementContent;
+    const replacementContent = args.replacement_content !== undefined
+        ? args.replacement_content
+        : (args.ReplacementContent !== undefined
+            ? args.ReplacementContent
+            : (args.replacement !== undefined
+                ? args.replacement
+                : (args.Replacement !== undefined
+                    ? args.Replacement
+                    : (args.replacementContent !== undefined ? args.replacementContent : undefined))));
     if (replacementContent === undefined || replacementContent === null) {
         throw new Error("Missing required parameter 'replacement_content'.");
     }
+
+    const artifactMeta = extractArtifactMetadata(args);
 
     const targetPath = resolveSafePath(rawPath, chatId);
     if (!fs.existsSync(targetPath)) {
@@ -496,7 +714,7 @@ async function handleReplaceFileContent(args, chatId, { resolveSafePath }) {
     const finalContent = hasCRLF ? newContent.replace(/\n/g, "\r\n") : newContent;
     const wsInfo = getWorkspaceForFile(targetPath, chatId);
     if (wsInfo && wsInfo.relativePath) {
-        try { shadowGit.recordPreEditBaseline(wsInfo.workspaceRoot, wsInfo.relativePath); } catch (_) {}
+        try { shadowGit.recordPreEditBaseline(wsInfo.workspaceRoot, wsInfo.relativePath, { chatId }); } catch (_) {}
     }
 
     await fs.promises.writeFile(targetPath, finalContent, "utf-8");
@@ -515,7 +733,23 @@ async function handleReplaceFileContent(args, chatId, { resolveSafePath }) {
     const newLinesCount = newContent.split("\n").length;
     const diffRes = generateUnifiedDiff(content, newContent, path.basename(rawPath));
 
-    return {
+    const isArtifact = isArtifactPath(rawPath, targetPath, chatId);
+    const rawMeta = args.ArtifactMetadata || args.artifact_metadata || args.artifactMetadata || null;
+    let artifactMetadata = null;
+    if (isArtifact) {
+        const record = await recordArtifactInCatalog({
+            rawPath,
+            resolvedPath: targetPath,
+            chatId,
+            metadata: rawMeta,
+            content: finalContent
+        });
+        if (record) {
+            artifactMetadata = record;
+        }
+    }
+
+    const result = {
         status: "success",
         path: rawPath,
         resolved_path: targetPath,
@@ -531,6 +765,13 @@ async function handleReplaceFileContent(args, chatId, { resolveSafePath }) {
         diff: diffRes.diff,
         message: `Successfully replaced content in ${rawPath}`
     };
+
+    if (isArtifact) {
+        result.is_artifact = true;
+        result.artifact_metadata = artifactMetadata || rawMeta || { UserFacing: true, Summary: path.basename(targetPath), RequestFeedback: false };
+    }
+
+    return result;
 }
 
 async function handleMultiReplaceFileContent(args, chatId, { resolveSafePath }) {
@@ -675,7 +916,7 @@ async function handleMultiReplaceFileContent(args, chatId, { resolveSafePath }) 
     const finalContent = hasCRLF ? currentContent.replace(/\n/g, "\r\n") : currentContent;
     const wsInfo = getWorkspaceForFile(targetPath, chatId);
     if (wsInfo && wsInfo.relativePath) {
-        try { shadowGit.recordPreEditBaseline(wsInfo.workspaceRoot, wsInfo.relativePath); } catch (_) {}
+        try { shadowGit.recordPreEditBaseline(wsInfo.workspaceRoot, wsInfo.relativePath, { chatId }); } catch (_) {}
     }
 
     await fs.promises.writeFile(targetPath, finalContent, "utf-8");
@@ -713,14 +954,16 @@ async function handleMultiReplaceFileContent(args, chatId, { resolveSafePath }) 
 }
 
 async function handleWriteFile(args, chatId, { resolveSafePath }) {
-    if (!args.path) {
+    const rawPath = args.path || args.Path || args.FilePath || args.filePath;
+    if (!rawPath) {
         throw new Error("Missing 'path' parameter for write_file.");
     }
-    if (args.content === undefined || args.content === null) {
+    const rawContent = args.content !== undefined ? args.content : (args.Content !== undefined ? args.Content : null);
+    if (rawContent === undefined || rawContent === null) {
         throw new Error("Missing 'content' parameter for write_file.");
     }
 
-    const targetPath = resolveSafePath(args.path, chatId);
+    const targetPath = resolveSafePath(rawPath, chatId);
     const parentDir = path.dirname(targetPath);
     await fs.promises.mkdir(parentDir, { recursive: true });
 
@@ -733,10 +976,10 @@ async function handleWriteFile(args, chatId, { resolveSafePath }) {
         } catch {}
     }
 
-    const contentStr = String(args.content);
+    const contentStr = String(rawContent);
     const wsInfo = getWorkspaceForFile(targetPath, chatId);
     if (wsInfo && wsInfo.relativePath && isOverwrite) {
-        try { shadowGit.recordPreEditBaseline(wsInfo.workspaceRoot, wsInfo.relativePath); } catch (_) {}
+        try { shadowGit.recordPreEditBaseline(wsInfo.workspaceRoot, wsInfo.relativePath, { chatId, isNew: !isOverwrite }); } catch (_) {}
     }
 
     await fs.promises.writeFile(targetPath, contentStr, "utf-8");
@@ -759,14 +1002,30 @@ async function handleWriteFile(args, chatId, { resolveSafePath }) {
     let linesRemoved = 0;
 
     if (isOverwrite && existingContent !== null) {
-        const diffRes = generateUnifiedDiff(existingContent.replace(/\r\n/g, "\n"), contentStr.replace(/\r\n/g, "\n"), path.basename(args.path));
+        const diffRes = generateUnifiedDiff(existingContent.replace(/\r\n/g, "\n"), contentStr.replace(/\r\n/g, "\n"), path.basename(rawPath));
         diff = diffRes.diff;
         linesAdded = diffRes.additions;
         linesRemoved = diffRes.deletions;
     }
 
-    return {
-        path: args.path,
+    const isArtifact = isArtifactPath(rawPath, targetPath, chatId);
+    const rawMeta = args.ArtifactMetadata || args.artifact_metadata || args.artifactMetadata || null;
+    let artifactMetadata = null;
+    if (isArtifact) {
+        const record = await recordArtifactInCatalog({
+            rawPath,
+            resolvedPath: targetPath,
+            chatId,
+            metadata: rawMeta,
+            content: contentStr
+        });
+        if (record) {
+            artifactMetadata = record;
+        }
+    }
+
+    const result = {
+        path: rawPath,
         resolved_path: targetPath,
         bytes_written: byteCount,
         line_count: lineCount,
@@ -775,8 +1034,15 @@ async function handleWriteFile(args, chatId, { resolveSafePath }) {
         is_overwrite: isOverwrite,
         diff,
         status: "success",
-        message: `Successfully wrote ${byteCount} bytes (${lineCount} lines) to ${args.path}`
+        message: `Successfully wrote ${byteCount} bytes (${lineCount} lines) to ${rawPath}`
     };
+
+    if (isArtifact) {
+        result.is_artifact = true;
+        result.artifact_metadata = artifactMetadata || rawMeta || { UserFacing: true, Summary: path.basename(targetPath), RequestFeedback: false };
+    }
+
+    return result;
 }
 
 async function handleListDir(args, chatId, { resolveSafePath }) {

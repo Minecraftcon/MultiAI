@@ -288,8 +288,8 @@ body.plan-modal-open {
     max-width: 860px;
     font-size: 14.5px;
     line-height: 1.75;
-    color: var(--text-primary, #d1d5db);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--text-primary);
+    font-family: var(--font-sans);
     user-select: text;
 }
 

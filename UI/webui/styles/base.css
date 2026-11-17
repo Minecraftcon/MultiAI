@@ -35,3 +35,30 @@ body {
 button, a, input, textarea, select, [role="button"] {
     touch-action: manipulation;
 }
+
+/* =========================================================
+   CLEAN MINIMALIST SCROLLBARS
+   ========================================================= */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar) transparent;
+}
+
+*::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+*::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+    background: var(--scrollbar);
+    border-radius: 4px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-hover);
+}
+

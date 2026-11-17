@@ -207,6 +207,19 @@ MultiAI features two dedicated operational workflows switchable via the sidebar 
 
 ---
 
+## Provider Discovery (`getProviderInfo`)
+
+All LLM provider classes extend `BaseProvider` in [`src/providers/llm/base.js`](src/providers/llm/base.js) and expose a static `getProviderInfo()` method for runtime discovery and registration:
+
+```js
+const info = MyProvider.getProviderInfo();
+// { id: "myprovider", displayName: "My Provider", matchPatterns: [...] }
+```
+
+This enables the agent core to enumerate available providers, match model identifiers to the correct provider class, and surface provider capabilities in the UI without hardcoding provider lists.
+
+---
+
 ## Configuration Reference
 
 ### Canonical Configuration (`~/.MultiAI/config.ini`)

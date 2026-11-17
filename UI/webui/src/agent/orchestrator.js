@@ -16,6 +16,7 @@ import { isVerificationToolCall, shouldTriggerVerification, getVerificationPromp
 import { rightPanel } from "../components/right-panel.js";
 import { terminalDrawer } from "../components/terminal-drawer.js";
 import { finalizeTurnFilesChanged } from "../components/files-changed-bar.js";
+import { formatCommentsForSystemPrompt } from "../services/file-comments.js";
 
 function isPromissoryAnnouncement(text) {
     if (!text) return false;
@@ -126,6 +127,17 @@ export async function runAgent(userText, currentAIMessage, chatId, images = [], 
         }
     } catch (_) {}
 
+    try {
+        const fileCommentsDirective = formatCommentsForSystemPrompt(chatId);
+        if (fileCommentsDirective) {
+            runtimeContextDirectives.push({
+                scope: "user_file_comments",
+                priority: "high",
+                instruction: fileCommentsDirective
+            });
+        }
+    } catch (_) {}
+
     const selectedModel = session.model || (modelSelect ? modelSelect.value : "gemini-2.5-flash");
     const effectiveProvider = session.provider || (modelSelect?.value === selectedModel ? modelSelect?.selectedOptions?.[0]?.dataset?.provider : undefined);
     let overallStartTime = Date.now();
@@ -174,6 +186,9 @@ export async function runAgent(userText, currentAIMessage, chatId, images = [], 
         : (Number(configuredRounds) > 0 ? Number(configuredRounds) : Infinity);
     let stageStatus = "Thinking";
     const statusTimer = setInterval(() => {
+        if (currentAIMessage?._streamingToolBadges && currentAIMessage._streamingToolBadges.size > 0) {
+            return; // Let updateStreamingToolBadge manage activity label during active tool streaming
+        }
         const activityLabel = currentAIMessage.querySelector(".activity-label");
         if (activityLabel) {
             const sec = ((Date.now() - overallStartTime) / 1000).toFixed(1);
@@ -257,6 +272,14 @@ export async function runAgent(userText, currentAIMessage, chatId, images = [], 
                     } : undefined,
                     onToolChunk: isStreamingEnabled ? (toolData) => {
                         if (currentAIMessage && !genState.abortRequested) {
+                            const tName = toolData.name || "";
+                            if (["write_file", "create_file", "write_to_file", "save_file"].includes(tName)) {
+                                stageStatus = "Writing file";
+                            } else if (["replace_file_content", "edit_file", "search_and_replace", "multi_replace_file_content", "replace_in_file", "str_replace"].includes(tName)) {
+                                stageStatus = "Editing file";
+                            } else if (tName) {
+                                stageStatus = `Running ${tName}`;
+                            }
                             updateStreamingToolBadge(currentAIMessage, toolData, overallStartTime);
                         }
                     } : undefined
@@ -329,6 +352,14 @@ export async function runAgent(userText, currentAIMessage, chatId, images = [], 
                                 } : undefined,
                                 onToolChunk: isStreamingEnabledRetry ? (toolData) => {
                                     if (currentAIMessage && !genState.abortRequested) {
+                                        const tName = toolData.name || "";
+                                        if (["write_file", "create_file", "write_to_file", "save_file"].includes(tName)) {
+                                            stageStatus = "Writing file";
+                                        } else if (["replace_file_content", "edit_file", "search_and_replace", "multi_replace_file_content", "replace_in_file", "str_replace"].includes(tName)) {
+                                            stageStatus = "Editing file";
+                                        } else if (tName) {
+                                            stageStatus = `Running ${tName}`;
+                                        }
                                         updateStreamingToolBadge(currentAIMessage, toolData, overallStartTime);
                                     }
                                 } : undefined
@@ -693,6 +724,11 @@ export async function runAgent(userText, currentAIMessage, chatId, images = [], 
                             const editingTools = ["write_file", "replace_file_content", "multi_replace_file_content", "edit_file", "search_and_replace"];
                             if (editingTools.includes(toolName)) {
                                 turnModifiedFiles.add(p);
+                                try {
+                                    if (typeof window !== "undefined") {
+                                        window.dispatchEvent(new CustomEvent("workspace-files-changed", { detail: { path: p, tool: toolName } }));
+                                    }
+                                } catch (_) {}
                             }
                         }
                     }

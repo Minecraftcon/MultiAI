@@ -125,6 +125,29 @@ export function formatToolResult(data) {
             }
         }
 
+        // Clean instruct format for file and artifact operations (anti-json-waste)
+        if (data.path || data.bytes_written !== undefined || data.is_artifact !== undefined || data.chunks_applied !== undefined || data.lines_diff !== undefined) {
+            const parts = [];
+            if (data.status) parts.push(`status: ${data.status}`);
+            if (data.path) parts.push(`path: ${data.path}`);
+            if (data.is_artifact !== undefined) parts.push(`is_artifact: ${data.is_artifact}`);
+            if (data.artifact_id) parts.push(`artifact_id: ${data.artifact_id}`);
+            if (data.resolved_path && data.resolved_path !== data.path) parts.push(`resolved_path: ${data.resolved_path}`);
+            if (data.bytes_written !== undefined) parts.push(`bytes_written: ${data.bytes_written}`);
+            if (data.lines_before !== undefined && data.lines_after !== undefined) {
+                parts.push(`lines: ${data.lines_before} -> ${data.lines_after} (${data.lines_diff >= 0 ? "+" : ""}${data.lines_diff})`);
+            }
+            if (data.lines_added !== undefined && data.lines_removed !== undefined) {
+                parts.push(`changes: +${data.lines_added} -${data.lines_removed}`);
+            }
+            if (data.chunks_applied !== undefined) parts.push(`chunks_applied: ${data.chunks_applied}`);
+            if (data.message) parts.push(`message: ${data.message}`);
+            if (data.error) parts.push(`error: ${data.error}`);
+            if (parts.length > 0) {
+                return parts.join("\n");
+            }
+        }
+
         return JSON.stringify(data);
     }
     return String(data);

@@ -43,6 +43,10 @@ export function initPlanDock() {
         fetchUnacceptedChanges().then(() => syncDockState());
     });
 
+    document.addEventListener("unacceptedChangesUpdated", () => {
+        fetchUnacceptedChanges().then(() => syncDockState());
+    });
+
     document.addEventListener("runningTasksUpdated", () => {
         fetchRunningTasks().then(() => syncDockState());
     });
@@ -648,6 +652,22 @@ function renderDock(transitionMeta = {}) {
                 });
                 if (res.ok) {
                     await fetchUnacceptedChanges();
+                    if (typeof window !== "undefined" && window.rightPanel) {
+                        const tabs = window.rightPanel.tabs || [];
+                        tabs.forEach(t => {
+                            if (t.type === "diff") {
+                                t.type = "file";
+                                t.title = t.path.split("/").pop() || t.path;
+                                t.id = `file_${t.path}`;
+                                if (window.rightPanel.activeTabId === t.id || window.rightPanel.activeTabId === `diff_${t.path}`) {
+                                    window.rightPanel.activeTabId = t.id;
+                                }
+                            }
+                        });
+                        window.rightPanel.renderTabStrip();
+                        await window.rightPanel.checkWorkspaceChanges();
+                        window.rightPanel.renderActiveTab();
+                    }
                     if (activeTab === "changes") {
                         transitionToTab(null);
                     } else {
@@ -676,6 +696,22 @@ function renderDock(transitionMeta = {}) {
                 });
                 if (res.ok) {
                     await fetchUnacceptedChanges();
+                    if (typeof window !== "undefined" && window.rightPanel) {
+                        const tabs = window.rightPanel.tabs || [];
+                        tabs.forEach(t => {
+                            if (t.type === "diff") {
+                                t.type = "file";
+                                t.title = t.path.split("/").pop() || t.path;
+                                t.id = `file_${t.path}`;
+                                if (window.rightPanel.activeTabId === t.id || window.rightPanel.activeTabId === `diff_${t.path}`) {
+                                    window.rightPanel.activeTabId = t.id;
+                                }
+                            }
+                        });
+                        window.rightPanel.renderTabStrip();
+                        await window.rightPanel.checkWorkspaceChanges();
+                        window.rightPanel.renderActiveTab();
+                    }
                     syncDockState();
                 }
             } catch (err) {
@@ -701,6 +737,9 @@ function renderDock(transitionMeta = {}) {
                 });
                 if (res.ok) {
                     await fetchUnacceptedChanges();
+                    if (typeof window !== "undefined" && window.rightPanel) {
+                        window.rightPanel.checkWorkspaceChanges();
+                    }
                     syncDockState();
                 }
             } catch (err) {

@@ -10,6 +10,16 @@
     --panel-width: min(88vw, 336px);
     --panel-ease: cubic-bezier(0.2, 0.9, 0.3, 1);
     --panel-speed: 0.32s;
+    --composer-height: 52px;
+    --term-panel-height: 280px;
+    --term-panel-width: 420px;
+    --viewer-sidebar-width: 260px;
+    --right-panel-width: 480px;
+    --img-ar: 16 / 9;
+
+    /* Typography */
+    --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
 
     /* Semantic Surface & Background */
     --bg: #0f0f0f;
@@ -24,16 +34,31 @@
     --bubble-user-bg: #2c2c2e;
     --modal-bg: #121214;
 
+    /* Aliases */
+    --bg-primary: var(--bg);
+    --bg-secondary: var(--surface);
+    --bg-tertiary: var(--surface-3);
+    --bg-surface: var(--surface);
+    --bg-surface-hover: var(--hover);
+    --bg-surface-secondary: var(--surface-2);
+    --bg-accent-subtle: var(--accent-subtle);
+    --bg-code: var(--code-bg);
+    --surface-1: var(--surface);
+
     /* Borders */
     --border: rgba(255, 255, 255, 0.09);
     --border-strong: rgba(255, 255, 255, 0.16);
     --border-subtle: rgba(255, 255, 255, 0.05);
+    --border-hover: var(--border-strong);
 
     /* Text & Foregrounds */
     --text-primary: #f2f2f2;
     --text-secondary: #9ca3af;
     --text-tertiary: #6b7280;
     --text-muted: rgba(255, 255, 255, 0.32);
+    --text-accent: var(--accent);
+    --text-code: var(--text-primary);
+    --text-success: var(--success);
 
     /* Accent & Interactions */
     --accent: #3b82f6;
@@ -41,6 +66,7 @@
     --accent-subtle: rgba(59, 130, 246, 0.12);
     --accent-muted: rgba(59, 130, 246, 0.22);
     --accent-mid: rgba(59, 130, 246, 0.38);
+    --accent-primary: var(--accent);
 
     /* Button specific tokens */
     --send-btn-bg: var(--accent);
@@ -65,7 +91,40 @@
     --success: #22c55e;
     --warning: #f59e0b;
     --error: #ef4444;
+    --danger: var(--error);
 
+    /* Spot Pastels */
+    --pastel-red-bg: rgba(239, 68, 68, 0.15);
+    --pastel-red-text: #fca5a5;
+    --pastel-blue-bg: rgba(56, 189, 248, 0.15);
+    --pastel-blue-text: #7dd3fc;
+    --pastel-green-bg: rgba(34, 197, 94, 0.15);
+    --pastel-green-text: #86efac;
+    --pastel-yellow-bg: rgba(245, 158, 11, 0.15);
+    --pastel-yellow-text: #fde68a;
+    --pastel-red: #FDEBEC;
+    --pastel-red-fg: #9F2F2D;
+    --pastel-blue: #E1F3FE;
+    --pastel-blue-fg: #1F6C9F;
+    --pastel-green: #EDF3EC;
+    --pastel-green-fg: #346538;
+    --pastel-yellow: #FBF3DB;
+    --pastel-yellow-fg: #956400;
+
+    /* Custom Theme Overrides (defaults) */
+    --custom-accent: #3b82f6;
+    --custom-accent-hover: #60a5fa;
+    --custom-accent-subtle: rgba(59, 130, 246, 0.12);
+    --custom-accent-muted: rgba(59, 130, 246, 0.22);
+    --custom-accent-mid: rgba(59, 130, 246, 0.38);
+    --custom-bg: #0f0f0f;
+    --custom-bg-alt: #141414;
+    --custom-surface: #161618;
+    --custom-border: rgba(59, 130, 246, 0.14);
+    --custom-border-strong: rgba(59, 130, 246, 0.28);
+    --custom-border-subtle: rgba(59, 130, 246, 0.07);
+    --custom-send-bg: var(--accent);
+    --custom-send-fg: #ffffff;
 
     color-scheme: dark;
 }
@@ -137,6 +196,20 @@
     --bubble-user-bg: #e2e8f0;
     --modal-bg: #ffffff;
 
+    /* Aliases */
+    --bg-primary: var(--bg);
+    --bg-secondary: var(--surface);
+    --bg-tertiary: var(--surface-2);
+    --bg-surface: var(--surface);
+    --bg-surface-hover: var(--hover);
+    --bg-surface-secondary: var(--surface-2);
+    --bg-accent-subtle: var(--accent-subtle);
+    --bg-code: var(--code-bg);
+    --surface-1: var(--surface);
+    --border-hover: var(--border-strong);
+    --text-accent: var(--accent);
+    --text-code: var(--text-primary);
+
     --border: rgba(0, 0, 0, 0.10);
     --border-strong: rgba(0, 0, 0, 0.20);
     --border-subtle: rgba(0, 0, 0, 0.06);
@@ -172,6 +245,15 @@
     --warning: #d97706;
     --error: #dc2626;
 
+    /* Spot Pastels (Minimalist UI Palette) */
+    --pastel-red-bg: #FDEBEC;
+    --pastel-red-text: #9F2F2D;
+    --pastel-blue-bg: #E1F3FE;
+    --pastel-blue-text: #1F6C9F;
+    --pastel-green-bg: #EDF3EC;
+    --pastel-green-text: #346538;
+    --pastel-yellow-bg: #FBF3DB;
+    --pastel-yellow-text: #956400;
 
     color-scheme: light;
 }
@@ -190,6 +272,20 @@
         --bubble-bg: #f1f3f6;
         --bubble-user-bg: #e2e8f0;
         --modal-bg: #ffffff;
+
+    /* Aliases */
+    --bg-primary: var(--bg);
+    --bg-secondary: var(--surface);
+    --bg-tertiary: var(--surface-2);
+    --bg-surface: var(--surface);
+    --bg-surface-hover: var(--hover);
+    --bg-surface-secondary: var(--surface-2);
+    --bg-accent-subtle: var(--accent-subtle);
+    --bg-code: var(--code-bg);
+    --surface-1: var(--surface);
+    --border-hover: var(--border-strong);
+    --text-accent: var(--accent);
+    --text-code: var(--text-primary);
 
         --border: rgba(0, 0, 0, 0.10);
         --border-strong: rgba(0, 0, 0, 0.20);
@@ -226,6 +322,15 @@
         --warning: #d97706;
         --error: #dc2626;
 
+        /* Spot Pastels */
+        --pastel-red-bg: #FDEBEC;
+        --pastel-red-text: #9F2F2D;
+        --pastel-blue-bg: #E1F3FE;
+        --pastel-blue-text: #1F6C9F;
+        --pastel-green-bg: #EDF3EC;
+        --pastel-green-text: #346538;
+        --pastel-yellow-bg: #FBF3DB;
+        --pastel-yellow-text: #956400;
 
         color-scheme: light;
     }

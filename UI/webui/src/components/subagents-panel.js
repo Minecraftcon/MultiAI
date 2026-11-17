@@ -34,53 +34,78 @@ export function recoverPastSubagentsFromMainChat(mainChatId) {
     const mainSession = state.chatSessions[mainChatId];
     const msgs = mainSession.messages || [];
 
+    // Collect all existing subagent sessions bound to this parent
+    const existingSessions = Object.values(state.chatSessions || {}).filter(s => s && s.isSubagent && s.parentChatId === mainChatId);
+
+    // Prune stale ghost recovery duplicates (subagent_call_*) if a real subagent session exists with matching task
+    for (const s of existingSessions) {
+        if (s.id.startsWith("subagent_call_")) {
+            const hasReal = existingSessions.some(other => other.id !== s.id && !other.id.startsWith("subagent_call_") && other.task === s.task);
+            if (hasReal) {
+                delete state.chatSessions[s.id];
+            }
+        }
+    }
+
     for (let i = 0; i < msgs.length; i++) {
         const m = msgs[i];
         if (m.role === "assistant" && Array.isArray(m.tool_calls)) {
             for (const call of m.tool_calls) {
                 if (call.function?.name === "invoke_subagent" || call.function?.name === "task") {
-                    const subagentId = "subagent_" + call.id;
-                    if (!state.chatSessions[subagentId]) {
-                        let args = {};
-                        try {
-                            args = JSON.parse(call.function?.arguments || "{}");
-                        } catch (_) {}
-                        const taskText = args.task || args.instruction || args.prompt || "Subagent task";
-                        const subType = args.subagent_type || args.type || "designer";
-
-                        // Find corresponding tool result message
-                        const toolMsg = msgs.slice(i + 1).find(tm => tm.role === "tool" && tm.tool_call_id === call.id);
-                        let repText = "";
-                        if (toolMsg && toolMsg.content) {
-                            try {
-                                const parsed = JSON.parse(toolMsg.content);
-                                repText = parsed.report || parsed.message || toolMsg.content;
-                            } catch (_) {
-                                repText = toolMsg.content;
-                            }
-                        }
-
-                        const cleanTitle = `Subagent [${subType}]: ${taskText.slice(0, 35)}${taskText.length > 35 ? '…' : ''}`;
-                        const subSession = {
-                            id: subagentId,
-                            title: cleanTitle,
-                            isSubagent: true,
-                            subagentType: subType,
-                            subagentStatus: "completed",
-                            parentChatId: mainChatId,
-                            task: taskText,
-                            createdAt: mainSession.createdAt || Date.now(),
-                            updatedAt: mainSession.updatedAt || Date.now(),
-                            model: mainSession.model,
-                            provider: mainSession.provider,
-                            messages: [
-                                { role: "system", content: `You are an expert ${subType} subagent.` },
-                                { role: "user", content: taskText },
-                                { role: "assistant", content: repText || "Subagent completed task." }
-                            ]
-                        };
-                        state.chatSessions[subagentId] = subSession;
+                    // Tool result message MUST exist before recovering; if missing, subagent is currently executing
+                    const toolMsg = msgs.slice(i + 1).find(tm => tm.role === "tool" && tm.tool_call_id === call.id);
+                    if (!toolMsg) {
+                        continue;
                     }
+
+                    let args = {};
+                    try {
+                        args = JSON.parse(call.function?.arguments || "{}");
+                    } catch (_) {}
+                    const taskText = args.task || args.instruction || args.prompt || "Subagent task";
+                    const subType = args.subagent_type || args.type || "designer";
+
+                    let repText = "";
+                    let parsedSubagentId = null;
+                    if (toolMsg.content) {
+                        try {
+                            const parsed = JSON.parse(toolMsg.content);
+                            parsedSubagentId = parsed.subagent_id || null;
+                            repText = parsed.report || parsed.message || toolMsg.content;
+                        } catch (_) {
+                            repText = toolMsg.content;
+                        }
+                    }
+
+                    // Check if this subagent session already exists (by parsed ID, call ID, or exact task)
+                    const targetId = parsedSubagentId || ("subagent_" + call.id);
+                    const alreadyExists = state.chatSessions[targetId] || 
+                                          state.chatSessions["subagent_" + call.id] ||
+                                          Object.values(state.chatSessions).some(s => s && s.isSubagent && s.parentChatId === mainChatId && s.task === taskText);
+                    if (alreadyExists) {
+                        continue;
+                    }
+
+                    const cleanTitle = `Subagent [${subType}]: ${taskText.slice(0, 35)}${taskText.length > 35 ? '…' : ''}`;
+                    const subSession = {
+                        id: targetId,
+                        title: cleanTitle,
+                        isSubagent: true,
+                        subagentType: subType,
+                        subagentStatus: "completed",
+                        parentChatId: mainChatId,
+                        task: taskText,
+                        createdAt: mainSession.createdAt || Date.now(),
+                        updatedAt: mainSession.updatedAt || Date.now(),
+                        model: mainSession.model,
+                        provider: mainSession.provider,
+                        messages: [
+                            { role: "system", content: `You are an expert ${subType} subagent.` },
+                            { role: "user", content: taskText },
+                            { role: "assistant", content: repText || "Subagent completed task." }
+                        ]
+                    };
+                    state.chatSessions[targetId] = subSession;
                 }
             }
         }

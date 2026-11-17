@@ -509,6 +509,29 @@ function acceptChanges(workspaceRoot) {
 }
 
 /**
+ * Accepts unaccepted changes for a single file by removing it from tracked unaccepted files.
+ */
+function acceptFile(workspaceRoot, relativePath) {
+    const storageDir = ensureShadowRepo(workspaceRoot);
+    const cleanRel = relativePath.replace(/\\/g, "/").replace(/^\.\//, "");
+    const manifest = loadManifest(workspaceRoot);
+
+    if (manifest.files && manifest.files[cleanRel]) {
+        delete manifest.files[cleanRel];
+        saveManifest(workspaceRoot, manifest);
+    }
+
+    const baselinePath = path.join(storageDir, "baseline", cleanRel);
+    try {
+        if (fs.existsSync(baselinePath)) {
+            fs.unlinkSync(baselinePath);
+        }
+    } catch (_) {}
+
+    return true;
+}
+
+/**
  * Reverts a single file to its baseline state.
  */
 function revertFile(workspaceRoot, relativePath) {
@@ -574,8 +597,14 @@ function getUnifiedDiff(workspaceRoot, relativePath = null) {
     const manifest = loadManifest(workspaceRoot);
     const fileMap = manifest.files || {};
 
-    const targets = relativePath
-        ? [relativePath.replace(/\\/g, "/").replace(/^\.\//, "")]
+    const cleanTarget = relativePath ? relativePath.replace(/\\/g, "/").replace(/^\.\//, "") : null;
+    if (cleanTarget && !fileMap[cleanTarget]) {
+        // File has no unaccepted modifications (clean or already accepted)
+        return "";
+    }
+
+    const targets = cleanTarget
+        ? [cleanTarget]
         : Object.keys(fileMap);
 
     const diffChunks = [];
@@ -758,6 +787,7 @@ module.exports = {
     recordPostEditCommit,
     getUnacceptedChanges,
     acceptChanges,
+    acceptFile,
     revertFile,
     revertAll,
     getUnifiedDiff,

@@ -497,7 +497,7 @@ svg.plan-lucide-spin,
 
 .dock-tab-btn:hover {
     color: var(--text-primary);
-    background: var(--hover, rgba(255, 255, 255, 0.08));
+    background: var(--hover);
     transform: translateY(-1px);
 }
 
@@ -507,7 +507,7 @@ svg.plan-lucide-spin,
 
 .dock-tab-btn.is-active {
     color: var(--text-primary);
-    background: var(--hover, rgba(255, 255, 255, 0.12));
+    background: var(--hover-2, var(--hover));
     border-color: var(--border);
 }
 
@@ -521,7 +521,7 @@ svg.plan-lucide-spin,
     font-weight: 600;
     padding: 1px 5px;
     border-radius: 9999px;
-    background: var(--surface-2, rgba(255, 255, 255, 0.08));
+    background: var(--surface-2);
     color: var(--text-secondary);
     letter-spacing: -0.01em;
 }
@@ -535,10 +535,10 @@ svg.plan-lucide-spin,
     align-items: center;
     gap: 5px;
     padding: 3px 9px;
-    background: var(--accent, #3b82f6);
-    color: #ffffff;
+    background: var(--accent);
+    color: var(--send-btn-fg);
     border: none;
-    border-radius: 6px;
+    border-radius: 4px;
     font-size: 11.5px;
     font-weight: 500;
     cursor: pointer;
@@ -579,11 +579,11 @@ svg.plan-lucide-spin,
     display: flex;
     flex-direction: column;
     gap: 4px;
-    background: #18181b !important;
-    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    background: var(--surface) !important;
+    border: 1px solid var(--border) !important;
     border-radius: 8px !important;
     padding: 4px 6px !important;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45) !important;
+    box-shadow: 0 2px 10px var(--shadow) !important;
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
     margin-bottom: 4px;
@@ -657,7 +657,7 @@ svg.plan-lucide-spin,
 }
 
 .dock-changes-list::-webkit-scrollbar-thumb {
-    background: var(--scrollbar, rgba(255, 255, 255, 0.15));
+    background: var(--scrollbar);
     border-radius: 3px;
 }
 
@@ -675,7 +675,7 @@ svg.plan-lucide-spin,
 }
 
 .dock-change-row:hover {
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--hover);
 }
 
 .dock-change-left {
@@ -696,12 +696,12 @@ svg.plan-lucide-spin,
     justify-content: center;
     width: 14px;
     height: 14px;
-    color: #f59e0b; /* Amber dot from screenshot */
+    color: var(--warning);
     flex-shrink: 0;
 }
 
 .dock-change-status-dot.is-new {
-    color: #10b981;
+    color: var(--success);
 }
 
 .dock-change-status-dot i,
@@ -712,21 +712,21 @@ svg.plan-lucide-spin,
 }
 
 .dock-diff-pill.add {
-    color: #10b981;
+    color: var(--success);
     font-weight: 500;
     font-size: 11.5px;
     flex-shrink: 0;
 }
 
 .dock-diff-pill.del {
-    color: #ef4444;
+    color: var(--error);
     font-weight: 500;
     font-size: 11.5px;
     flex-shrink: 0;
 }
 
 .dock-file-name {
-    color: var(--text-primary, #f8fafc);
+    color: var(--text-primary);
     font-weight: 600;
     white-space: nowrap !important;
     overflow: hidden;
@@ -737,7 +737,7 @@ svg.plan-lucide-spin,
 }
 
 .dock-file-dir {
-    color: var(--text-tertiary, #64748b);
+    color: var(--text-tertiary);
     font-size: 11.5px;
     font-weight: 400;
     white-space: nowrap !important;
@@ -784,7 +784,7 @@ svg.plan-lucide-spin,
 
 .dock-row-action-btn:hover {
     color: var(--text-primary);
-    background: rgba(255, 255, 255, 0.08);
+    background: var(--hover);
 }
 
 .dock-row-action-btn i,
@@ -845,7 +845,7 @@ svg.plan-lucide-spin,
     border: none;
     background: transparent;
     border-radius: 4px;
-    color: var(--text-secondary, #94a3b8);
+    color: var(--text-secondary);
     cursor: pointer;
     padding: 0;
     transition: all 0.16s cubic-bezier(0.16, 1, 0.3, 1);
@@ -854,8 +854,8 @@ svg.plan-lucide-spin,
 }
 
 .dock-back-btn:hover {
-    color: var(--text-primary, #ffffff);
-    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-primary);
+    background: var(--hover);
     transform: translateX(-2px);
 }
 
@@ -874,7 +874,7 @@ svg.plan-lucide-spin,
 .dock-bar-task-icon {
     width: 15px;
     height: 15px;
-    color: var(--text-secondary, #94a3b8);
+    color: var(--text-tertiary);
     flex-shrink: 0;
 }
 
@@ -882,7 +882,7 @@ svg.plan-lucide-spin,
     font-size: 13px;
     font-family: 'JetBrains Mono', var(--font-mono, monospace);
     font-weight: 500;
-    color: var(--text-secondary, #cbd5e1);
+    color: var(--text-primary);
     letter-spacing: -0.01em;
     white-space: nowrap !important;
     overflow: hidden;
@@ -900,7 +900,7 @@ svg.plan-lucide-spin,
 .dock-reject-all-btn {
     background: transparent;
     border: none;
-    color: var(--text-secondary, #94a3b8);
+    color: var(--text-secondary);
     font-family: inherit;
     font-size: 12.5px;
     font-weight: 500;
@@ -914,8 +914,8 @@ svg.plan-lucide-spin,
 }
 
 .dock-reject-all-btn:hover:not(:disabled) {
-    color: var(--text-primary, #ffffff);
-    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-primary);
+    background: var(--hover);
 }
 
 .dock-reject-all-btn:disabled {
@@ -924,10 +924,10 @@ svg.plan-lucide-spin,
 }
 
 .dock-accept-all-btn {
-    background: #0284c7; /* Blue accent pill */
-    color: #ffffff;
+    background: var(--accent);
+    color: var(--send-btn-fg);
     border: none;
-    border-radius: 6px;
+    border-radius: 4px;
     padding: 3px 9px;
     font-family: inherit;
     font-size: 12.5px;
@@ -936,14 +936,14 @@ svg.plan-lucide-spin,
     display: inline-flex;
     align-items: center;
     gap: 3px;
-    transition: background 0.15s ease;
+    transition: background 0.15s ease, opacity 0.15s ease;
     outline: none;
     white-space: nowrap !important;
     flex-shrink: 0;
 }
 
 .dock-accept-all-btn:hover:not(:disabled) {
-    background: #0369a1;
+    background: var(--accent-hover);
 }
 
 .dock-accept-all-btn:disabled {
@@ -962,8 +962,9 @@ svg.plan-lucide-spin,
     font-size: 11.5px;
     font-family: 'JetBrains Mono', var(--font-mono, monospace);
     font-weight: 500;
-    color: var(--text-secondary, #94a3b8);
-    background: rgba(255, 255, 255, 0.07);
+    color: var(--text-secondary);
+    background: var(--surface-2);
+    border: 1px solid var(--border-subtle, transparent);
     padding: 2px 7px;
     border-radius: 4px;
     letter-spacing: -0.01em;
@@ -1162,7 +1163,7 @@ svg.plan-lucide-spin,
     height: 6px;
     border-radius: 50%;
     background: var(--text-secondary);
-    box-shadow: 0 0 4px rgba(255, 255, 255, 0.15);
+    box-shadow: 0 0 4px var(--border);
     flex-shrink: 0;
     margin-right: 4px;
     animation: runningTaskPulse 2s infinite ease-in-out;
@@ -1174,8 +1175,8 @@ svg.plan-lucide-spin,
 }
 
 .dock-kill-task-btn:hover {
-    color: #ef4444 !important;
-    background: rgba(239, 68, 68, 0.15) !important;
+    color: var(--error) !important;
+    background: var(--pastel-red-bg) !important;
 }
 
 .dock-kill-all-btn {
@@ -1185,7 +1186,7 @@ svg.plan-lucide-spin,
     padding: 3px 9px;
     background: transparent;
     color: var(--text-secondary);
-    border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.12));
+    border: 1px solid var(--border-subtle);
     border-radius: 6px;
     font-size: 11.5px;
     font-weight: 500;
@@ -1196,9 +1197,9 @@ svg.plan-lucide-spin,
 }
 
 .dock-kill-all-btn:hover:not(:disabled) {
-    color: #ef4444;
-    border-color: rgba(239, 68, 68, 0.35);
-    background: rgba(239, 68, 68, 0.1);
+    color: var(--error);
+    border-color: var(--error);
+    background: var(--pastel-red-bg);
 }
 
 .dock-kill-all-btn:disabled {
@@ -1211,14 +1212,14 @@ svg.plan-lucide-spin,
 }
 
 .dock-tab-btn.has-running-tasks .dock-tab-badge {
-    background: var(--surface-2, rgba(255, 255, 255, 0.08));
+    background: var(--surface-2);
     color: var(--text-secondary);
 }
 
 .dock-tab-btn.has-running-tasks:hover .dock-tab-badge,
 .dock-tab-btn.has-running-tasks.is-active .dock-tab-badge {
     color: var(--text-primary);
-    background: var(--hover-3, rgba(255, 255, 255, 0.14));
+    background: var(--hover-3, var(--hover));
 }
 
 /* =========================================================
@@ -1230,7 +1231,7 @@ svg.plan-lucide-spin,
     gap: 8px;
     padding: 3px 6px;
     font-size: 11.5px;
-    color: var(--text-tertiary, #888888);
+    color: var(--text-tertiary);
     user-select: none;
     line-height: 1.2;
 }
@@ -1241,7 +1242,7 @@ svg.plan-lucide-spin,
 }
 
 .dock-subagents-text {
-    color: var(--text-tertiary, #888888);
+    color: var(--text-tertiary);
     font-size: 11.5px;
     font-weight: 500;
     letter-spacing: 0.01em;

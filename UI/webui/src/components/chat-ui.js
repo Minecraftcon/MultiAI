@@ -100,11 +100,20 @@ export function renderTurn(turn, session, compactionRef, isLastTurn) {
     const fragment = document.createDocumentFragment();
     const cp = session?.compactionState;
 
-    // 1. Render User Message
+    // 1. Render User Message or Agent Directive
     if (turn.userMessage) {
         const userMsg = turn.userMessage;
+        const isAgent = Boolean(
+            userMsg.isAgentMessage === true || 
+            userMsg.sender === "agent" || 
+            (typeof userMsg.content === "string" && (
+                userMsg.content.startsWith("[Agent Message]:") || 
+                userMsg.content.startsWith("[Message from Agent")
+            ))
+        );
+
         const userDiv = document.createElement("div");
-        userDiv.className = "message user";
+        userDiv.className = isAgent ? "message agent-inter-message" : "message user";
 
         let rawText = "";
         let imgsHtml = "";
@@ -127,13 +136,31 @@ export function renderTurn(turn, session, compactionRef, isLastTurn) {
         }
 
         userDiv.dataset.rawText = rawText;
-        const textHtml = rawText ? `<div class="msg-bubble-text">${formatMessageWithInlineEntities(rawText)}</div>` : "";
-        userDiv.innerHTML = `
-            <div class="user-bubble-content">
-                ${imgsHtml}
-                ${textHtml}
-            </div>
-        `;
+
+        if (isAgent) {
+            const cleanText = userMsg.rawContent || rawText
+                .replace(/^\[Agent Message\]:\s*/i, "")
+                .replace(/^\[Message from [^\]]+\]:\s*/i, "");
+            const senderLabel = userMsg.senderName || "Agent Message";
+            userDiv.innerHTML = `
+                <div class="agent-inter-bubble">
+                    <div class="agent-inter-header">
+                        <span class="agent-inter-badge"><i data-lucide="bot"></i> ${escapeHTML(senderLabel)}</span>
+                        <span class="agent-inter-bus-tag">Inter-Agent Messaging</span>
+                    </div>
+                    <div class="agent-inter-text">${formatMessageWithInlineEntities(cleanText)}</div>
+                </div>
+            `;
+            renderIcons(userDiv);
+        } else {
+            const textHtml = rawText ? `<div class="msg-bubble-text">${formatMessageWithInlineEntities(rawText)}</div>` : "";
+            userDiv.innerHTML = `
+                <div class="user-bubble-content">
+                    ${imgsHtml}
+                    ${textHtml}
+                </div>
+            `;
+        }
         fragment.appendChild(userDiv);
     }
 
@@ -770,48 +797,94 @@ export function updateAIStream(element, fullText, isDone, startTime, hasTools) {
     const shouldSyncParse = !isStreamingEnabled || (!streamer && isDone) || isDone;
     const sanitizedRest = (shouldSyncParse && content) ? parseMarkdown(content) : "";
 
+    const searchContainer = element.querySelector(".search-items-container");
+    const hasToolsPresent = Boolean(
+        hasTools ||
+        (searchContainer && searchContainer.children.length > 0) ||
+        (element._streamingToolBadges && element._streamingToolBadges.size > 0)
+    );
+
     if (sanitizedThought) {
-        if (element._lastRenderedThought !== sanitizedThought) {
-            const prevDetails = preSearchContent.querySelector(".thought-box");
-            const wasUserClosed = prevDetails && (!prevDetails.open || prevDetails.dataset.userToggled === "closed");
-            const wasExpanded = Boolean(preSearchContent.querySelector(".thought-collapsible.is-expanded"));
+        if (!hasToolsPresent) {
+            // Round 0: stream to top thought header (preSearchContent)
+            if (element._lastRenderedThought !== sanitizedThought) {
+                const prevDetails = preSearchContent.querySelector(".thought-box");
+                const wasUserClosed = prevDetails && (!prevDetails.open || prevDetails.dataset.userToggled === "closed");
+                const wasExpanded = Boolean(preSearchContent.querySelector(".thought-collapsible.is-expanded"));
 
-            preSearchContent.innerHTML = sanitizedThought;
-            if (sanitizedThought.includes("<table")) {
-                wrapTablesForScroll(preSearchContent);
+                preSearchContent.innerHTML = sanitizedThought;
+                if (sanitizedThought.includes("<table")) {
+                    wrapTablesForScroll(preSearchContent);
+                }
+
+                const newDetails = preSearchContent.querySelector(".thought-box");
+                if (newDetails) {
+                    const wasUserOpened = prevDetails && prevDetails.dataset.userToggled === "open";
+                    const isThinkingActive = !isDone && (!content || !content.trim());
+                    if (wasUserOpened) {
+                        newDetails.open = true;
+                        newDetails.dataset.userToggled = "open";
+                    } else if (wasUserClosed || !isThinkingActive) {
+                        newDetails.open = false;
+                        if (wasUserClosed) newDetails.dataset.userToggled = "closed";
+                    } else {
+                        newDetails.open = true;
+                    }
+                }
+
+                const newCollapsible = preSearchContent.querySelector(".thought-collapsible");
+                if (newCollapsible && wasExpanded) {
+                    newCollapsible.classList.add("is-expanded");
+                    const btn = newCollapsible.querySelector(".thought-expand-btn");
+                    if (btn) {
+                        btn.setAttribute("aria-expanded", "true");
+                        btn.innerHTML = `<span class="thought-expand-icon" aria-hidden="true">▴</span> collapse`;
+                    }
+                }
+
+                element._lastRenderedThought = sanitizedThought;
+                if (isDone) renderIcons(preSearchContent);
             }
+        } else {
+            // Round > 0: stream into the active round thought element inside searchContainer
+            const wrapper = element.querySelector(".activity-wrapper");
+            const searchContainer = element.querySelector(".search-items-container");
+            if (wrapper && searchContainer) {
+                wrapper.style.display = "block";
+                if (!element.dataset.manuallyToggled) {
+                    wrapper.classList.add("open");
+                }
+                let activeRoundThought = element._activeRoundThoughtEl;
+                if (!activeRoundThought || activeRoundThought.parentNode !== searchContainer) {
+                    activeRoundThought = document.createElement("div");
+                    activeRoundThought.className = "activity-thought-item streaming";
 
-            const newDetails = preSearchContent.querySelector(".thought-box");
-            if (newDetails) {
-                const wasUserOpened = prevDetails && prevDetails.dataset.userToggled === "open";
-                const hasStreamingTools = Boolean(element._streamingToolBadges && element._streamingToolBadges.size > 0);
-                const isThinkingActive = !isDone && !hasTools && !hasStreamingTools && (!content || !content.trim());
-                if (wasUserOpened) {
-                    newDetails.open = true;
-                    newDetails.dataset.userToggled = "open";
-                } else if (wasUserClosed || !isThinkingActive) {
-                    newDetails.open = false;
-                    if (wasUserClosed) newDetails.dataset.userToggled = "closed";
-                } else {
-                    newDetails.open = true;
+                    let insertRef = null;
+                    if (element._streamingToolBadges && element._streamingToolBadges.size > 0) {
+                        for (const badge of element._streamingToolBadges.values()) {
+                            if (badge && badge.parentNode === searchContainer) {
+                                insertRef = badge;
+                                break;
+                            }
+                        }
+                    }
+                    if (insertRef) {
+                        searchContainer.insertBefore(activeRoundThought, insertRef);
+                    } else {
+                        searchContainer.appendChild(activeRoundThought);
+                    }
+                    element._activeRoundThoughtEl = activeRoundThought;
+                }
+                activeRoundThought.innerHTML = sanitizedThought;
+                wrapTablesForScroll(activeRoundThought);
+                if (isDone) {
+                    activeRoundThought.classList.remove("streaming");
+                    element._activeRoundThoughtEl = null;
                 }
             }
-
-            const newCollapsible = preSearchContent.querySelector(".thought-collapsible");
-            if (newCollapsible && wasExpanded) {
-                newCollapsible.classList.add("is-expanded");
-                const btn = newCollapsible.querySelector(".thought-expand-btn");
-                if (btn) {
-                    btn.setAttribute("aria-expanded", "true");
-                    btn.innerHTML = `<span class="thought-expand-icon" aria-hidden="true">▴</span> collapse`;
-                }
-            }
-
-            element._lastRenderedThought = sanitizedThought;
-            if (isDone) renderIcons(preSearchContent);
         }
     } else {
-        if (preSearchContent.innerHTML) {
+        if (!hasToolsPresent && preSearchContent.innerHTML) {
             preSearchContent.innerHTML = "";
             element._lastRenderedThought = "";
         }

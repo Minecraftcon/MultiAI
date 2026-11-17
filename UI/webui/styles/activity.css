@@ -146,7 +146,7 @@
 }
 
 .badge-answer-arrow {
-    color: var(--accent-primary, #6366f1);
+    color: var(--accent);
     font-weight: 600;
     font-size: 11px;
     user-select: none;
@@ -213,41 +213,25 @@
     width: 36px;
     height: 36px;
     border-radius: 50%;
-    background: #242424;
-    border: 1px solid #383838;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    color: #888;
+    color: var(--text-tertiary);
     position: relative;
     transition: color 0.25s ease, border-color 0.25s ease;
 }
 
 .search-icon-circle.has-timer-ring {
     border-color: transparent;
-    color: #ffffff;
-}
-
-[data-theme="light"] .search-icon-circle {
-    background: #f4f4f5;
-    border-color: #e4e4e7;
-    color: #71717a;
-}
-
-[data-theme="light"] .search-icon-circle.has-timer-ring {
-    border-color: transparent;
-    color: #09090b;
+    color: var(--text-primary);
 }
 
 .timer-badge.timer-finished .search-icon-circle {
-    color: #888 !important;
-    border-color: #383838 !important;
-}
-
-[data-theme="light"] .timer-badge.timer-finished .search-icon-circle {
-    color: #71717a !important;
-    border-color: #e4e4e7 !important;
+    color: var(--text-tertiary) !important;
+    border-color: var(--border) !important;
 }
 
 .search-icon-circle i svg,
@@ -271,17 +255,13 @@
 
 .timer-ring-bg {
     fill: none;
-    stroke: #383838;
+    stroke: var(--border);
     stroke-width: 1.5;
-}
-
-[data-theme="light"] .timer-ring-bg {
-    stroke: #e4e4e7;
 }
 
 .timer-ring-bar {
     fill: none;
-    stroke: #ffffff;
+    stroke: var(--text-primary);
     stroke-width: 1.5;
     stroke-linecap: round;
     stroke-dasharray: 108.39;
@@ -289,17 +269,9 @@
     transition: stroke 0.3s ease;
 }
 
-[data-theme="light"] .timer-ring-bar {
-    stroke: #09090b;
-}
-
 .timer-badge.timer-finished .timer-ring-bar {
     stroke-dashoffset: 0;
-    stroke: #383838 !important;
-}
-
-[data-theme="light"] .timer-badge.timer-finished .timer-ring-bar {
-    stroke: #e4e4e7 !important;
+    stroke: var(--border) !important;
 }
 
 .timer-badge.timer-finished .timer-ring-svg {
@@ -347,23 +319,23 @@
 }
 
 .badge-diff-stat.add {
-    color: #22c55e !important;
+    color: var(--success) !important;
     background: transparent !important;
     border: none !important;
 }
 
 .badge-diff-stat.del {
-    color: #f87171 !important;
+    color: var(--error) !important;
     background: transparent !important;
     border: none !important;
 }
 
 [data-theme="light"] .badge-diff-stat.add {
-    color: #2e7d32 !important;
+    color: var(--success) !important;
 }
 
 [data-theme="light"] .badge-diff-stat.del {
-    color: #c62828 !important;
+    color: var(--error) !important;
 }
 
 .search-badge-item.clickable-badge:hover .badge-diff-stats,
@@ -377,7 +349,7 @@
 }
 
 .search-badge-item.file-edit-badge.is-editing .search-label {
-    color: #3fb950;
+    color: var(--success);
     font-weight: 600;
 }
 
@@ -387,7 +359,7 @@
     font-weight: 500;
     color: var(--text-tertiary);
     margin-left: 6px;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-family: 'JetBrains Mono', ui-monospace, sans-serif;
     vertical-align: middle;
     letter-spacing: -0.01em;
     will-change: transform, opacity;
@@ -740,8 +712,8 @@
     overflow: hidden;
     position: relative;
     transition: max-height 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-    -webkit-mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 1) 60%, rgba(0, 0, 0, 0) 100%);
-    mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 1) 60%, rgba(0, 0, 0, 0) 100%);
+    -webkit-mask-image: linear-gradient(to bottom, black 60%, transparent 100%);
+    mask-image: linear-gradient(to bottom, black 60%, transparent 100%);
 }
 
 .thought-collapsible.is-expanded .thought-collapsed-body {
@@ -889,7 +861,7 @@
 }
 
 .checkpoint-view-btn:focus-visible {
-    outline: 2px solid rgba(255, 255, 255, 0.5);
+    outline: 2px solid var(--border-strong);
     outline-offset: 2px;
 }
 
@@ -914,7 +886,7 @@
 
 .checkpoint-view-btn:hover .checkpoint-pill-tag {
     background: var(--accent);
-    color: #ffffff;
+    color: var(--send-btn-fg);
 }
 
 /* Artifact Badges & Buttons */
@@ -956,9 +928,9 @@
 .checkpoint-artifact-link {
     color: var(--text-primary);
     text-decoration: underline;
-    text-decoration-color: rgba(255, 255, 255, 0.28);
+    text-decoration-color: var(--border-strong);
     text-underline-offset: 3px;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-family: var(--font-mono, monospace);
     font-size: 0.9em;
     padding: 2px 4px;
     border-radius: 4px;
@@ -973,7 +945,7 @@
 }
 
 .checkpoint-artifact-link:focus-visible {
-    outline: 2px solid rgba(255, 255, 255, 0.5);
+    outline: 2px solid var(--border-strong);
     outline-offset: 2px;
 }
 
@@ -982,7 +954,7 @@
     align-items: center;
     gap: 5px;
     background: var(--accent);
-    color: #ffffff;
+    color: var(--send-btn-fg);
     border: 1px solid transparent;
     border-radius: 5px;
     padding: 3px 9px;
@@ -996,8 +968,8 @@
 }
 
 .checkpoint-open-doc-btn:hover {
-    background: #e4e4e7;
-    color: #000000;
+    background: var(--surface-3);
+    color: var(--text-primary);
 }
 
 .checkpoint-open-doc-btn:active {
@@ -1005,7 +977,7 @@
 }
 
 .checkpoint-open-doc-btn:focus-visible {
-    outline: 2px solid rgba(255, 255, 255, 0.6);
+    outline: 2px solid var(--border-strong);
     outline-offset: 2px;
 }
 
@@ -1013,7 +985,7 @@
 .checkpoint-modal-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.82);
+    background: var(--overlay);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
     z-index: 9999;
@@ -1033,7 +1005,7 @@
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 14px;
-    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.85), 0 0 0 1px var(--hover);
+    box-shadow: 0 24px 64px var(--shadow-strong), 0 0 0 1px var(--hover);
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -1124,7 +1096,7 @@
 
 .checkpoint-copy-path-btn:focus-visible,
 .checkpoint-modal-close-btn:focus-visible {
-    outline: 2px solid rgba(255, 255, 255, 0.45);
+    outline: 2px solid var(--border-strong);
     outline-offset: 2px;
 }
 
@@ -1239,13 +1211,13 @@
 }
 
 .checkpoint-close-footer-btn:focus-visible {
-    outline: 2px solid rgba(255, 255, 255, 0.45);
+    outline: 2px solid var(--border-strong);
     outline-offset: 2px;
 }
 
 /* ── Todo Checklist Card (Build Mode Plan Engine) ────────── */
 .todo-checklist-card {
-    background: var(--card-bg, #161618);
+    background: var(--card-bg);
     border: 1px solid var(--border);
     border-radius: 8px;
     padding: 12px 14px;
@@ -1264,7 +1236,7 @@
 }
 
 .todo-progress-pct {
-    color: var(--accent, #3b82f6);
+    color: var(--accent);
     font-size: 11.5px;
     font-weight: 700;
 }
@@ -1272,7 +1244,7 @@
 .todo-progress-bar-track {
     width: 100%;
     height: 4px;
-    background: var(--surface-3, rgba(255, 255, 255, 0.08));
+    background: var(--surface-3);
     border-radius: 4px;
     overflow: hidden;
     margin-bottom: 10px;
@@ -1280,7 +1252,7 @@
 
 .todo-progress-bar-fill {
     height: 100%;
-    background: linear-gradient(90deg, #3b82f6 0%, #10b981 100%);
+    background: linear-gradient(90deg, var(--accent) 0%, var(--success) 100%);
     border-radius: 4px;
     transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -1311,7 +1283,7 @@
 }
 
 .todo-check-icon {
-    color: #10b981;
+    color: var(--success);
     font-weight: 700;
 }
 
@@ -1323,7 +1295,7 @@
 .todo-spinner {
     width: 11px;
     height: 11px;
-    border: 2px solid var(--accent, #3b82f6);
+    border: 2px solid var(--accent);
     border-top-color: transparent;
     border-radius: 50%;
     animation: todoSpin 0.75s linear infinite;

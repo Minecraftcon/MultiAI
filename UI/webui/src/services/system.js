@@ -9,6 +9,7 @@ import {
 } from "../config.js";
 import { state, setActiveSystemPrompt } from "../state.js";
 import { McpActiveTools } from "../tools/mcp/index.js";
+import { formatCommentsForSystemPrompt } from "./file-comments.js";
 
 let cachedSystemInfo = null;
 
@@ -46,13 +47,13 @@ export function buildFullSystemPrompt(workspace = null, personaOverride = null) 
     if (state.config?.Tools?.EnableMcp !== false) {
         const mcpTools = McpActiveTools.getActiveTools();
         if (mcpTools && mcpTools.length > 0) {
-            let mcpPrompt = `[EXTERNAL MODEL CONTEXT PROTOCOL (MCP) TOOLS]:\n`;
-            mcpPrompt += `You have access to the following active external MCP tools registered from connected Model Context Protocol servers:\n`;
+            let mcpPrompt = `[MCP TOOLS]:\n`;
+            mcpPrompt += `Active external tools from connected Model Context Protocol servers:\n`;
             for (const t of mcpTools) {
                 const desc = t.schema?.function?.description || t.description || "External MCP tool execution";
                 mcpPrompt += `- ${t.name}: ${desc}\n`;
             }
-            mcpPrompt += `\nWhen the user asks you to perform tasks matching these capabilities or inquires about your available tools, invoke or reference these MCP tools directly by their registered names.`;
+            mcpPrompt += `\nInvoke these tools by their registered names when the user's request matches their capabilities.`;
             sections.push(mcpPrompt.trim());
         }
     }
@@ -87,6 +88,11 @@ export function buildFullSystemPrompt(workspace = null, personaOverride = null) 
             `  4. Regular relative paths resolve normally against the project workspace.`
         ].join("\n");
         sections.push(wsText.trim());
+    }
+
+    const commentsPrompt = formatCommentsForSystemPrompt(state.currentChatId);
+    if (commentsPrompt) {
+        sections.push(commentsPrompt);
     }
 
     sections.push(FOLLOWUP_SYSTEM_PROMPT);

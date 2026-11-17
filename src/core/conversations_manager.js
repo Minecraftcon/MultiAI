@@ -161,46 +161,106 @@ function findChatDateDir(chatId) {
  *                                             /artifacts
  *                                             /images
  */
-function ensureChatWorkspace(chatId, dateStr) {
-    if (!chatId || typeof chatId !== "string") {
-        throw new Error("Chat ID is required to ensure chat workspace.");
+function ensureChatWorkspace(chatIdOrDir, dateStrOrMeta) {
+    if (!chatIdOrDir) {
+        throw new Error("Chat ID or directory is required to ensure chat workspace.");
     }
 
-    const found = findChatDateDir(chatId);
-    const date = found ? found.dateFolder : (dateStr && /^\d{4}-\d{2}-\d{2}$/.test(dateStr) ? dateStr : formatDate());
-    const convRoot = found ? found.convRoot : getConversationsRoot();
+    let chatDir;
+    let chatId;
+    let date;
+    let convRoot;
+    let metaInput = null;
 
-    const dateDir = path.join(convRoot, date);
-    const chatsDir = path.join(dateDir, "chats");
-    const chatDir = path.join(chatsDir, chatId);
+    if (typeof dateStrOrMeta === "object" && dateStrOrMeta !== null) {
+        metaInput = dateStrOrMeta;
+    }
+
+    if (typeof chatIdOrDir === "string" && (chatIdOrDir.includes("/") || chatIdOrDir.includes("\\"))) {
+        chatDir = path.resolve(chatIdOrDir);
+        chatId = path.basename(chatDir);
+        date = (typeof dateStrOrMeta === "string" && /^\d{4}-\d{2}-\d{2}$/.test(dateStrOrMeta)) ? dateStrOrMeta : formatDate();
+        convRoot = path.dirname(path.dirname(chatDir));
+    } else {
+        chatId = chatIdOrDir;
+        const found = findChatDateDir(chatId);
+        date = found ? found.dateFolder : (typeof dateStrOrMeta === "string" && /^\d{4}-\d{2}-\d{2}$/.test(dateStrOrMeta) ? dateStrOrMeta : formatDate());
+        convRoot = found ? found.convRoot : getConversationsRoot();
+
+        const dateDir = path.join(convRoot, date);
+        const chatsDir = path.join(dateDir, "chats");
+        chatDir = path.join(chatsDir, chatId);
+    }
+
     const scratchDir = path.join(chatDir, "scratch");
     const artifactsDir = path.join(chatDir, "artifacts");
+    const artifactsCatalogFile = path.join(artifactsDir, "artifacts.json");
     const imagesDir = path.join(chatDir, "images");
     const metaFile = path.join(chatDir, "meta.json");
+    const metadataFile = path.join(chatDir, "metadata.json");
     const messagesFile = path.join(chatDir, "messages.jsonl");
     const contextFile = path.join(chatDir, "context.json");
     const legacyChatFile = path.join(chatDir, "chat.json");
 
     try {
+        if (!fs.existsSync(chatDir)) fs.mkdirSync(chatDir, { recursive: true });
         if (!fs.existsSync(scratchDir)) fs.mkdirSync(scratchDir, { recursive: true });
         if (!fs.existsSync(artifactsDir)) fs.mkdirSync(artifactsDir, { recursive: true });
         if (!fs.existsSync(imagesDir)) fs.mkdirSync(imagesDir, { recursive: true });
+        if (!fs.existsSync(artifactsCatalogFile)) {
+            fs.writeFileSync(artifactsCatalogFile, JSON.stringify({ artifacts: [] }, null, 2), "utf8");
+        }
+
+        let existingMeta = {};
+        if (fs.existsSync(metadataFile)) {
+            existingMeta = readJsonFile(metadataFile, {});
+        } else if (fs.existsSync(metaFile)) {
+            existingMeta = readJsonFile(metaFile, {});
+        }
+        if (metaInput && typeof metaInput === "object") {
+            existingMeta = { ...existingMeta, ...metaInput };
+        }
+
+        const updatedWorkspace = {
+            chatDir,
+            artifactsDir,
+            scratchDir,
+            imagesDir,
+            dateStr: date,
+            ...(existingMeta.workspace || {})
+        };
+        updatedWorkspace.artifactsDir = artifactsDir;
+        updatedWorkspace.scratchDir = scratchDir;
+        updatedWorkspace.chatDir = chatDir;
+
+        const updatedMeta = {
+            id: chatId,
+            mode: existingMeta.mode || "chat",
+            title: existingMeta.title || "Conversation",
+            createdAt: existingMeta.createdAt || Date.now(),
+            updatedAt: existingMeta.updatedAt || Date.now(),
+            ...existingMeta,
+            workspace: updatedWorkspace
+        };
+
+        writeJsonFile(metadataFile, updatedMeta);
+        writeJsonFile(metaFile, updatedMeta);
     } catch (err) {
         console.error(`[CONVERSATIONS] Error creating directories for chat ${chatId}:`, err.message);
     }
 
     const workspacePrompt = [
         `[SCRATCHPAD, ARTIFACTS & WORKSPACE]:`,
-        `- Active Chat ID: ${chatId}`,
+        `- Chat ID: ${chatId}`,
         `- Conversation Root: ${chatDir}`,
-        `- Scratch Directory ($SCRATCH): ${scratchDir}`,
-        `- Artifacts Directory ($ARTIFACTS): ${artifactsDir}`,
-        `- Images Directory: ${imagesDir}`,
-        `- STORAGE & WORKSPACE GUIDELINES:`,
-        `  1. You have a dedicated scratch directory (${scratchDir}) accessible via '$SCRATCH/<filename>' for temporary test scripts, scratch notes, working logs, or one-off benchmarks.`,
-        `  2. You have a dedicated artifacts directory (${artifactsDir}) accessible via '$ARTIFACTS/<filename>' for persistent milestone archives, architecture briefs, and state snapshots.`,
-        `  3. In run_task, you can directly reference '$SCRATCH' or '$ARTIFACTS' (or '$SCRATCH_DIR', '$ARTIFACTS_DIR') in terminal commands. Always provide a concise 2-4 word 'task_name' (e.g. 'Run tests') for UI command tagging.`,
-        `  4. Regular relative paths resolve normally against the project workspace.`
+        `- Scratch ($SCRATCH): ${scratchDir}`,
+        `- Artifacts ($ARTIFACTS): ${artifactsDir}`,
+        `- Images: ${imagesDir}`,
+        `- STORAGE GUIDELINES:`,
+        `  1. Write temporary scripts, notes, working logs, and one-off benchmarks to '$SCRATCH/<filename>' (resolves to ${scratchDir}).`,
+        `  2. Write persistent milestone docs, architecture briefs, and state snapshots to '$ARTIFACTS/<filename>' (resolves to ${artifactsDir}).`,
+        `  3. In run_task, reference '$SCRATCH', '$ARTIFACTS', '$SCRATCH_DIR', or '$ARTIFACTS_DIR' directly. Always set a concise 2–4 word task_name for UI command tagging.`,
+        `  4. Unprefixed relative paths resolve against the project workspace root.`
     ].join("\n");
 
     return {
@@ -210,8 +270,10 @@ function ensureChatWorkspace(chatId, dateStr) {
         chatDir,
         scratchDir,
         artifactsDir,
+        artifactsCatalogFile,
         imagesDir,
         metaFile,
+        metadataFile,
         messagesFile,
         contextFile,
         chatFile: legacyChatFile,
@@ -231,14 +293,14 @@ function saveChat(chatSession) {
     const dateStr = chatSession.createdAt ? formatDate(chatSession.createdAt) : (found?.dateFolder || formatDate());
     const ws = ensureChatWorkspace(chatId, dateStr);
 
-    const existingMeta = readJsonFile(ws.metaFile, {});
+    const existingMeta = readJsonFile(ws.metadataFile, null) || readJsonFile(ws.metaFile, {});
     const messages = Array.isArray(chatSession.messages) ? chatSession.messages : [];
     const hasMeaningfulMessages = messages.some(m => m.role !== "system");
 
     // 1. Safely write messages without truncating existing disk history
     const actualMsgCount = safelyWriteMessages(ws.messagesFile, messages, hasMeaningfulMessages);
 
-    // 2. Write metadata to meta.json
+    // 2. Write metadata to meta.json and metadata.json
     const metaPayload = {
         id: chatId,
         mode: "chat",
@@ -250,6 +312,7 @@ function saveChat(chatSession) {
         compactionState: chatSession.compactionState || existingMeta.compactionState || null,
         workspace: {
             chatDir: ws.chatDir,
+            artifactsDir: ws.artifactsDir,
             scratchDir: ws.scratchDir,
             imagesDir: ws.imagesDir,
             dateStr: ws.dateStr
@@ -258,6 +321,7 @@ function saveChat(chatSession) {
         savedAt: Date.now()
     };
     writeJsonFile(ws.metaFile, metaPayload);
+    writeJsonFile(ws.metadataFile, metaPayload);
 
     // 3. Persist separate compaction context state to context.json
     if (chatSession.compactionState) {
@@ -284,7 +348,7 @@ function appendChatMessage(chatId, message) {
     appendMessage(ws.messagesFile, message);
 
     try {
-        let meta = readJsonFile(ws.metaFile, null);
+        let meta = readJsonFile(ws.metadataFile, null) || readJsonFile(ws.metaFile, null);
         if (!meta) {
             meta = {
                 id: chatId,
@@ -293,15 +357,24 @@ function appendChatMessage(chatId, message) {
                 createdAt: Date.now(),
                 workspace: {
                     chatDir: ws.chatDir,
+                    artifactsDir: ws.artifactsDir,
                     scratchDir: ws.scratchDir,
                     imagesDir: ws.imagesDir,
                     dateStr: ws.dateStr
                 }
             };
+        } else {
+            meta.workspace = meta.workspace || {};
+            meta.workspace.chatDir = ws.chatDir;
+            meta.workspace.artifactsDir = ws.artifactsDir;
+            meta.workspace.scratchDir = ws.scratchDir;
+            meta.workspace.imagesDir = ws.imagesDir;
+            meta.workspace.dateStr = ws.dateStr;
         }
         meta.updatedAt = Date.now();
         meta.messageCount = (meta.messageCount || 0) + 1;
         writeJsonFile(ws.metaFile, meta);
+        writeJsonFile(ws.metadataFile, meta);
     } catch (e) {
         console.warn(`[CONVERSATIONS] Could not update meta.json on append for ${chatId}:`, e.message);
     }

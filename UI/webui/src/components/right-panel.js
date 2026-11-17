@@ -4,7 +4,7 @@
    ========================================================= */
 import { escapeHTML } from "../utils/dom.js";
 import { renderIcons } from "../utils/icons.js";
-import { renderDiffCardHtml, renderCodeViewerCardHtml, bindDiffViewerCards, getLanguageMeta } from "./diff-viewer.js";
+import { renderDiffCardHtml, renderStackedReviewHtml, renderCodeViewerCardHtml, bindDiffViewerCards, getLanguageMeta } from "./diff-viewer.js";
 import { terminalDrawer } from "./terminal-drawer.js";
 import { closePanel, getIsPanelOpen } from "./gestures.js";
 import { state } from "../state/index.js";
@@ -248,6 +248,12 @@ class RightPanelManager {
                 this.toggleSidebar();
             });
         }
+
+        // Listen for workspace modifications accepted / reverted externally
+        document.addEventListener("unacceptedChangesUpdated", async () => {
+            await this.checkWorkspaceChanges();
+            this.debouncedRefreshFileTree();
+        });
 
         // Global hotkey: Ctrl+. or Cmd+. and Escape to close
         document.addEventListener("keydown", (e) => {
@@ -671,7 +677,7 @@ class RightPanelManager {
             const filterInput = document.getElementById("viewerSidebarFilterInput");
             const filterVal = filterInput ? filterInput.value.trim() : "";
             const activeTab = (this.tabs || []).find(t => t.id === this.activeTabId);
-            const isDiffMode = Boolean(activeTab?.isDiff);
+            const isDiffMode = activeTab?.type === "diff";
             const currentFilePath = activeTab?.path || "";
 
             const prevScrollTop = listEl.scrollTop || 0;
@@ -687,6 +693,14 @@ class RightPanelManager {
 
         // 3. Update changes badge
         this.checkWorkspaceChanges();
+
+        // 4. Live Diffing: Update active diff or review tab live if open
+        const activeTab = (this.tabs || []).find(t => t.id === this.activeTabId);
+        if (activeTab?.type === "review") {
+            this.renderReviewTab(activeTab, true);
+        } else if (activeTab?.type === "diff") {
+            this.renderDiffTab(activeTab, true);
+        }
     }
 
     startPolling() {
@@ -708,14 +722,44 @@ class RightPanelManager {
 
     async checkWorkspaceChanges() {
         try {
-            const res = await fetch("/api/history/changes");
+            const chatId = state?.currentChatId || "";
+            let changesUrl = "/api/history/changes";
+            if (chatId) changesUrl += `?chatId=${encodeURIComponent(chatId)}`;
+            const res = await fetch(changesUrl);
             if (res.ok) {
                 const data = await res.json();
                 if (data.version && data.version !== this.lastWorkspaceVersion) {
                     this.lastWorkspaceVersion = data.version;
                     this.debouncedRefreshFileTree();
                 }
-                const count = Array.isArray(data.files) ? data.files.length : 0;
+                const files = Array.isArray(data.files) ? data.files : [];
+                this.unacceptedFiles = new Set(files.map(f => (f.displayPath || f.path || "").replace(/\\/g, "/").replace(/^\.\//, "").trim()));
+                this.unacceptedFilesList = files;
+
+                // If diff tabs exist whose modifications were accepted or clean, transition smoothly to file view
+                let activeChangedToFile = false;
+                this.tabs.forEach(t => {
+                    if (t.type === "diff" && !this.isFileModified(t.path)) {
+                        t.type = "file";
+                        t.title = t.path.split("/").pop() || t.path;
+                        const oldId = t.id;
+                        t.id = `file_${t.path}`;
+                        if (this.activeTabId === oldId) {
+                            this.activeTabId = t.id;
+                            activeChangedToFile = true;
+                        }
+                    }
+                });
+
+                if (activeChangedToFile) {
+                    this.renderTabStrip();
+                    const currentActive = this.tabs.find(t => t.id === this.activeTabId);
+                    if (currentActive) {
+                        this.renderFileTab(currentActive);
+                    }
+                }
+
+                const count = files.length;
                 if (this.reviewBadgeEl) {
                     if (count > 0) {
                         this.reviewBadgeEl.textContent = `${count} files`;
@@ -726,6 +770,21 @@ class RightPanelManager {
                 }
             }
         } catch (_) {}
+    }
+
+    isFileModified(filePath) {
+        if (!filePath) return false;
+        const norm = filePath.replace(/\\/g, "/").replace(/^\.\//, "").trim();
+        if (this.unacceptedFiles) {
+            if (this.unacceptedFiles.has(norm) || this.unacceptedFiles.has(filePath)) return true;
+        }
+        if (Array.isArray(this.unacceptedFilesList)) {
+            return this.unacceptedFilesList.some(f => {
+                const p = (f.displayPath || f.path || "").replace(/\\/g, "/").replace(/^\.\//, "").trim();
+                return p === norm || p.endsWith("/" + norm) || norm.endsWith("/" + p);
+            });
+        }
+        return false;
     }
 
     // ── Multi-Tab Manager ─────────────────────────────────────
@@ -889,6 +948,11 @@ class RightPanelManager {
                 this.viewerMountEl.style.display = "flex";
                 this.renderDiffTab(activeTab);
             }
+        } else if (activeTab.type === "review") {
+            if (this.viewerMountEl) {
+                this.viewerMountEl.style.display = "flex";
+                this.renderReviewTab(activeTab);
+            }
         } else if (activeTab.type === "file") {
             if (this.viewerMountEl) {
                 this.viewerMountEl.style.display = "flex";
@@ -919,30 +983,23 @@ class RightPanelManager {
 
     // ── Primary Actions ───────────────────────────────────────
     async openReviewTab() {
-        try {
-            const res = await fetch("/api/history/changes");
-            if (res.ok) {
-                const data = await res.json();
-                const files = Array.isArray(data.files) ? data.files : [];
-                if (files.length > 0) {
-                    const firstPath = files[0].displayPath || files[0].path;
-                    this.openDiffTab(firstPath);
-                    return;
-                }
-            }
-        } catch (_) {}
-
-        // Fallback Review tab
+        if (!this.isOpen) {
+            this.open();
+        }
         const tabId = "tab_review";
         let tab = this.tabs.find(t => t.id === tabId);
         if (!tab) {
-            this.tabs.push({
+            tab = {
                 id: tabId,
-                type: "diff",
+                type: "review",
                 title: "Review",
                 path: ""
-            });
+            };
+            this.tabs.push(tab);
+        } else {
+            tab.type = "review";
         }
+        this.renderTabStrip();
         this.switchTab(tabId);
     }
 
@@ -1407,7 +1464,10 @@ class RightPanelManager {
 
         if (isDiffMode) {
             try {
-                const changesRes = await fetch("/api/history/changes");
+                const chatId = state?.currentChatId || "";
+                let changesUrl = "/api/history/changes";
+                if (chatId) changesUrl += `?chatId=${encodeURIComponent(chatId)}`;
+                const changesRes = await fetch(changesUrl);
                 if (!changesRes.ok) {
                     listEl.innerHTML = '<div class="tasks-empty-state">Unable to load changes.</div>';
                     return;
@@ -1422,6 +1482,16 @@ class RightPanelManager {
                 }
                 if (changedFiles.length === 0) {
                     listEl.innerHTML = '<div class="tasks-empty-state">No changed files found.</div>';
+                    // If the active tab is showing a diff for a file that is now clean, transition to file view
+                    const activeTab = this.tabs.find(t => t.id === this.activeTabId);
+                    if (activeTab && activeTab.type === "diff") {
+                        activeTab.type = "file";
+                        activeTab.title = activeTab.path.split("/").pop() || activeTab.path;
+                        activeTab.id = `file_${activeTab.path}`;
+                        this.activeTabId = activeTab.id;
+                        this.renderTabStrip();
+                        this.renderFileTab(activeTab);
+                    }
                     return;
                 }
                 let html = "";
@@ -1604,14 +1674,189 @@ class RightPanelManager {
         }, { passive: true });
     }
 
-    async renderDiffTab(tab) {
+    async renderReviewTab(tab, isSilent = false) {
+        if (!this.viewerMountEl) return;
+
+        let prevScrollTop = 0;
+        const collapsedStates = new Map();
+        const existingEditor = this.viewerMountEl.querySelector(".viewer-editor-pane");
+        if (existingEditor) {
+            prevScrollTop = existingEditor.scrollTop;
+            existingEditor.querySelectorAll(".modern-viewer-window.diff-mode").forEach(w => {
+                const fp = w.getAttribute("data-file-path");
+                if (fp) {
+                    collapsedStates.set(fp, w.classList.contains("is-collapsed"));
+                }
+            });
+        }
+
+        if (!isSilent && !this.viewerMountEl.querySelector("#viewerSplitContainer")) {
+            this.viewerMountEl.innerHTML = '<div class="tasks-empty-state">Loading workspace modifications…</div>';
+        }
+
+        try {
+            const chatId = state?.currentChatId || "";
+            let changesUrl = "/api/history/changes";
+            if (chatId) changesUrl += `?chatId=${encodeURIComponent(chatId)}`;
+            const res = await fetch(changesUrl);
+            if (!res.ok) {
+                if (!isSilent) this.viewerMountEl.innerHTML = '<div class="tasks-empty-state">Unable to load changes.</div>';
+                return;
+            }
+
+            const data = await res.json();
+            const files = Array.isArray(data.files) ? data.files : [];
+
+            // Update tab title with count
+            tab.title = files.length > 0 ? `Review (${files.length})` : "Review";
+            this.renderTabStrip();
+
+            if (files.length === 0) {
+                const cleanHtml = `
+                    <div class="diff-empty-state">
+                        <div class="diff-empty-icon"><i data-lucide="check-circle"></i></div>
+                        <div class="diff-empty-title">Working tree clean</div>
+                        <div class="diff-empty-sub">No unaccepted file modifications detected.</div>
+                    </div>
+                `;
+                const editorPane = this.viewerMountEl.querySelector(".viewer-editor-pane");
+                if (editorPane) {
+                    editorPane.innerHTML = cleanHtml;
+                    renderIcons(editorPane);
+                } else {
+                    this.viewerMountEl.innerHTML = cleanHtml;
+                    renderIcons(this.viewerMountEl);
+                }
+                return;
+            }
+
+            // Fetch diffs for each modified file concurrently
+            const filesWithDiffs = await Promise.all(files.map(async f => {
+                const fPath = f.displayPath || f.path || "";
+                let diffUrl = `/api/history/diff?path=${encodeURIComponent(fPath)}`;
+                if (chatId) diffUrl += `&chatId=${encodeURIComponent(chatId)}`;
+                if (f.workspace) diffUrl += `&workspace=${encodeURIComponent(f.workspace)}`;
+                try {
+                    const dRes = await fetch(diffUrl);
+                    if (dRes.ok) {
+                        const dData = await dRes.json();
+                        return {
+                            path: f.path,
+                            displayPath: fPath,
+                            workspace: f.workspace,
+                            diff: dData.diff || "",
+                            stats: {
+                                additions: dData.additions ?? f.additions ?? 0,
+                                deletions: dData.deletions ?? f.deletions ?? 0
+                            }
+                        };
+                    }
+                } catch (_) {}
+                return {
+                    path: f.path,
+                    displayPath: fPath,
+                    workspace: f.workspace,
+                    diff: "",
+                    stats: { additions: f.additions || 0, deletions: f.deletions || 0 }
+                };
+            }));
+
+            const reviewHtml = renderStackedReviewHtml({
+                files: filesWithDiffs,
+                hideWhitespace: this.hideWhitespace
+            });
+
+            const breadcrumbHtml = `
+                <div class="right-panel-breadcrumb-bar">
+                    <span class="breadcrumb-item active">
+                        <i data-lucide="git-pull-request"></i>
+                        <span>Review Changes (${files.length})</span>
+                    </span>
+                </div>
+            `;
+
+            const existingContainer = this.viewerMountEl.querySelector("#viewerSplitContainer");
+            if (existingContainer) {
+                const breadcrumbBar = this.viewerMountEl.querySelector(".right-panel-breadcrumb-bar");
+                if (breadcrumbBar) breadcrumbBar.outerHTML = breadcrumbHtml;
+
+                const editorPane = this.viewerMountEl.querySelector(".viewer-editor-pane");
+                if (editorPane) {
+                    editorPane.innerHTML = reviewHtml;
+                    // Restore collapsed states
+                    collapsedStates.forEach((isCollapsed, fp) => {
+                        const card = editorPane.querySelector(`.modern-viewer-window[data-file-path="${escapeHTML(fp)}"]`);
+                        if (card) {
+                            if (isCollapsed) card.classList.add("is-collapsed");
+                            else card.classList.remove("is-collapsed");
+                        }
+                    });
+                    editorPane.scrollTop = prevScrollTop;
+                    bindDiffViewerCards(editorPane);
+                    renderIcons(editorPane);
+                }
+
+                const listEl = document.getElementById("viewerSidebarList");
+                if (listEl) {
+                    this.loadViewerSidebar(".", "", true);
+                }
+                return;
+            }
+
+            const splitContainerHtml = `
+                ${breadcrumbHtml}
+                <div class="viewer-split-container ${this.isSidebarOpen ? "" : "sidebar-collapsed"}" id="viewerSplitContainer">
+                    <div class="viewer-editor-pane">
+                        ${reviewHtml}
+                    </div>
+                    <div class="viewer-col-resizer" id="viewerColResizer" title="Drag to resize sidebar"></div>
+                    <div class="viewer-sidebar-pane">
+                        <div class="viewer-sidebar-header">
+                            <span class="viewer-sidebar-title">Changes (${files.length})</span>
+                            <div class="viewer-sidebar-actions">
+                                <button class="viewer-sidebar-icon-btn" id="viewerSidebarRefreshBtn" title="Refresh changes">
+                                    <i data-lucide="refresh-cw"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="viewer-sidebar-search-box">
+                            <i data-lucide="search" class="viewer-sidebar-search-icon"></i>
+                            <input type="text" class="viewer-sidebar-filter-input" id="viewerSidebarFilterInput" placeholder="Filter changes..." autocomplete="off" spellcheck="false">
+                        </div>
+                        <div class="viewer-sidebar-list" id="viewerSidebarList">
+                            <div class="tasks-empty-state">Loading changes…</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            this.viewerMountEl.innerHTML = splitContainerHtml;
+            bindDiffViewerCards(this.viewerMountEl);
+            renderIcons(this.viewerMountEl);
+            this.bindViewerColResizer(this.viewerMountEl);
+            this.loadViewerSidebar(".", "", true);
+        } catch (err) {
+            console.error("[RightPanel] Render review tab error:", err);
+            if (!isSilent) this.viewerMountEl.innerHTML = '<div class="tasks-empty-state">Failed to render review.</div>';
+        }
+    }
+
+    async renderDiffTab(tab, isSilent = false) {
         if (!this.viewerMountEl) return;
         if (!tab.path) {
             this.viewerMountEl.innerHTML = '<div class="tasks-empty-state">Working tree clean. No unaccepted file modifications.</div>';
             return;
         }
 
-        this.viewerMountEl.innerHTML = '<div class="tasks-empty-state">Loading unified diff…</div>';
+        let prevScrollTop = 0;
+        const existingEditor = this.viewerMountEl.querySelector(".viewer-editor-pane");
+        if (existingEditor) {
+            prevScrollTop = existingEditor.scrollTop;
+        }
+
+        if (!isSilent && !this.viewerMountEl.querySelector("#viewerSplitContainer")) {
+            this.viewerMountEl.innerHTML = '<div class="tasks-empty-state">Loading unified diff…</div>';
+        }
 
         try {
             const chatId = state?.currentChatId || "";
@@ -1627,6 +1872,14 @@ class RightPanelManager {
             const data = await res.json();
             const diffStr = data.diff || "";
 
+            if (!diffStr || diffStr.trim().length === 0) {
+                // If there is no diff (already accepted or no modifications), switch smoothly to file viewer
+                tab.type = "file";
+                tab.title = tab.path.split("/").pop() || tab.path;
+                this.renderTabStrip();
+                return this.renderFileTab(tab);
+            }
+
             const folderPath = tab.path.split("/").slice(0, -1).join("/") || ".";
             const folderName = folderPath.split("/").pop() || "workspace";
 
@@ -1636,6 +1889,7 @@ class RightPanelManager {
                 <div class="diff-toolbar-actions">
                     <span class="diff-toolbar-title">${escapeHTML(tab.path)}</span>
                     <div class="diff-toolbar-btns">
+                        <button type="button" class="diff-action-btn secondary" id="diffTabRawFileBtn" title="View full document">Raw View</button>
                         <button type="button" class="diff-action-btn" id="diffTabAcceptBtn">Accept All</button>
                         <button type="button" class="diff-action-btn secondary" id="diffTabRevertBtn">Revert All</button>
                     </div>
@@ -1662,6 +1916,7 @@ class RightPanelManager {
                 const editorPane = this.viewerMountEl.querySelector(".viewer-editor-pane");
                 if (editorPane) {
                     editorPane.innerHTML = `${toolbarHtml}${diffCardHtml}`;
+                    editorPane.scrollTop = prevScrollTop;
                     bindDiffViewerCards(editorPane);
                     renderIcons(editorPane);
                 }
@@ -1733,15 +1988,33 @@ class RightPanelManager {
     bindDiffTabButtons(tab) {
         const acceptBtn = document.getElementById("diffTabAcceptBtn");
         const revertBtn = document.getElementById("diffTabRevertBtn");
+        const rawBtn = document.getElementById("diffTabRawFileBtn");
+
+        if (rawBtn) {
+            rawBtn.addEventListener("click", () => {
+                this.openFileTab(tab.path, tab.workspace, true);
+            });
+        }
 
         if (acceptBtn) {
             acceptBtn.addEventListener("click", async () => {
                 acceptBtn.disabled = true;
                 acceptBtn.textContent = "Accepting…";
                 try {
-                    await fetch("/api/history/accept", { method: "POST" });
-                    this.closeTab(tab.id);
-                    this.checkWorkspaceChanges();
+                    const chatId = state?.currentChatId || "";
+                    await fetch("/api/history/accept", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ file: tab.path, chatId })
+                    });
+                    tab.type = "file";
+                    tab.title = tab.path.split("/").pop() || tab.path;
+                    tab.id = `file_${tab.path}`;
+                    this.activeTabId = tab.id;
+                    this.renderTabStrip();
+                    await this.checkWorkspaceChanges();
+                    this.renderFileTab(tab);
+                    document.dispatchEvent(new CustomEvent("unacceptedChangesUpdated"));
                 } catch (e) {
                     console.error(e);
                 }
@@ -1753,13 +2026,20 @@ class RightPanelManager {
                 if (!window.confirm("Revert workspace modifications for this file?")) return;
                 revertBtn.disabled = true;
                 try {
+                    const chatId = state?.currentChatId || "";
                     await fetch("/api/history/revert", {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ file: tab.path })
+                        body: JSON.stringify({ file: tab.path, chatId })
                     });
-                    this.closeTab(tab.id);
-                    this.checkWorkspaceChanges();
+                    tab.type = "file";
+                    tab.title = tab.path.split("/").pop() || tab.path;
+                    tab.id = `file_${tab.path}`;
+                    this.activeTabId = tab.id;
+                    this.renderTabStrip();
+                    await this.checkWorkspaceChanges();
+                    this.renderFileTab(tab);
+                    document.dispatchEvent(new CustomEvent("unacceptedChangesUpdated"));
                 } catch (e) {
                     console.error(e);
                 }
@@ -1767,10 +2047,70 @@ class RightPanelManager {
         }
     }
 
-    openFileTab(filePath, workspace = "") {
+    bindFileTabActions(tab) {
+        if (!this.viewerMountEl) return;
+        const showDiffBtn = this.viewerMountEl.querySelector("#fileTabShowDiffBtn");
+        const acceptBtn = this.viewerMountEl.querySelector("#fileTabAcceptBtn");
+        const revertBtn = this.viewerMountEl.querySelector("#fileTabRevertBtn");
+
+        if (showDiffBtn) {
+            showDiffBtn.addEventListener("click", () => {
+                this.openDiffTab(tab.path, tab.workspace);
+            });
+        }
+
+        if (acceptBtn) {
+            acceptBtn.addEventListener("click", async () => {
+                acceptBtn.disabled = true;
+                acceptBtn.textContent = "Accepting…";
+                try {
+                    const chatId = state?.currentChatId || "";
+                    await fetch("/api/history/accept", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ file: tab.path, chatId })
+                    });
+                    await this.checkWorkspaceChanges();
+                    this.renderActiveTab();
+                    document.dispatchEvent(new CustomEvent("unacceptedChangesUpdated"));
+                } catch (e) {
+                    console.error(e);
+                }
+            });
+        }
+
+        if (revertBtn) {
+            revertBtn.addEventListener("click", async () => {
+                if (!window.confirm("Revert workspace modifications for this file?")) return;
+                revertBtn.disabled = true;
+                try {
+                    const chatId = state?.currentChatId || "";
+                    await fetch("/api/history/revert", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ file: tab.path, chatId })
+                    });
+                    this.closeTab(tab.id);
+                    await this.checkWorkspaceChanges();
+                    document.dispatchEvent(new CustomEvent("unacceptedChangesUpdated"));
+                } catch (e) {
+                    console.error(e);
+                }
+            });
+        }
+    }
+
+    openFileTab(filePath, workspace = "", forceRaw = false) {
         if (!this.isOpen) {
             this.open();
         }
+
+        // If file has unaccepted modifications and caller did not explicitly request raw view, route directly to diff view
+        if (!forceRaw && this.isFileModified(filePath)) {
+            this.openDiffTab(filePath, workspace);
+            return;
+        }
+
         const tabId = `file_${filePath}`;
         const existing = this.tabs.find(t => t.id === tabId);
         if (existing) {
@@ -1792,7 +2132,9 @@ class RightPanelManager {
 
     async renderFileTab(tab) {
         if (!this.viewerMountEl) return;
-        this.viewerMountEl.innerHTML = '<div class="tasks-empty-state">Loading file…</div>';
+        if (!this.viewerMountEl.querySelector("#viewerSplitContainer")) {
+            this.viewerMountEl.innerHTML = '<div class="tasks-empty-state">Loading file…</div>';
+        }
 
         try {
             const chatId = state?.currentChatId || "";
@@ -1820,6 +2162,21 @@ class RightPanelManager {
 
             const breadcrumbHtml = this.buildBreadcrumbBarHtml(tab.path, "single edit");
 
+            const isMod = this.isFileModified(tab.path);
+            let toolbarHtml = "";
+            if (isMod) {
+                toolbarHtml = `
+                    <div class="diff-toolbar-actions">
+                        <span class="diff-toolbar-title">${escapeHTML(tab.path)} <span class="diff-modified-pill" style="font-size:10px; background:rgba(46,160,67,0.12); color:#2ea043; padding:1px 6px; border-radius:10px; margin-left:6px; font-weight:600;">Modified</span></span>
+                        <div class="diff-toolbar-btns">
+                            <button type="button" class="diff-action-btn secondary" id="fileTabShowDiffBtn" title="View unified diff">View Diff</button>
+                            <button type="button" class="diff-action-btn" id="fileTabAcceptBtn">Accept All</button>
+                            <button type="button" class="diff-action-btn secondary" id="fileTabRevertBtn">Revert All</button>
+                        </div>
+                    </div>
+                `;
+            }
+
             const codeCardHtml = renderCodeViewerCardHtml({
                 code: content,
                 filePath: tab.path,
@@ -1838,11 +2195,12 @@ class RightPanelManager {
                 }
                 const editorPane = this.viewerMountEl.querySelector(".viewer-editor-pane");
                 if (editorPane) {
-                    editorPane.innerHTML = codeCardHtml;
+                    editorPane.innerHTML = `${toolbarHtml}${codeCardHtml}`;
                     bindDiffViewerCards(editorPane);
                     renderIcons(editorPane);
                 }
                 this.bindBreadcrumbEvents(this.viewerMountEl, tab.path, content);
+                this.bindFileTabActions(tab);
 
                 const listEl = document.getElementById("viewerSidebarList");
                 if (listEl) {
@@ -1869,6 +2227,7 @@ class RightPanelManager {
                 ${breadcrumbHtml}
                 <div class="viewer-split-container ${this.isSidebarOpen ? "" : "sidebar-collapsed"}" id="viewerSplitContainer">
                     <div class="viewer-editor-pane">
+                        ${toolbarHtml}
                         ${codeCardHtml}
                     </div>
                     <div class="viewer-col-resizer" id="viewerColResizer" title="Drag to resize sidebar"></div>
@@ -1897,6 +2256,7 @@ class RightPanelManager {
             renderIcons(this.viewerMountEl);
             this.bindViewerColResizer(this.viewerMountEl);
             this.bindBreadcrumbEvents(this.viewerMountEl, tab.path, content);
+            this.bindFileTabActions(tab);
             this.loadViewerSidebar(folderPath, tab.path, false);
         } catch (err) {
             console.error("[RightPanel] Render file tab error:", err);
@@ -2976,7 +3336,19 @@ class RightPanelManager {
                 return b.updatedAt - a.updatedAt;
             });
 
-            const runningCount = subagentsList.filter(s => s.status === "running").length;
+            // Deduplicate any accidental duplicate entries for the same task
+            const seenTasks = new Set();
+            const uniqueSubagentsList = [];
+            for (const item of subagentsList) {
+                const normTask = (item.task || "").trim();
+                if (normTask && seenTasks.has(normTask)) {
+                    continue;
+                }
+                if (normTask) seenTasks.add(normTask);
+                uniqueSubagentsList.push(item);
+            }
+
+            const runningCount = uniqueSubagentsList.filter(s => s.status === "running").length;
 
             if (this.subagentsBadgeEl) {
                 if (runningCount > 0) {
@@ -2988,15 +3360,15 @@ class RightPanelManager {
             }
 
             if (this.subagentsCountBadgeEl) {
-                if (subagentsList.length > 0) {
-                    this.subagentsCountBadgeEl.textContent = String(subagentsList.length);
+                if (uniqueSubagentsList.length > 0) {
+                    this.subagentsCountBadgeEl.textContent = String(uniqueSubagentsList.length);
                     this.subagentsCountBadgeEl.style.display = "inline-block";
                 } else {
                     this.subagentsCountBadgeEl.style.display = "none";
                 }
             }
 
-            this.renderSubagentsList(subagentsList);
+            this.renderSubagentsList(uniqueSubagentsList);
         } catch (err) {
             if (!isBackground) console.error("[RightPanel] Load subagents error:", err);
         }
@@ -3226,6 +3598,36 @@ class RightPanelManager {
         }
     }
 
+    setSubagentModel(modelValue) {
+        if (!modelValue) return;
+        const activeTab = this.tabs.find(t => t.id === this.activeTabId);
+        if (!activeTab || activeTab.type !== "subagent") return;
+
+        const subagentId = activeTab.subagentId;
+        const subSession = state.chatSessions[subagentId];
+        if (!subSession) return;
+
+        const modelSelect = document.getElementById("modelSelect");
+        const opt = modelSelect ? Array.from(modelSelect.options).find(o => o.value === modelValue) : null;
+        const provider = opt?.dataset?.provider || null;
+
+        subSession.model = modelValue;
+        subSession.provider = provider;
+        subSession.updatedAt = Date.now();
+        saveStoredChats();
+
+        const activeSub = activeSubagents.get(subagentId);
+        if (activeSub) {
+            activeSub.model = modelValue;
+            activeSub.provider = provider;
+        }
+
+        this.updateSubagentModelPickerDisplay();
+        if (typeof document !== "undefined" && typeof document.dispatchEvent === "function") {
+            document.dispatchEvent(new CustomEvent("chatsUpdated"));
+        }
+    }
+
     updateSubagentSendButton(isGenerating) {
         if (!this.subagentSendBtn) return;
         if (isGenerating) {
@@ -3370,11 +3772,13 @@ class RightPanelManager {
             }
 
             try {
-                // If user selected a specific model in the model picker, ensure subagent uses it
-                const modelSelect = document.getElementById("modelSelect");
-                if (modelSelect && modelSelect.value) {
-                    subSession.model = modelSelect.value;
-                    subSession.provider = modelSelect.selectedOptions?.[0]?.dataset?.provider || null;
+                // If subSession does not have a model configured, fall back to current selection
+                if (!subSession.model) {
+                    const modelSelect = document.getElementById("modelSelect");
+                    if (modelSelect && modelSelect.value) {
+                        subSession.model = modelSelect.value;
+                        subSession.provider = modelSelect.selectedOptions?.[0]?.dataset?.provider || null;
+                    }
                 }
 
                 // Run the full MultiAI streaming agent orchestrator!

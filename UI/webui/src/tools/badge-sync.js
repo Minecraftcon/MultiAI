@@ -484,6 +484,48 @@ export function onToolComplete(name, args, badgeEl, data, options = {}) {
         }
     }
 
+    if (name === "define_subagent" && data) {
+        const iconCircle = badgeEl.querySelector(".search-icon-circle");
+        if (iconCircle) {
+            iconCircle.innerHTML = `<i data-lucide="bot" aria-hidden="true"></i>`;
+            renderIcons(iconCircle);
+        }
+        const labelEl = badgeEl.querySelector(".search-label");
+        const queryEl = badgeEl.querySelector(".search-query");
+        if (labelEl) labelEl.textContent = `Defined subagent [${data.name || args.name}]`;
+        if (queryEl) {
+            queryEl.textContent = `${data.description || "Custom subagent registered"} • ${(data.allowed_tools || []).length} tools`;
+        }
+    }
+
+    if (name === "manage_subagents" && data) {
+        const iconCircle = badgeEl.querySelector(".search-icon-circle");
+        if (iconCircle) {
+            iconCircle.innerHTML = `<i data-lucide="shield" aria-hidden="true"></i>`;
+            renderIcons(iconCircle);
+        }
+        const labelEl = badgeEl.querySelector(".search-label");
+        const queryEl = badgeEl.querySelector(".search-query");
+        if (labelEl) labelEl.textContent = `Managed subagents [${data.action || args.Action || args.action || "list"}]`;
+        if (queryEl) {
+            queryEl.textContent = data.message || `${data.count || 0} subagents`;
+        }
+    }
+
+    if (name === "send_message" && data) {
+        const iconCircle = badgeEl.querySelector(".search-icon-circle");
+        if (iconCircle) {
+            iconCircle.innerHTML = `<i data-lucide="send" aria-hidden="true"></i>`;
+            renderIcons(iconCircle);
+        }
+        const labelEl = badgeEl.querySelector(".search-label");
+        const queryEl = badgeEl.querySelector(".search-query");
+        if (labelEl) labelEl.textContent = `Sent subagent message`;
+        if (queryEl) {
+            queryEl.textContent = `To: ${data.recipient || args.Recipient || args.recipient} • Status: ${data.status || "delivered"}`;
+        }
+    }
+
     if ((name === "task" || name === "invoke_subagent") && data) {
         const iconCircle = badgeEl.querySelector(".search-icon-circle");
         if (iconCircle) {
@@ -640,7 +682,15 @@ export function onToolComplete(name, args, badgeEl, data, options = {}) {
             let outText = "";
             const isRunning = data.running === true || data.status === "running" || data.status === "in_progress";
             const isLarge = data.is_large_output || (data.stdout && data.stdout.split("\n").length > 150);
-            if (name === "task" || name === "invoke_subagent") {
+            if (name === "define_subagent") {
+                outText = `[Defined Subagent: ${data.name || args.name}]\nDescription: ${data.description || args.description || ""}\nAllowed Tools: ${(data.allowed_tools || args.tools || []).join(", ") || "default"}\n\nStatus: ${data.status || "defined"}\nMessage: ${data.message || "Ready to invoke"}`;
+            } else if (name === "manage_subagents") {
+                const act = data.action || args.Action || args.action || "list";
+                outText = `[Manage Subagents: ${act.toUpperCase()}]\nStatus: ${data.status || "success"}\n${data.message || ""}\n${data.subagents ? JSON.stringify(data.subagents, null, 2) : ""}`;
+            } else if (name === "send_message") {
+                const rec = data.recipient || args.Recipient || args.recipient || "subagent";
+                outText = `[Message Sent to Subagent: ${rec}]\nStatus: ${data.status || "delivered"}\nSubagent Response:\n${data.response || data.report || data.message || "Delivered"}`;
+            } else if (name === "task" || name === "invoke_subagent") {
                 const subType = data.subagent_type || args.subagent_type || args.type || "designer";
                 const taskText = args.task || args.instruction || args.prompt || "";
                 const repText = data.report || (data.status === "running" ? "Subagent running in background..." : "(No report provided)");

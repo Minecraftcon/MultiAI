@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Maison Aurèle — Haute Couture & Ready-to-Wear</title>
+<meta name="description" content="Maison Aurèle — Haute couture and ready-to-wear fashion house. Editorial collections, bespoke craftsmanship, timeless silhouettes.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<!-- Preloader -->
+<div class="preloader" id="preloader">
+  <div class="preloader__mark">A</div>
+  <div class="preloader__line"></div>
+</div>
+
+<!-- Navigation -->
+<header class="nav" id="nav">
+  <div class="nav__inner">
+    <a class="nav__logo" href="#top">MAISON AURÈLE</a>
+    <nav class="nav__links">
+      <a href="#collections">Collections</a>
+      <a href="#lookbook">Lookbook</a>
+      <a href="#about">House</a>
+      <a href="#journal">Journal</a>
+    </nav>
+    <div class="nav__actions">
+      <button class="nav__icon" aria-label="Search">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      </button>
+      <button class="nav__icon" aria-label="Bag">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 7h12l-1 13H7L6 7z"/><path d="M9 7V5a3 3 0 0 1 6 0v2"/></svg>
+        <span class="nav__count">0</span>
+      </button>
+      <button class="nav__burger" id="burger" aria-label="Menu">
+        <span></span><span></span>
+      </button>
+    </div>
+  </div>
+  <div class="nav__mobile" id="mobileMenu">
+    <a href="#collections">Collections</a>
+    <a href="#lookbook">Lookbook</a>
+    <a href="#about">House</a>
+    <a href="#journal">Journal</a>
+    <a href="#newsletter">Newsletter</a>
+  </div>
+</header>
+
+<main id="top">
+
+<!-- Hero -->
+<section class="hero">
+  <div class="hero__bg">
+    <div class="hero__grain"></div>
+    <div class="hero__orb hero__orb--1"></div>
+    <div class="hero__orb hero__orb--2"></div>
+  </div>
+  <div class="hero__content">
+    <p class="hero__eyebrow reveal">Spring / Summer 2026 — Collection N°14</p>
+    <h1 class="hero__title reveal">
+      <span class="hero__title-line">The Art of</span>
+      <span class="hero__title-line hero__title-line--italic">Quiet Luxury</span>
+    </h1>
+    <p class="hero__sub reveal">Handcrafted silhouettes. Considered materials. A wardrobe built to outlast the season.</p>
+    <div class="hero__cta reveal">
+      <a href="#collections" class="btn btn--primary">Discover the Collection</a>
+      <a href="#lookbook" class="btn btn--ghost">View Lookbook</a>
+    </div>
+  </div>
+  <div class="hero__scroll">
+    <span>Scroll</span>
+    <div class="hero__scroll-line"></div>
+  </div>
+</section>
+
+<!-- Marquee -->
+<div class="marquee">
+  <div class="marquee__track">
+    <span>HAUTE COUTURE</span><span class="marquee__dot">✦</span>
+    <span>READY-TO-WEAR</span><span class="marquee__dot">✦</span>
+    <span>MADE IN PARIS</span><span class="marquee__dot">✦</span>
+    <span>BESPOKE ATELIER</span><span class="marquee__dot">✦</span>
+    <span>SUSTAINABLE LUXURY</span><span class="marquee__dot">✦</span>
+    <span>HAUTE COUTURE</span><span class="marquee__dot">✦</span>
+    <span>READY-TO-WEAR</span><span class="marquee__dot">✦</span>
+    <span>MADE IN PARIS</span><span class="marquee__dot">✦</span>
+    <span>BESPOKE ATELIER</span><span class="marquee__dot">✦</span>
+    <span>SUSTAINABLE LUXURY</span><span class="marquee__dot">✦</span>
+  </div>
+</div>
+
+<!-- Collections -->
+<section class="section collections" id="collections">
+  <div class="container">
+    <div class="section__head">
+      <p class="eyebrow">01 — Collections</p>
+      <h2 class="section__title">Curated for the <em>Modern Woman</em></h2>
+      <p class="section__desc">Each piece is a dialogue between heritage craftsmanship and contemporary form.</p>
+    </div>
+
+    <div class="filters">
+      <button class="filter is-active" data-filter="all">All</button>
+      <button class="filter" data-filter="dresses">Dresses</button>
+      <button class="filter" data-filter="outerwear">Outerwear</button>
+      <button class="filter" data-filter="knitwear">Knitwear</button>
+      <button class="filter" data-filter="accessories">Accessories</button>
+    </div>
+
+    <div class="product-grid" id="productGrid">
+      <!-- products injected by JS -->
+    </div>
+  </div>
+</section>
+
+<!-- Lookbook -->
+<section class="section lookbook" id="lookbook">
+  <div class="container">
+    <div class="section__head section__head--row">
+      <div>
+        <p class="eyebrow">02 — Lookbook</p>
+        <h2 class="section__title">Spring / Summer <em>Editorial</em></h2>
+      </div>
+      <a href="#" class="btn btn--ghost">View All Looks</a>
+    </div>
+  </div>
+  <div class="lookbook__strip">
+    <div class="lookbook__item lookbook__item--tall">
+      <div class="lookbook__img" style="background: linear-gradient(135deg,#d8cfc4,#a89888)"></div>
+      <div class="lookbook__meta"><span>Look 01</span><span>Silk Organza Gown</span></div>
+    </div>
+    <div class="lookbook__item">
+      <div class="lookbook__img" style="background: linear-gradient(135deg,#c9b8a3,#8a7a6a)"></div>
+      <div class="lookbook__meta"><span>Look 02</span><span>Cashmere Coat</span></div>
+    </div>
+    <div class="lookbook__item lookbook__item--wide">
+      <div class="lookbook__img" style="background: linear-gradient(135deg,#e8e0d4,#b8a898)"></div>
+      <div class="lookbook__meta"><span>Look 03</span><span>Linen Tailoring</span></div>
+    </div>
+    <div class="lookbook__item">
+      <div class="lookbook__img" style="background: linear-gradient(135deg,#d4c4b0,#9a8a7a)"></div>
+      <div class="lookbook__meta"><span>Look 04</span><span>Evening Set</span></div>
+    </div>
+    <div class="lookbook__item lookbook__item--tall">
+      <div class="lookbook__img" style="background: linear-gradient(135deg,#c4b4a0,#7a6a5a)"></div>
+      <div class="lookbook__meta"><span>Look 05</span><span>Knit Dress</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- About / House -->
+<section class="section about" id="about">
+  <div class="container about__grid">
+    <div class="about__visual">
+      <div class="about__img" style="background: linear-gradient(160deg,#e8dfd2,#9a8a78)"></div>
+      <div class="about__badge">Since 1987</div>
+    </div>
+    <div class="about__content">
+      <p class="eyebrow">03 — The House</p>
+      <h2 class="section__title">A legacy of <em>craftsmanship</em></h2>
+      <p class="about__text">Founded in a small atelier on Rue Saint-Honoré, Maison Aurèle has spent four decades perfecting the language of quiet elegance. Every garment passes through thirty-seven hands before it leaves our atelier — a ritual of patience we refuse to compromise.</p>
+      <p class="about__text">We source only from mills that share our devotion to longevity: Italian wool, French silk, Scottish cashmere. Materials chosen not for trend, but for the decades they will endure.</p>
+      <div class="about__stats">
+        <div><strong>37</strong><span>Artisan hands per piece</span></div>
+        <div><strong>100%</strong><span>Natural fibers</span></div>
+        <div><strong>4</strong><span>Decades of craft</span></div>
+      </div>
+      <a href="#" class="btn btn--primary">Our Story</a>
+    </div>
+  </div>
+</section>
+
+<!-- Journal -->
+<section class="section journal" id="journal">
+  <div class="container">
+    <div class="section__head">
+      <p class="eyebrow">04 — Journal</p>
+      <h2 class="section__title">Notes from the <em>Atelier</em></h2>
+    </div>
+    <div class="journal__grid">
+      <article class="journal__card">
+        <div class="journal__img" style="background: linear-gradient(135deg,#d4c8b8,#a89888)"></div>
+        <div class="journal__body">
+          <span class="journal__tag">Craft</span>
+          <h3>The Anatomy of a Perfect Blazer</h3>
+          <p>Inside the 42-hour construction of our signature tailored jacket.</p>
+          <a href="#" class="journal__link">Read →</a>
+        </div>
+      </article>
+      <article class="journal__card">
+        <div class="journal__img" style="background: linear-gradient(135deg,#c8bca8,#8a7a6a)"></div>
+        <div class="journal__body">
+          <span class="journal__tag">Sustainability</span>
+          <h3>Traceable Cashmere, from Herd to Hanger</h3>
+          <p>How we rebuilt our supply chain for total transparency.</p>
+          <a href="#" class="journal__link">Read →</a>
+        </div>
+      </article>
+      <article class="journal__card">
+        <div class="journal__img" style="background: linear-gradient(135deg,#e0d4c4,#b8a898)"></div>
+        <div class="journal__body">
+          <span class="journal__tag">Editorial</span>
+          <h3>Spring Light: A Study in Linen</h3>
+          <p>Photographed in the Provençal countryside at golden hour.</p>
+          <a href="#" class="journal__link">Read →</a>
+        </div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- Newsletter -->
+<section class="section newsletter" id="newsletter">
+  <div class="container newsletter__inner">
+    <p class="eyebrow">05 — Newsletter</p>
+    <h2 class="section__title newsletter__title">Join the <em>Inner Circle</em></h2>
+    <p class="newsletter__desc">Early access to collections, private atelier events, and editorial stories — delivered with restraint.</p>
+    <form class="newsletter__form" id="newsletterForm">
+      <input type="email" placeholder="Your email address" required aria-label="Email address">
+      <button type="submit" class="btn btn--primary">Subscribe</button>
+    </form>
+    <p class="newsletter__note">By subscribing you agree to our privacy policy. Unsubscribe anytime.</p>
+  </div>
+</section>
+
+</main>
+
+<!-- Footer -->
+<footer class="footer">
+  <div class="container footer__grid">
+    <div class="footer__brand">
+      <a class="footer__logo" href="#top">MAISON AURÈLE</a>
+      <p>Haute couture & ready-to-wear.<br>Paris · Milan · New York</p>
+    </div>
+    <div class="footer__col">
+      <h4>Shop</h4>
+      <a href="#">New Arrivals</a>
+      <a href="#">Dresses</a>
+      <a href="#">Outerwear</a>
+      <a href="#">Accessories</a>
+    </div>
+    <div class="footer__col">
+      <h4>House</h4>
+      <a href="#">Our Story</a>
+      <a href="#">Atelier</a>
+      <a href="#">Sustainability</a>
+      <a href="#">Careers</a>
+    </div>
+    <div class="footer__col">
+      <h4>Client Care</h4>
+      <a href="#">Shipping & Returns</a>
+      <a href="#">Size Guide</a>
+      <a href="#">Contact</a>
+      <a href="#">Book Appointment</a>
+    </div>
+  </div>
+  <div class="container footer__bottom">
+    <span>© 2026 Maison Aurèle. All rights reserved.</span>
+    <div class="footer__social">
+      <a href="#">Instagram</a>
+      <a href="#">Pinterest</a>
+      <a href="#">WeChat</a>
+    </div>
+  </div>
+</footer>
+
+<!-- Quick view modal -->
+<div class="modal" id="modal">
+  <div class="modal__backdrop" id="modalBackdrop"></div>
+  <div class="modal__panel">
+    <button class="modal__close" id="modalClose" aria-label="Close">×</button>
+    <div class="modal__img" id="modalImg"></div>
+    <div class="modal__info">
+      <p class="eyebrow" id="modalCat"></p>
+      <h3 id="modalName"></h3>
+      <p class="modal__price" id="modalPrice"></p>
+      <p class="modal__desc" id="modalDesc"></p>
+      <div class="modal__sizes">
+        <span>Size</span>
+        <button>XS</button><button class="is-active">S</button><button>M</button><button>L</button>
+      </div>
+      <button class="btn btn--primary modal__add">Add to Bag</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/main.js"></script>
+</body>
+</html>

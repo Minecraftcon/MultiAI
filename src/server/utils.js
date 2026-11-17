@@ -358,16 +358,21 @@ function resolveSafePath(inputPath, chatId) {
     if (isScratch) {
         let rel = processed;
         if (rel.startsWith("$SCRATCH/")) rel = rel.slice(9);
-        else if (rel.startsWith("${SCRATCH}/")) rel = rel.slice(10);
+        else if (rel.startsWith("${SCRATCH}/")) rel = rel.slice(11);
         else if (rel.startsWith("$SCRATCH\\")) rel = rel.slice(9);
-        else if (rel.startsWith("${SCRATCH}\\")) rel = rel.slice(10);
+        else if (rel.startsWith("${SCRATCH}\\")) rel = rel.slice(11);
         else if (rel === "$SCRATCH" || rel === "${SCRATCH}") rel = "";
+        rel = rel.replace(/^[/\\]+/, "");
 
         const scratchDir = getChatScratchDir(chatId);
         if (!fs.existsSync(scratchDir)) {
             fs.mkdirSync(scratchDir, { recursive: true });
         }
-        return rel ? path.resolve(scratchDir, rel) : scratchDir;
+        const resolved = rel ? path.resolve(scratchDir, rel) : scratchDir;
+        if (rel && !resolved.startsWith(scratchDir + path.sep) && resolved !== scratchDir) {
+            throw new Error("Path traversal outside scratch directory is prohibited");
+        }
+        return resolved;
     }
 
     const isArtifacts = processed === "$ARTIFACTS" || 
@@ -380,16 +385,21 @@ function resolveSafePath(inputPath, chatId) {
     if (isArtifacts) {
         let rel = processed;
         if (rel.startsWith("$ARTIFACTS/")) rel = rel.slice(11);
-        else if (rel.startsWith("${ARTIFACTS}/")) rel = rel.slice(12);
+        else if (rel.startsWith("${ARTIFACTS}/")) rel = rel.slice(13);
         else if (rel.startsWith("$ARTIFACTS\\")) rel = rel.slice(11);
-        else if (rel.startsWith("${ARTIFACTS}\\")) rel = rel.slice(12);
+        else if (rel.startsWith("${ARTIFACTS}\\")) rel = rel.slice(13);
         else if (rel === "$ARTIFACTS" || rel === "${ARTIFACTS}") rel = "";
+        rel = rel.replace(/^[/\\]+/, "");
 
         const artifactsDir = getChatArtifactsDir(chatId);
         if (!fs.existsSync(artifactsDir)) {
             fs.mkdirSync(artifactsDir, { recursive: true });
         }
-        return rel ? path.resolve(artifactsDir, rel) : artifactsDir;
+        const resolved = rel ? path.resolve(artifactsDir, rel) : artifactsDir;
+        if (rel && !resolved.startsWith(artifactsDir + path.sep) && resolved !== artifactsDir) {
+            throw new Error("Path traversal outside artifacts directory is prohibited");
+        }
+        return resolved;
     }
 
     // Also support 'scratch' or 'scratch/...' and 'artifacts' or 'artifacts/...' shorthand
@@ -402,7 +412,11 @@ function resolveSafePath(inputPath, chatId) {
         if (!fs.existsSync(scratchDir)) {
             fs.mkdirSync(scratchDir, { recursive: true });
         }
-        return rel ? path.resolve(scratchDir, rel) : scratchDir;
+        const resolved = rel ? path.resolve(scratchDir, rel) : scratchDir;
+        if (rel && !resolved.startsWith(scratchDir + path.sep) && resolved !== scratchDir) {
+            throw new Error("Path traversal outside scratch directory is prohibited");
+        }
+        return resolved;
     }
 
     if (normLower === "artifacts" || normLower.startsWith("artifacts/") || normLower.startsWith("./artifacts/")) {
@@ -413,7 +427,11 @@ function resolveSafePath(inputPath, chatId) {
         if (!fs.existsSync(artifactsDir)) {
             fs.mkdirSync(artifactsDir, { recursive: true });
         }
-        return rel ? path.resolve(artifactsDir, rel) : artifactsDir;
+        const resolved = rel ? path.resolve(artifactsDir, rel) : artifactsDir;
+        if (rel && !resolved.startsWith(artifactsDir + path.sep) && resolved !== artifactsDir) {
+            throw new Error("Path traversal outside artifacts directory is prohibited");
+        }
+        return resolved;
     }
 
     let baseDir = process.cwd();

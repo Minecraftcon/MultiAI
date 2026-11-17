@@ -13,6 +13,17 @@ class BaseProvider {
     static matchPatterns = [];
 
     /**
+     * Returns provider metadata for discovery and registration.
+     */
+    static getProviderInfo() {
+        return {
+            id: this.id,
+            displayName: this.displayName,
+            matchPatterns: this.matchPatterns
+        };
+    }
+
+    /**
      * Checks if a provider identifier (type, name, model prefix) matches this provider.
      * Supports case-insensitivity, hyphens, underscores, spaces, etc.
      */

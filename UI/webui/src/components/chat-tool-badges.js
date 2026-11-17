@@ -212,12 +212,12 @@ export function getToolBadgeConfig(toolName, args = {}) {
         const queryTerm = args.Query !== undefined ? args.Query : (args.query || args.pattern || "");
         detail = `"${queryTerm}"${scope}`;
         isCommandTask = true;
-    } else if (toolName === "replace_file_content" || toolName === "search_and_replace") {
+    } else if (toolName === "replace_file_content" || toolName === "search_and_replace" || toolName === "edit_file" || toolName === "replace_in_file" || toolName === "str_replace") {
         icon = "edit-3";
         label = "Edited file";
-        const filePath = args.path || args.TargetFile || "file";
-        const targetStr = args.target_content || args.TargetContent || "";
-        const replStr = args.replacement_content || args.ReplacementContent || "";
+        const filePath = args.path || args.Path || args.TargetFile || args.file_path || args.file || "file";
+        const targetStr = args.target_content || args.TargetContent || args.target || args.Target || args.old_str || "";
+        const replStr = args.replacement_content || args.ReplacementContent || args.replacement || args.Replacement || args.new_str || "";
         detail = filePath;
         if (targetStr || replStr) {
             const dels = targetStr ? targetStr.split("\n").length : 0;
@@ -274,6 +274,21 @@ export function getToolBadgeConfig(toolName, args = {}) {
         const inProgText = inProg ? ` • In progress: ${inProg.content}` : (todos.length > 0 && completed === todos.length ? " • All completed" : "");
         detail = `${completed}/${todos.length} completed${inProgText}`;
         isCommandTask = true;
+    } else if (toolName === "define_subagent") {
+        icon = "bot";
+        label = "Defined subagent";
+        detail = args.name || "custom subagent";
+        isCommandTask = true;
+    } else if (toolName === "manage_subagents") {
+        icon = "shield";
+        label = "Subagent manager";
+        detail = `${args.Action || args.action || "manage"}`;
+        isCommandTask = true;
+    } else if (toolName === "send_message") {
+        icon = "send";
+        label = "Sent subagent message";
+        detail = `To: ${args.Recipient || args.recipient || "subagent"}`;
+        isCommandTask = true;
     } else if (toolName === "task" || toolName === "invoke_subagent") {
         icon = "bot";
         const subType = args.subagent_type || args.type || "designer";
@@ -319,6 +334,17 @@ export function getToolBadgeConfig(toolName, args = {}) {
             return `${sym} ${t.content}`;
         }).join("\n");
         displayCmd = `PLAN (${completed}/${todos.length} completed):\n${items}`;
+    } else if (toolName === "define_subagent") {
+        const toolsList = Array.isArray(args.tools) ? args.tools.join(", ") : "default";
+        displayCmd = `DEFINED SUBAGENT [${args.name || "custom"}]:\nDescription: ${args.description || ""}\nTools: ${toolsList}\n\nSystem Prompt:\n${args.system_prompt || args.SystemPrompt || ""}`;
+    } else if (toolName === "manage_subagents") {
+        const action = args.Action || args.action || "list";
+        const ids = args.ConversationIds || args.conversation_ids || args.conversationIds || [];
+        displayCmd = `MANAGE SUBAGENTS [${action.toUpperCase()}]:\nTarget IDs: ${ids.length ? ids.join(", ") : "all/none"}`;
+    } else if (toolName === "send_message") {
+        const rec = args.Recipient || args.recipient || "subagent";
+        const msg = args.Message || args.message || "";
+        displayCmd = `SEND MESSAGE [-> ${rec}]:\n${msg}`;
     } else if (toolName === "task" || toolName === "invoke_subagent") {
         const subType = args.subagent_type || args.type || "designer";
         const taskText = args.task || args.instruction || args.prompt || "";
@@ -429,8 +455,8 @@ export function addToolBadge(element, toolName, args) {
         ? `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-code preview-icon" aria-hidden="true" style="display:inline-block; vertical-align:-2px; margin: 0 4px; opacity:0.8;"><path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/></svg>` 
         : ``;
 
-    const isFileEditTool = (toolName === "replace_file_content" || toolName === "multi_replace_file_content" || toolName === "search_and_replace");
-    const editFilePath = isFileEditTool ? (args.path || args.TargetFile || args.target_file || args.file_path || "") : "";
+    const isFileEditTool = ["replace_file_content", "multi_replace_file_content", "search_and_replace", "edit_file", "replace_in_file", "str_replace"].includes(toolName);
+    const editFilePath = isFileEditTool ? (args.path || args.Path || args.TargetFile || args.target_file || args.file_path || args.file || "") : "";
 
     if (isFileEditTool && editFilePath && searchContainer) {
         let existingEditBadge = null;
@@ -586,7 +612,7 @@ export function addToolBadge(element, toolName, args) {
  */
 export function extractStreamingPath(rawJson) {
     if (!rawJson || typeof rawJson !== "string") return "";
-    const m = rawJson.match(/"(?:path|TargetFile|target_file|file_path|FilePath)"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"?/i);
+    const m = rawJson.match(/"(?:path|Path|TargetFile|target_file|file_path|FilePath|file|File|filename|fileName)"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"?/i);
     if (m && m[1]) {
         try {
             return JSON.parse(`"${m[1]}"`);
@@ -607,32 +633,38 @@ export function extractStreamingPath(rawJson) {
 export function extractStreamingDiffCounts(toolName, rawJson) {
     if (!rawJson || typeof rawJson !== "string") return null;
 
-    if (toolName === "write_file" || toolName === "create_file") {
-        const contentIdx = rawJson.search(/"(?:content|CodeContent)"\s*:\s*"/i);
-        if (contentIdx === -1) return null;
+    const isWriteTool = ["write_file", "create_file", "write_to_file", "save_file"].includes(toolName);
+    const isEditTool = ["replace_file_content", "search_and_replace", "edit_file", "replace_in_file", "str_replace"].includes(toolName);
 
-        const valueStartMatch = rawJson.slice(contentIdx).match(/"(?:content|CodeContent)"\s*:\s*"/i);
-        if (!valueStartMatch) return null;
-        const valueStart = contentIdx + valueStartMatch[0].length;
+    if (isWriteTool) {
+        const contentMatch = rawJson.match(/"(?:content|Content|CodeContent|code|text)"\s*:\s*"/i);
+        if (!contentMatch) return null;
+
+        const valueStart = contentMatch.index + contentMatch[0].length;
         const valuePortion = rawJson.slice(valueStart);
 
         let lineCount = 1;
         for (let i = 0; i < valuePortion.length; i++) {
+            if (valuePortion[i] === '"') {
+                break;
+            }
             if (valuePortion[i] === "\n") {
                 lineCount++;
             } else if (valuePortion[i] === "\\" && valuePortion[i + 1] === "n") {
                 lineCount++;
+                i++;
+            } else if (valuePortion[i] === "\\") {
                 i++;
             }
         }
         return { adds: lineCount, dels: 0 };
     }
 
-    if (toolName === "replace_file_content" || toolName === "search_and_replace") {
+    if (isEditTool) {
         let dels = 0;
         let adds = 0;
 
-        const targetMatch = rawJson.match(/"(?:target_content|TargetContent)"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"?/i);
+        const targetMatch = rawJson.match(/"(?:target_content|TargetContent|target|Target|old_str|oldStr)"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"?/i);
         if (targetMatch && targetMatch[1]) {
             const rawTarget = targetMatch[1];
             let targetLines = 1;
@@ -645,21 +677,23 @@ export function extractStreamingDiffCounts(toolName, rawJson) {
             dels = targetLines;
         }
 
-        const replIdx = rawJson.search(/"(?:replacement_content|ReplacementContent)"\s*:\s*"/i);
-        if (replIdx !== -1) {
-            const replStartMatch = rawJson.slice(replIdx).match(/"(?:replacement_content|ReplacementContent)"\s*:\s*"/i);
-            if (replStartMatch) {
-                const replStart = replIdx + replStartMatch[0].length;
-                const replPortion = rawJson.slice(replStart);
-                let replLines = 1;
-                for (let i = 0; i < replPortion.length; i++) {
-                    if (replPortion[i] === "\n" || (replPortion[i] === "\\" && replPortion[i + 1] === "n")) {
-                        replLines++;
-                        if (replPortion[i] === "\\") i++;
-                    }
+        const replKeyMatch = rawJson.match(/"(?:replacement_content|ReplacementContent|replacement|Replacement|new_str|newStr)"\s*:\s*"/i);
+        if (replKeyMatch) {
+            const replStart = replKeyMatch.index + replKeyMatch[0].length;
+            const replPortion = rawJson.slice(replStart);
+            let replLines = 1;
+            for (let i = 0; i < replPortion.length; i++) {
+                if (replPortion[i] === '"') {
+                    break;
                 }
-                adds = replLines;
+                if (replPortion[i] === "\n" || (replPortion[i] === "\\" && replPortion[i + 1] === "n")) {
+                    replLines++;
+                    if (replPortion[i] === "\\") i++;
+                } else if (replPortion[i] === "\\") {
+                    i++;
+                }
             }
+            adds = replLines;
         }
 
         if (dels > 0 || adds > 0) {
@@ -668,23 +702,34 @@ export function extractStreamingDiffCounts(toolName, rawJson) {
     }
 
     if (toolName === "multi_replace_file_content") {
-        const replMatches = rawJson.match(/"(?:replacement_content|ReplacementContent)"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"?/gi);
-        const targetMatches = rawJson.match(/"(?:target_content|TargetContent)"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"?/gi);
+        const countRawLines = (str) => {
+            if (!str) return 0;
+            let lines = 1;
+            for (let i = 0; i < str.length; i++) {
+                if (str[i] === "\n" || (str[i] === "\\" && str[i + 1] === "n")) {
+                    lines++;
+                    if (str[i] === "\\") i++;
+                }
+            }
+            return lines;
+        };
+        const replMatches = rawJson.match(/"(?:replacement_content|ReplacementContent|replacement|Replacement|new_str|newStr)"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"?/gi);
+        const targetMatches = rawJson.match(/"(?:target_content|TargetContent|target|Target|old_str|oldStr)"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"?/gi);
         let totalAdds = 0;
         let totalDels = 0;
         if (Array.isArray(targetMatches)) {
             for (const tm of targetMatches) {
-                const m = tm.match(/"(?:target_content|TargetContent)"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"?/i);
+                const m = tm.match(/"(?:target_content|TargetContent|target|Target|old_str|oldStr)"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"?/i);
                 if (m && m[1]) {
-                    totalDels += (m[1].split("\n").length || 1);
+                    totalDels += countRawLines(m[1]);
                 }
             }
         }
         if (Array.isArray(replMatches)) {
             for (const rm of replMatches) {
-                const m = rm.match(/"(?:replacement_content|ReplacementContent)"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"?/i);
+                const m = rm.match(/"(?:replacement_content|ReplacementContent|replacement|Replacement|new_str|newStr)"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"?/i);
                 if (m && m[1]) {
-                    totalAdds += (m[1].split("\n").length || 1);
+                    totalAdds += countRawLines(m[1]);
                 }
             }
         }
@@ -705,7 +750,7 @@ export function extractStreamingDiffCounts(toolName, rawJson) {
  */
 export function extractStreamingContent(rawJson) {
     if (!rawJson || typeof rawJson !== "string") return "";
-    const keyMatch = rawJson.match(/"(?:content|CodeContent)"\s*:\s*"/i);
+    const keyMatch = rawJson.match(/"(?:content|Content|CodeContent|code|text|replacement_content|ReplacementContent|replacement|Replacement)"\s*:\s*"/i);
     if (!keyMatch) return "";
     const startIdx = keyMatch.index + keyMatch[0].length;
     let unescaped = "";
@@ -755,8 +800,20 @@ export function updateStreamingToolBadge(element, toolData, overallStartTime) {
         }
     });
 
+    // 2. Ensure activity wrapper is visible and expanded while tool call streams
+    const wrapper = element.querySelector(".activity-wrapper");
+    if (wrapper) {
+        wrapper.style.display = "block";
+        if (!element.dataset.manuallyToggled) {
+            wrapper.classList.add("open");
+        }
+    }
+
     const toolName = toolData.name || "";
     if (!toolName) return;
+
+    const isWriteTool = ["write_file", "create_file", "write_to_file", "save_file"].includes(toolName);
+    const isEditTool = ["replace_file_content", "search_and_replace", "edit_file", "replace_in_file", "str_replace", "multi_replace_file_content"].includes(toolName);
 
     if (!element._streamingToolBadges) {
         element._streamingToolBadges = new Map();
@@ -769,15 +826,24 @@ export function updateStreamingToolBadge(element, toolData, overallStartTime) {
     const partialPath = extractStreamingPath(accumulatedArgs);
     const diffCounts = extractStreamingDiffCounts(toolName, accumulatedArgs);
 
-    // Update activity status label so it doesn't stay frozen on "Thinking..."
+    // Update activity status label with real-time diff counter (+N -M) so user sees live counter stream
     const activityLabel = element.querySelector(".activity-label");
     if (activityLabel && overallStartTime) {
         const elapsed = ((Date.now() - overallStartTime) / 1000).toFixed(1);
-        if (toolName === "write_file") {
+        let diffSnippet = "";
+        if (diffCounts) {
+            const parts = [];
+            if (diffCounts.adds > 0) parts.push(`+${diffCounts.adds}`);
+            if (diffCounts.dels > 0) parts.push(`-${diffCounts.dels}`);
+            if (parts.length > 0) diffSnippet = ` (${parts.join(" ")})`;
+        }
+        if (isWriteTool) {
             const isArtifact = partialPath.startsWith("$ARTIFACTS/") || partialPath.startsWith("${ARTIFACTS}/");
-            activityLabel.textContent = isArtifact ? `Writing artifact (${elapsed}s)` : `Writing file (${elapsed}s)`;
-        } else if (toolName === "replace_file_content" || toolName === "multi_replace_file_content") {
-            activityLabel.textContent = `Editing file (${elapsed}s)`;
+            activityLabel.textContent = isArtifact ? `Writing artifact${diffSnippet} (${elapsed}s)` : `Writing file${diffSnippet} (${elapsed}s)`;
+        } else if (isEditTool) {
+            activityLabel.textContent = `Editing file${diffSnippet} (${elapsed}s)`;
+        } else {
+            activityLabel.textContent = `Running ${toolName} (${elapsed}s)`;
         }
     }
 
@@ -785,17 +851,18 @@ export function updateStreamingToolBadge(element, toolData, overallStartTime) {
         const initialArgs = { path: partialPath };
         badgeEl = addToolBadge(element, toolName, initialArgs);
         badgeEl.classList.add("is-streaming-tool");
-
-        const labelEl = badgeEl.querySelector(".search-label");
-        if (labelEl) {
-            if (toolName === "write_file") {
-                const isArtifact = partialPath.startsWith("$ARTIFACTS/") || partialPath.startsWith("${ARTIFACTS}/");
-                labelEl.textContent = isArtifact ? "Writing artifact" : "Writing file";
-            } else if (toolName === "replace_file_content" || toolName === "search_and_replace" || toolName === "multi_replace_file_content") {
-                labelEl.textContent = "Editing file";
-            }
-        }
         element._streamingToolBadges.set(badgeKey, badgeEl);
+    }
+
+    // Always keep search-label dynamically updated
+    const labelEl = badgeEl.querySelector(".search-label");
+    if (labelEl) {
+        if (isWriteTool) {
+            const isArtifact = partialPath.startsWith("$ARTIFACTS/") || partialPath.startsWith("${ARTIFACTS}/");
+            labelEl.textContent = isArtifact ? "Writing artifact" : "Writing file";
+        } else if (isEditTool) {
+            labelEl.textContent = "Editing file";
+        }
     }
 
     const queryEl = badgeEl.querySelector(".search-query");
@@ -898,7 +965,7 @@ export function syncToolBadgeArgs(badgeEl, toolName, args) {
         badgeEl._streamRafId = null;
     }
     badgeEl.classList.remove("is-streaming-tool");
-    const isFileEditTool = (toolName === "replace_file_content" || toolName === "multi_replace_file_content" || toolName === "search_and_replace");
+    const isFileEditTool = ["replace_file_content", "multi_replace_file_content", "search_and_replace", "edit_file", "replace_in_file", "str_replace"].includes(toolName);
     const config = getToolBadgeConfig(toolName, args);
     const labelEl = badgeEl.querySelector(".search-label");
     const queryEl = badgeEl.querySelector(".search-query");
@@ -919,7 +986,7 @@ export function syncToolBadgeArgs(badgeEl, toolName, args) {
         badgeEl.classList.add("artifact-badge-item");
     }
     if (isFileEditTool) {
-        const editFilePath = args.path || args.TargetFile || args.target_file || args.file_path || "";
+        const editFilePath = args.path || args.Path || args.TargetFile || args.target_file || args.file_path || args.file || "";
         if (editFilePath) {
             badgeEl.classList.add("file-edit-badge", "is-editing");
             badgeEl.dataset.editFile = editFilePath;
@@ -1333,15 +1400,13 @@ export function addThoughtTrace(element, text) {
 
     const { thoughtHtml, content } = extractThoughtAndContent(text);
 
-    // If thinking reasoning exists and the top thought box is empty, populate it
-    if (thoughtHtml && preSearchContent && !preSearchContent.innerHTML.trim()) {
-        preSearchContent.innerHTML = thoughtHtml;
-        wrapTablesForScroll(preSearchContent);
+    // If active streaming thought element was already placed in searchContainer for this round,
+    // finalize it instead of appending a duplicate
+    let item = element._activeRoundThoughtEl;
+    if (item && item.parentNode !== searchContainer) {
+        item = null;
+        element._activeRoundThoughtEl = null;
     }
-
-    // Only render into the activity timeline if there is user-facing commentary content
-    const commentary = (content || "").trim();
-    if (!commentary) return null;
 
     if (wrapper) {
         wrapper.style.display = "block";
@@ -1350,27 +1415,49 @@ export function addThoughtTrace(element, text) {
         }
     }
 
-    const item = document.createElement("div");
-    item.className = "activity-thought-item";
-    item.innerHTML = parseMarkdown(commentary);
-    wrapTablesForScroll(item);
+    let renderedHtml = "";
+    if (thoughtHtml) {
+        renderedHtml += thoughtHtml;
+    }
+    const commentary = (content || "").trim();
+    if (commentary) {
+        renderedHtml += (renderedHtml ? "<br>" : "") + parseMarkdown(commentary);
+    }
+    if (!renderedHtml.trim()) return null;
 
-    // If streaming tool badges were created during this round before thought trace was finalized,
-    // ensure pre-tool reasoning / commentary is inserted BEFORE the tool badges of this round.
-    let insertRef = null;
-    if (element._streamingToolBadges && element._streamingToolBadges.size > 0) {
-        for (const badge of element._streamingToolBadges.values()) {
-            if (badge && badge.parentNode === searchContainer) {
-                insertRef = badge;
-                break;
+    if (!item) {
+        item = document.createElement("div");
+        item.className = "activity-thought-item";
+
+        // Insert before streaming tool badges of this round if present
+        let insertRef = null;
+        if (element._streamingToolBadges && element._streamingToolBadges.size > 0) {
+            for (const badge of element._streamingToolBadges.values()) {
+                if (badge && badge.parentNode === searchContainer) {
+                    insertRef = badge;
+                    break;
+                }
             }
         }
+
+        if (insertRef) {
+            searchContainer.insertBefore(item, insertRef);
+        } else {
+            searchContainer.appendChild(item);
+        }
+    } else {
+        item.classList.remove("streaming");
+        element._activeRoundThoughtEl = null;
     }
 
-    if (insertRef) {
-        searchContainer.insertBefore(item, insertRef);
-    } else {
-        searchContainer.appendChild(item);
+    item.innerHTML = renderedHtml;
+    wrapTablesForScroll(item);
+
+    // When reasoning belongs in the activity timeline above tool calls,
+    // ensure the top thought box (first block) does not keep a stale/duplicate copy
+    if (preSearchContent && preSearchContent.innerHTML.trim()) {
+        preSearchContent.innerHTML = "";
+        element._lastRenderedThought = "";
     }
     requestScrollToBottom(chat);
     return item;

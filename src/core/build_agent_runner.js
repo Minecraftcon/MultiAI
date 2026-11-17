@@ -48,12 +48,22 @@ const SERVER_BUILD_TOOLS = [
         type: "function",
         function: {
             name: "write_file",
-            description: "Create or overwrite a file with given content.",
+            description: "Create or overwrite a file with given content. When writing to $ARTIFACTS, specify ArtifactMetadata.",
             parameters: {
                 type: "object",
                 properties: {
                     path: { type: "string", description: "File path relative to project root or $SCRATCH/$ARTIFACTS" },
-                    content: { type: "string", description: "Full content to write" }
+                    content: { type: "string", description: "Full content to write" },
+                    ArtifactMetadata: {
+                        type: "object",
+                        description: "Metadata that defines artifact properties. ONLY provide when creating an artifact file in $ARTIFACTS directory.",
+                        properties: {
+                            Summary: { type: "string", description: "Detailed multi-line summary of the artifact's contents and purpose." },
+                            UserFacing: { type: "boolean", description: "Whether this artifact should be presented to the user." },
+                            RequestFeedback: { type: "boolean", description: "Whether to request user feedback on this artifact if its contents are executable (e.g., a plan)." }
+                        },
+                        required: ["Summary", "UserFacing", "RequestFeedback"]
+                    }
                 },
                 required: ["path", "content"]
             }
@@ -67,11 +77,65 @@ const SERVER_BUILD_TOOLS = [
             parameters: {
                 type: "object",
                 properties: {
-                    path: { type: "string", description: "Target file path" },
-                    target_content: { type: "string", description: "Exact character sequence to be replaced" },
-                    replacement_content: { type: "string", description: "Drop-in replacement text" }
+                    path: { type: "string", description: "Target file path relative to project root or $SCRATCH/$ARTIFACTS" },
+                    target_content: { type: "string", description: "Exact character sequence to be replaced (exact match including indentation and whitespace)" },
+                    replacement_content: { type: "string", description: "Drop-in replacement text" },
+                    start_line: { type: "integer", description: "Optional starting line of search window (1-indexed)" },
+                    end_line: { type: "integer", description: "Optional ending line of search window (inclusive)" },
+                    allow_multiple: { type: "boolean", description: "Allow multiple replacements if matched (default false)" },
+                    ArtifactMetadata: {
+                        type: "object",
+                        description: "Metadata updates if updating an artifact file in $ARTIFACTS directory.",
+                        properties: {
+                            Summary: { type: "string", description: "Detailed multi-line summary of the artifact's contents and purpose." },
+                            UserFacing: { type: "boolean", description: "Whether this artifact should be presented to the user." },
+                            RequestFeedback: { type: "boolean", description: "Whether to request user feedback on this artifact if its contents are executable." }
+                        },
+                        required: ["Summary", "UserFacing", "RequestFeedback"]
+                    }
                 },
                 required: ["path", "target_content", "replacement_content"]
+            }
+        }
+    },
+    {
+        type: "function",
+        function: {
+            name: "multi_replace_file_content",
+            description: "Apply multiple non-contiguous edits to a single file in a single atomic pass. Validates all chunks before applying any changes.",
+            parameters: {
+                type: "object",
+                properties: {
+                    path: { type: "string", description: "Path to the target file relative to project root or $SCRATCH/$ARTIFACTS" },
+                    replacement_chunks: {
+                        type: "array",
+                        description: "Array of non-contiguous replacement chunks.",
+                        items: {
+                            type: "object",
+                            properties: {
+                                target_content: { type: "string", description: "Exact content to be replaced." },
+                                replacement_content: { type: "string", description: "Content to replace target_content with." },
+                                start_line: { type: "integer", description: "Optional 1-based start line." },
+                                end_line: { type: "integer", description: "Optional 1-based end line." },
+                                allow_multiple: { type: "boolean", description: "Allow multiple replacements if matched." }
+                            },
+                            required: ["target_content", "replacement_content"]
+                        }
+                    },
+                    instruction: { type: "string", description: "Optional explanation of the changes being made." },
+                    description: { type: "string", description: "Optional user-facing summary of why this change is made." },
+                    ArtifactMetadata: {
+                        type: "object",
+                        description: "Metadata updates if updating an artifact file in $ARTIFACTS directory.",
+                        properties: {
+                            Summary: { type: "string", description: "Detailed multi-line summary of the artifact's contents and purpose." },
+                            UserFacing: { type: "boolean", description: "Whether this artifact should be presented to the user." },
+                            RequestFeedback: { type: "boolean", description: "Whether to request user feedback on this artifact if its contents are executable." }
+                        },
+                        required: ["Summary", "UserFacing", "RequestFeedback"]
+                    }
+                },
+                required: ["path", "replacement_chunks"]
             }
         }
     },
@@ -282,6 +346,10 @@ function formatPlanMarkdown(title, todos = []) {
  * Executes a single tool call on the local server.
  */
 async function executeServerTool(name, args, { chatId, projectId, abortSignal, job, dispatchEvent }) {
+    if (!args || typeof args !== "object") {
+        return { error: `Invalid arguments for tool '${name}': expected an object.` };
+    }
+
     if (name.startsWith("mcp_") || mcpManager.activeTools.has(name)) {
         try {
             return await mcpManager.callTool(name, args);
@@ -290,30 +358,67 @@ async function executeServerTool(name, args, { chatId, projectId, abortSignal, j
         }
     }
     if (name === "read_file") {
+        const filePath = args.path || args.filePath || args.file_path || args.Path;
+        if (!filePath) return { error: "Missing required parameter 'path'." };
+        args.path = String(filePath).trim();
+        if (args.start_line !== undefined) args.start_line = parseInt(args.start_line, 10);
+        if (args.end_line !== undefined) args.end_line = parseInt(args.end_line, 10);
         return await handleFileRead(args, chatId);
     }
     if (name === "write_file") {
+        const filePath = args.path || args.filePath || args.file_path || args.Path;
+        if (!filePath) return { error: "Missing required parameter 'path'." };
+        if (args.content === undefined && args.Content !== undefined) args.content = args.Content;
+        if (args.content === undefined || args.content === null) return { error: "Missing required parameter 'content'." };
+        args.path = String(filePath).trim();
+        args.content = typeof args.content === "string" ? args.content : String(args.content);
         return await handleWriteFile(args, chatId, { resolveSafePath });
     }
     if (name === "replace_file_content" || name === "search_and_replace") {
+        const filePath = args.path || args.filePath || args.file_path || args.TargetFile || args.target_file || args.Path;
+        if (!filePath) return { error: "Missing required parameter 'path'." };
+        if (args.target_content === undefined && args.TargetContent !== undefined) args.target_content = args.TargetContent;
+        if (args.target_content === undefined && args.target !== undefined) args.target_content = args.target;
+        if (args.replacement_content === undefined && args.ReplacementContent !== undefined) args.replacement_content = args.ReplacementContent;
+        if (args.replacement_content === undefined && args.replacement !== undefined) args.replacement_content = args.replacement;
+        if (args.target_content === undefined || args.target_content === null) return { error: "Missing required parameter 'target_content'." };
+        if (args.replacement_content === undefined || args.replacement_content === null) return { error: "Missing required parameter 'replacement_content'." };
+        args.path = String(filePath).trim();
         return await handleReplaceFileContent(args, chatId, { resolveSafePath });
     }
     if (name === "multi_replace_file_content") {
+        const filePath = args.path || args.filePath || args.file_path || args.TargetFile || args.target_file || args.Path;
+        if (!filePath) return { error: "Missing required parameter 'path'." };
+        const chunks = args.replacement_chunks || args.ReplacementChunks || args.chunks;
+        if (!Array.isArray(chunks) || chunks.length === 0) return { error: "Missing or invalid parameter 'replacement_chunks': expected non-empty array." };
+        args.path = String(filePath).trim();
+        args.replacement_chunks = chunks;
         return await handleMultiReplaceFileContent(args, chatId, { resolveSafePath });
     }
     if (name === "list_dir") {
+        const dirPath = args.path || args.dir || args.directory || args.Path || ".";
+        args.path = String(dirPath).trim();
         return await handleListDir(args, chatId, { resolveSafePath });
     }
     if (name === "grep_search") {
+        const dirPath = args.path || args.dir || args.directory || args.Path || ".";
+        const query = args.query !== undefined ? args.query : (args.pattern !== undefined ? args.pattern : args.Query);
+        if (query === undefined || query === null || String(query).trim() === "") return { error: "Missing required parameter 'query'." };
+        args.path = String(dirPath).trim();
+        args.query = String(query);
         return await handleCodeGrep(args, chatId, { resolveSafePath, postJSON });
     }
     if (name === "run_task") {
+        const cmd = args.command || args.cmd || args.CommandLine;
+        if (!cmd || typeof cmd !== "string" || !cmd.trim()) return { error: "Missing required parameter 'command'." };
+        args.command = String(cmd).trim();
+        args.timer = parseInt(args.timer, 10) || 5;
         // Forward terminal execution to local terminal daemon (port 5000)
         try {
             const res = await postJSON(5000, "/api/task/run", {
                 command: args.command,
-                task_name: args.task_name,
-                timer: args.timer || 5,
+                task_name: args.task_name || "Run task",
+                timer: args.timer,
                 chatId
             }, 30000);
             return res;
