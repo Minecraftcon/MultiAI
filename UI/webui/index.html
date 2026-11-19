@@ -11,8 +11,8 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
 
-    <!-- Puter -->
-    <script src="https://js.puter.com/v2/"></script>
+    <!-- Content Security Policy: Restricted to self, fonts, and inline styles -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' ws: wss:; frame-src 'self' blob: http: https:;">
 
     <!-- Vendor libraries served locally (no CDN required) -->
 
@@ -156,6 +156,15 @@
                 <i data-lucide="square-pen"></i>
                 <span>New Chat</span>
             </button>
+            <button id="cloudUploadBtn" class="panel-nav-btn" type="button" title="Upload files to /tmp/user/files">
+                <i data-lucide="upload-cloud"></i>
+                <span>Upload Files</span>
+            </button>
+            <button id="cloudNewProjectBtn" class="panel-nav-btn" type="button" title="Create a new workspace project">
+                <i data-lucide="folder-plus"></i>
+                <span>New Project</span>
+            </button>
+            <button id="cloudGitCloneBtn" style="display: none;" type="button" aria-hidden="true"></button>
             <button id="newVoiceBtn" class="panel-nav-btn" type="button" title="Start voice conversation">
                 <i data-lucide="audio-lines"></i>
                 <span>New Voice Chat</span>
@@ -576,6 +585,96 @@
 </div>
 
 
+
+<!-- ================= CLOUD NEW PROJECT & WORKSPACE MODAL ================= -->
+<div id="cloudGitCloneBackdrop" class="project-modal-backdrop" style="display: none;"></div>
+<div id="cloudGitCloneModal" class="project-modal" role="dialog" aria-modal="true" style="display: none;">
+    <div class="project-modal-header">
+        <div class="project-modal-title-group">
+            <i data-lucide="folder-plus"></i>
+            <h2 class="project-modal-title">New Workspace Project</h2>
+        </div>
+        <button id="cloudGitCloseBtn" class="project-modal-close" type="button" aria-label="Close dialog">
+            <i data-lucide="x"></i>
+        </button>
+    </div>
+    <div class="project-modal-body">
+        <!-- Project Name -->
+        <label class="project-input-label" for="cloudProjectName">Project Name</label>
+        <div class="project-input-wrap">
+            <i data-lucide="folder" class="project-input-icon"></i>
+            <input type="text" id="cloudProjectName" class="project-input" placeholder="e.g. backend-api, ui-client, notes" autocomplete="off" spellcheck="false">
+        </div>
+        <div id="cloudProjectPathHint" class="project-path-hint" style="font-size: 11px; color: var(--text-tertiary); margin-top: 2px; font-family: var(--font-mono, monospace);">/tmp/workspace/&lt;name&gt;</div>
+
+        <!-- Storage Persistence -->
+        <label class="project-input-label" style="margin-top: 10px;">Storage Persistence</label>
+        <div class="cloud-storage-options">
+            <div class="cloud-storage-card active" id="cloudStoragePersistentCard" data-type="persistent">
+                <div class="cloud-storage-card-header">
+                    <div class="cloud-storage-card-title-wrap">
+                        <i data-lucide="cloud" class="cloud-storage-card-icon"></i>
+                        <span class="cloud-storage-card-title">Persistent</span>
+                    </div>
+                    <div class="cloud-storage-card-radio"></div>
+                </div>
+                <div class="cloud-storage-card-desc">Auto-synced to Backblaze B2 every minute & on disconnect.</div>
+            </div>
+            <div class="cloud-storage-card" id="cloudStorageTemporaryCard" data-type="temporary">
+                <div class="cloud-storage-card-header">
+                    <div class="cloud-storage-card-title-wrap">
+                        <i data-lucide="hard-drive" class="cloud-storage-card-icon"></i>
+                        <span class="cloud-storage-card-title">Temporary</span>
+                    </div>
+                    <div class="cloud-storage-card-radio"></div>
+                </div>
+                <div class="cloud-storage-card-desc">Ephemeral container storage in /tmp/workspace.</div>
+            </div>
+        </div>
+
+        <!-- Project Source -->
+        <label class="project-input-label" style="margin-top: 10px;">Project Source</label>
+        <div class="cloud-source-tabs">
+            <button type="button" class="cloud-source-tab active" id="cloudSourceEmptyBtn" data-source="empty">
+                <i data-lucide="file-plus"></i>
+                <span>Empty Project</span>
+            </button>
+            <button type="button" class="cloud-source-tab" id="cloudSourceGitBtn" data-source="git">
+                <i data-lucide="git-branch"></i>
+                <span>Clone Git Repository</span>
+            </button>
+        </div>
+
+        <!-- Git Clone Options (visible when Git source selected) -->
+        <div id="cloudGitCloneSection" style="display: none; margin-top: 10px;">
+            <label class="project-input-label" for="cloudGitRepoUrl">Repository URL</label>
+            <div class="project-input-wrap">
+                <i data-lucide="link" class="project-input-icon"></i>
+                <input type="text" id="cloudGitRepoUrl" class="project-input" placeholder="https://github.com/user/repository.git" autocomplete="off" spellcheck="false">
+            </div>
+            <button id="cloudGitInspectBtn" type="button" class="project-btn-secondary" style="margin-top: 8px; width: 100%;">
+                Fetch Remote Branches
+            </button>
+
+            <div id="cloudGitBranchSection" style="display: none; margin-top: 10px;">
+                <label class="project-input-label" for="cloudGitBranchSelect">Select Branch</label>
+                <div class="project-input-wrap">
+                    <select id="cloudGitBranchSelect" class="project-input" style="padding-left: 10px;"></select>
+                </div>
+                <label style="display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 12px; color: var(--text-secondary); cursor: pointer;">
+                    <input type="checkbox" id="cloudGitCloneAll">
+                    <span>Clone all branches (full clone)</span>
+                </label>
+            </div>
+        </div>
+
+        <div id="cloudGitStatus" class="cloud-status-msg" style="margin-top: 10px;"></div>
+    </div>
+    <div class="project-modal-footer">
+        <button id="cloudProjectCancelBtn" type="button" class="project-btn-secondary">Cancel</button>
+        <button id="cloudGitDoCloneBtn" type="button" class="project-btn-primary">Create Project</button>
+    </div>
+</div>
 
 <!-- ================= MODEL PICKER MODAL / DROPDOWN ================= -->
 <div id="modelPickerBackdrop" class="model-picker-backdrop"></div>

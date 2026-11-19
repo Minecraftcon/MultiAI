@@ -18,6 +18,9 @@ const DEFAULT_CONFIG = {
         LogLevel: "info",
         LogFile: "./logs.txt",
         SystemPreset: "default",
+        CustomSystemPrompt: "",
+        CustomAgents: "[]",
+        SendKey: "enter",
         UIStyle: "multiai"
     },
     Agent: {
@@ -48,13 +51,23 @@ const DEFAULT_CONFIG = {
     },
     UI: {
         Theme: "dark",
+        Accent: "warm",
+        CustomAccent: "",
         AuroraTheme: "saturn",
         ShowLineNumbers: true,
-        CompactMobileView: true
+        CompactMobileView: true,
+        Scale: 1.0
     },
     Mobile: {
         LimitVisibleTurns: true,
         VisibleTurns: 15
+    },
+    ContextFilter: {
+        Enabled: true,
+        Filters: "[]"
+    },
+    Mcp: {
+        Servers: "{}"
     }
 };
 
@@ -74,9 +87,14 @@ function castValue(raw) {
         const num = parseFloat(str);
         if (!isNaN(num)) return num;
     }
-    // Remove surrounding quotes if present
+    // Remove surrounding quotes and unescape multiline and escaped characters
     if ((str.startsWith('"') && str.endsWith('"')) || (str.startsWith("'") && str.endsWith("'"))) {
-        return str.slice(1, -1);
+        return str.slice(1, -1)
+            .replace(/\\"/g, '"')
+            .replace(/\\'/g, "'")
+            .replace(/\\n/g, "\n")
+            .replace(/\\r/g, "\r")
+            .replace(/\\\\/g, "\\");
     }
     return str;
 }
@@ -126,7 +144,7 @@ function parseINI(text) {
             if (commentIdx !== -1) {
                 // Check if comment char is inside quotes
                 const beforeComment = rawVal.slice(0, commentIdx);
-                const quoteCount = (beforeComment.match(/"/g) || []).length + (beforeComment.match(/'/g) || []).length;
+                const quoteCount = (beforeComment.match(/(?<!\\)"/g) || []).length + (beforeComment.match(/(?<!\\)'/g) || []).length;
                 if (quoteCount % 2 === 0) {
                     rawVal = beforeComment;
                 }
@@ -151,7 +169,15 @@ function serializeINI(config) {
         out += `[${section}]\n`;
         if (entries && typeof entries === "object") {
             for (const [key, val] of Object.entries(entries)) {
-                out += `${key} = ${val}\n`;
+                if (typeof val === "string" && (val.includes("\n") || val.includes("\r") || val.includes('"'))) {
+                    const escaped = val.replace(/\\/g, "\\\\").replace(/\n/g, "\\n").replace(/\r/g, "\\r").replace(/"/g, '\\"');
+                    out += `${key} = "${escaped}"\n`;
+                } else if (typeof val === "object" && val !== null) {
+                    const jsonStr = JSON.stringify(val).replace(/\\/g, "\\\\").replace(/\n/g, "\\n").replace(/\r/g, "\\r");
+                    out += `${key} = "${jsonStr}"\n`;
+                } else {
+                    out += `${key} = ${val}\n`;
+                }
             }
         }
         out += "\n";
@@ -323,7 +349,72 @@ function saveConfig(updates, filePath) {
     try {
         lastMtime = fs.statSync(targetPath).mtimeMs;
     } catch (_) {}
+
+    // Asynchronously synchronize with Supabase Cloud
+    try {
+        const supabaseStorage = require("./supabase_storage");
+        if (supabaseStorage && typeof supabaseStorage.saveAppConfig === "function") {
+            supabaseStorage.saveAppConfig(updated).catch(err => {
+                console.warn("[CONFIG] Background cloud sync error:", err.message);
+            });
+        }
+    } catch (_) {}
+
     return updated;
+}
+
+/**
+ * Saves an updated config to config.ini and awaits Supabase cloud synchronization.
+ */
+async function saveConfigAsync(updates, filePath) {
+    const updated = saveConfig(updates, filePath);
+    try {
+        const supabaseStorage = require("./supabase_storage");
+        if (supabaseStorage && typeof supabaseStorage.saveAppConfig === "function") {
+            await supabaseStorage.saveAppConfig(updated);
+        }
+    } catch (err) {
+        console.warn("[CONFIG] Await cloud sync error:", err.message);
+    }
+    return updated;
+}
+
+/**
+ * Synchronizes configuration from Supabase Cloud on server startup.
+ */
+async function initCloudConfig() {
+    try {
+        let supabaseStorage = null;
+        try {
+            supabaseStorage = require("./supabase_storage");
+        } catch (_) {}
+
+        if (!supabaseStorage || typeof supabaseStorage.isConnected !== "function") return;
+        const connected = await supabaseStorage.isConnected();
+        if (!connected) return;
+
+        const cloudConfig = await supabaseStorage.getAppConfig();
+        const targetPath = getDefaultConfigPath();
+
+        if (cloudConfig && typeof cloudConfig === "object" && Object.keys(cloudConfig).length > 0) {
+            const merged = mergeWithDefaults(cloudConfig);
+            cachedConfig = merged;
+
+            try {
+                const dir = path.dirname(targetPath);
+                if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+                fs.writeFileSync(targetPath, serializeINI(merged), "utf8");
+                lastMtime = fs.statSync(targetPath).mtimeMs;
+            } catch (_) {}
+            console.log("[CONFIG] Successfully synchronized configuration from Supabase cloud.");
+        } else {
+            const current = loadConfig(targetPath);
+            await supabaseStorage.saveAppConfig(current);
+            console.log("[CONFIG] Seeded Supabase cloud configuration from local configuration.");
+        }
+    } catch (err) {
+        console.warn("[CONFIG] Cloud config sync error:", err.message);
+    }
 }
 
 module.exports = {
@@ -331,6 +422,8 @@ module.exports = {
     loadConfig,
     getConfig: () => loadConfig(),
     saveConfig,
+    saveConfigAsync,
+    initCloudConfig,
     getDefaultConfigPath,
     parseINI,
     serializeINI,

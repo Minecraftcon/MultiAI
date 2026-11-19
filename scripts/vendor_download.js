@@ -54,6 +54,9 @@ function getVendorList() {
         { url: "https://cdn.jsdelivr.net/npm/mermaid@10.9.3/dist/mermaid.min.js", dest: "mermaid/mermaid.min.js" },
         // Three.js
         { url: "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js", dest: "three/three.min.js" },
+        // Ace Editor
+        { url: "https://cdnjs.cloudflare.com/ajax/libs/ace/1.37.1/ace.js", dest: "ace/ace.js", local: "node_modules/ace-builds/src-min-noconflict/ace.js" },
+        { url: "https://cdnjs.cloudflare.com/ajax/libs/ace/1.37.1/ext-language_tools.js", dest: "ace/ext-language_tools.js", local: "node_modules/ace-builds/src-min-noconflict/ext-language_tools.js" },
         // xterm.js & addons
         { url: "https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.min.js", dest: "xterm/xterm.js", local: "node_modules/@xterm/xterm/lib/xterm.js" },
         { url: "https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.css", dest: "xterm/xterm.css", local: "node_modules/@xterm/xterm/css/xterm.css" },

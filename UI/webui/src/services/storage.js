@@ -24,16 +24,26 @@ export async function initChatWorkspace(chatId, createdAt) {
     }
 
     try {
+        const session = state.chatSessions[chatId];
+        const projectName = session?.projectName || state.activeProjectName || null;
+        const workspacePath = (typeof session?.workspace === "string" ? session.workspace : null) || state.activeWorkspacePath || null;
+
         const res = await fetch("/api/chats/session", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ chatId, date: dateStr })
+            body: JSON.stringify({
+                chatId,
+                date: dateStr,
+                projectName,
+                workspacePath
+            })
         });
         if (!res.ok) return null;
         const data = await res.json();
         if (data.workspace) {
             if (state.chatSessions[chatId]) {
                 state.chatSessions[chatId].workspace = data.workspace;
+                if (projectName) state.chatSessions[chatId].projectName = projectName;
             }
             if (state.currentChatId === chatId) {
                 syncActiveWorkspacePrompt(data.workspace);
@@ -73,10 +83,13 @@ export function loadStoredChats() {
             fetch(fetchUrl)
                 .then(r => r.ok ? r.json() : null)
                 .then(d => {
-                    if (d?.session?.messages && d.session.messages.length > 0) {
-                        sess.messages = d.session.messages;
-                        state.messages = structuredClone(d.session.messages);
-                        if (d.session.compactionState) sess.compactionState = d.session.compactionState;
+                    const msgs = d?.session?.messages || d?.messages;
+                    if (msgs && Array.isArray(msgs) && msgs.length > 0) {
+                        sess.messages = msgs;
+                        state.messages = structuredClone(msgs);
+                        if (d?.session?.compactionState || d?.compactionState) {
+                            sess.compactionState = d?.session?.compactionState || d?.compactionState;
+                        }
                         document.dispatchEvent(new CustomEvent("chatsUpdated"));
                     }
                 })
@@ -89,58 +102,40 @@ export function loadStoredChats() {
 }
 
 /**
- * Asynchronously synchronizes chats from $HOME/.MuktiAI/conversations/
+ * Asynchronously reloads all conversations fresh from Supabase Cloud.
  */
 export async function syncFromBackendDisk() {
     try {
         const res = await fetch("/api/chats");
         if (!res.ok) return;
         const data = await res.json();
-        if (Array.isArray(data.chats) && data.chats.length > 0) {
-            let changed = false;
-            for (const diskChat of data.chats) {
-                if (!diskChat || !diskChat.id) continue;
-                const existing = state.chatSessions[diskChat.id];
-                if (!existing) {
-                    state.chatSessions[diskChat.id] = diskChat;
-                    changed = true;
+        if (Array.isArray(data.chats)) {
+            const nextSessions = {};
+            for (const cloudChat of data.chats) {
+                if (!cloudChat || !cloudChat.id) continue;
+                cloudChat.source = "supabase";
+                cloudChat.fromBackend = true;
+                const existing = state.chatSessions[cloudChat.id];
+                if (existing) {
+                    if (existing.messages && existing.messages.length > 0 && (!cloudChat.messages || cloudChat.messages.length === 0)) {
+                        cloudChat.messages = existing.messages;
+                    }
+                    if (existing.compactionState && !cloudChat.compactionState) {
+                        cloudChat.compactionState = existing.compactionState;
+                    }
+                    nextSessions[cloudChat.id] = { ...existing, ...cloudChat };
                 } else {
-                    if (!existing.workspace && diskChat.workspace) {
-                        existing.workspace = diskChat.workspace;
-                        changed = true;
-                    }
-                    if ((diskChat.updatedAt || 0) > (existing.updatedAt || 0)) {
-                        // CRITICAL: NEVER overwrite existing in-memory messages with undefined/empty!
-                        if ((!diskChat.messages || diskChat.messages.length === 0) && (existing.messages && existing.messages.length > 0)) {
-                            diskChat.messages = existing.messages;
-                        }
-                        if (existing.title && (!diskChat.title || diskChat.title === "Conversation")) {
-                            diskChat.title = existing.title;
-                        }
-                        if (existing.compactionState && !diskChat.compactionState) {
-                            diskChat.compactionState = existing.compactionState;
-                        }
-                        state.chatSessions[diskChat.id] = diskChat;
-                        changed = true;
-                    } else if ((!existing.messages || existing.messages.length === 0) && diskChat.messages && diskChat.messages.length > 0) {
-                        existing.messages = diskChat.messages;
-                        if (diskChat.compactionState && !existing.compactionState) {
-                            existing.compactionState = diskChat.compactionState;
-                        }
-                        changed = true;
-                    }
+                    nextSessions[cloudChat.id] = cloudChat;
                 }
             }
-
-            if (changed) {
-                try {
-                    localStorage.setItem(CHATS_STORAGE_KEY, JSON.stringify(state.chatSessions));
-                } catch (_) {}
-                document.dispatchEvent(new CustomEvent("chatsUpdated"));
-            }
+            state.chatSessions = nextSessions;
+            try {
+                localStorage.setItem(CHATS_STORAGE_KEY, JSON.stringify(state.chatSessions));
+            } catch (_) {}
+            document.dispatchEvent(new CustomEvent("chatsUpdated"));
         }
     } catch (err) {
-        console.warn("[STORAGE] Backend chats sync error:", err.message);
+        console.warn("[STORAGE] Cloud chats reload error:", err.message);
     }
 }
 
@@ -300,17 +295,21 @@ export function createNewChatSession(initialUserText = "") {
 
     const isBuild = state.appMode === "build" && Boolean(state.currentProjectId);
     const projectId = isBuild ? state.currentProjectId : undefined;
+    const projectName = (!isBuild && state.activeProjectName) ? state.activeProjectName : undefined;
+    const workspace = (!isBuild && state.activeWorkspacePath) ? state.activeWorkspacePath : undefined;
+    const agentId = state.currentAgentId || undefined;
 
-    const selectedOpt = modelSelect?.selectedOptions?.[0];
     state.chatSessions[id] = {
         id,
         projectId,
+        projectName,
+        workspace,
+        agentId,
         mode: isBuild ? "build" : "chat",
         title,
         createdAt: Date.now(),
         updatedAt: Date.now(),
         model: modelSelect ? modelSelect.value : defaultModel,
-        provider: selectedOpt?.dataset?.provider || undefined,
         messages: [...state.messages]
         // chatHtml intentionally omitted — DOM is re-rendered from messages on load
     };
@@ -322,6 +321,9 @@ export function createNewChatSession(initialUserText = "") {
     } else {
         // Auto-create workspace directories on disk and prompt AI
         initChatWorkspace(id, Date.now());
+        if (workspace) {
+            syncActiveWorkspacePrompt(workspace);
+        }
         if (state.config?.General?.RecordChatHistory !== false) {
             saveStoredChats();
         }
@@ -347,11 +349,7 @@ export function saveCurrentChatState() {
     }
 
     session.updatedAt = Date.now();
-    if (modelSelect) {
-        session.model = modelSelect.value;
-        const prov = modelSelect.selectedOptions?.[0]?.dataset?.provider;
-        if (prov) session.provider = prov;
-    }
+    if (modelSelect) session.model = modelSelect.value;
 
     if (!session.title || session.title === "Conversation") {
         const firstUserMsg = session.messages && session.messages.find(m => m.role === "user");

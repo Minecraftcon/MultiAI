@@ -23,21 +23,83 @@ const { handleBuildAgentRoute } = require("./routes/build_agent");
 const { handleMcpRoute } = require("./routes/mcp");
 const { handleHistoryRoute } = require("./routes/history");
 const { handleSkillsRoute } = require("./routes/skills");
+const { handleCloudToolsRoute } = require("./routes/cloud_tools");
 const { handleBrowserProxyRoute } = require("./routes/browser_proxy");
+const { isAuthenticated, handleLogin, handleLogout, handleAuthCheck, handleCaptchaEndpoint, renderLockPage } = require("./auth");
 const { sendJSON } = require("./utils");
 
 async function routeRequest(req, res) {
     try {
+        // Enforce baseline HTTP security headers on all responses
+        res.setHeader("X-Content-Type-Options", "nosniff");
+        res.setHeader("X-Frame-Options", "DENY");
+        res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+        res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+
+        const origin = req.headers.origin;
+        const host = req.headers.host;
+        let isSameOrigin = false;
+        if (!origin) {
+            isSameOrigin = true; // Non-browser or direct curl
+        } else if (host) {
+            try {
+                const parsedOrigin = new URL(origin);
+                isSameOrigin = (parsedOrigin.host === host);
+            } catch (_) {
+                isSameOrigin = false;
+            }
+        }
+
         if (req.method === "OPTIONS") {
             res.writeHead(204, {
-                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Origin": isSameOrigin && origin ? origin : "null",
                 "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-                "Access-Control-Allow-Headers": "Content-Type, Range, Authorization, X-Chat-ID"
+                "Access-Control-Allow-Headers": "Content-Type, Range, Authorization, X-Chat-ID",
+                "Access-Control-Allow-Credentials": "true"
             });
             return res.end();
         }
 
         const reqUrl = req.url.split("?")[0];
+
+        // Public Auth Endpoints
+        if (req.method === "POST" && reqUrl === "/api/auth/login") {
+            return handleLogin(req, res);
+        }
+        if (req.method === "POST" && reqUrl === "/api/auth/logout") {
+            return handleLogout(req, res);
+        }
+        if (req.method === "GET" && reqUrl === "/api/auth/check") {
+            return handleAuthCheck(req, res);
+        }
+        if (req.method === "GET" && reqUrl === "/api/auth/captcha") {
+            return handleCaptchaEndpoint(req, res);
+        }
+
+        // Security Barrier: Check if session is authenticated
+        if (!isAuthenticated(req)) {
+            // If API request, return 401 Unauthorized
+            if (reqUrl.startsWith("/api/")) {
+                return sendJSON(res, 401, { error: "Authentication required. Please unlock with master security password." });
+            }
+
+            // Allowed static resource prefixes needed strictly for the login page assets
+            const isAuthStaticAsset = reqUrl.startsWith("/styles/") ||
+                                      reqUrl.startsWith("/vendor/") ||
+                                      reqUrl === "/favicon.ico";
+
+            // If not an allowed static asset, serve the Security Checkpoint Lock Page for ANY requested path
+            if (!isAuthStaticAsset) {
+                const html = renderLockPage();
+                res.writeHead(200, {
+                    "Content-Type": "text/html; charset=utf-8",
+                    "Content-Length": Buffer.byteLength(html),
+                    "Cache-Control": "no-store, no-cache, must-revalidate",
+                    "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob:;"
+                });
+                return res.end(html);
+            }
+        }
 
         // System info & config
         if ((req.method === "GET" || req.method === "HEAD") && reqUrl === "/api/system-info") {
@@ -144,6 +206,11 @@ async function routeRequest(req, res) {
         // MCP (Model Context Protocol) Endpoints
         if (reqUrl.startsWith("/api/mcp")) {
             return handleMcpRoute(req, res);
+        }
+
+        // MultiAI Cloud Tools (Uploads to /tmp/user/files & Git Clone Engine)
+        if (reqUrl.startsWith("/api/cloud/")) {
+            return handleCloudToolsRoute(req, res);
         }
 
         // Skills Catalog & Content

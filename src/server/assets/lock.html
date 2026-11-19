@@ -1,0 +1,625 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Login</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap">
+  <style>
+  :root {
+    --bg: #090909;
+    --card: #141414;
+    --card-hi: #1d1d1d;
+    --card-hst: #272727;
+    --fg: #ededed;
+    --fg-var: #a1a1a1;
+    --outline: #6a6a6a;
+    --outline-var: #2c2c2c;
+    --primary: #f0f0f0;
+    --on-primary: #0d0d0d;
+    --primary-c: #2b2b2b;
+    --secondary-c: #303030;
+    --tertiary: #bcbcbc;
+    --tertiary-c: #383838;
+    --font: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font);
+    font-size: 14px;
+    display: grid;
+    place-items: center;
+    padding-block: 24px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    overflow-x: hidden;
+  }
+
+  /* ---------- Background ---------- */
+  .bg {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+    background:
+      radial-gradient(120vmin 90vmin at 15% 0%, color-mix(in srgb, var(--primary-c) 70%, var(--bg)) 0%, transparent 70%),
+      radial-gradient(100vmin 80vmin at 100% 100%, color-mix(in srgb, var(--tertiary-c) 70%, var(--bg)) 0%, transparent 70%),
+      var(--bg);
+  }
+  .bg::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: radial-gradient(circle, color-mix(in srgb, var(--fg) 11%, transparent) 1px, transparent 1.6px);
+    background-size: 26px 26px;
+    -webkit-mask-image: radial-gradient(ellipse at center, #000 0%, transparent 78%);
+    mask-image: radial-gradient(ellipse at center, #000 0%, transparent 78%);
+  }
+  .shape {
+    position: absolute;
+    --dx: 0px; --dy: 0px; --r: 0deg; --w: 1; --d: 0;
+    transform: translate(0, 0) rotate(var(--r));
+    translate: calc(var(--px, 0) * var(--d) * 1px) calc(var(--py, 0) * var(--d) * 1px);
+    rotate: calc(var(--spin, 0deg) * var(--w));
+    scale: calc(1 + var(--len, 0) * .004 + var(--boost, 0));
+    transition: rotate .8s cubic-bezier(.2, .8, .2, 1), scale .8s cubic-bezier(.2, .8, .2, 1);
+    animation: drift 38s ease-in-out infinite alternate;
+  }
+  @keyframes drift {
+    to { transform: translate(var(--dx), var(--dy)) rotate(calc(var(--r) + 16deg)); }
+  }
+  .s1 {
+    width: 72vmin; aspect-ratio: 1; border-radius: 50%;
+    left: -20vmin; top: -24vmin;
+    background: var(--primary-c);
+    --dx: 6vmin; --dy: 8vmin; --w: 1; --d: 46;
+  }
+  .s2 {
+    width: 66vmin; aspect-ratio: 1; border-radius: 34%;
+    right: -18vmin; bottom: -22vmin;
+    background: var(--tertiary-c);
+    --r: 18deg; --dx: -7vmin; --dy: -5vmin; --w: -1; --d: -56;
+    animation-duration: 46s;
+  }
+  .s3 {
+    width: 64vmin; height: 20vmin; border-radius: 999px;
+    right: 6vmin; top: 8vmin;
+    background: var(--secondary-c);
+    --r: -24deg; --dx: -6vmin; --dy: 6vmin; --w: .7; --d: 30;
+    animation-duration: 52s;
+  }
+  .s4 {
+    width: 24vmin; aspect-ratio: 1;
+    left: 9vmin; bottom: 9vmin;
+    --dx: 5vmin; --dy: -6vmin; --w: -1.4; --d: -80;
+    animation-duration: 44s;
+  }
+  .s4::before, .s4::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 30%;
+    background: color-mix(in srgb, var(--primary) 82%, var(--primary-c));
+  }
+  .s4::after { rotate: 45deg; }
+  .s5 {
+    width: 16vmin; aspect-ratio: 1; border-radius: 50%;
+    right: 22vmin; bottom: 14vmin;
+    border: 2.4vmin solid color-mix(in srgb, var(--tertiary) 55%, var(--tertiary-c));
+    --dx: -4vmin; --dy: -7vmin; --w: 1.2; --d: 64;
+    animation-duration: 36s;
+  }
+  .s6 {
+    width: 7vmin; aspect-ratio: 1; border-radius: 50%;
+    left: 30%; top: 12vmin;
+    background: var(--tertiary);
+    opacity: .85;
+    --dx: 6vmin; --dy: 4vmin; --w: 2; --d: 110;
+    animation-duration: 30s;
+  }
+
+  /* ---------- Card ---------- */
+  .card {
+    position: relative;
+    width: min(100%, 392px);
+    display: grid;
+    gap: 20px;
+    padding: 32px 28px 28px;
+    background: var(--card);
+    border: 1px solid var(--outline-var);
+    border-radius: 28px;
+    box-shadow:
+      0 1px 2px rgba(0, 0, 0, .5),
+      0 12px 28px rgba(0, 0, 0, .4),
+      0 36px 72px rgba(0, 0, 0, .35);
+  }
+  .card::before {
+    content: "";
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    padding: 1px;
+    background: radial-gradient(240px circle at var(--mx, 50%) var(--my, 0px), color-mix(in srgb, var(--fg) 70%, transparent), transparent 70%);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+    opacity: 0;
+    transition: opacity .3s;
+    pointer-events: none;
+  }
+  .card:hover::before, .card:focus-within::before { opacity: 1; }
+  .card.nope { animation: nope .42s cubic-bezier(.36, .07, .19, .97); }
+  @keyframes nope {
+    20% { translate: -7px 0; }
+    40% { translate: 6px 0; }
+    60% { translate: -4px 0; }
+    80% { translate: 3px 0; }
+  }
+
+  .mark {
+    justify-self: center;
+    width: 56px; height: 56px;
+    display: grid; place-items: center;
+    border-radius: 50%;
+    background: var(--card-hst);
+    color: var(--fg);
+    margin-bottom: 4px;
+    transition: background .25s, color .25s;
+  }
+  .card:has(#pw:focus) .mark,
+  .card.unlocked .mark { background: var(--primary); color: var(--on-primary); }
+  .mark .lock-open { display: none; }
+  .card.unlocked .mark .lock { display: none; }
+  .card.unlocked .mark .lock-open { display: block; }
+
+  .i {
+    width: 20px; height: 20px;
+    fill: none; stroke: currentColor;
+    stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+    flex: none;
+  }
+  .i.sm { width: 14px; height: 14px; }
+  .mark .i { width: 26px; height: 26px; }
+
+  .header {
+    text-align: center;
+    margin-top: -6px;
+    margin-bottom: 2px;
+  }
+  .title {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--fg);
+  }
+  .subtitle {
+    margin: 6px 0 0;
+    font-size: 13px;
+    color: var(--fg-var);
+    font-weight: 400;
+    letter-spacing: -0.01em;
+  }
+
+  form { display: grid; gap: 16px; margin: 0; }
+  .group { display: grid; gap: 6px; min-width: 0; }
+
+  /* Outlined text field */
+  .field { position: relative; }
+  .field input {
+    width: 100%;
+    height: 56px;
+    padding: 0 52px 0 16px;
+    background: transparent;
+    border: 0;
+    border-radius: 14px;
+    box-shadow: inset 0 0 0 1px var(--outline);
+    color: var(--fg);
+    font: 500 15px/1 var(--font);
+    letter-spacing: .06em;
+    outline: none;
+    transition: box-shadow .15s;
+  }
+  .field input:hover { box-shadow: inset 0 0 0 1px var(--fg-var); }
+  .field input:focus { box-shadow: inset 0 0 0 2px var(--primary); }
+  .group.bad .field input { box-shadow: inset 0 0 0 2px var(--fg); }
+  .field.code input { padding-right: 48px; text-transform: uppercase; letter-spacing: .32em; }
+  .field label {
+    position: absolute;
+    left: 12px; top: 50%;
+    translate: 0 -50%;
+    padding: 0 5px;
+    background: var(--card);
+    color: var(--fg-var);
+    font: 400 14px/1 var(--font);
+    pointer-events: none;
+    transition: top .15s, font-size .15s, color .15s;
+  }
+  .field input:focus ~ label,
+  .field input:not(:placeholder-shown) ~ label {
+    top: 0;
+    font-size: 11px;
+    letter-spacing: .04em;
+  }
+  .field input:focus ~ label { color: var(--primary); }
+  .group.bad .field input ~ label { color: var(--fg); }
+
+  .tick {
+    position: absolute;
+    right: 16px; top: 50%;
+    translate: 0 -50%;
+    scale: .4;
+    opacity: 0;
+    color: var(--primary);
+    transition: opacity .2s, scale .25s cubic-bezier(.2, .8, .2, 1.4);
+    pointer-events: none;
+  }
+  .field.ok .tick { opacity: 1; scale: 1; }
+  .field.ok input { box-shadow: inset 0 0 0 1px var(--primary); }
+  .field.ok input:focus { box-shadow: inset 0 0 0 2px var(--primary); }
+
+  .icon-btn {
+    position: relative;
+    overflow: hidden;
+    display: grid; place-items: center;
+    width: 40px; height: 40px;
+    border: 0; border-radius: 50%;
+    background: transparent;
+    color: var(--fg-var);
+    cursor: pointer;
+    transition: background .15s, color .15s;
+  }
+  .icon-btn:hover { background: color-mix(in srgb, var(--fg) 10%, transparent); color: var(--fg); }
+  .icon-btn:active { background: color-mix(in srgb, var(--fg) 16%, transparent); }
+  .icon-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+  .field .icon-btn { position: absolute; right: 8px; top: 8px; }
+
+  .err, .hint {
+    margin: 0;
+    padding: 0 16px;
+    display: flex; align-items: center; gap: 8px;
+    font: 400 12px/1.4 var(--font);
+  }
+  .err[hidden], .hint[hidden] { display: none !important; }
+  .err { color: #f87171; }
+  .hint { color: var(--fg-var); }
+
+  /* Captcha */
+  .cap-row { display: flex; gap: 8px; }
+  .cap-view {
+    flex: 1; min-width: 0;
+    height: 56px;
+    border-radius: 14px;
+    background: var(--card-hst);
+    overflow: hidden;
+  }
+  .cap-view canvas, .cap-view svg { display: block; width: 100%; height: 100%; }
+  .cap-row .icon-btn {
+    width: 56px; height: 56px;
+    border-radius: 14px;
+    background: var(--card-hi);
+    color: var(--fg);
+  }
+  .cap-row .icon-btn:hover { background: var(--card-hst); color: var(--primary); }
+  .cap-row .icon-btn .i { transition: rotate .4s cubic-bezier(.2, .8, .2, 1); }
+  .cap-row .icon-btn.spin .i { rotate: 180deg; }
+
+  /* Button */
+  .btn {
+    position: relative;
+    overflow: hidden;
+    height: 52px;
+    margin-top: 4px;
+    border: 0; border-radius: 999px;
+    background: var(--primary);
+    color: var(--on-primary);
+    font: 600 15px/1 var(--font);
+    letter-spacing: .02em;
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    cursor: pointer;
+    transition: transform .12s, box-shadow .2s, filter .2s, background .25s, color .25s;
+  }
+  .btn[data-ready="0"] { background: var(--card-hst); color: var(--fg-var); }
+  .btn:hover { filter: brightness(1.08); box-shadow: 0 4px 18px color-mix(in srgb, var(--primary) 22%, transparent); }
+  .btn[data-ready="0"]:hover { box-shadow: none; }
+  .btn:active { transform: scale(.98); }
+  .btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
+  .btn .when-idle { display: inline-flex; align-items: center; gap: 10px; transition: gap .2s; }
+  .btn[data-ready="1"]:hover .when-idle { gap: 14px; }
+  .btn .when-busy, .btn .when-done { display: none; }
+  .btn[data-state="busy"] .when-idle, .btn[data-state="done"] .when-idle { display: none; }
+  .btn[data-state="busy"] .when-busy { display: inline-block; }
+  .btn[data-state="done"] .when-done { display: inline-flex; align-items: center; gap: 10px; }
+  .btn[data-state="busy"] { pointer-events: none; }
+  .spinner {
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    border: 2.5px solid color-mix(in srgb, var(--on-primary) 25%, transparent);
+    border-top-color: var(--on-primary);
+    animation: turn .7s linear infinite;
+  }
+  @keyframes turn { to { rotate: 360deg; } }
+
+  /* Touch ripple */
+  .ripple {
+    position: absolute;
+    border-radius: 50%;
+    background: currentColor;
+    opacity: .22;
+    scale: 0;
+    pointer-events: none;
+    animation: rip .55s ease-out forwards;
+  }
+  @keyframes rip { to { scale: 1; opacity: 0; } }
+
+  @media (max-width: 420px) {
+    .card { padding: 28px 20px 22px; border-radius: 24px; }
+  }
+  </style>
+</head>
+<body>
+
+<div class="bg" id="bg" aria-hidden="true">
+  <div class="shape s1"></div>
+  <div class="shape s2"></div>
+  <div class="shape s3"></div>
+  <div class="shape s4"></div>
+  <div class="shape s5"></div>
+  <div class="shape s6"></div>
+</div>
+
+<main class="card" id="card">
+  <div class="mark" id="mark" aria-hidden="true">
+    <svg class="i lock" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+    <svg class="i lock-open" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>
+  </div>
+
+  <div class="header">
+    <h1 class="title">Login</h1>
+    <p class="subtitle">Please enter your password</p>
+  </div>
+
+  <form id="form" novalidate>
+    <div class="group" id="g-pw">
+      <div class="field">
+        <input id="pw" name="password" type="password" placeholder=" " autocomplete="current-password" aria-describedby="e-pw" autofocus>
+        <label for="pw">Password</label>
+        <button type="button" class="icon-btn" id="eye" aria-label="Show password" aria-pressed="false">
+          <svg class="i" id="i-eye" viewBox="0 0 24 24"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg>
+          <svg class="i" id="i-eye-off" viewBox="0 0 24 24" hidden><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/></svg>
+        </button>
+      </div>
+      <p class="err" id="e-pw" role="alert" hidden>
+        <svg class="i sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg><span></span>
+      </p>
+      <p class="hint" id="e-caps" hidden>
+        <svg class="i sm" viewBox="0 0 24 24"><path d="M9 18v-6H5l7-7 7 7h-4v6H9z"/></svg><span>Caps Lock is on</span>
+      </p>
+    </div>
+
+    <div class="group" id="g-cap">
+      <div class="cap-row">
+        <div class="cap-view" id="cap-svg" role="img" aria-label="Verification challenge"></div>
+        <button type="button" class="icon-btn" id="refresh" aria-label="New code">
+          <svg class="i" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+        </button>
+      </div>
+      <div class="field code" id="f-cap">
+        <input id="cap" name="captcha" type="text" placeholder=" " maxlength="5" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-describedby="e-cap">
+        <label for="cap">Captcha</label>
+        <svg class="i tick" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+      </div>
+      <p class="err" id="e-cap" role="alert" hidden>
+        <svg class="i sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg><span></span>
+      </p>
+    </div>
+
+    <button type="submit" class="btn" id="go" data-state="idle" data-ready="0">
+      <span class="when-idle">Unlock
+        <svg class="i" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+      </span>
+      <span class="spinner when-busy" aria-label="Working"></span>
+      <span class="when-done">
+        <svg class="i" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>
+        Welcome
+      </span>
+    </button>
+  </form>
+</main>
+
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var reduced = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var bg = $("bg"), card = $("card");
+  var currentCaptchaId = "";
+
+  async function fetchCaptcha() {
+    var b = $("refresh");
+    b.classList.add("spin");
+    $("cap").value = "";
+    updateReady();
+    try {
+      var res = await fetch("/api/auth/captcha");
+      var data = await res.json();
+      if (data && data.id && data.svg) {
+        currentCaptchaId = data.id;
+        $("cap-svg").innerHTML = data.svg;
+      }
+    } catch (e) {
+      console.error("Failed to load captcha challenge", e);
+    } finally {
+      setTimeout(function () { b.classList.remove("spin"); }, 400);
+    }
+  }
+
+  function setErr(which, msg) {
+    $("g-" + which).classList.add("bad");
+    var e = $("e-" + which);
+    e.querySelector("span").textContent = msg;
+    e.hidden = false;
+  }
+
+  function clearErr() {
+    ["pw", "cap"].forEach(function (k) {
+      $("g-" + k).classList.remove("bad");
+      $("e-" + k).hidden = true;
+    });
+  }
+
+  function shake() {
+    card.classList.remove("nope");
+    void card.offsetWidth;
+    card.classList.add("nope");
+  }
+
+  function setState(s) { $("go").setAttribute("data-state", s); }
+
+  function updateCap() {
+    var v = $("cap").value.trim();
+    $("f-cap").classList.toggle("ok", v.length === 5);
+  }
+
+  function updateReady() {
+    var ready = $("pw").value.length > 0 && $("cap").value.trim().length >= 4;
+    $("go").setAttribute("data-ready", ready ? "1" : "0");
+  }
+
+  var kick = 0;
+  function react(len) {
+    kick++;
+    bg.style.setProperty("--spin", (kick * 5) + "deg");
+    if (typeof len === "number") bg.style.setProperty("--len", String(Math.min(len, 30)));
+    if (!reduced && $("mark").animate) {
+      $("mark").animate([{ transform: "scale(1)" }, { transform: "scale(.88)" }, { transform: "scale(1)" }], { duration: 180, easing: "ease-out" });
+    }
+  }
+
+  var tx = 0, ty = 0, px = 0, py = 0, raf = 0;
+  function loop() {
+    px += (tx - px) * 0.07;
+    py += (ty - py) * 0.07;
+    bg.style.setProperty("--px", px.toFixed(4));
+    bg.style.setProperty("--py", py.toFixed(4));
+    raf = (Math.abs(tx - px) > 0.0005 || Math.abs(ty - py) > 0.0005) ? requestAnimationFrame(loop) : 0;
+  }
+  if (!reduced) {
+    window.addEventListener("pointermove", function (e) {
+      tx = e.clientX / window.innerWidth - 0.5;
+      ty = e.clientY / window.innerHeight - 0.5;
+      if (!raf) raf = requestAnimationFrame(loop);
+    }, { passive: true });
+  }
+
+  card.addEventListener("pointermove", function (e) {
+    var r = card.getBoundingClientRect();
+    card.style.setProperty("--mx", (e.clientX - r.left) + "px");
+    card.style.setProperty("--my", (e.clientY - r.top) + "px");
+  });
+
+  document.addEventListener("pointerdown", function (e) {
+    if (reduced) return;
+    var b = e.target.closest && e.target.closest(".btn, .icon-btn");
+    if (!b) return;
+    var r = b.getBoundingClientRect();
+    var s = Math.max(r.width, r.height) * 2.2;
+    var el = document.createElement("span");
+    el.className = "ripple";
+    el.style.cssText = "width:" + s + "px;height:" + s + "px;left:" + (e.clientX - r.left - s / 2) + "px;top:" + (e.clientY - r.top - s / 2) + "px";
+    b.appendChild(el);
+    el.addEventListener("animationend", function () { el.remove(); });
+  });
+
+  $("eye").addEventListener("click", function () {
+    var pw = $("pw"), show = pw.type === "password";
+    pw.type = show ? "text" : "password";
+    $("i-eye").hidden = show;
+    $("i-eye-off").hidden = !show;
+    this.setAttribute("aria-pressed", String(show));
+    this.setAttribute("aria-label", show ? "Hide password" : "Show password");
+    pw.focus();
+  });
+
+  $("refresh").addEventListener("click", function () {
+    fetchCaptcha();
+    $("cap").focus();
+  });
+
+  $("pw").addEventListener("input", function () {
+    $("g-pw").classList.remove("bad");
+    $("e-pw").hidden = true;
+    react(this.value.length);
+    updateReady();
+  });
+
+  $("cap").addEventListener("input", function () {
+    $("g-cap").classList.remove("bad");
+    $("e-cap").hidden = true;
+    react();
+    updateCap();
+    updateReady();
+  });
+
+  function caps(e) {
+    if (e.getModifierState) $("e-caps").hidden = !e.getModifierState("CapsLock");
+  }
+  $("pw").addEventListener("keydown", caps);
+  $("pw").addEventListener("keyup", caps);
+  $("pw").addEventListener("blur", function () { $("e-caps").hidden = true; });
+
+  $("form").addEventListener("submit", async function (ev) {
+    ev.preventDefault();
+    clearErr();
+    var pw = $("pw").value;
+    var cap = $("cap").value.trim();
+    if (!pw) { setErr("pw", "Enter your password"); shake(); $("pw").focus(); return; }
+    if (!cap) { setErr("cap", "Type the code above"); shake(); $("cap").focus(); return; }
+
+    setState("busy");
+    try {
+      var res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: pw, captchaId: currentCaptchaId, captchaAnswer: cap })
+      });
+      var data = await res.json().catch(function () { return {}; });
+
+      if (res.ok && data.success) {
+        setState("done");
+        card.classList.add("unlocked");
+        bg.style.setProperty("--boost", ".1");
+        setTimeout(function () {
+          window.location.reload();
+        }, 400);
+      } else {
+        setState("idle");
+        shake();
+        if (data.needNewCaptcha || (data.error && data.error.toLowerCase().includes("verification")) || (data.error && data.error.toLowerCase().includes("code"))) {
+          setErr("cap", data.error || "Code does not match");
+          fetchCaptcha();
+          $("cap").focus();
+        } else {
+          setErr("pw", data.error || "Incorrect password");
+          $("pw").focus();
+        }
+      }
+    } catch (e) {
+      setState("idle");
+      setErr("pw", "Connection error. Please try again.");
+      shake();
+    }
+  });
+
+  fetchCaptcha();
+})();
+</script>
+</body>
+</html>

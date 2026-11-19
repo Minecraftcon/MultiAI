@@ -1,7 +1,7 @@
 {
   "main": "src/index.js",
   "scripts": {
-    "start": "node start.js",
+    "start": "node src/index.js",
     "vendor": "node scripts/vendor_download.js",
     "setup:sandbox": "node scripts/setup_sandbox.js",
     "build:daemon": "cd daemon/go && CGO_ENABLED=0 go build -ldflags=\"-s -w\" -o ../bin/task_daemon .",
@@ -10,7 +10,8 @@
     "build:daemon:windows": "cd daemon/go && CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags=\"-s -w\" -o ../bin/task_daemon.exe .",
     "build:daemon:darwin": "cd daemon/go && CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags=\"-s -w\" -o ../bin/task_daemon_darwin_arm64 .",
     "build:daemon:all": "npm run build:daemon && npm run build:daemon:arm64 && npm run build:daemon:armv7l && npm run build:daemon:windows && npm run build:daemon:darwin",
-    "test:daemon": "node tests/test_go_daemon.js"
+    "test:daemon": "node tests/test_go_daemon.js",
+    "test": "node --test tests/*.js"
   },
   "dependencies": {
     "@langchain/core": "^1.2.11",
@@ -22,6 +23,8 @@
     "ace-builds": "^1.45.2",
     "better-sqlite3": "^12.11.1",
     "node-pty": "^1.1.0",
+    "pg": "^8.23.1",
+    "svg-captcha": "^1.4.0",
     "ws": "^8.23.0",
     "yaml": "^2.9.1"
   }

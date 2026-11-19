@@ -15,7 +15,7 @@ import { initContextMenu } from "./components/context-menu.js";
 import { initBottomSheet } from "./components/bottom-sheet.js";
 import { initErrorRecovery } from "./components/error-recovery.js";
 import { initModelPicker } from "./components/model-picker.js";
-import { initSettingsView, applyTheme, applyUIStyle } from "./components/settings-view.js";
+import { initSettingsView, applyTheme, applyUIStyle, applyAccent, applyCustomAccentVariables } from "./components/settings-view.js";
 import { initPlanDock } from "./components/chat-plan-dock.js";
 import { initSkillsMenu } from "./components/skills-menu.js";
 
@@ -24,6 +24,7 @@ import { setStartPageMode } from "./components/chatbox.js";
 import { initUiScale } from "./components/ui-scale.js";
 import { initAuroraTheme } from "./components/aurora-theme.js";
 import { initModeSwitcher } from "./components/mode-switcher.js";
+import { initCloudTools } from "./components/cloud-tools.js";
 import { McpActiveTools } from "./tools/mcp/index.js";
 import { initTaskWatcher } from "./tools/terminal/task-watcher.js";
 import { initTerminalDrawer } from "./components/terminal-drawer.js";
@@ -42,6 +43,11 @@ async function initChatSessions() {
     let hasCleaned = false;
     for (const id of Object.keys(state.chatSessions)) {
         const sess = state.chatSessions[id];
+        if (!sess) continue;
+        // Never prune sessions that originate from cloud / backend
+        if (sess.source === "supabase" || sess.source === "disk" || sess.persisted || sess.fromBackend) {
+            continue;
+        }
         // Session has no user messages and is not backed by disk — prune it
         const hasUserMsg = sess.messages
             ? sess.messages.some(m => m.role === "user")
@@ -85,6 +91,24 @@ async function initConfig() {
 
             // Sync configured Aurora theme
             initAuroraTheme();
+
+            // Sync configured Accent & Custom Accent
+            const accent = state.config.UI?.Accent || localStorage.getItem("multiai_accent") || "warm";
+            applyAccent(accent);
+            if (accent === "custom" && state.config.UI?.CustomAccent) {
+                try {
+                    const customCfg = typeof state.config.UI.CustomAccent === "string"
+                        ? JSON.parse(state.config.UI.CustomAccent)
+                        : state.config.UI.CustomAccent;
+                    localStorage.setItem("multiai_custom_accent", JSON.stringify(customCfg));
+                    applyCustomAccentVariables(customCfg);
+                } catch (_) {}
+            }
+
+            // Sync UI Scale from cloud
+            if (state.config.UI?.Scale) {
+                initUiScale(state.config.UI.Scale);
+            }
         }
     } catch (e) {
         console.warn("[CONFIG] Could not load /api/config:", e);
@@ -104,6 +128,7 @@ async function bootstrap() {
     initComposer();
     initGestures();
     initSidePanel();
+    initCloudTools();
     initModeSwitcher();
     initChatDelegation();
     initContextMenu();

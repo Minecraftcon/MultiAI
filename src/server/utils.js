@@ -84,12 +84,29 @@ function loadModelsConfig() {
         const userYamlPath = path.join(userDir, "models.yaml");
         const repoYamlPath = path.join(__dirname, "../..", "models.yaml");
         
-        // Auto-install to ~/.MultiAI/models.yaml if not present
-        if (!fs.existsSync(userYamlPath) && fs.existsSync(repoYamlPath)) {
-            try {
-                if (!fs.existsSync(userDir)) fs.mkdirSync(userDir, { recursive: true });
-                fs.copyFileSync(repoYamlPath, userYamlPath);
-            } catch (_) {}
+        // Auto-install or sync to ~/.MultiAI/models.yaml
+        if (fs.existsSync(repoYamlPath)) {
+            let shouldSync = !fs.existsSync(userYamlPath);
+            if (!shouldSync) {
+                try {
+                    const isCloud = Boolean(process.env.RENDER || process.env.RENDER_SERVICE_ID || process.env.MULTIAI_CLOUD);
+                    if (isCloud) {
+                        shouldSync = true;
+                    } else {
+                        const repoStat = fs.statSync(repoYamlPath);
+                        const userStat = fs.statSync(userYamlPath);
+                        if (repoStat.mtimeMs > userStat.mtimeMs || repoStat.size !== userStat.size) {
+                            shouldSync = true;
+                        }
+                    }
+                } catch (_) {}
+            }
+            if (shouldSync) {
+                try {
+                    if (!fs.existsSync(userDir)) fs.mkdirSync(userDir, { recursive: true });
+                    fs.copyFileSync(repoYamlPath, userYamlPath);
+                } catch (_) {}
+            }
         }
         
         const yamlPath = fs.existsSync(userYamlPath) ? userYamlPath : repoYamlPath;
@@ -177,8 +194,24 @@ function getSystemInfo() {
         instructions = [
             "Operating system is Linux.",
             "Shell is Bash/sh. Use standard GNU/Linux commands: ls, cat, grep, pwd, which, curl, etc.",
-            "Package manager: apt, dnf, pacman, etc. depending on distro."
+            "ROOTLESS PACKAGE MANAGEMENT (No sudo/root required):",
+            "  - The environment may run as an unprivileged user (no root/sudo access). Do NOT run 'sudo apt install'.",
+            "  - Fast on-demand CLI binaries: use 'pkgx <binary> [args...]' (2,500+ developer tools ready out of the box, e.g. 'pkgx jq', 'pkgx ffmpeg', 'pkgx ripgrep').",
+            "  - Full libraries & tools: use 'micromamba' (75,000+ packages from Conda-Forge). Install via 'micromamba install -y -c conda-forge <package>' or run via 'micromamba run -n base <cmd>'.",
+            "  - Standard language managers: 'npm install', 'pip install --user', etc."
         ];
+    }
+
+    let defaultWorkdir = process.env.MULTIAI_WORKSPACE_DIR;
+    if (!defaultWorkdir) {
+        try {
+            const { getChatWorkdir } = require("./routes/cloud_tools");
+            defaultWorkdir = getChatWorkdir("");
+        } catch (_) {}
+    }
+    if (!defaultWorkdir) defaultWorkdir = "/tmp/workspace";
+    if (!fs.existsSync(defaultWorkdir)) {
+        try { fs.mkdirSync(defaultWorkdir, { recursive: true }); } catch (_) {}
     }
 
     return {
@@ -189,8 +222,9 @@ function getSystemInfo() {
         hostname: os.hostname(),
         username: os.userInfo ? os.userInfo().username : "user",
         homedir: os.homedir(),
-        cwd: process.cwd(),
-        workspaceDir: process.cwd(),
+        cwd: defaultWorkdir,
+        workspaceDir: defaultWorkdir,
+        userUploadsDir: "/tmp/user/files",
         storageRoot: conversationsManager.getStorageRoot(),
         conversationsRoot: conversationsManager.getConversationsRoot(),
         isTermux,
@@ -311,11 +345,52 @@ function getChatWorkspace(chatId) {
 }
 
 function getChatScratchDir(chatId) {
+    if (process.env.MULTIAI_WORKSPACE_DIR) {
+        const baseDir = process.env.MULTIAI_WORKSPACE_DIR;
+        const scratchDir = path.join(baseDir, "scratch");
+        try {
+            if (!fs.existsSync(scratchDir)) {
+                fs.mkdirSync(scratchDir, { recursive: true });
+            }
+            const gitDir = path.join(baseDir, ".git");
+            const gitignoreFile = path.join(baseDir, ".gitignore");
+            if (fs.existsSync(gitDir)) {
+                const ignoreContent = fs.existsSync(gitignoreFile) ? fs.readFileSync(gitignoreFile, "utf8") : "";
+                if (!/^\s*scratch\/?\s*$/m.test(ignoreContent)) {
+                    fs.appendFileSync(gitignoreFile, (ignoreContent && !ignoreContent.endsWith("\n") ? "\n" : "") + "scratch/\n");
+                }
+            }
+        } catch (_) {}
+        return scratchDir;
+    }
     const wsContext = getChatWorkspace(chatId);
     if (wsContext && wsContext.workspace && wsContext.workspace.scratchDir) {
         return wsContext.workspace.scratchDir;
     }
-    return path.join(conversationsManager.getStorageRoot(), "scratch");
+    let baseDir = process.env.MULTIAI_WORKSPACE_DIR;
+    if (!baseDir) {
+        try {
+            const { getChatWorkdir } = require("./routes/cloud_tools");
+            baseDir = getChatWorkdir(chatId);
+        } catch (_) {}
+    }
+    if (!baseDir) baseDir = "/tmp/workspace";
+    const scratchDir = path.join(baseDir, "scratch");
+    try {
+        if (!fs.existsSync(scratchDir)) {
+            fs.mkdirSync(scratchDir, { recursive: true });
+        }
+        // Auto-add scratch/ to .gitignore if in a git repo
+        const gitDir = path.join(baseDir, ".git");
+        const gitignoreFile = path.join(baseDir, ".gitignore");
+        if (fs.existsSync(gitDir)) {
+            const ignoreContent = fs.existsSync(gitignoreFile) ? fs.readFileSync(gitignoreFile, "utf8") : "";
+            if (!/^\s*scratch\/?\s*$/m.test(ignoreContent)) {
+                fs.appendFileSync(gitignoreFile, (ignoreContent && !ignoreContent.endsWith("\n") ? "\n" : "") + "scratch/\n");
+            }
+        }
+    } catch (_) {}
+    return scratchDir;
 }
 
 function getChatArtifactsDir(chatId) {
@@ -326,6 +401,24 @@ function getChatArtifactsDir(chatId) {
     return path.join(conversationsManager.getStorageRoot(), "artifacts");
 }
 
+function verifyPathContainment(targetPath, allowedRoots, originalInput) {
+    const norm = path.resolve(targetPath);
+    const normUnix = norm.replace(/\\/g, "/");
+    const FORBIDDEN_PREFIXES = ["/proc", "/sys", "/dev"];
+    for (const forbidden of FORBIDDEN_PREFIXES) {
+        if (normUnix === forbidden || normUnix.startsWith(forbidden + "/")) {
+            throw new Error(`Access denied: System pseudofilesystem access is blocked (${originalInput})`);
+        }
+    }
+
+    const realTarget = fs.existsSync(norm) ? fs.realpathSync(norm) : norm;
+    const isContained = allowedRoots.some(root => realTarget === root || realTarget.startsWith(root + path.sep));
+    if (!isContained) {
+        throw new Error(`Path containment violation: path escapes allowed workspace boundaries (${originalInput})`);
+    }
+    return realTarget;
+}
+
 function resolveSafePath(inputPath, chatId) {
     const raw = String(inputPath || "").trim();
     if (!raw) throw new Error("Path parameter is empty or missing");
@@ -333,13 +426,44 @@ function resolveSafePath(inputPath, chatId) {
     let processed = raw;
     const homedir = os.homedir();
 
+    // Determine baseline workspace directories
+    let baseDir = process.env.MULTIAI_WORKSPACE_DIR;
+    if (chatId) {
+        try {
+            const { getChatWorkdir } = require("./routes/cloud_tools");
+            const cloudDir = getChatWorkdir(chatId);
+            if (cloudDir) baseDir = cloudDir;
+        } catch (_) {}
+        const wsContext = getChatWorkspace(chatId);
+        if (wsContext && wsContext.project && wsContext.project.rootPath) {
+            baseDir = wsContext.project.rootPath;
+        }
+    }
+    if (!baseDir) {
+        baseDir = process.cwd();
+    }
+
+    if (!fs.existsSync(baseDir)) {
+        try { fs.mkdirSync(baseDir, { recursive: true }); } catch (_) {}
+    }
+
+    const scratchDir = chatId ? getChatScratchDir(chatId) : path.join(baseDir, "scratch");
+    const artifactsDir = chatId ? getChatArtifactsDir(chatId) : path.join(baseDir, "artifacts");
+
+    const allowedRoots = [
+        baseDir,
+        scratchDir,
+        artifactsDir,
+        path.join(homedir, ".MultiAI"),
+        os.tmpdir()
+    ].filter(Boolean).map(r => path.resolve(r));
+
     // Expand ~ / ~/... to home directory
     if (processed === "~" || processed.startsWith("~/") || processed.startsWith("~\\")) {
         processed = path.join(homedir, processed.slice(1));
     }
 
     // Expand sanitized [USER] placeholders back to actual user's home directory
-    // e.g. /home/[USER]/foo -> /home/<user>/foo, /Users/[USER]/foo -> /Users/<user>/foo, C:\Users\[USER]\foo -> C:\Users\<user>\foo
     if (processed.includes("[USER]")) {
         processed = processed
             .replace(/^\/home\/\[USER\](?=[\\/]|$)/i, homedir)
@@ -364,15 +488,11 @@ function resolveSafePath(inputPath, chatId) {
         else if (rel === "$SCRATCH" || rel === "${SCRATCH}") rel = "";
         rel = rel.replace(/^[/\\]+/, "");
 
-        const scratchDir = getChatScratchDir(chatId);
         if (!fs.existsSync(scratchDir)) {
             fs.mkdirSync(scratchDir, { recursive: true });
         }
-        const resolved = rel ? path.resolve(scratchDir, rel) : scratchDir;
-        if (rel && !resolved.startsWith(scratchDir + path.sep) && resolved !== scratchDir) {
-            throw new Error("Path traversal outside scratch directory is prohibited");
-        }
-        return resolved;
+        const cand = rel ? path.resolve(scratchDir, rel) : scratchDir;
+        return verifyPathContainment(cand, allowedRoots, raw);
     }
 
     const isArtifacts = processed === "$ARTIFACTS" || 
@@ -391,15 +511,11 @@ function resolveSafePath(inputPath, chatId) {
         else if (rel === "$ARTIFACTS" || rel === "${ARTIFACTS}") rel = "";
         rel = rel.replace(/^[/\\]+/, "");
 
-        const artifactsDir = getChatArtifactsDir(chatId);
         if (!fs.existsSync(artifactsDir)) {
             fs.mkdirSync(artifactsDir, { recursive: true });
         }
-        const resolved = rel ? path.resolve(artifactsDir, rel) : artifactsDir;
-        if (rel && !resolved.startsWith(artifactsDir + path.sep) && resolved !== artifactsDir) {
-            throw new Error("Path traversal outside artifacts directory is prohibited");
-        }
-        return resolved;
+        const cand = rel ? path.resolve(artifactsDir, rel) : artifactsDir;
+        return verifyPathContainment(cand, allowedRoots, raw);
     }
 
     // Also support 'scratch' or 'scratch/...' and 'artifacts' or 'artifacts/...' shorthand
@@ -408,52 +524,34 @@ function resolveSafePath(inputPath, chatId) {
         let rel = processed.replace(/^\.\//, "");
         if (rel.toLowerCase() === "scratch") rel = "";
         else if (rel.toLowerCase().startsWith("scratch/")) rel = rel.slice(8);
-        const scratchDir = getChatScratchDir(chatId);
         if (!fs.existsSync(scratchDir)) {
             fs.mkdirSync(scratchDir, { recursive: true });
         }
-        const resolved = rel ? path.resolve(scratchDir, rel) : scratchDir;
-        if (rel && !resolved.startsWith(scratchDir + path.sep) && resolved !== scratchDir) {
-            throw new Error("Path traversal outside scratch directory is prohibited");
-        }
-        return resolved;
+        const cand = rel ? path.resolve(scratchDir, rel) : scratchDir;
+        return verifyPathContainment(cand, allowedRoots, raw);
     }
 
     if (normLower === "artifacts" || normLower.startsWith("artifacts/") || normLower.startsWith("./artifacts/")) {
         let rel = processed.replace(/^\.\//, "");
         if (rel.toLowerCase() === "artifacts") rel = "";
         else if (rel.toLowerCase().startsWith("artifacts/")) rel = rel.slice(10);
-        const artifactsDir = getChatArtifactsDir(chatId);
         if (!fs.existsSync(artifactsDir)) {
             fs.mkdirSync(artifactsDir, { recursive: true });
         }
-        const resolved = rel ? path.resolve(artifactsDir, rel) : artifactsDir;
-        if (rel && !resolved.startsWith(artifactsDir + path.sep) && resolved !== artifactsDir) {
-            throw new Error("Path traversal outside artifacts directory is prohibited");
-        }
-        return resolved;
-    }
-
-    let baseDir = process.cwd();
-    if (chatId) {
-        const wsContext = getChatWorkspace(chatId);
-        if (wsContext && wsContext.project && wsContext.project.rootPath) {
-            baseDir = wsContext.project.rootPath;
-        }
+        const cand = rel ? path.resolve(artifactsDir, rel) : artifactsDir;
+        return verifyPathContainment(cand, allowedRoots, raw);
     }
 
     const resolved = path.isAbsolute(processed) ? path.normalize(processed) : path.resolve(baseDir, processed);
     if (!fs.existsSync(resolved) && chatId) {
-        const scratchDir = getChatScratchDir(chatId);
         const scratchCandidate = path.resolve(scratchDir, processed);
-        if (fs.existsSync(scratchCandidate)) return scratchCandidate;
+        if (fs.existsSync(scratchCandidate)) return verifyPathContainment(scratchCandidate, allowedRoots, raw);
 
-        const artifactsDir = getChatArtifactsDir(chatId);
         const artifactCandidate = path.resolve(artifactsDir, processed);
-        if (fs.existsSync(artifactCandidate)) return artifactCandidate;
+        if (fs.existsSync(artifactCandidate)) return verifyPathContainment(artifactCandidate, allowedRoots, raw);
     }
 
-    return resolved;
+    return verifyPathContainment(resolved, allowedRoots, raw);
 }
 
 function postJSON(portOrUrl, reqPath, data, timeoutMs = 3000) {

@@ -1566,23 +1566,7 @@ export function addThoughtTrace(element, text) {
     if (!item) {
         item = document.createElement("div");
         item.className = "activity-thought-item";
-
-        // Insert before streaming tool badges of this round if present
-        let insertRef = null;
-        if (element._streamingToolBadges && element._streamingToolBadges.size > 0) {
-            for (const badge of element._streamingToolBadges.values()) {
-                if (badge && badge.parentNode === searchContainer) {
-                    insertRef = badge;
-                    break;
-                }
-            }
-        }
-
-        if (insertRef) {
-            searchContainer.insertBefore(item, insertRef);
-        } else {
-            searchContainer.appendChild(item);
-        }
+        searchContainer.appendChild(item);
     } else {
         item.classList.remove("streaming");
         element._activeRoundThoughtEl = null;

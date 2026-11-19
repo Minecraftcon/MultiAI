@@ -225,6 +225,11 @@ export async function runAgent(userText, currentAIMessage, chatId, images = [], 
                         tb.open = false;
                     }
                 });
+                // Reset active round thought element and per-round streaming tool badges so round N elements append below round N-1
+                currentAIMessage._activeRoundThoughtEl = null;
+                if (currentAIMessage._streamingToolBadges) {
+                    currentAIMessage._streamingToolBadges.clear();
+                }
             }
             const activityLabel = currentAIMessage.querySelector(".activity-label");
             if (activityLabel) {

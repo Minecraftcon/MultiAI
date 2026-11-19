@@ -823,20 +823,7 @@ export function updateAIStream(element, fullText, isDone, startTime, hasTools) {
                     activeRoundThought = document.createElement("div");
                     activeRoundThought.className = "activity-thought-item streaming";
 
-                    let insertRef = null;
-                    if (element._streamingToolBadges && element._streamingToolBadges.size > 0) {
-                        for (const badge of element._streamingToolBadges.values()) {
-                            if (badge && badge.parentNode === searchContainer) {
-                                insertRef = badge;
-                                break;
-                            }
-                        }
-                    }
-                    if (insertRef) {
-                        searchContainer.insertBefore(activeRoundThought, insertRef);
-                    } else {
-                        searchContainer.appendChild(activeRoundThought);
-                    }
+                    searchContainer.appendChild(activeRoundThought);
                     element._activeRoundThoughtEl = activeRoundThought;
                 }
                 activeRoundThought.innerHTML = sanitizedThought;

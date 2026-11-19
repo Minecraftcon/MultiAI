@@ -16,6 +16,7 @@ const {
     safelyWriteMessages
 } = require("./jsonl_session_store");
 const { createBuildProjectsManager } = require("./build_projects_manager");
+const supabaseStorage = require("./supabase_storage");
 
 let migrationDone = false;
 
@@ -260,7 +261,8 @@ function ensureChatWorkspace(chatIdOrDir, dateStrOrMeta) {
         `  1. Write temporary scripts, notes, working logs, and one-off benchmarks to '$SCRATCH/<filename>' (resolves to ${scratchDir}).`,
         `  2. Write persistent milestone docs, architecture briefs, and state snapshots to '$ARTIFACTS/<filename>' (resolves to ${artifactsDir}).`,
         `  3. In run_task, reference '$SCRATCH', '$ARTIFACTS', '$SCRATCH_DIR', or '$ARTIFACTS_DIR' directly. Always set a concise 2–4 word task_name for UI command tagging.`,
-        `  4. Unprefixed relative paths resolve against the project workspace root.`
+        `  4. Unprefixed relative paths resolve against the project workspace root.`,
+        `  5. ROOTLESS PACKAGE MANAGEMENT: No sudo/root required. Use 'pkgx <binary> [args...]' for on-demand binaries or 'micromamba' for Conda environments.`
     ].join("\n");
 
     return {
@@ -385,7 +387,30 @@ function appendChatMessage(chatId, message) {
 /**
  * Loads a single chat session by ID.
  */
-function getChat(chatId) {
+async function getChat(chatId) {
+    if (!chatId) return null;
+
+    if (supabaseStorage && typeof supabaseStorage.getChat === "function") {
+        try {
+            const cloudSession = await supabaseStorage.getChat(chatId);
+            if (cloudSession && cloudSession.id) {
+                const ws = ensureChatWorkspace(chatId, cloudSession.createdAt);
+                if (Array.isArray(cloudSession.messages) && cloudSession.messages.length > 0) {
+                    try {
+                        safelyWriteMessages(ws.messagesFile, cloudSession.messages, true);
+                    } catch (_) {}
+                }
+                return {
+                    session: cloudSession,
+                    messages: cloudSession.messages || [],
+                    workspace: ws
+                };
+            }
+        } catch (err) {
+            console.warn("[CONVERSATIONS] Supabase getChat fallback:", err.message);
+        }
+    }
+
     const found = findChatDateDir(chatId);
     if (!found) return null;
 
@@ -439,7 +464,27 @@ function getChat(chatId) {
 /**
  * Lists all chats across all date directories for Chat mode.
  */
-function listChats() {
+async function listChats() {
+    if (supabaseStorage && typeof supabaseStorage.listChats === "function") {
+        try {
+            const cloudChats = await supabaseStorage.listChats();
+            if (Array.isArray(cloudChats) && cloudChats.length > 0) {
+                cloudChats.sort((a, b) => {
+                    const timeA = Number(a.updatedAt || a.createdAt) || 0;
+                    const timeB = Number(b.updatedAt || b.createdAt) || 0;
+                    return timeB - timeA;
+                });
+                return cloudChats;
+            }
+        } catch (err) {
+            console.warn("[CONVERSATIONS] Error listing chats from Supabase:", err.message);
+        }
+    }
+
+    return listChatsFromDisk();
+}
+
+function listChatsFromDisk() {
     const convRoots = [
         getConversationsRoot(),
         path.join(getStorageRoot(), "conversations") // include legacy if present
