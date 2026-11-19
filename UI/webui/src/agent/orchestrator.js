@@ -656,11 +656,54 @@ export async function runAgent(userText, currentAIMessage, chatId, images = [], 
                 const call = calls[i];
                 const toolName = call.function?.name;
                 let args = {};
+                const rawArgs = call.function?.arguments;
 
-                try {
-                    args = JSON.parse(call.function?.arguments || "{}");
-                } catch (err) {
-                    args = {};
+                if (typeof rawArgs === "object" && rawArgs !== null) {
+                    args = { ...rawArgs };
+                } else if (typeof rawArgs === "string") {
+                    const trimmed = rawArgs.trim();
+                    try {
+                        args = JSON.parse(trimmed || "{}");
+                    } catch (_) {
+                        // Recovery 1: Strip trailing commas before closing braces/brackets
+                        try {
+                            const cleaned = trimmed.replace(/,\s*([}\]])/g, "$1");
+                            args = JSON.parse(cleaned);
+                        } catch (_) {
+                            // Recovery 2: Sanitize raw newlines inside string literals
+                            try {
+                                const cleanedNewlines = trimmed
+                                    .replace(/,\s*([}\]])/g, "$1")
+                                    .replace(/(?<!\\)\r?\n/g, "\\n");
+                                args = JSON.parse(cleanedNewlines);
+                            } catch (_) {
+                                // Recovery 3: Regex key-value extraction for malformed JSON
+                                const extracted = {};
+                                const regex = /["']?([a-zA-Z0-9_\-]+)["']?\s*:\s*(?:"([^"]*)"|'([^']*)'|([^,}\s]+))/g;
+                                let m;
+                                while ((m = regex.exec(trimmed)) !== null) {
+                                    const key = m[1];
+                                    let val = m[2] !== undefined ? m[2] : (m[3] !== undefined ? m[3] : m[4]);
+                                    if (val === "true") val = true;
+                                    else if (val === "false") val = false;
+                                    else if (!isNaN(Number(val)) && val !== "") val = Number(val);
+                                    extracted[key] = val;
+                                }
+                                args = Object.keys(extracted).length > 0 ? extracted : { _unparsed: trimmed };
+                            }
+                        }
+                    }
+                }
+
+                // Unwrap nested function call wrappers e.g. {"arguments": {"command": "..."}}
+                if (args.arguments && typeof args.arguments === "object" && args.arguments !== null) {
+                    args = { ...args.arguments, ...args };
+                }
+                if (args.parameters && typeof args.parameters === "object" && args.parameters !== null) {
+                    args = { ...args.parameters, ...args };
+                }
+                if (args.input && typeof args.input === "object" && args.input !== null) {
+                    args = { ...args.input, ...args };
                 }
 
                 stageStatus = `Running ${toolName}`;

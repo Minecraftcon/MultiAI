@@ -55,13 +55,41 @@ export function normalizeToolName(rawName) {
 }
 
 /**
- * Normalizes tool arguments for hallucinated fields (e.g. tools.shell({ command }) inside code).
+ * Normalizes tool arguments for hallucinated fields, nested wrappers, or raw string payloads.
  */
 export function normalizeToolArguments(toolName, rawArgs = {}) {
-    const args = typeof rawArgs === "object" && rawArgs !== null ? { ...rawArgs } : {};
+    let args = {};
+    if (typeof rawArgs === "string") {
+        const trimmed = rawArgs.trim();
+        try {
+            args = JSON.parse(trimmed);
+        } catch (_) {
+            try {
+                const cleaned = trimmed.replace(/,\s*([}\]])/g, "$1");
+                args = JSON.parse(cleaned);
+            } catch (_) {
+                // If the model passed a raw string instead of a JSON object (e.g. "ls -la" or "src/index.js")
+                args = { command: trimmed, path: trimmed };
+            }
+        }
+    } else if (typeof rawArgs === "object" && rawArgs !== null) {
+        args = { ...rawArgs };
+    }
+
+    // Unwrap nested function call wrappers e.g. {"arguments": {"command": "..."}} or {"parameters": {...}}
+    if (args.arguments && typeof args.arguments === "object" && args.arguments !== null) {
+        args = { ...args.arguments, ...args };
+    }
+    if (args.parameters && typeof args.parameters === "object" && args.parameters !== null) {
+        args = { ...args.parameters, ...args };
+    }
+    if (args.input && typeof args.input === "object" && args.input !== null) {
+        args = { ...args.input, ...args };
+    }
+
     const normName = normalizeToolName(toolName);
     if (normName === "run_task") {
-        const code = String(args.code || args.command || args.cmd || args.script || "");
+        const code = String(args.code || args.command || args.cmd || args.script || args.CommandLine || "");
         const shellMatch = code.match(/tools\.shell\(\s*\{\s*command:\s*(?:["'`])([\s\S]*?)(?:["'`])\s*\}\s*\)/) ||
                            code.match(/tools\.shell\(\s*(?:["'`])([\s\S]*?)(?:["'`])\s*\)/);
         if (shellMatch) {
@@ -71,6 +99,9 @@ export function normalizeToolArguments(toolName, rawArgs = {}) {
         }
         if (!args.command && (args.CommandLine || args.cmd)) {
             args.command = args.CommandLine || args.cmd;
+        }
+        if (!args.command && args.instruction && typeof args.instruction === "string") {
+            args.command = args.instruction;
         }
     } else if (normName === "read_file") {
         if (!args.path && args.file) args.path = args.file;

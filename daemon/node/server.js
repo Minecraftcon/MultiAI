@@ -852,9 +852,9 @@ const server = http.createServer(async (req, res) => {
     // 2. Task streaming: POST /api/task/stream
     if (req.method === "POST" && pathname === "/api/task/stream") {
         const body = await parseJSONBody(req);
-        const command = body.command;
+        const command = body.command || body.cmd || body.CommandLine || body.code || body.script;
         if (!command) {
-            return sendJSON(res, 400, { error: "No command provided" });
+            return sendJSON(res, 400, { error: "No command provided in request payload (expected 'command' string)" });
         }
 
         // Real PTY execution mode for run_task if requested
@@ -1006,9 +1006,9 @@ const server = http.createServer(async (req, res) => {
     // 3. Task synchronous run: POST /api/task/run
     if (req.method === "POST" && pathname === "/api/task/run") {
         const body = await parseJSONBody(req);
-        const command = body.command;
+        const command = body.command || body.cmd || body.CommandLine || body.code || body.script;
         if (!command) {
-            return sendJSON(res, 400, { error: "No command provided" });
+            return sendJSON(res, 400, { error: "No command provided in request payload (expected 'command' string)" });
         }
 
         const task = manager.createTask(command, {

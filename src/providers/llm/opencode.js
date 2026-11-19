@@ -8,6 +8,7 @@ const path = require("path");
 const crypto = require("crypto");
 const { spawn } = require("child_process");
 const BaseProvider = require("./base");
+const { parseToolCallArgs } = require("./tool_extractor");
 
 // OpenCode core agent tools mapping
 const OPENCODE_SENTINEL_TOOLS = [
@@ -66,17 +67,33 @@ function mapOpenCodeSentinelToolCall(tc) {
     if (!tc) return tc;
     const name = tc.function?.name || tc.name || tc.tool;
     let args = {};
-    try {
-        const rawArgs = tc.function?.arguments || tc.arguments || tc.input || tc.state?.input;
-        args = typeof rawArgs === "string" ? JSON.parse(rawArgs || "{}") : (rawArgs || {});
-    } catch (_) {
-        args = {};
+    const rawArgs = tc.function?.arguments !== undefined ? tc.function.arguments : (tc.arguments !== undefined ? tc.arguments : (tc.input !== undefined ? tc.input : tc.state?.input));
+    if (typeof rawArgs === "object" && rawArgs !== null) {
+        args = { ...rawArgs };
+    } else if (typeof rawArgs === "string") {
+        try {
+            args = JSON.parse(rawArgs);
+        } catch (_) {
+            args = parseToolCallArgs(rawArgs);
+            if (typeof args !== "object" || args === null) args = {};
+        }
+    }
+
+    // Unwrap nested wrappers e.g. {"arguments": {"command": "..."}} or {"parameters": {...}}
+    if (args.arguments && typeof args.arguments === "object" && args.arguments !== null) {
+        args = { ...args.arguments, ...args };
+    }
+    if (args.parameters && typeof args.parameters === "object" && args.parameters !== null) {
+        args = { ...args.parameters, ...args };
+    }
+    if (args.input && typeof args.input === "object" && args.input !== null) {
+        args = { ...args.input, ...args };
     }
 
     const id = tc.id || ("call_" + Math.random().toString(36).substring(2, 9));
 
     if (name === "subagent" || name === "agent" || name === "invoke_subagent" || name === "task") {
-        const subTask = args.command || args.task || args.prompt || args.description || args.instruction || "";
+        const subTask = args.command || args.cmd || args.CommandLine || args.task || args.prompt || args.description || args.instruction || "";
         return {
             id,
             type: "function",
@@ -92,21 +109,21 @@ function mapOpenCodeSentinelToolCall(tc) {
     if (name === "todowrite" || name === "write_todos") {
         return { id, type: "function", function: { name: "write_todos", arguments: JSON.stringify(args) } };
     }
-    if (name === "bash" || name === "shell" || name === "run_task") {
+    if (name === "bash" || name === "shell" || name === "run_task" || name === "run_command") {
         return {
             id,
             type: "function",
             function: {
                 name: "run_task",
                 arguments: JSON.stringify({
-                    command: args.command || args.cmd || args.code || args.script || "",
+                    command: args.command || args.cmd || args.CommandLine || args.code || args.script || "",
                     task_name: args.task_name || "Run shell command"
                 })
             }
         };
     }
     if (name === "execute" || name === "exec") {
-        const code = String(args.code || args.command || args.cmd || args.script || "");
+        const code = String(args.code || args.command || args.cmd || args.CommandLine || args.script || "");
         const shellMatch = code.match(/tools\.shell\(\s*\{\s*command:\s*(?:["'`])([\s\S]*?)(?:["'`])\s*\}\s*\)/) ||
                            code.match(/tools\.shell\(\s*(?:["'`])([\s\S]*?)(?:["'`])\s*\)/);
         if (shellMatch) {

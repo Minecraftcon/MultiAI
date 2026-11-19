@@ -89,6 +89,7 @@ export function getSettingsHTML() {
                             <select id="cfgUIStyle" class="settings-select">
                                 <option value="multiai" selected>Multi AI</option>
                                 <option value="classics">Classics</option>
+                                <option value="silica">Silica</option>
                             </select>
                         </div>
                     </div>

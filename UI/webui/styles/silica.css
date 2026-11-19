@@ -1,0 +1,566 @@
+/* ==========================================================================
+   SILICA UI STYLE
+   Precision-engineered Minimalist Design System adapted from Antigravity Onyx.
+   Active when [data-ui-style="silica"] or .ui-style-silica.
+   ========================================================================== */
+
+/* ── 1. Antigravity "Onyx" Color Tokens & Surfaces ── */
+
+/* Silica Light Theme (Warm Bone Canvas & Crisp White Surfaces) */
+:root[data-theme="light"][data-ui-style="silica"],
+[data-ui-style="silica"][data-theme="light"],
+.ui-style-silica[data-theme="light"],
+[data-ui-style="silica"]:not([data-theme="dark"]):not([data-theme="midnight"]) {
+    --bg-primary: #FAFAFA;
+    --bg-secondary: #FFFFFF;
+    --surface: #FFFFFF;
+    --surface-1: #FFFFFF;
+    --surface-2: #F4F4F5;
+    --surface-hover: rgba(10, 10, 12, 0.04);
+    --border: rgba(10, 10, 12, 0.07);
+    --border-subtle: rgba(10, 10, 12, 0.04);
+    --border-strong: rgba(10, 10, 12, 0.14);
+    --text-primary: #0A0A0C;
+    --text-secondary: #3F3F46;
+    --text-tertiary: #71717A;
+    --text-placeholder: #8E8E95;
+    --accent: #111111;
+    --accent-contrast: #FFFFFF;
+    --input-bg: #FFFFFF;
+    --input-border: rgba(10, 10, 12, 0.09);
+    --diff-add: #16a34a;
+    --diff-del: #dc2626;
+    --diff-warn: #d97706;
+}
+
+/* Silica Dark Theme (Deep Warm Obsidian & Obsidian Surfaces) */
+:root[data-theme="dark"][data-ui-style="silica"],
+:root[data-theme="midnight"][data-ui-style="silica"],
+[data-ui-style="silica"][data-theme="dark"],
+[data-ui-style="silica"][data-theme="midnight"],
+.ui-style-silica[data-theme="dark"],
+.ui-style-silica[data-theme="midnight"] {
+    --bg-primary: #070708;
+    --bg-secondary: #111114;
+    --surface: #131317;
+    --surface-1: #131317;
+    --surface-2: #1A1A20;
+    --surface-hover: rgba(255, 255, 255, 0.04);
+    --border: rgba(255, 255, 255, 0.08);
+    --border-subtle: rgba(255, 255, 255, 0.05);
+    --border-strong: rgba(255, 255, 255, 0.16);
+    --text-primary: #FFFFFF;
+    --text-secondary: #BCBDC6;
+    --text-tertiary: #87888F;
+    --text-placeholder: #636470;
+    --accent: #FFFFFF;
+    --accent-contrast: #070708;
+    --input-bg: #131317;
+    --input-border: rgba(255, 255, 255, 0.09);
+    --diff-add: #4ade80;
+    --diff-del: #f87171;
+    --diff-warn: #fbbf24;
+}
+
+/* ── 2. Silica Composer & Floating Input Dock ── */
+[data-ui-style="silica"] .composer,
+[data-ui-style="silica"] .composer-dock,
+.ui-style-silica .composer,
+.ui-style-silica .composer-dock {
+    border-radius: 8px !important;
+    background: var(--input-bg, var(--surface)) !important;
+    border: 1px solid var(--input-border, var(--border)) !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 0 0 1px var(--border-subtle) !important;
+    padding: 6px 10px !important;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease !important;
+}
+
+[data-ui-style="silica"] .composer:focus-within,
+[data-ui-style="silica"] .composer-dock:focus-within,
+.ui-style-silica .composer:focus-within,
+.ui-style-silica .composer-dock:focus-within {
+    border-color: var(--border-strong) !important;
+}
+
+[data-ui-style="silica"] .composer-toolbar,
+.ui-style-silica .composer-toolbar {
+    margin-top: 4px !important;
+}
+
+[data-ui-style="silica"] .composer-textarea,
+.ui-style-silica .composer-textarea {
+    min-height: 22px !important;
+    line-height: 22px !important;
+    font-size: 13.5px !important;
+    color: var(--text-primary) !important;
+}
+
+/* Start page composer dock */
+[data-ui-style="silica"] #appShell.is-start-page .composer-dock,
+.ui-style-silica #appShell.is-start-page .composer-dock {
+    border-radius: 8px !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25), 0 0 0 1px var(--border) !important;
+}
+
+/* Attach (+) Button */
+[data-ui-style="silica"] .attach-btn,
+.ui-style-silica .attach-btn {
+    width: 28px !important;
+    height: 28px !important;
+    border-radius: 6px !important;
+    border: 1px solid transparent !important;
+}
+
+[data-ui-style="silica"] .attach-btn:hover,
+.ui-style-silica .attach-btn:hover {
+    background: var(--surface-hover) !important;
+    border-color: var(--border-subtle) !important;
+}
+
+/* Chatbox Model Picker Button */
+[data-ui-style="silica"] .chatbox-model-btn,
+.ui-style-silica .chatbox-model-btn {
+    border-radius: 6px !important;
+    height: 28px !important;
+    padding: 0 10px !important;
+    font-size: 12px !important;
+    font-weight: 500 !important;
+    border: 1px solid var(--border-subtle) !important;
+    background: transparent !important;
+    color: var(--text-secondary) !important;
+}
+
+[data-ui-style="silica"] .chatbox-model-btn:hover,
+.ui-style-silica .chatbox-model-btn:hover {
+    background: var(--surface-hover) !important;
+    color: var(--text-primary) !important;
+}
+
+/* Send (Arrow) Button */
+[data-ui-style="silica"] .composer-send-btn,
+.ui-style-silica .composer-send-btn {
+    border-radius: 6px !important;
+    background: var(--accent) !important;
+    color: var(--accent-contrast) !important;
+    border: none !important;
+    transition: transform 0.1s ease, opacity 0.15s ease !important;
+}
+
+[data-ui-style="silica"] .composer-send-btn:hover,
+.ui-style-silica .composer-send-btn:hover {
+    opacity: 0.9 !important;
+}
+
+[data-ui-style="silica"] .composer-send-btn:active,
+.ui-style-silica .composer-send-btn:active {
+    transform: scale(0.96) !important;
+}
+
+/* Header Cleanup */
+[data-ui-style="silica"] header .header-center,
+.ui-style-silica header .header-center {
+    opacity: 0;
+    pointer-events: none;
+}
+
+[data-ui-style="silica"] #startPageFooter,
+.ui-style-silica #startPageFooter {
+    display: none !important;
+}
+
+/* Model Picker Dropdown */
+[data-ui-style="silica"] .model-picker-dropdown,
+.ui-style-silica .model-picker-dropdown {
+    border-radius: 8px !important;
+    border: 1px solid var(--border) !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22) !important;
+}
+
+/* Floating Scroll-to-Bottom Button */
+[data-ui-style="silica"] .chat-scroll-btn,
+.ui-style-silica .chat-scroll-btn {
+    border-radius: 6px !important;
+    border: 1px solid var(--border) !important;
+}
+
+[data-ui-style="silica"] .chat-scroll-btn.has-unread::after,
+.ui-style-silica .chat-scroll-btn.has-unread::after {
+    display: none !important;
+}
+
+/* ── 3. Silica Thinking / Reasoning Indicator ── */
+[data-ui-style="silica"] .thought-box,
+.ui-style-silica .thought-box {
+    margin: 2px 0 6px 0 !important;
+}
+
+[data-ui-style="silica"] .thought-summary,
+.ui-style-silica .thought-summary {
+    display: flex !important;
+    align-items: center !important;
+    min-height: 28px !important;
+    padding: 2px 6px !important;
+    border-radius: 6px !important;
+    gap: 6px !important;
+    user-select: none !important;
+    cursor: pointer !important;
+    transition: background-color 0.12s ease !important;
+}
+
+[data-ui-style="silica"] .thought-summary:hover,
+.ui-style-silica .thought-summary:hover {
+    background: var(--surface-hover) !important;
+}
+
+[data-ui-style="silica"] .thought-brain-icon,
+.ui-style-silica .thought-brain-icon {
+    display: none !important;
+}
+
+[data-ui-style="silica"] .thought-summary::before,
+.ui-style-silica .thought-summary::before {
+    content: "•";
+    display: inline-block;
+    color: var(--text-tertiary);
+    font-size: 11px;
+    margin-right: 2px;
+    flex-shrink: 0;
+}
+
+[data-ui-style="silica"] .thought-header,
+.ui-style-silica .thought-header {
+    font-size: 12.5px !important;
+    font-weight: 500 !important;
+    font-variant-numeric: tabular-nums !important;
+    color: var(--text-secondary) !important;
+    letter-spacing: 0.01em !important;
+}
+
+[data-ui-style="silica"] .thought-chevron,
+.ui-style-silica .thought-chevron {
+    font-size: 8px !important;
+    color: var(--text-tertiary) !important;
+    margin-left: 2px !important;
+    transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+[data-ui-style="silica"] details.thought-box[open] .thought-chevron,
+.ui-style-silica details.thought-box[open] .thought-chevron {
+    transform: rotate(90deg) !important;
+    color: var(--text-primary) !important;
+}
+
+[data-ui-style="silica"] .thought-body,
+.ui-style-silica .thought-body {
+    margin-top: 4px !important;
+    margin-left: 6px !important;
+    padding-left: 10px !important;
+    border-left: 2px solid var(--border) !important;
+}
+
+[data-ui-style="silica"] .thought-content,
+.ui-style-silica .thought-content {
+    font-size: 12.5px !important;
+    line-height: 1.55 !important;
+    color: var(--text-secondary) !important;
+    font-style: normal !important;
+}
+
+/* ── 4. Silica Activity & Tool Step Rows (Progressive Natural Language) ── */
+[data-ui-style="silica"] .activity-wrapper,
+.ui-style-silica .activity-wrapper {
+    margin-bottom: 8px !important;
+}
+
+[data-ui-style="silica"] .activity-toggle,
+.ui-style-silica .activity-toggle {
+    font-size: 13px !important;
+    font-weight: 500 !important;
+    color: var(--text-secondary) !important;
+    padding: 2px 4px !important;
+    border-radius: 6px !important;
+    gap: 6px !important;
+    transition: background 0.12s ease !important;
+}
+
+[data-ui-style="silica"] .activity-toggle:hover,
+.ui-style-silica .activity-toggle:hover {
+    background: var(--surface-hover) !important;
+    color: var(--text-primary) !important;
+}
+
+/* Remove vertical hierarchy line and ring badges */
+[data-ui-style="silica"] .search-items-container::before,
+.ui-style-silica .search-items-container::before,
+[data-ui-style="silica"] .search-badge-item .search-icon-circle,
+.ui-style-silica .search-badge-item .search-icon-circle,
+[data-ui-style="silica"] .search-badge-item .preview-icon,
+.ui-style-silica .search-badge-item .preview-icon,
+[data-ui-style="silica"] .badge-open-pty-btn,
+.ui-style-silica .badge-open-pty-btn {
+    display: none !important;
+}
+
+/* Indented child tool items */
+[data-ui-style="silica"] .search-items-container,
+.ui-style-silica .search-items-container {
+    padding-left: 14px !important;
+    gap: 2px !important;
+    margin: 4px 0 !important;
+    border-left: none !important;
+}
+
+/* Clean, indented text row for each tool */
+[data-ui-style="silica"] .search-badge-item,
+.ui-style-silica .search-badge-item {
+    display: flex !important;
+    align-items: baseline !important;
+    gap: 6px !important;
+    padding: 3px 6px !important;
+    min-height: auto !important;
+    background: transparent !important;
+    border: none !important;
+    border-radius: 6px !important;
+    box-shadow: none !important;
+    font-size: 13px !important;
+    line-height: 1.5 !important;
+    cursor: pointer !important;
+    transition: background-color 0.12s ease !important;
+}
+
+[data-ui-style="silica"] .search-badge-item:hover,
+.ui-style-silica .search-badge-item:hover {
+    background: var(--surface-hover) !important;
+}
+
+/* Status indicator bullet */
+[data-ui-style="silica"] .search-badge-item::before,
+.ui-style-silica .search-badge-item::before {
+    content: "•";
+    display: inline-block;
+    color: var(--text-tertiary);
+    font-size: 11px;
+    margin-right: 2px;
+    flex-shrink: 0;
+}
+
+[data-ui-style="silica"] .search-badge-item.is-running::before,
+.ui-style-silica .search-badge-item.is-running::before {
+    content: "›";
+    color: var(--accent);
+    font-weight: 700;
+    font-size: 13px;
+    animation: silicaPulse 1.2s infinite ease-in-out;
+}
+
+@keyframes silicaPulse {
+    0%, 100% { opacity: 1; transform: translateX(0); }
+    50% { opacity: 0.35; transform: translateX(1.5px); }
+}
+
+[data-ui-style="silica"] .search-badge-item .search-label,
+.ui-style-silica .search-badge-item .search-label {
+    font-size: 13px !important;
+    font-weight: 500 !important;
+    color: var(--text-secondary) !important;
+}
+
+[data-ui-style="silica"] .search-badge-item.is-running .search-label,
+.ui-style-silica .search-badge-item.is-running .search-label {
+    color: var(--text-primary) !important;
+}
+
+/* Target detail / command / path */
+[data-ui-style="silica"] .search-badge-item .search-query,
+.ui-style-silica .search-badge-item .search-query {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+    font-size: 12.5px !important;
+    color: var(--text-primary) !important;
+    font-weight: 500 !important;
+}
+
+[data-ui-style="silica"] .search-badge-item:not(.timer-badge) .search-query,
+.ui-style-silica .search-badge-item:not(.timer-badge) .search-query {
+    font-family: inherit !important;
+    font-weight: 400 !important;
+    color: var(--text-secondary) !important;
+}
+
+[data-ui-style="silica"] .search-badge-item.timer-badge .search-query,
+.ui-style-silica .search-badge-item.timer-badge .search-query {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+    font-size: 12px !important;
+    color: var(--text-primary) !important;
+    font-weight: 500 !important;
+}
+
+/* Inset output card */
+[data-ui-style="silica"] .badge-collapse,
+.ui-style-silica .badge-collapse {
+    grid-template-rows: 0fr !important;
+    margin-left: 14px !important;
+    margin-top: 2px !important;
+    margin-bottom: 4px !important;
+    max-width: calc(100% - 14px) !important;
+    border-radius: 6px !important;
+    border: 1px solid var(--border) !important;
+    background: var(--surface-1) !important;
+    box-shadow: none !important;
+    padding: 0 8px !important;
+}
+
+[data-ui-style="silica"] .search-badge-item.open + .badge-collapse,
+.ui-style-silica .search-badge-item.open + .badge-collapse {
+    grid-template-rows: 1fr !important;
+    padding: 6px 10px !important;
+}
+
+[data-ui-style="silica"] .command-output-box pre,
+.ui-style-silica .command-output-box pre {
+    padding: 0 !important;
+    font-size: 11.5px !important;
+    color: var(--text-secondary) !important;
+    max-height: 200px !important;
+    border-radius: 0 !important;
+}
+
+/* ── 5. Silica Floating Changes Bar & Review Drawer ── */
+[data-ui-style="silica"] .dock-window-view,
+.ui-style-silica .dock-window-view {
+    border-radius: 8px !important;
+    border: 1px solid var(--border) !important;
+    background: var(--surface) !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12) !important;
+    overflow: hidden !important;
+}
+
+[data-ui-style="silica"] .dock-changes-box,
+.ui-style-silica .dock-changes-box {
+    background: var(--surface) !important;
+    border-bottom: 1px solid var(--border) !important;
+}
+
+[data-ui-style="silica"] .dock-changes-item,
+.ui-style-silica .dock-changes-item {
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    padding: 6px 10px !important;
+    font-size: 12.5px !important;
+    color: var(--text-secondary) !important;
+    border-bottom: 1px solid var(--border-subtle) !important;
+    transition: background 0.1s ease !important;
+}
+
+[data-ui-style="silica"] .dock-changes-item:hover,
+.ui-style-silica .dock-changes-item:hover {
+    background: var(--surface-hover) !important;
+    color: var(--text-primary) !important;
+}
+
+[data-ui-style="silica"] .dock-changes-item .diff-badge-status,
+.ui-style-silica .dock-changes-item .diff-badge-status {
+    width: 14px !important;
+    height: 14px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border-radius: 3px !important;
+    font-size: 10px !important;
+    font-weight: 700 !important;
+    border: 1px solid var(--border) !important;
+}
+
+[data-ui-style="silica"] .dock-changes-item.is-new .diff-badge-status,
+.ui-style-silica .dock-changes-item.is-new .diff-badge-status {
+    color: var(--diff-add) !important;
+    border-color: rgba(22, 163, 74, 0.3) !important;
+}
+
+[data-ui-style="silica"] .dock-changes-item.is-modified .diff-badge-status,
+.ui-style-silica .dock-changes-item.is-modified .diff-badge-status {
+    color: var(--diff-warn) !important;
+    border-color: rgba(217, 119, 6, 0.3) !important;
+}
+
+[data-ui-style="silica"] .dock-changes-bar,
+.ui-style-silica .dock-changes-bar {
+    padding: 6px 10px !important;
+    background: var(--surface) !important;
+    border-top: none !important;
+}
+
+[data-ui-style="silica"] .dock-window-title,
+.ui-style-silica .dock-window-title {
+    font-size: 12.5px !important;
+    font-weight: 500 !important;
+    color: var(--text-primary) !important;
+}
+
+/* Reject all (Ghost text button) */
+[data-ui-style="silica"] .dock-reject-all-btn,
+.ui-style-silica .dock-reject-all-btn {
+    border: none !important;
+    background: transparent !important;
+    color: var(--text-tertiary) !important;
+    font-size: 12px !important;
+    font-weight: 500 !important;
+    padding: 3px 8px !important;
+    border-radius: 4px !important;
+    cursor: pointer !important;
+    transition: color 0.15s ease, opacity 0.15s ease !important;
+}
+
+[data-ui-style="silica"] .dock-reject-all-btn:hover,
+.ui-style-silica .dock-reject-all-btn:hover {
+    color: var(--text-primary) !important;
+}
+
+/* Accept all (High-contrast solid button) */
+[data-ui-style="silica"] .dock-accept-all-btn,
+.ui-style-silica .dock-accept-all-btn {
+    border: none !important;
+    background: var(--accent) !important;
+    color: var(--accent-contrast) !important;
+    font-size: 12px !important;
+    font-weight: 500 !important;
+    padding: 4px 10px !important;
+    border-radius: 4px !important;
+    cursor: pointer !important;
+    box-shadow: none !important;
+    transition: opacity 0.15s ease, transform 0.1s ease !important;
+}
+
+[data-ui-style="silica"] .dock-accept-all-btn:hover,
+.ui-style-silica .dock-accept-all-btn:hover {
+    opacity: 0.9 !important;
+}
+
+[data-ui-style="silica"] .dock-accept-all-btn:active,
+.ui-style-silica .dock-accept-all-btn:active {
+    transform: scale(0.97) !important;
+}
+
+/* ── 6. Silica Follow-up Suggestion Cards ── */
+[data-ui-style="silica"] .follow-up-card,
+.ui-style-silica .follow-up-card,
+[data-ui-style="silica"] .suggestion-item,
+.ui-style-silica .suggestion-item {
+    border-radius: 6px !important;
+    border: 1px solid var(--border) !important;
+    background: var(--surface) !important;
+    padding: 8px 12px !important;
+    font-size: 12.5px !important;
+    color: var(--text-secondary) !important;
+    cursor: pointer !important;
+    transition: background-color 0.12s ease, border-color 0.12s ease !important;
+}
+
+[data-ui-style="silica"] .follow-up-card:hover,
+.ui-style-silica .follow-up-card:hover,
+[data-ui-style="silica"] .suggestion-item:hover,
+.ui-style-silica .suggestion-item:hover {
+    background: var(--surface-hover) !important;
+    border-color: var(--border-strong) !important;
+    color: var(--text-primary) !important;
+}

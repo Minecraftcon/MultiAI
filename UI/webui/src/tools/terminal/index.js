@@ -9,12 +9,26 @@ import { parseTerminalAnsi, cleanTerminalScreen } from "./term-emulator.js";
  * Streams real-time terminal command execution chunks directly into the UI badge.
  */
 async function streamTaskExecution(args, { badgeEl, genState } = {}) {
+    const cmd = args.command || args.cmd || args.CommandLine || args.code || args.script;
+    if (!cmd || typeof cmd !== "string" || !cmd.trim()) {
+        const received = args._unparsed ? `(unparsed arguments: ${args._unparsed})` : JSON.stringify(args);
+        return {
+            task_id: "error",
+            status: "error",
+            running: false,
+            exit_code: 1,
+            error: `Missing 'command' property in run_task arguments. Received: ${received}. Please invoke run_task with {"command": "<shell command>"}.`,
+            stderr: `Missing 'command' property in run_task arguments. Received: ${received}`,
+            stdout: ""
+        };
+    }
+
     const isBg = Boolean(args.background || args.is_daemon || args.isDaemon);
     const defaultTimer = isBg ? 1 : 10;
     const timerVal = args.timer !== undefined ? Number(args.timer) : defaultTimer;
 
     const payload = {
-        command: args.command,
+        command: cmd.trim(),
         timer: timerVal,
         timeout: timerVal,
         background: isBg,
@@ -137,8 +151,21 @@ async function streamTaskExecution(args, { badgeEl, genState } = {}) {
 }
 
 async function fallbackRunTask(args, genState) {
+    const cmd = args.command || args.cmd || args.CommandLine || args.code || args.script;
+    if (!cmd || typeof cmd !== "string" || !cmd.trim()) {
+        const received = args._unparsed ? `(unparsed arguments: ${args._unparsed})` : JSON.stringify(args);
+        return {
+            task_id: "error",
+            status: "error",
+            running: false,
+            exit_code: 1,
+            error: `Missing 'command' property in run_task arguments. Received: ${received}. Please invoke run_task with {"command": "<shell command>"}.`,
+            stderr: `Missing 'command' property in run_task arguments. Received: ${received}`,
+            stdout: ""
+        };
+    }
     const payload = {
-        command: args.command,
+        command: cmd.trim(),
         timer: args.timer || 5,
         timeout: args.timer || 5,
         task_name: args.task_name,

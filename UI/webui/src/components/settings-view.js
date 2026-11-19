@@ -1350,10 +1350,11 @@ function renderContextFilterRules() {
    GLOBAL UI STYLE APPLICATION HELPER (TOP-LEVEL EXPORT)
    ========================================================= */
 export function applyUIStyle(val) {
-    const style = (val === "classics") ? "classics" : "multiai";
+    const style = (val === "classics" || val === "silica") ? val : "multiai";
     document.documentElement.setAttribute("data-ui-style", style);
     if (document.body) {
         document.body.classList.toggle("ui-style-classics", style === "classics");
+        document.body.classList.toggle("ui-style-silica", style === "silica");
         document.body.classList.toggle("ui-style-multiai", style === "multiai");
     }
     try {

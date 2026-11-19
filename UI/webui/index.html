@@ -44,6 +44,8 @@
                 document.documentElement.setAttribute("data-ui-style", s);
                 if (s === "classics") {
                     document.documentElement.classList.add("ui-style-classics");
+                } else if (s === "silica") {
+                    document.documentElement.classList.add("ui-style-silica");
                 }
             } catch (e) {}
         })();
@@ -101,6 +103,7 @@
     <link rel="stylesheet" href="./styles/terminal.css">
     <link rel="stylesheet" href="./styles/skills-menu.css">
     <link rel="stylesheet" href="./styles/classics.css">
+    <link rel="stylesheet" href="./styles/silica.css">
     <link rel="stylesheet" href="./styles/right-panel.css">
     <link rel="stylesheet" href="./styles/element-inspector.css">
 </head>

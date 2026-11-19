@@ -91,14 +91,53 @@ function cleanPromptContent(text) {
 
 /**
  * Parses tool call argument string supporting standard JSON or delimited key:<|"|>val<|"|> syntax.
+ * Automatically recovers from trailing commas, raw newlines, markdown code fences, and unwraps nested wrappers.
  */
 function parseToolCallArgs(rawArgs) {
-    if (!rawArgs || typeof rawArgs !== "string") return {};
-    const trimmed = rawArgs.trim();
+    if (!rawArgs) return {};
+    if (typeof rawArgs === "object" && rawArgs !== null) {
+        let unwrapped = { ...rawArgs };
+        if (unwrapped.arguments && typeof unwrapped.arguments === "object" && unwrapped.arguments !== null) unwrapped = { ...unwrapped.arguments, ...unwrapped };
+        if (unwrapped.parameters && typeof unwrapped.parameters === "object" && unwrapped.parameters !== null) unwrapped = { ...unwrapped.parameters, ...unwrapped };
+        if (unwrapped.input && typeof unwrapped.input === "object" && unwrapped.input !== null) unwrapped = { ...unwrapped.input, ...unwrapped };
+        return unwrapped;
+    }
+    if (typeof rawArgs !== "string") return {};
+
+    let trimmed = rawArgs.trim();
+
+    // Strip markdown code fences if wrapped in ```json ... ```
+    if (trimmed.startsWith("```")) {
+        trimmed = trimmed.replace(/^```[a-zA-Z0-9_\-]*\n?/, "").replace(/\n?```$/, "").trim();
+    }
+
+    const unwrapObject = (obj) => {
+        if (!obj || typeof obj !== "object") return obj;
+        let unwrapped = { ...obj };
+        if (unwrapped.arguments && typeof unwrapped.arguments === "object" && unwrapped.arguments !== null) unwrapped = { ...unwrapped.arguments, ...unwrapped };
+        if (unwrapped.parameters && typeof unwrapped.parameters === "object" && unwrapped.parameters !== null) unwrapped = { ...unwrapped.parameters, ...unwrapped };
+        if (unwrapped.input && typeof unwrapped.input === "object" && unwrapped.input !== null) unwrapped = { ...unwrapped.input, ...unwrapped };
+        return unwrapped;
+    };
+
     if ((trimmed.startsWith("{") && trimmed.endsWith("}")) || (trimmed.startsWith("[") && trimmed.endsWith("]"))) {
         try {
-            return JSON.parse(trimmed);
-        } catch (_) { }
+            return unwrapObject(JSON.parse(trimmed));
+        } catch (_) {
+            // Attempt 1: Remove trailing commas before closing braces/brackets
+            try {
+                const cleaned = trimmed.replace(/,\s*([}\]])/g, "$1");
+                return unwrapObject(JSON.parse(cleaned));
+            } catch (_) {}
+
+            // Attempt 2: Escape raw unescaped newlines inside string literals
+            try {
+                const cleaned = trimmed
+                    .replace(/,\s*([}\]])/g, "$1")
+                    .replace(/(?<!\\)\r?\n/g, "\\n");
+                return unwrapObject(JSON.parse(cleaned));
+            } catch (_) {}
+        }
     }
     const argsObj = {};
     const argRegex = /["\x27]?([a-zA-Z0-9_\-]+)["\x27]?\s*:\s*(?:<\|"\|>([\s\S]*?)<\|"\|>|"([^"]*)"|'([^']*)'|([^,}\s]+))/g;
@@ -114,7 +153,7 @@ function parseToolCallArgs(rawArgs) {
         else if (!isNaN(Number(val)) && val !== "") val = Number(val);
         argsObj[key] = val;
     }
-    if (found) return argsObj;
+    if (found) return unwrapObject(argsObj);
     return trimmed;
 }
 
@@ -316,6 +355,17 @@ function normalizeToolCalls(tool_calls, parseArgs = parseToolCallArgs) {
             }
         }
 
+        // Unwrap nested wrappers e.g. {"arguments": {"command": "..."}} or {"parameters": {...}}
+        if (argsObj.arguments && typeof argsObj.arguments === "object" && argsObj.arguments !== null) {
+            argsObj = { ...argsObj.arguments, ...argsObj };
+        }
+        if (argsObj.parameters && typeof argsObj.parameters === "object" && argsObj.parameters !== null) {
+            argsObj = { ...argsObj.parameters, ...argsObj };
+        }
+        if (argsObj.input && typeof argsObj.input === "object" && argsObj.input !== null) {
+            argsObj = { ...argsObj.input, ...argsObj };
+        }
+
         // Check for XML fragment leaks in function name, e.g.:
         // "read_task_command</arg_key><arg_value>cd "$SCRATCH/apk" && unzip -l ...</arg_value>"
         // or "<arg_value>...</arg_value>"
@@ -337,7 +387,15 @@ function normalizeToolCalls(tool_calls, parseArgs = parseToolCallArgs) {
             nameLower === "run_command" || nameLower === "execute_command" || nameLower === "terminal" ||
             nameLower === "bash" || nameLower === "shell" || nameLower === "sh" || nameLower === "cmd") {
             name = "run_task";
-            if (argsObj.cmd && !argsObj.command) argsObj.command = argsObj.cmd;
+            if (!argsObj.command && argsObj.cmd) argsObj.command = argsObj.cmd;
+            if (!argsObj.command && argsObj.CommandLine) argsObj.command = argsObj.CommandLine;
+            if (!argsObj.command && argsObj.code) argsObj.command = argsObj.code;
+            if (!argsObj.command && argsObj.script) argsObj.command = argsObj.script;
+        } else if (nameLower === "run_task") {
+            if (!argsObj.command && argsObj.cmd) argsObj.command = argsObj.cmd;
+            if (!argsObj.command && argsObj.CommandLine) argsObj.command = argsObj.CommandLine;
+            if (!argsObj.command && argsObj.code) argsObj.command = argsObj.code;
+            if (!argsObj.command && argsObj.script) argsObj.command = argsObj.script;
         } else if (nameLower === "view_file" || nameLower === "cat" || nameLower === "open_file" || nameLower === "get_file") {
             name = "read_file";
             if (argsObj.file && !argsObj.path) argsObj.path = argsObj.file;

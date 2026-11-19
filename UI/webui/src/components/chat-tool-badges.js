@@ -447,8 +447,8 @@ export function addToolBadge(element, toolName, args) {
     } = config;
 
     const isClassics = (typeof document !== "undefined") && (
-        (typeof document.documentElement?.getAttribute === "function" && document.documentElement.getAttribute("data-ui-style") === "classics") ||
-        (document.body?.classList?.contains && document.body.classList.contains("ui-style-classics"))
+        (typeof document.documentElement?.getAttribute === "function" && ["classics", "silica"].includes(document.documentElement.getAttribute("data-ui-style"))) ||
+        (document.body?.classList?.contains && (document.body.classList.contains("ui-style-classics") || document.body.classList.contains("ui-style-silica")))
     );
     const codeIconHtml = (isRunTaskWithTitle && !isClassics)
         ? `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-code preview-icon" aria-hidden="true" style="display:inline-block; vertical-align:-2px; margin: 0 4px; opacity:0.8;"><path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/></svg>` 
@@ -1043,8 +1043,8 @@ export function syncToolBadgeArgs(badgeEl, toolName, args) {
 
     let previewIcon = badgeEl.querySelector(".preview-icon");
     const isClassics = (typeof document !== "undefined") && (
-        (typeof document.documentElement?.getAttribute === "function" && document.documentElement.getAttribute("data-ui-style") === "classics") ||
-        (document.body?.classList?.contains && document.body.classList.contains("ui-style-classics"))
+        (typeof document.documentElement?.getAttribute === "function" && ["classics", "silica"].includes(document.documentElement.getAttribute("data-ui-style"))) ||
+        (document.body?.classList?.contains && (document.body.classList.contains("ui-style-classics") || document.body.classList.contains("ui-style-silica")))
     );
     if (config.isRunTaskWithTitle && !isClassics) {
         if (!previewIcon && labelEl && typeof document !== "undefined" && typeof document.createElement === "function") {
