@@ -218,13 +218,25 @@ async function runTests() {
     const toolsModule = await import("../UI/webui/src/tools/index.js");
     const { getActiveToolSchemas } = toolsModule;
     const activeSchemas = getActiveToolSchemas();
-    assert(activeSchemas.some(s => s.function?.name === "mcp_test_mcp_test_ping"), "getActiveToolSchemas must expose mcp_test_mcp_test_ping");
+    assert(activeSchemas.some(s => s.function?.name === "list_mcp"), "getActiveToolSchemas must expose list_mcp in on-demand mode");
+    assert(activeSchemas.some(s => s.function?.name === "call_mcp"), "getActiveToolSchemas must expose call_mcp in on-demand mode");
 
     const systemModule = await import("../UI/webui/src/services/system.js");
     const { buildFullSystemPrompt } = systemModule;
     const fullPrompt = buildFullSystemPrompt();
     assert(fullPrompt.includes("[EXTERNAL MODEL CONTEXT PROTOCOL (MCP) TOOLS]"), "System prompt must contain external MCP tools section");
-    assert(fullPrompt.includes("mcp_test_mcp_test_ping"), "System prompt must list mcp_test_mcp_test_ping");
+    assert(fullPrompt.includes("list_mcp"), "System prompt must document list_mcp in on-demand mode");
+
+    // Also verify legacy ExposeAllMcpTools mode when explicitly enabled
+    const { state } = await import("../UI/webui/src/state/index.js");
+    if (!state.config) state.config = {};
+    if (!state.config.Tools) state.config.Tools = {};
+    state.config.Tools.ExposeAllMcpTools = true;
+    const exposedSchemas = getActiveToolSchemas();
+    assert(exposedSchemas.some(s => s.function?.name === "mcp_test_mcp_test_ping"), "getActiveToolSchemas must expose individual mcp tools when ExposeAllMcpTools is true");
+    const exposedPrompt = buildFullSystemPrompt();
+    assert(exposedPrompt.includes("mcp_test_mcp_test_ping"), "System prompt must list mcp_test_mcp_test_ping when ExposeAllMcpTools is true");
+    state.config.Tools.ExposeAllMcpTools = false;
 
     // Restore fetch and window
     globalThis.fetch = prevFetch;

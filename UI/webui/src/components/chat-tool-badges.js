@@ -7,7 +7,7 @@ import { state } from "../state.js";
 import { parseMarkdown, extractThoughtAndContent, bindInteractiveCodeBlocks, renderMermaidInElement, renderMath } from "./renderer.js";
 import { saveCurrentChatState } from "../services/storage.js";
 import { requestScrollToBottom } from "./chat-ui.js";
-import { getTool } from "../tools/registry.js";
+import { getTool, normalizeToolName } from "../tools/registry.js";
 import { openTerminal } from "./terminal-drawer.js";
 import { setBadgeDiffStats } from "../tools/badge-sync.js";
 import { renderCodeViewerCardHtml, renderCodeViewerRowsHtml, bindDiffViewerCards } from "./diff-viewer.js";
@@ -89,7 +89,8 @@ export function deriveCommandTag(rawCmd) {
  * Resolves tool configuration, icon, label, and detail strings for a given tool execution.
  * Pure function to enable characterization testing and decoupled UI rendering.
  */
-export function getToolBadgeConfig(toolName, args = {}) {
+export function getToolBadgeConfig(rawToolName, args = {}) {
+    const toolName = normalizeToolName ? normalizeToolName(rawToolName) : rawToolName;
     let icon = "terminal";
     let label = "Executed";
     let runningLabel = "Executing";
@@ -322,7 +323,7 @@ export function getToolBadgeConfig(toolName, args = {}) {
     }
 
     const isTimer = toolName === "sleep" || toolName === "idle" || toolName === "schedule";
-    const isCommand = toolName === "run_task" || toolName === "run_command" || Boolean(args && (args.command || args.CommandLine || args.cmd));
+    const isCommand = (toolName === "run_task" || toolName === "run_command" || toolName === "terminal" || toolName === "bash" || toolName === "shell") && Boolean(args && (args.command || args.CommandLine || args.cmd || args.script || args.code));
     const hasRing = isTimer || isCommand;
 
     const detailLines = String(detail || "").split("\n");
@@ -445,7 +446,11 @@ export function addToolBadge(element, toolName, args) {
         cmdLines
     } = config;
 
-    const codeIconHtml = isRunTaskWithTitle 
+    const isClassics = (typeof document !== "undefined") && (
+        (typeof document.documentElement?.getAttribute === "function" && document.documentElement.getAttribute("data-ui-style") === "classics") ||
+        (document.body?.classList?.contains && document.body.classList.contains("ui-style-classics"))
+    );
+    const codeIconHtml = (isRunTaskWithTitle && !isClassics)
         ? `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-code preview-icon" aria-hidden="true" style="display:inline-block; vertical-align:-2px; margin: 0 4px; opacity:0.8;"><path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/></svg>` 
         : ``;
 
@@ -1037,7 +1042,11 @@ export function syncToolBadgeArgs(badgeEl, toolName, args) {
     }
 
     let previewIcon = badgeEl.querySelector(".preview-icon");
-    if (config.isRunTaskWithTitle) {
+    const isClassics = (typeof document !== "undefined") && (
+        (typeof document.documentElement?.getAttribute === "function" && document.documentElement.getAttribute("data-ui-style") === "classics") ||
+        (document.body?.classList?.contains && document.body.classList.contains("ui-style-classics"))
+    );
+    if (config.isRunTaskWithTitle && !isClassics) {
         if (!previewIcon && labelEl && typeof document !== "undefined" && typeof document.createElement === "function") {
             const span = document.createElement("span");
             span.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-code preview-icon" aria-hidden="true" style="display:inline-block; vertical-align:-2px; margin: 0 4px; opacity:0.8;"><path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/></svg>`;
@@ -1051,6 +1060,25 @@ export function syncToolBadgeArgs(badgeEl, toolName, args) {
         queryEl.textContent = config.compactDetail;
         queryEl.dataset.full = config.detail;
         queryEl.dataset.compact = config.compactDetail;
+    }
+
+    if (badgeEl._collapseDiv) {
+        const cmdStr = args.command || args.CommandLine || args.cmd || args.script || args.code;
+        if (cmdStr) {
+            const cmdText = badgeEl._collapseDiv.querySelector(".command-cmd-text");
+            const cmdBox = badgeEl._collapseDiv.querySelector(".command-output-cmd");
+            const cmdLines = String(cmdStr).split("\n");
+            const isMulti = cmdLines.length > 3;
+            const compact = isMulti ? cmdLines.slice(0, 3).join("\n") + "\n…" : cmdStr;
+            if (cmdText) {
+                cmdText.textContent = compact;
+            }
+            if (cmdBox) {
+                cmdBox.dataset.full = cmdStr;
+                cmdBox.dataset.compact = compact;
+            }
+            badgeEl._displayCmd = cmdStr;
+        }
     }
     if (config.diffStatsHtml && queryEl) {
         setBadgeDiffStats(badgeEl, queryEl, config.diffStatsHtml);

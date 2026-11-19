@@ -471,7 +471,44 @@ export async function callChatModel(messages, { model, provider: explicitProvide
 
         const finalToolCalls = Object.keys(toolCallsMap)
             .sort((a, b) => Number(a) - Number(b))
-            .map(k => toolCallsMap[k])
+            .map(k => {
+                const tc = toolCallsMap[k];
+                if (!tc || !tc.function) return tc;
+                let name = String(tc.function.name || "").replace(/<[^>]+>/g, "").trim();
+                // Clean repeated tokens e.g. "run_taskrun_task" -> "run_task"
+                if (/^([a-zA-Z0-9_]+?)\1+$/.test(name)) {
+                    const unrepeated = name.replace(/^([a-zA-Z0-9_]+?)\1+$/, "$1");
+                    if (unrepeated) name = unrepeated;
+                }
+                const lower = name.toLowerCase();
+                if (lower === "execute" || lower === "exec" || lower === "run_command" || lower === "execute_command" ||
+                    lower === "terminal" || lower === "bash" || lower === "shell" || lower === "sh" || lower === "cmd" ||
+                    lower === "read_task_command" || lower === "task_command") {
+                    name = "run_task";
+                } else if (lower === "view_file" || lower === "cat" || lower === "open_file" || lower === "get_file") {
+                    name = "read_file";
+                } else if (lower === "write_to_file" || lower === "create_file" || lower === "save_file") {
+                    name = "write_file";
+                } else if (lower === "edit_file" || lower === "replace_in_file" || lower === "str_replace" || lower === "search_and_replace") {
+                    name = "replace_file_content";
+                } else if (lower === "find_in_files" || lower === "grep" || lower === "search_files") {
+                    name = "grep_search";
+                } else if (lower === "glob" || lower === "ls" || lower === "dir") {
+                    name = "list_dir";
+                } else if (lower === "fetch_web_content" || lower === "web_fetch" || lower === "fetch_url" || lower === "curl" || lower === "scrape" || lower === "google_search" || lower === "search") {
+                    name = "web_search";
+                } else if (lower === "manage_task" || lower === "task_manager" || lower === "task_send_input" || lower === "task_kill" || lower === "task_stdout") {
+                    name = "manage_tasks";
+                } else if (lower === "wait") {
+                    name = "idle";
+                } else if (lower === "list_mcp_tools" || lower === "mcp_list" || lower === "mcp_tools") {
+                    name = "list_mcp";
+                } else if (lower === "call_mcp_tool" || lower === "mcp_call" || lower === "execute_mcp") {
+                    name = "call_mcp";
+                }
+                tc.function.name = name;
+                return tc;
+            })
             .filter(tc => Boolean(tc.function?.name));
 
         const finalContent = accumulatedReasoning

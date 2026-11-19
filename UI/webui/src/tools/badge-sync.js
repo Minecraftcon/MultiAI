@@ -120,7 +120,7 @@ export function onToolStart(name, args, badgeEl) {
         if (cmdStr) {
             const cmdText = badgeEl._collapseDiv.querySelector(".command-cmd-text");
             const cmdBox = badgeEl._collapseDiv.querySelector(".command-output-cmd");
-            if (cmdText && (cmdText.textContent === "Task execution" || cmdText.textContent === "Command execution" || !cmdText.textContent.trim())) {
+            if (cmdText && cmdStr) {
                 const cmdLines = String(cmdStr).split("\n");
                 const isMulti = cmdLines.length > 3;
                 const compact = isMulti ? cmdLines.slice(0, 3).join("\n") + "\n…" : cmdStr;

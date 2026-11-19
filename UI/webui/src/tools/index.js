@@ -2,7 +2,7 @@
    TOOL MODULE ROOT & DISPATCHER
    ========================================================= */
 import { state } from "../state/index.js";
-import { registerTool, getTool, getAllToolSchemas, hasTool } from "./registry.js";
+import { registerTool, getTool, getAllToolSchemas, hasTool, normalizeToolName, normalizeToolArguments } from "./registry.js";
 import { onToolStart, onToolComplete, onToolError } from "./badge-sync.js";
 import { terminalTools } from "./terminal/index.js";
 import { webTools } from "./web/index.js";
@@ -84,54 +84,56 @@ export async function executeTool(name, args, badgeEl, genState) {
         throw new Error("Generation stopped by user");
     }
 
+    const canonicalName = normalizeToolName(name);
+    const resolvedArgs = normalizeToolArguments(canonicalName, args);
     const toolsConfig = state.config?.Tools || {};
 
     // Check if terminal execution is disabled in config.ini
-    const isTerminalTool = name === "run_task" || name === "manage_tasks" || name === "schedule";
+    const isTerminalTool = canonicalName === "run_task" || canonicalName === "manage_tasks" || canonicalName === "schedule";
     if (toolsConfig.EnableTerminal === false && isTerminalTool) {
         throw new Error("Terminal execution is disabled in config.ini");
     }
 
     // Check if web search is disabled in config.ini
-    const isWebTool = name === "web_search";
+    const isWebTool = canonicalName === "web_search";
     if (toolsConfig.EnableWebSearch === false && isWebTool) {
         throw new Error("Web search is disabled in config.ini");
     }
 
     // Check if image generation is disabled in config.ini
-    const isImageTool = name === "generate_image";
+    const isImageTool = canonicalName === "generate_image";
     if (toolsConfig.EnableImageGeneration === false && isImageTool) {
         throw new Error("Image generation is disabled in config.ini");
     }
 
     // Check if filesystem tools are disabled in config.ini
-    const isFilesystemTool = name === "list_dir" || name === "read_file" || name === "write_file" || name === "replace_file_content" || name === "multi_replace_file_content" || name === "grep_search";
+    const isFilesystemTool = canonicalName === "list_dir" || canonicalName === "read_file" || canonicalName === "write_file" || canonicalName === "replace_file_content" || canonicalName === "multi_replace_file_content" || canonicalName === "grep_search";
     if (toolsConfig.EnableFilesystem === false && isFilesystemTool) {
         throw new Error("Filesystem tools are disabled in config.ini");
     }
 
-    const tool = getTool(name);
+    const tool = getTool(canonicalName);
     if (!tool) {
         throw new Error("Unknown tool: " + name);
     }
 
     // Check if MCP tools are disabled in config.ini
-    const isMcpTool = name.startsWith("mcp_") || tool.isMcp;
+    const isMcpTool = canonicalName.startsWith("mcp_") || tool.isMcp;
     if (toolsConfig.EnableMcp === false && isMcpTool) {
         throw new Error("MCP tools are disabled in config.ini");
     }
 
-    onToolStart(name, args, badgeEl);
+    onToolStart(canonicalName, resolvedArgs, badgeEl);
 
     let data;
     try {
-        data = await tool.handler(args, { badgeEl, genState });
+        data = await tool.handler(resolvedArgs, { badgeEl, genState });
     } catch (err) {
-        onToolError(name, badgeEl, err);
+        onToolError(canonicalName, badgeEl, err);
         throw err;
     }
 
-    onToolComplete(name, args, badgeEl, data);
+    onToolComplete(canonicalName, resolvedArgs, badgeEl, data);
     return data;
 }
 
@@ -141,6 +143,8 @@ export {
     getAllToolSchemas,
     getActiveToolSchemas,
     hasTool,
+    normalizeToolName,
+    normalizeToolArguments,
     onToolStart,
     onToolComplete,
     onToolError,
