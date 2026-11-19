@@ -121,6 +121,11 @@
     border-radius: 6px !important;
 }
 
+[data-ui-style="classics"] .chat-scroll-btn.has-unread::after,
+.ui-style-classics .chat-scroll-btn.has-unread::after {
+    display: none !important;
+}
+
 /* ── 3. Rectangular Staged Attachment Items ── */
 [data-ui-style="classics"] .staged-img-thumb,
 .ui-style-classics .staged-img-thumb {

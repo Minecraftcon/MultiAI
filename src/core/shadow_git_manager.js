@@ -390,6 +390,7 @@ function getUnacceptedChanges(workspaceRoot) {
     const files = [];
     let totalAdditions = 0;
     let totalDeletions = 0;
+    let manifestModified = false;
 
     const fileMap = manifest.files || {};
     for (const cleanRel of Object.keys(fileMap)) {
@@ -410,8 +411,15 @@ function getUnacceptedChanges(workspaceRoot) {
             try { baselineContent = fs.readFileSync(baselinePath, "utf8"); } catch (_) {}
         }
 
+        // Ephemeral file: recorded as new, but no longer exists on disk and has no baseline
+        if (!currentExists && !baselineExists) {
+            delete fileMap[cleanRel];
+            manifestModified = true;
+            continue;
+        }
+
         // Newly created file
-        if (fileInfo.isNew || (!baselineExists && !fileInfo.modified && currentExists)) {
+        if (currentExists && (fileInfo.isNew || (!baselineExists && !fileInfo.modified))) {
             const lines = currentContent === "" ? [] : currentContent.split(/\r?\n/);
             const additions = lines.length;
             files.push({
@@ -473,6 +481,11 @@ function getUnacceptedChanges(workspaceRoot) {
             });
             totalAdditions += additions;
         }
+    }
+
+    if (manifestModified) {
+        manifest.files = fileMap;
+        try { saveManifest(workspaceRoot, manifest); } catch (_) {}
     }
 
     return {
