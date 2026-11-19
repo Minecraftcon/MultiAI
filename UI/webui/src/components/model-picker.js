@@ -12,7 +12,6 @@ const expandedGroups = new Set();
 
 // Desktop picker state
 let desktopActiveProvider = "all";
-let desktopCapabilityFilter = "all"; // "all" | "vision" | "free" | "tools"
 let desktopFocusedIndex = -1;
 
 /**
@@ -145,56 +144,23 @@ function getModelData() {
     return { providers, allModels };
 }
 
-function getProviderMonogram(providerId, providerName) {
-    const id = (providerId || "").toLowerCase();
-    if (id === "gemini") return "GE";
-    if (id === "zai") return "ZA";
-    if (id === "groq") return "GQ";
-    if (id === "openrouter") return "OR";
-    if (id === "nim" || id === "nvidia") return "NV";
-    if (id === "cohere") return "CO";
-    if (id === "arliai") return "AR";
-    if (id === "llm7") return "L7";
-    if (id === "logfare") return "LF";
-    if (id === "local") return "LC";
-    if (id === "koboldcpp") return "KC";
-    if (!providerName) return "AI";
-    const words = providerName.split(/\s+/).filter(Boolean);
-    if (words.length >= 2) {
-        return (words[0][0] + words[1][0]).toUpperCase();
-    }
-    return providerName.slice(0, 2).toUpperCase();
-}
-
-function formatContextTokens(tokens) {
-    if (!tokens || typeof tokens !== "number") return "";
-    if (tokens >= 1000000) {
-        const m = (tokens / 1000000).toFixed(tokens % 1000000 === 0 ? 0 : 1);
-        return `${m}M ctx`;
-    }
-    if (tokens >= 1000) {
-        return `${Math.round(tokens / 1000)}k ctx`;
-    }
-    return `${tokens} ctx`;
-}
-
 function getCurrentSelectedModelValue() {
-    if (currentOpenSource === "subagent" && typeof window !== "undefined" && window.rightPanel) {
-        const activeTab = window.rightPanel.tabs.find(t => t.id === window.rightPanel.activeTabId);
-        const subSession = activeTab?.subagentId ? state?.chatSessions?.[activeTab.subagentId] : null;
-        if (subSession?.model) return subSession.model;
-    }
     const modelSelect = document.getElementById("modelSelect");
     return modelSelect?.value || "";
 }
 
-function selectModel(modelValue) {
+function getCurrentSelectedProvider() {
+    const modelSelect = document.getElementById("modelSelect");
+    return modelSelect?.selectedOptions?.[0]?.dataset?.provider || "";
+}
+
+function selectModel(modelValue, providerId = null) {
     const modelSelect = document.getElementById("modelSelect");
 
     // Rolling connect placeholder — show the connect modal instead of selecting
     if (modelValue && modelValue.startsWith("__rolling_connect__")) {
-        const providerId = modelValue.replace("__rolling_connect__", "");
-        if (providerId === "local" || providerId === "koboldcpp") {
+        const pId = modelValue.replace("__rolling_connect__", "");
+        if (pId === "local" || pId === "koboldcpp") {
             closeModelPicker();
             import("./local-connect.js").then(lc => {
                 lc.showLocalConnectModal((data) => {
@@ -205,17 +171,34 @@ function selectModel(modelValue) {
         return;
     }
 
-    if (currentOpenSource === "subagent") {
-        if (typeof window !== "undefined" && window.rightPanel && typeof window.rightPanel.setSubagentModel === "function") {
-            window.rightPanel.setSubagentModel(modelValue);
+    if (modelSelect) {
+        let targetOpt = null;
+        if (providerId) {
+            for (const opt of modelSelect.options) {
+                if (opt.value === modelValue && opt.dataset.provider === providerId) {
+                    targetOpt = opt;
+                    break;
+                }
+            }
         }
-        closeModelPicker();
-        return;
-    }
+        if (!targetOpt && modelValue) {
+            for (const opt of modelSelect.options) {
+                if (opt.value === modelValue) {
+                    targetOpt = opt;
+                    break;
+                }
+            }
+        }
 
-    if (modelSelect && modelSelect.value !== modelValue) {
-        modelSelect.value = modelValue;
-        modelSelect.dispatchEvent(new Event("change", { bubbles: true }));
+        if (targetOpt) {
+            const alreadySelected = targetOpt.selected && modelSelect.selectedOptions?.[0] === targetOpt;
+            if (!alreadySelected) {
+                for (const opt of modelSelect.options) {
+                    opt.selected = (opt === targetOpt);
+                }
+                modelSelect.dispatchEvent(new Event("change", { bubbles: true }));
+            }
+        }
     }
     updateModelPickerDisplay();
     closeModelPicker();
@@ -232,6 +215,7 @@ function renderMobileModelPickerList(filter = "") {
     listEl.innerHTML = "";
     const filterLower = filter.trim().toLowerCase();
     const currentVal = getCurrentSelectedModelValue();
+    const currentProvider = getCurrentSelectedProvider();
 
     const optgroups = modelSelect.querySelectorAll("optgroup");
     let totalRendered = 0;
@@ -293,7 +277,8 @@ function renderMobileModelPickerList(filter = "") {
 
             matchingOptions.forEach(opt => {
                 totalRendered++;
-                const isSelected = opt.value === currentVal;
+                const optProvider = opt.dataset.provider || group.dataset.provider || "";
+                const isSelected = opt.value === currentVal && (!currentProvider || optProvider === currentProvider);
                 const isVision = opt.dataset.vision === "true" || /\[Vision\]/i.test(opt.textContent);
                 const cleanName = opt.textContent.replace(/\s*\[Vision\]/i, "").trim();
 
@@ -301,6 +286,7 @@ function renderMobileModelPickerList(filter = "") {
                 item.type = "button";
                 item.className = `model-item ${isSelected ? "selected" : ""}`;
                 item.dataset.modelValue = opt.value;
+                item.dataset.providerId = optProvider;
                 item.setAttribute("role", "option");
                 item.setAttribute("aria-selected", isSelected ? "true" : "false");
 
@@ -313,7 +299,7 @@ function renderMobileModelPickerList(filter = "") {
                 `;
 
                 item.addEventListener("click", () => {
-                    selectModel(opt.value);
+                    selectModel(opt.value, optProvider);
                 });
 
                 itemsEl.appendChild(item);
@@ -331,7 +317,8 @@ function renderMobileModelPickerList(filter = "") {
 
         matchingOptions.forEach(opt => {
             totalRendered++;
-            const isSelected = opt.value === currentVal;
+            const optProvider = opt.dataset.provider || "";
+            const isSelected = opt.value === currentVal && (!currentProvider || optProvider === currentProvider);
             const isVision = /\[Vision\]/i.test(opt.textContent);
             const cleanName = opt.textContent.replace(/\s*\[Vision\]/i, "").trim();
 
@@ -339,6 +326,7 @@ function renderMobileModelPickerList(filter = "") {
             item.type = "button";
             item.className = `model-item ${isSelected ? "selected" : ""}`;
             item.dataset.modelValue = opt.value;
+            item.dataset.providerId = optProvider;
             item.setAttribute("role", "option");
             item.setAttribute("aria-selected", isSelected ? "true" : "false");
 
@@ -351,7 +339,7 @@ function renderMobileModelPickerList(filter = "") {
             `;
 
             item.addEventListener("click", () => {
-                selectModel(opt.value);
+                selectModel(opt.value, optProvider);
             });
 
             listEl.appendChild(item);
@@ -386,17 +374,10 @@ function ensureDesktopContainer(dropdown) {
                         <circle cx="11" cy="11" r="8"></circle>
                         <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
                     </svg>
-                    <input type="text" id="desktopModelSearchInput" class="desktop-search-input" placeholder="Search models by name, provider, or capability (e.g. vision, free)..." autocomplete="off" spellcheck="false" aria-label="Search models">
+                    <input type="text" id="desktopModelSearchInput" class="desktop-search-input" placeholder="Search models..." autocomplete="off" spellcheck="false" aria-label="Search models">
                     <button type="button" class="desktop-search-clear" id="desktopSearchClear" style="display: none;" title="Clear search" aria-label="Clear search">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                     </button>
-                    <div class="desktop-kbd-hint"><kbd>Esc</kbd> to close</div>
-                </div>
-                <div class="desktop-filter-chips">
-                    <button type="button" class="desktop-filter-chip active" data-filter="all">All Models</button>
-                    <button type="button" class="desktop-filter-chip" data-filter="vision">Vision</button>
-                    <button type="button" class="desktop-filter-chip" data-filter="free">Free</button>
-                    <button type="button" class="desktop-filter-chip" data-filter="tools">Tools</button>
                 </div>
             </div>
             <div class="desktop-picker-split">
@@ -407,22 +388,9 @@ function ensureDesktopContainer(dropdown) {
                 <div class="desktop-models-pane">
                     <div class="desktop-models-header">
                         <div class="desktop-models-header-title" id="desktopModelsHeaderTitle">All Models</div>
-                        <div class="desktop-models-header-meta" id="desktopModelsHeaderMeta">0 models available</div>
+                        <div class="desktop-models-header-meta" id="desktopModelsHeaderMeta"></div>
                     </div>
                     <div class="desktop-models-list" id="desktopModelsList" role="listbox"></div>
-                </div>
-            </div>
-            <div class="desktop-picker-footer">
-                <div class="desktop-active-summary">
-                    <span class="desktop-status-dot"></span>
-                    <span class="desktop-active-label">Active:</span>
-                    <span class="desktop-active-model-name" id="desktopActiveModelName">-</span>
-                    <span class="desktop-active-provider-name" id="desktopActiveProviderName">-</span>
-                </div>
-                <div class="desktop-footer-shortcuts">
-                    <span class="desktop-shortcut-item"><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
-                    <span class="desktop-shortcut-item"><kbd>↵</kbd> select</span>
-                    <span class="desktop-shortcut-item"><kbd>Esc</kbd> dismiss</span>
                 </div>
             </div>
         `;
@@ -454,17 +422,6 @@ function ensureDesktopContainer(dropdown) {
                 renderDesktopModelPicker("");
             });
         }
-
-        container.querySelectorAll(".desktop-filter-chip").forEach(chip => {
-            chip.addEventListener("click", (e) => {
-                e.stopPropagation();
-                container.querySelectorAll(".desktop-filter-chip").forEach(c => c.classList.remove("active"));
-                chip.classList.add("active");
-                desktopCapabilityFilter = chip.dataset.filter || "all";
-                desktopFocusedIndex = 0;
-                renderDesktopModelPicker(currentSearch);
-            });
-        });
     }
     return container;
 }
@@ -502,21 +459,10 @@ function updateCardFocus(cards) {
     });
 }
 
-function passesDesktopCapability(m) {
-    if (desktopCapabilityFilter === "vision") return m.isVision;
-    if (desktopCapabilityFilter === "free") return m.isFree;
-    if (desktopCapabilityFilter === "tools") return m.isTools;
-    return true;
-}
-
 function passesDesktopSearch(m, filterLower) {
     if (!filterLower) return true;
     const text = `${m.name} ${m.id} ${m.providerName}`.toLowerCase();
-    if (text.includes(filterLower)) return true;
-    if (filterLower === "vision" && m.isVision) return true;
-    if (filterLower === "free" && m.isFree) return true;
-    if (filterLower === "tools" && m.isTools) return true;
-    return false;
+    return text.includes(filterLower);
 }
 
 function selectDesktopProvider(providerId, container) {
@@ -530,13 +476,13 @@ function selectDesktopProvider(providerId, container) {
         });
     }
 
-    const modelSelect = document.getElementById("modelSelect");
-    const currentVal = modelSelect ? modelSelect.value : "";
+    const currentVal = getCurrentSelectedModelValue();
+    const currentProvider = getCurrentSelectedProvider();
     const { providers, allModels } = getModelData();
-    renderDesktopModelsPane(container, allModels, providers, currentSearch, currentVal);
+    renderDesktopModelsPane(container, allModels, providers, currentSearch, currentVal, currentProvider);
 }
 
-function renderDesktopModelsPane(container, allModels, providers, filter, currentVal) {
+function renderDesktopModelsPane(container, allModels, providers, filter, currentVal, currentProvider) {
     const modelsListEl = container.querySelector("#desktopModelsList");
     const headerTitleEl = container.querySelector("#desktopModelsHeaderTitle");
     const headerMetaEl = container.querySelector("#desktopModelsHeaderMeta");
@@ -548,7 +494,7 @@ function renderDesktopModelsPane(container, allModels, providers, filter, curren
         if (desktopActiveProvider !== "all" && m.providerId !== desktopActiveProvider) {
             return false;
         }
-        return passesDesktopCapability(m) && passesDesktopSearch(m, filterLower);
+        return passesDesktopSearch(m, filterLower);
     });
 
     if (headerTitleEl) {
@@ -560,7 +506,7 @@ function renderDesktopModelsPane(container, allModels, providers, filter, curren
         }
     }
     if (headerMetaEl) {
-        headerMetaEl.textContent = `${displayedModels.length} models available`;
+        headerMetaEl.textContent = `${displayedModels.length} models`;
     }
 
     modelsListEl.innerHTML = "";
@@ -568,27 +514,21 @@ function renderDesktopModelsPane(container, allModels, providers, filter, curren
     if (displayedModels.length === 0) {
         modelsListEl.innerHTML = `
             <div class="desktop-models-empty">
-                No models found matching your criteria.
+                No models found.
             </div>
         `;
         return;
     }
 
     displayedModels.forEach((m, idx) => {
-        const isSelected = m.id === currentVal;
+        const isSelected = m.id === currentVal && (!currentProvider || m.providerId === currentProvider);
         const card = document.createElement("button");
         card.type = "button";
         card.className = `desktop-model-card ${isSelected ? "selected" : ""} ${idx === desktopFocusedIndex ? "keyboard-focused" : ""}`;
         card.dataset.modelId = m.id;
+        card.dataset.providerId = m.providerId;
         card.setAttribute("role", "option");
         card.setAttribute("aria-selected", isSelected ? "true" : "false");
-
-        const badgesHtml = `
-            ${m.isVision ? '<span class="desktop-badge-vision">Vision</span>' : ''}
-            ${m.isFree ? '<span class="desktop-badge-free">Free</span>' : ''}
-            ${m.isTools ? '<span class="desktop-badge-tools">Tools</span>' : ''}
-            ${m.isRolling ? '<span class="desktop-badge-rolling">Connect</span>' : ''}
-        `;
 
         const checkIconHtml = isSelected ? `
             <svg class="desktop-model-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
@@ -596,27 +536,22 @@ function renderDesktopModelsPane(container, allModels, providers, filter, curren
             </svg>
         ` : '';
 
-        const ctxHtml = m.contextTokens ? `<span class="desktop-model-ctx">${formatContextTokens(m.contextTokens)}</span>` : '';
         const providerTagHtml = (desktopActiveProvider === "all") ? `<span class="desktop-model-provider-tag">${m.providerName}</span>` : '';
 
         card.innerHTML = `
             <div class="desktop-model-top">
                 <span class="desktop-model-name" title="${m.name}">${m.name}</span>
-                <div class="desktop-model-badges">
-                    ${badgesHtml}
-                    ${checkIconHtml}
-                </div>
+                ${checkIconHtml}
             </div>
             <div class="desktop-model-bottom">
                 <span class="desktop-model-id" title="${m.id}">${m.id}</span>
                 ${providerTagHtml}
-                ${ctxHtml}
             </div>
         `;
 
         card.addEventListener("click", (e) => {
             e.stopPropagation();
-            selectModel(m.id);
+            selectModel(m.id, m.providerId);
         });
 
         modelsListEl.appendChild(card);
@@ -630,33 +565,25 @@ function renderDesktopModelPicker(filter = "") {
 
     const container = ensureDesktopContainer(dropdown);
     const providersListEl = container.querySelector("#desktopProvidersList");
-    const activeModelNameEl = container.querySelector("#desktopActiveModelName");
-    const activeProviderNameEl = container.querySelector("#desktopActiveProviderName");
+    const headerTitleEl = container.querySelector("#desktopModelsHeaderTitle");
+    const headerMetaEl = container.querySelector("#desktopModelsHeaderMeta");
 
     const currentVal = getCurrentSelectedModelValue();
+    const currentProvider = getCurrentSelectedProvider();
     const { providers, allModels } = getModelData();
     const filterLower = filter.trim().toLowerCase();
 
-    // 1. Update Footer Active Model Display
-    const activeModelObj = allModels.find(m => m.id === currentVal);
-    if (activeModelObj) {
-        if (activeModelNameEl) activeModelNameEl.textContent = activeModelObj.name;
-        if (activeProviderNameEl) activeProviderNameEl.textContent = `• ${activeModelObj.providerName}`;
-    } else {
-        if (activeModelNameEl) activeModelNameEl.textContent = currentVal || "None";
-        if (activeProviderNameEl) activeProviderNameEl.textContent = "";
-    }
-
-    // 2. Calculate match count per provider
-    const providerCounts = {};
-    let totalMatchingModels = 0;
-
-    allModels.forEach(m => {
-        if (passesDesktopCapability(m) && passesDesktopSearch(m, filterLower)) {
-            totalMatchingModels++;
-            providerCounts[m.providerId] = (providerCounts[m.providerId] || 0) + 1;
+    if (headerTitleEl) {
+        if (desktopActiveProvider === "all") {
+            headerTitleEl.textContent = "All Models";
+        } else {
+            const currentP = providers.find(p => p.id === desktopActiveProvider);
+            headerTitleEl.textContent = currentP ? currentP.name : "Models";
         }
-    });
+    }
+    if (headerMetaEl) {
+        headerMetaEl.textContent = "";
+    }
 
     // 3. Render Providers List in Left Pane
     providersListEl.innerHTML = "";
@@ -666,11 +593,7 @@ function renderDesktopModelPicker(filter = "") {
     allBtn.type = "button";
     allBtn.dataset.providerId = "all";
     allBtn.className = `desktop-provider-item ${desktopActiveProvider === "all" ? "active" : ""}`;
-    allBtn.innerHTML = `
-        <span class="desktop-provider-monogram">ALL</span>
-        <span class="desktop-provider-name">All Providers</span>
-        <span class="desktop-provider-count">${totalMatchingModels}</span>
-    `;
+    allBtn.textContent = "All Providers";
     allBtn.addEventListener("click", (e) => {
         e.stopPropagation();
         selectDesktopProvider("all", container);
@@ -679,22 +602,22 @@ function renderDesktopModelPicker(filter = "") {
 
     // Each Provider entry
     providers.forEach(p => {
-        const count = providerCounts[p.id] || 0;
         // In search mode, hide providers with 0 matching models
+        let count = 0;
+        if (!filterLower) {
+            count = p.models.length;
+        } else {
+            count = p.models.filter(m => passesDesktopSearch(m, filterLower)).length;
+        }
         if (filterLower && count === 0 && desktopActiveProvider !== p.id) {
             return;
         }
 
-        const monogram = getProviderMonogram(p.id, p.name);
         const pBtn = document.createElement("button");
         pBtn.type = "button";
         pBtn.dataset.providerId = p.id;
         pBtn.className = `desktop-provider-item ${desktopActiveProvider === p.id ? "active" : ""}`;
-        pBtn.innerHTML = `
-            <span class="desktop-provider-monogram">${monogram}</span>
-            <span class="desktop-provider-name" title="${p.name}">${p.name}</span>
-            <span class="desktop-provider-count">${count}</span>
-        `;
+        pBtn.textContent = p.name;
         pBtn.addEventListener("click", (e) => {
             e.stopPropagation();
             selectDesktopProvider(p.id, container);
@@ -703,7 +626,7 @@ function renderDesktopModelPicker(filter = "") {
     });
 
     // 4. Render Right Models Pane
-    renderDesktopModelsPane(container, allModels, providers, filter, currentVal);
+    renderDesktopModelsPane(container, allModels, providers, filter, currentVal, currentProvider);
 }
 
 /**
@@ -832,7 +755,6 @@ export function openModelPicker(source = "header") {
 
     currentSearch = "";
     expandedGroups.clear();
-    desktopCapabilityFilter = "all";
     desktopFocusedIndex = -1;
 
     if (isMobile) {

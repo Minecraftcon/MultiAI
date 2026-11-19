@@ -175,7 +175,7 @@
         </div>
     </div>
 
-    <!-- Chats, Projects & Subagents Section -->
+    <!-- Chats & Projects Section -->
     <div class="panel-body">
         <div id="panelSectionHeader" class="panel-section-header">
             <span id="panelSectionLabel" class="panel-section-label">Chats</span>
@@ -326,30 +326,12 @@
                         <span>Browser</span>
                     </div>
                 </div>
-                <div class="launcher-menu-item" id="launcherItemSubagents" role="button" tabindex="0">
-                    <div class="launcher-item-left">
-                        <i data-lucide="bot"></i>
-                        <span>Subagents</span>
-                    </div>
-                    <span id="launcherSubagentsBadge" class="launcher-item-badge" style="display: none;">0</span>
-                </div>
                 <div class="launcher-menu-item" id="launcherItemExtensions" role="button" tabindex="0">
                     <div class="launcher-item-left">
                         <i data-lucide="puzzle"></i>
                         <span>Extensions</span>
                     </div>
                     <i data-lucide="chevron-right" class="launcher-item-chevron"></i>
-                </div>
-            </div>
-
-            <!-- Subagents Section -->
-            <div class="launcher-section launcher-subagents-section">
-                <div class="launcher-section-header">
-                    <span class="launcher-section-title">Subagents</span>
-                    <span id="launcherSubagentsCountBadge" class="launcher-count-pill" style="display: none;">0</span>
-                </div>
-                <div id="launcherSubagentsList" class="launcher-subagents-list">
-                    <div class="launcher-subagents-empty">No active subagents.</div>
                 </div>
             </div>
 
@@ -384,62 +366,6 @@
                     <button type="button" id="browserOpenExternalBtn" class="browser-nav-btn" title="Open in new window"><i data-lucide="external-link"></i></button>
                 </div>
                 <iframe id="rightPanelBrowserFrame" class="browser-iframe" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-downloads"></iframe>
-            </div>
-            <!-- Subagent Direct Chat Mount -->
-            <div id="rightPanelSubagentMount" class="right-panel-subagent-mount" style="display: none;">
-                <div id="rpSubagentMessagesList" class="subagent-panel-messages-list"></div>
-                <!-- Subagent Chatbox Dock (Same as Main Agent Chatbox) -->
-                <div class="subagent-composer-container">
-                    <input type="file" id="rpSubagentFileInput" style="display: none;" multiple accept="image/*,.txt,.md,.json,.js,.py,.html,.css,.pdf" />
-                    <div class="composer-dock composer composer-compact rp-subagent-chatbox" id="rpSubagentChatboxDock">
-                        <!-- Top Resize Handle -->
-                        <div class="composer-top-resizer" id="rpSubagentTopResizer" title="Drag to resize chatbox"></div>
-
-                        <!-- Top: Staged Attachments Strip -->
-                        <div id="rpSubagentStagedAttachments" class="staged-attachments-strip" style="display: none;"></div>
-
-                        <!-- Main textarea column -->
-                        <div class="composer-main-col">
-                            <div class="composer-input-wrapper">
-                                <textarea 
-                                    id="rpSubagentInput" 
-                                    class="composer-textarea" 
-                                    placeholder="Message subagent…" 
-                                    rows="1" 
-                                    aria-label="Message subagent"
-                                    enterkeyhint="enter"
-                                    autocomplete="off"
-                                    autocorrect="on"
-                                    spellcheck="true"></textarea>
-                            </div>
-                        </div>
-
-                        <!-- Bottom: Action Toolbar with Plus, Model Picker & Send -->
-                        <div class="composer-toolbar">
-                            <div class="composer-toolbar-left">
-                                <!-- Plus Attachment Button -->
-                                <button id="rpSubagentAttachBtn" type="button" class="icon-btn attach-btn" aria-label="Add attachments" title="Add attachments">
-                                    <i data-lucide="plus"></i>
-                                </button>
-
-                                <!-- Model Picker Button inside Chatbox -->
-                                <button id="rpSubagentModelPickerBtn" class="chatbox-model-btn" type="button" aria-haspopup="dialog" aria-expanded="false" title="Select AI Model">
-                                    <span id="rpSubagentModelPickerName" class="model-picker-name">Select Model</span>
-                                    <i data-lucide="chevron-down" class="model-picker-chevron"></i>
-                                </button>
-                            </div>
-
-                            <div class="composer-toolbar-right">
-                                <button type="button" class="composer-clear-btn" id="rpSubagentClearBtn" title="Clear text" aria-label="Clear text" style="display: none;">
-                                    <i data-lucide="x"></i>
-                                </button>
-                                <button id="rpSubagentSendBtn" type="button" class="composer-send-btn" aria-label="Send message" title="Send message">
-                                    <i data-lucide="arrow-up"></i>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
             </div>
         </div>
     </div>

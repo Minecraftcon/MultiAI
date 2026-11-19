@@ -126,13 +126,40 @@ export async function loadAvailableModels() {
 
         if (state.currentChatId && state.chatSessions[state.currentChatId]?.model) {
             const curModel = state.chatSessions[state.currentChatId].model;
-            if (modelSelect.querySelector(`option[value="${CSS.escape(curModel)}"]`)) {
-                modelSelect.value = curModel;
+            const curProv = state.chatSessions[state.currentChatId].provider;
+            let matched = false;
+            if (curProv) {
+                for (const opt of modelSelect.options) {
+                    if (opt.value === curModel && opt.dataset.provider === curProv) {
+                        opt.selected = true;
+                        matched = true;
+                        break;
+                    }
+                }
             }
-        } else if (previousVal && modelSelect.querySelector(`option[value="${CSS.escape(previousVal)}"]`)) {
-            modelSelect.value = previousVal;
-        } else if (defaultModelId && modelSelect.querySelector(`option[value="${CSS.escape(defaultModelId)}"]`)) {
-            modelSelect.value = defaultModelId;
+            if (!matched) {
+                for (const opt of modelSelect.options) {
+                    if (opt.value === curModel) {
+                        opt.selected = true;
+                        matched = true;
+                        break;
+                    }
+                }
+            }
+        } else if (previousVal) {
+            for (const opt of modelSelect.options) {
+                if (opt.value === previousVal) {
+                    opt.selected = true;
+                    break;
+                }
+            }
+        } else if (defaultModelId) {
+            for (const opt of modelSelect.options) {
+                if (opt.value === defaultModelId) {
+                    opt.selected = true;
+                    break;
+                }
+            }
         }
 
         if (state.currentChatId && state.chatSessions[state.currentChatId]) {

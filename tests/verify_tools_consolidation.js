@@ -23,10 +23,9 @@ const ROOT_DIR = path.resolve(__dirname, "..");
  * Loads ES module or parses static definition if needed.
  */
 async function loadModules() {
-    const subagentModule = await import(path.join(ROOT_DIR, "UI/webui/src/agent/subagent.js"));
     const designModule = await import(path.join(ROOT_DIR, "UI/webui/src/tools/design/index.js"));
     const domModule = await import(path.join(ROOT_DIR, "UI/webui/src/utils/dom.js"));
-    return { subagentModule, designModule, domModule };
+    return { designModule, domModule };
 }
 
 function loadServerBuildTools() {
@@ -68,7 +67,7 @@ async function runToolsConsolidationChecks(options = {}) {
         console.log("================================================================================");
     }
 
-    const { subagentModule, designModule, domModule } = await loadModules();
+    const { designModule, domModule } = await loadModules();
     const serverBuildTools = loadServerBuildTools();
 
     // -------------------------------------------------------------------------
@@ -139,23 +138,20 @@ async function runToolsConsolidationChecks(options = {}) {
     }
 
     // -------------------------------------------------------------------------
-    // 2. toggle_panel Removal from Designer Allowed Tools
+    // 2. First-class show_html_preview tool availability
     // -------------------------------------------------------------------------
-    if (verbose) console.log("\n2. Verifying toggle_panel Removal from Designer Allowed Tools...");
-
-    const designerAllowed = subagentModule.SUBAGENT_ALLOWED_TOOLS?.["designer"] || [];
-    const hasToggleInDesigner = designerAllowed.includes("toggle_panel");
+    if (verbose) console.log("\n2. Verifying show_html_preview tool availability...");
 
     record(
-        "toggle_panel is NOT in SUBAGENT_ALLOWED_TOOLS['designer']",
-        !hasToggleInDesigner,
-        "toggle_panel must be removed from designer allowed tools to eliminate redundant panel calls (R1/Feature 1)."
+        "show_html_preview is available without isolation restriction",
+        !designModule.showHtmlPreviewTool?.subagentOnly,
+        "show_html_preview must be available as a direct tool without isolation restriction."
     );
 
     record(
-        "show_html_preview IS in SUBAGENT_ALLOWED_TOOLS['designer']",
-        designerAllowed.includes("show_html_preview"),
-        "show_html_preview must remain available to designer subagent."
+        "show_html_preview is exported in designTools",
+        designModule.designTools.some(t => t.name === "show_html_preview"),
+        "show_html_preview must remain available in designTools."
     );
 
     // -------------------------------------------------------------------------

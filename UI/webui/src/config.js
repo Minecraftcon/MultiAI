@@ -47,13 +47,9 @@ export const CORE_TOOLS_PROMPT = `
 - Track A (Quick Fix): read_file/list_dir → write_todos → surgical edit → verify → done.
 - Track B (Complex Build): investigate → structured plan + open questions → write_todos ($ARTIFACTS/Tasklist-{name}.md) → pause for approval → execute step by step.
 
-[PLANNING & DELEGATION]:
+[PLANNING & USER INPUT]:
 - write_todos(todos: [{id, content, status}]) — status: 'pending'|'in_progress'|'completed'.
 - ask_questions(question: "...", options: [...]) or ask_questions(questions: [{question, options}, ...]) — pauses for user response.
-- define_subagent(name: "...", description: "...", system_prompt: "...", tools: [...]) — register custom reusable subagent specifications.
-- invoke_subagent(task: "...", subagent_type: "designer"|"researcher"|"general-purpose"|"<custom_name>", background: false) — delegate work to built-in or custom subagents; alias: 'task'.
-- manage_subagents(Action: "list"|"kill"|"kill_all", ConversationIds: [...]) — monitor active subagents and terminate subagent lifecycles.
-- send_message(Recipient: "<conversationId>", Message: "...") — inter-agent communication over the background messaging bus.
 
 [STORAGE ROUTING ($SCRATCH / $ARTIFACTS)]:
 - $SCRATCH/<file>: temporary scripts, notes, working outputs, benchmarks.

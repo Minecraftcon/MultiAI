@@ -17,7 +17,7 @@ const OPENCODE_SENTINEL_TOOLS = [
     { type: "function", function: { name: "grep", description: "Searches file contents using regex", parameters: { type: "object", properties: { pattern: { type: "string" } }, required: ["pattern"] } } },
     { type: "function", function: { name: "read", description: "Reads a file from local filesystem", parameters: { type: "object", properties: { filePath: { type: "string" } }, required: ["filePath"] } } },
     { type: "function", function: { name: "skill", description: "Loads a specialized skill", parameters: { type: "object", properties: { name: { type: "string" } }, required: ["name"] } } },
-    { type: "function", function: { name: "task", description: "Launch subagent task", parameters: { type: "object", properties: { prompt: { type: "string" } }, required: ["prompt"] } } },
+    { type: "function", function: { name: "task", description: "Execute command or system task", parameters: { type: "object", properties: { prompt: { type: "string" } }, required: ["prompt"] } } },
     { type: "function", function: { name: "todowrite", description: "Maintains task list", parameters: { type: "object", properties: { todos: { type: "array" } }, required: ["todos"] } } },
     { type: "function", function: { name: "webfetch", description: "Fetches web URL content", parameters: { type: "object", properties: { url: { type: "string" } }, required: ["url"] } } },
     { type: "function", function: { name: "websearch", description: "Performs web searches", parameters: { type: "object", properties: { query: { type: "string" } }, required: ["query"] } } },
@@ -76,16 +76,15 @@ function mapOpenCodeSentinelToolCall(tc) {
     const id = tc.id || ("call_" + Math.random().toString(36).substring(2, 9));
 
     if (name === "subagent" || name === "agent" || name === "invoke_subagent" || name === "task") {
-        const subType = args.subagent_type || (args.agent && args.agent !== "general" ? args.agent : "designer");
-        const subTask = args.task || args.prompt || args.description || args.instruction || "";
+        const subTask = args.command || args.task || args.prompt || args.description || args.instruction || "";
         return {
             id,
             type: "function",
             function: {
-                name: "invoke_subagent",
+                name: "run_task",
                 arguments: JSON.stringify({
-                    task: subTask,
-                    subagent_type: subType
+                    command: subTask,
+                    task_name: "Run task"
                 })
             }
         };
@@ -100,8 +99,87 @@ function mapOpenCodeSentinelToolCall(tc) {
             function: {
                 name: "run_task",
                 arguments: JSON.stringify({
-                    command: args.command || "",
+                    command: args.command || args.cmd || args.code || args.script || "",
                     task_name: args.task_name || "Run shell command"
+                })
+            }
+        };
+    }
+    if (name === "execute" || name === "exec") {
+        const code = String(args.code || args.command || args.cmd || args.script || "");
+        const shellMatch = code.match(/tools\.shell\(\s*\{\s*command:\s*(?:["'`])([\s\S]*?)(?:["'`])\s*\}\s*\)/) ||
+                           code.match(/tools\.shell\(\s*(?:["'`])([\s\S]*?)(?:["'`])\s*\)/);
+        if (shellMatch) {
+            return {
+                id,
+                type: "function",
+                function: {
+                    name: "run_task",
+                    arguments: JSON.stringify({
+                        command: shellMatch[1],
+                        task_name: args.task_name || "Run shell command"
+                    })
+                }
+            };
+        }
+        const globMatch = code.match(/tools\.glob\(\s*\{\s*(?:pattern:\s*[^,]+,\s*)?path:\s*(?:["'`])([^"'`]+)(?:["'`])/);
+        if (globMatch) {
+            return {
+                id,
+                type: "function",
+                function: {
+                    name: "list_dir",
+                    arguments: JSON.stringify({
+                        DirectoryPath: globMatch[1]
+                    })
+                }
+            };
+        }
+        return {
+            id,
+            type: "function",
+            function: {
+                name: "run_task",
+                arguments: JSON.stringify({
+                    command: code,
+                    task_name: args.task_name || "Run shell command"
+                })
+            }
+        };
+    }
+    if (name === "glob") {
+        return {
+            id,
+            type: "function",
+            function: {
+                name: "list_dir",
+                arguments: JSON.stringify({
+                    DirectoryPath: args.path || args.dir || "."
+                })
+            }
+        };
+    }
+    if (name === "grep") {
+        return {
+            id,
+            type: "function",
+            function: {
+                name: "grep_search",
+                arguments: JSON.stringify({
+                    query: args.pattern || args.query || "",
+                    path: args.path || args.dir || "."
+                })
+            }
+        };
+    }
+    if (name === "list_dir" || name === "ls" || name === "dir") {
+        return {
+            id,
+            type: "function",
+            function: {
+                name: "list_dir",
+                arguments: JSON.stringify({
+                    DirectoryPath: args.DirectoryPath || args.path || args.dir || "."
                 })
             }
         };
@@ -112,7 +190,7 @@ function mapOpenCodeSentinelToolCall(tc) {
             type: "function",
             function: {
                 name: "read_file",
-                arguments: JSON.stringify({ path: args.filePath || args.path || "" })
+                arguments: JSON.stringify({ path: args.filePath || args.path || args.file || "" })
             }
         };
     }
@@ -122,7 +200,7 @@ function mapOpenCodeSentinelToolCall(tc) {
             type: "function",
             function: {
                 name: "write_file",
-                arguments: JSON.stringify({ path: args.filePath || args.path || "", content: args.content || "" })
+                arguments: JSON.stringify({ path: args.filePath || args.path || args.file || "", content: args.content || args.text || "" })
             }
         };
     }
@@ -724,6 +802,8 @@ class OpenCodeProvider extends BaseProvider {
                 let overallTimeout = null;
                 let streamedContent = "";
                 let streamedReasoning = "";
+                let hasEmittedToolCalls = false;
+                let pendingToolCall = null;
 
                 const keepaliveInterval = setInterval(() => {
                     if (!finished && res && !res.writableEnded) {
@@ -771,27 +851,62 @@ class OpenCodeProvider extends BaseProvider {
                                     streamedContent = fullText;
                                 }
 
-                                if (toolCalls.length > 0) {
-                                    const mappedCalls = toolCalls.map((tc, idx) => ({
-                                        index: idx,
-                                        id: tc.id,
-                                        type: "function",
-                                        function: {
-                                            name: tc.function?.name || "",
-                                            arguments: tc.function?.arguments || "{}"
-                                        }
-                                    }));
-                                    writeDelta({ tool_calls: mappedCalls }, "tool_calls");
-                                } else if (!streamedContent && streamedReasoning) {
-                                    writeDelta({ content: streamedReasoning });
+                                if (!hasEmittedToolCalls) {
+                                    if (toolCalls.length > 0) {
+                                        hasEmittedToolCalls = true;
+                                        const mappedCalls = toolCalls.map((tc, idx) => ({
+                                            index: idx,
+                                            id: tc.id,
+                                            type: "function",
+                                            function: {
+                                                name: tc.function?.name || "",
+                                                arguments: tc.function?.arguments || "{}"
+                                            }
+                                        }));
+                                        writeDelta({ tool_calls: mappedCalls }, "tool_calls");
+                                    } else if (pendingToolCall) {
+                                        hasEmittedToolCalls = true;
+                                        writeDelta({
+                                            tool_calls: [{
+                                                index: 0,
+                                                id: pendingToolCall.id,
+                                                type: "function",
+                                                function: {
+                                                    name: pendingToolCall.function?.name || "",
+                                                    arguments: pendingToolCall.function?.arguments || "{}"
+                                                }
+                                            }]
+                                        }, "tool_calls");
+                                    } else if (!streamedContent && streamedReasoning) {
+                                        writeDelta({ content: streamedReasoning });
+                                    }
                                 }
                             }
                         } catch (_) {}
                     }
 
-                    writeDelta({}, "stop");
-                    res.write("data: [DONE]\n\n");
-                    res.end();
+                    if (!hasEmittedToolCalls && pendingToolCall) {
+                        hasEmittedToolCalls = true;
+                        writeDelta({
+                            tool_calls: [{
+                                index: 0,
+                                id: pendingToolCall.id,
+                                type: "function",
+                                function: {
+                                    name: pendingToolCall.function?.name || "",
+                                    arguments: pendingToolCall.function?.arguments || "{}"
+                                }
+                            }]
+                        }, "tool_calls");
+                    }
+
+                    if (res && !res.writableEnded && !res.destroyed) {
+                        try {
+                            writeDelta({}, "stop");
+                            res.write("data: [DONE]\n\n");
+                            res.end();
+                        } catch (_) {}
+                    }
 
                     if (err) reject(err);
                     else resolve();
@@ -827,23 +942,15 @@ class OpenCodeProvider extends BaseProvider {
                                     streamedContent += evt.data.delta;
                                     writeDelta({ content: evt.data.delta });
                                 } else if (evt.type === "session.tool.called" && evt.data) {
-                                    const rawTool = evt.data;
-                                    const mapped = mapOpenCodeSentinelToolCall({
-                                        id: rawTool.id,
-                                        name: rawTool.name || rawTool.tool || "invoke_subagent",
-                                        input: rawTool.input
-                                    });
-                                    writeDelta({
-                                        tool_calls: [{
-                                            index: 0,
-                                            id: mapped.id,
-                                            type: "function",
-                                            function: {
-                                                name: mapped.function?.name || "",
-                                                arguments: mapped.function?.arguments || "{}"
-                                            }
-                                        }]
-                                    }, "tool_calls");
+                                    const rawTool = evt.data?.part || evt.data;
+                                    const toolName = rawTool.name || rawTool.tool;
+                                    if (toolName) {
+                                        pendingToolCall = mapOpenCodeSentinelToolCall({
+                                            id: rawTool.id,
+                                            name: toolName,
+                                            input: rawTool.input || rawTool.args || rawTool.arguments
+                                        });
+                                    }
                                     finishStream();
                                     return;
                                 } else if ((evt.type === "session.text.ended" || evt.type === "session.step.ended") && streamedContent) {
@@ -855,9 +962,8 @@ class OpenCodeProvider extends BaseProvider {
                                 } else if (evt.type === "session.step.failed" || evt.type === "session.execution.failed") {
                                     const errMsg = evt.data?.error?.message || "Execution failed";
                                     writeDelta({ content: `\n[OpenCode error: ${errMsg}]` }, "stop");
-                                    res.write("data: [DONE]\n\n");
-                                    res.end();
                                     finishStream();
+                                    return;
                                 }
                             } catch (_) {}
                         }
@@ -883,9 +989,7 @@ class OpenCodeProvider extends BaseProvider {
                 // Overall timeout
                 overallTimeout = setTimeout(() => {
                     if (!finished) {
-                        res.write("data: [DONE]\n\n");
-                        res.end();
-                        finishStream();
+                        finishStream(new Error("Request timed out"));
                     }
                 }, options.timeoutMs || 300000);
             });
@@ -1074,8 +1178,12 @@ class OpenCodeProvider extends BaseProvider {
             });
 
             child.on("close", () => {
-                res.write("data: [DONE]\n\n");
-                res.end();
+                if (res && !res.writableEnded && !res.destroyed) {
+                    try {
+                        res.write("data: [DONE]\n\n");
+                        res.end();
+                    } catch (_) {}
+                }
                 resolve({ ok: true });
             });
 
@@ -1083,8 +1191,12 @@ class OpenCodeProvider extends BaseProvider {
                 if (!res.headersSent) {
                     resolve({ ok: false, error: err.message });
                 } else {
-                    res.write("data: [DONE]\n\n");
-                    res.end();
+                    if (res && !res.writableEnded && !res.destroyed) {
+                        try {
+                            res.write("data: [DONE]\n\n");
+                            res.end();
+                        } catch (_) {}
+                    }
                     resolve({ ok: true });
                 }
             });

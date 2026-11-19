@@ -705,7 +705,11 @@ async function main() {
     const probeHost = (host === "0.0.0.0" || !host) ? "127.0.0.1" : host;
     const displayHost = (host === "0.0.0.0" || host === "127.0.0.1" || !host) ? "localhost" : host;
 
-    const workspaceDir = path.resolve(workspace || process.env.MULTIAI_WORKSPACE_DIR || process.cwd());
+    let rawWorkspace = workspace || process.env.MULTIAI_WORKSPACE_DIR || process.cwd();
+    if (rawWorkspace.startsWith("~/") || rawWorkspace === "~") {
+        rawWorkspace = path.join(os.homedir(), rawWorkspace.slice(rawWorkspace === "~" ? 1 : 2));
+    }
+    const workspaceDir = path.resolve(rawWorkspace);
     if (!fs.existsSync(workspaceDir)) {
         fs.mkdirSync(workspaceDir, { recursive: true });
     }

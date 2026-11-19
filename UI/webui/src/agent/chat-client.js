@@ -302,7 +302,23 @@ export async function callChatModel(messages, { model, provider: explicitProvide
                         // 3. Tool Calls streaming delta aggregation
                         if (Array.isArray(delta.tool_calls)) {
                             for (const tc of delta.tool_calls) {
-                                const idx = typeof tc.index === "number" ? tc.index : 0;
+                                // Resolve target index robustly across heterogeneous upstream providers:
+                                let idx;
+                                if (typeof tc.index === "number") {
+                                    // If this index is already occupied by a DIFFERENT tool call id, do not concatenate!
+                                    if (tc.id && toolCallsMap[tc.index] && toolCallsMap[tc.index].id && toolCallsMap[tc.index].id !== tc.id) {
+                                        idx = Object.keys(toolCallsMap).length;
+                                    } else {
+                                        idx = tc.index;
+                                    }
+                                } else if (tc.id) {
+                                    const matchIdx = Object.keys(toolCallsMap).find(k => toolCallsMap[k].id === tc.id);
+                                    idx = matchIdx !== undefined ? Number(matchIdx) : Object.keys(toolCallsMap).length;
+                                } else {
+                                    const lastKey = Object.keys(toolCallsMap).pop();
+                                    idx = (lastKey !== undefined && !toolCallsMap[lastKey].function?.arguments) ? Number(lastKey) : Object.keys(toolCallsMap).length;
+                                }
+
                                 if (!toolCallsMap[idx]) {
                                     toolCallsMap[idx] = {
                                         id: tc.id || ("call_" + Math.random().toString(36).slice(2, 10)),
@@ -313,9 +329,62 @@ export async function callChatModel(messages, { model, provider: explicitProvide
                                         }
                                     };
                                 } else {
-                                    if (tc.id) toolCallsMap[idx].id = tc.id;
-                                    if (tc.function?.name) toolCallsMap[idx].function.name += tc.function.name;
-                                    if (tc.function?.arguments) toolCallsMap[idx].function.arguments += tc.function.arguments;
+                                    if (tc.id && !toolCallsMap[idx].id) toolCallsMap[idx].id = tc.id;
+                                    // Prevent accidental concatenation of two distinct tool names into one
+                                    let handledInNewIdx = false;
+                                    if (tc.function?.name) {
+                                        const currentName = toolCallsMap[idx].function.name;
+                                        const knownTools = ["invoke_subagent", "task", "run_task", "manage_tasks", "write_todos", "ask_question", "ask_questions", "read_file", "write_file", "replace_file_content", "multi_replace_file_content", "list_dir", "grep_search", "web_search", "generate_image", "schedule", "idle"];
+                                        if (currentName && knownTools.includes(currentName) && currentName !== tc.function.name) {
+                                            const newIdx = Object.keys(toolCallsMap).length;
+                                            toolCallsMap[newIdx] = {
+                                                id: tc.id || ("call_" + Math.random().toString(36).slice(2, 10)),
+                                                type: tc.type || "function",
+                                                function: {
+                                                    name: tc.function.name,
+                                                    arguments: tc.function?.arguments || ""
+                                                }
+                                            };
+                                            idx = newIdx;
+                                            handledInNewIdx = true;
+                                        } else if (currentName === tc.function.name || currentName.endsWith(tc.function.name)) {
+                                            // Name is already set/duplicated in stream, do not duplicate
+                                        } else {
+                                            toolCallsMap[idx].function.name += tc.function.name;
+                                        }
+                                    }
+                                    if (!handledInNewIdx && tc.function?.arguments) {
+                                        const currentArgs = toolCallsMap[idx].function.arguments;
+                                        const incomingArgs = tc.function.arguments;
+                                        if (!currentArgs) {
+                                            toolCallsMap[idx].function.arguments = incomingArgs;
+                                        } else if (currentArgs === incomingArgs || currentArgs.endsWith(incomingArgs)) {
+                                            // Duplicate args payload resent by provider, do not append
+                                        } else {
+                                            let currentIsJson = false;
+                                            try {
+                                                if (currentArgs.trim().startsWith("{") && currentArgs.trim().endsWith("}")) {
+                                                    JSON.parse(currentArgs);
+                                                    currentIsJson = true;
+                                                }
+                                            } catch (_) {}
+
+                                            if (currentIsJson) {
+                                                try {
+                                                    if (incomingArgs.trim().startsWith("{") && incomingArgs.trim().endsWith("}")) {
+                                                        JSON.parse(incomingArgs);
+                                                        // Both are complete JSON objects; ignore duplicate resend
+                                                    } else {
+                                                        toolCallsMap[idx].function.arguments += incomingArgs;
+                                                    }
+                                                } catch (_) {
+                                                    toolCallsMap[idx].function.arguments += incomingArgs;
+                                                }
+                                            } else {
+                                                toolCallsMap[idx].function.arguments += incomingArgs;
+                                            }
+                                        }
+                                    }
                                 }
                                 const sig = tc.thoughtSignature || tc.thought_signature || tc.function?.thoughtSignature || tc.function?.thought_signature;
                                 if (sig) {

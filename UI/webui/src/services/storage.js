@@ -301,6 +301,7 @@ export function createNewChatSession(initialUserText = "") {
     const isBuild = state.appMode === "build" && Boolean(state.currentProjectId);
     const projectId = isBuild ? state.currentProjectId : undefined;
 
+    const selectedOpt = modelSelect?.selectedOptions?.[0];
     state.chatSessions[id] = {
         id,
         projectId,
@@ -309,6 +310,7 @@ export function createNewChatSession(initialUserText = "") {
         createdAt: Date.now(),
         updatedAt: Date.now(),
         model: modelSelect ? modelSelect.value : defaultModel,
+        provider: selectedOpt?.dataset?.provider || undefined,
         messages: [...state.messages]
         // chatHtml intentionally omitted — DOM is re-rendered from messages on load
     };
@@ -345,7 +347,11 @@ export function saveCurrentChatState() {
     }
 
     session.updatedAt = Date.now();
-    if (modelSelect) session.model = modelSelect.value;
+    if (modelSelect) {
+        session.model = modelSelect.value;
+        const prov = modelSelect.selectedOptions?.[0]?.dataset?.provider;
+        if (prov) session.provider = prov;
+    }
 
     if (!session.title || session.title === "Conversation") {
         const firstUserMsg = session.messages && session.messages.find(m => m.role === "user");

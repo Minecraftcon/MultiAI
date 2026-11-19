@@ -47,13 +47,27 @@ export function buildFullSystemPrompt(workspace = null, personaOverride = null) 
     if (state.config?.Tools?.EnableMcp !== false) {
         const mcpTools = McpActiveTools.getActiveTools();
         if (mcpTools && mcpTools.length > 0) {
-            let mcpPrompt = `[MCP TOOLS]:\n`;
-            mcpPrompt += `Active external tools from connected Model Context Protocol servers:\n`;
-            for (const t of mcpTools) {
-                const desc = t.schema?.function?.description || t.description || "External MCP tool execution";
-                mcpPrompt += `- ${t.name}: ${desc}\n`;
+            let mcpPrompt = `[EXTERNAL MODEL CONTEXT PROTOCOL (MCP) TOOLS]:\n`;
+            if (state.config?.Tools?.ExposeAllMcpTools) {
+                mcpPrompt += `Active external tools from connected Model Context Protocol servers:\n`;
+                for (const t of mcpTools) {
+                    const desc = t.schema?.function?.description || t.description || "External MCP tool execution";
+                    mcpPrompt += `- ${t.name}: ${desc}\n`;
+                }
+                mcpPrompt += `\nInvoke these tools by their registered names when the user's request matches their capabilities.`;
+            } else {
+                mcpPrompt += `External tools from connected MCP servers are available on-demand via list_mcp and call_mcp:\n`;
+                mcpPrompt += `- list_mcp: Call list_mcp() to see connected servers and tool summaries, or list_mcp(server: "<server_id>") to inspect full parameter schemas for a specific server.\n`;
+                mcpPrompt += `- call_mcp: Call call_mcp(tool: "<tool_name>", [server: "<server_id>"], args: {...}) to execute a discovered MCP tool.\n`;
+                const servers = McpActiveTools.servers || [];
+                if (servers.length > 0) {
+                    const serverList = servers.map(s => {
+                        const count = mcpTools.filter(t => (t.serverId || "").toLowerCase() === (s.id || "").toLowerCase()).length;
+                        return `${s.id} (${count} tool${count === 1 ? '' : 's'})`;
+                    }).join(", ");
+                    mcpPrompt += `- Connected servers: ${serverList}\n`;
+                }
             }
-            mcpPrompt += `\nInvoke these tools by their registered names when the user's request matches their capabilities.`;
             sections.push(mcpPrompt.trim());
         }
     }

@@ -17,7 +17,6 @@ import { escapeHTML } from "../utils/dom.js";
 import { renderIcons } from "../utils/icons.js";
 import { renderDiffCardHtml, bindDiffViewerCards } from "./diff-viewer.js";
 import { deriveCommandTag } from "./chat-tool-badges.js";
-import { getActiveSubagents, onSubagentsChange } from "../agent/subagent.js";
 
 let activeTodos = null;
 let unacceptedChanges = [];
@@ -49,10 +48,6 @@ export function initPlanDock() {
 
     document.addEventListener("runningTasksUpdated", () => {
         fetchRunningTasks().then(() => syncDockState());
-    });
-
-    onSubagentsChange(() => {
-        syncDockState();
     });
 
     if (!runningTasksPollTimer) {
@@ -369,11 +364,9 @@ function renderDock(transitionMeta = {}) {
     const pct = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
     const hasChanges = unacceptedChanges.length > 0;
     const hasRunningTasks = runningTasks.length > 0;
-    const activeSubagents = typeof getActiveSubagents === "function" ? getActiveSubagents() : [];
-    const hasSubagents = activeSubagents.length > 0;
 
-    // If nothing to show (no changes, no todos, no running tasks, no subagents) and window is not open
-    if (!hasChanges && !hasTodos && !hasRunningTasks && !hasSubagents && activeTab === null) {
+    // If nothing to show (no changes, no todos, no running tasks) and window is not open
+    if (!hasChanges && !hasTodos && !hasRunningTasks && activeTab === null) {
         dismissPlanDock();
         return;
     }
@@ -582,31 +575,9 @@ function renderDock(transitionMeta = {}) {
         </div>
     `;
 
-    // Minimalist subagents indicator (shows in grey just under the changes, or in place of changes if no changes tab)
-    const subagentsIndicatorHtml = hasSubagents ? `
-        <div class="dock-subagents-indicator ${hasChanges ? 'under-changes' : 'standalone'}" title="${escapeHTML(activeSubagents.map(s => s.task || s.id).join('; '))}">
-            <div class="subagent-spinner-dots" aria-hidden="true">
-                <span class="subagent-spinner-dot"></span>
-                <span class="subagent-spinner-dot"></span>
-                <span class="subagent-spinner-dot"></span>
-                <span class="subagent-spinner-dot"></span>
-            </div>
-            <span class="dock-subagents-text">${activeSubagents.length} Subagent${activeSubagents.length === 1 ? '' : 's'} running</span>
-        </div>
-    ` : "";
-
-    // When an option is opened, show the window view; otherwise show toolbar / in-place indicator
+    // When an option is opened, show the window view; otherwise show toolbar
     if (isWindowOpen) {
-        card.innerHTML = windowHtml + (hasChanges && hasSubagents ? subagentsIndicatorHtml : "");
-    } else if (hasChanges) {
-        card.innerHTML = toolbarHtml + subagentsIndicatorHtml;
-    } else if (hasSubagents) {
-        // No changes tab: show in place of changes
-        card.innerHTML = `
-            <div class="dock-bottom-toolbar dock-subagents-standalone-bar">
-                ${subagentsIndicatorHtml}
-            </div>
-        `;
+        card.innerHTML = windowHtml;
     } else {
         card.innerHTML = toolbarHtml;
     }

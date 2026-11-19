@@ -448,10 +448,14 @@ class GoogleProvider extends BaseProvider {
                 }
             }
 
-            res.write("data: [DONE]\n\n");
-            if (typeof res.flush === "function") res.flush();
             clearTimeout(timeout);
-            res.end();
+            if (res && !res.writableEnded && !res.destroyed) {
+                try {
+                    res.write("data: [DONE]\n\n");
+                    if (typeof res.flush === "function") res.flush();
+                    res.end();
+                } catch (_) {}
+            }
             return { status: 200 };
         } catch (err) {
             clearTimeout(timeout);

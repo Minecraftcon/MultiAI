@@ -209,7 +209,7 @@ function createBuildProjectsManager(getBuildProjectsRoot, resolveHome) {
             `  4. MODULAR ARCHITECTURE: Single-purpose ES modules only. Never create monolithic files.`,
             `  5. BUG FINDING: Trace every execution point to root cause. Never apply blind fixes — explain what causes what, then apply the surgical fix.`,
             `  6. CLARIFICATIONS: When requirements or preferences are ambiguous, call ask_questions before proceeding.`,
-            `  7. SUBAGENT DELEGATION: Use invoke_subagent for deep research, large directory scans, or test runs to avoid bloating main context.`,
+            `  7. SURGICAL SCOPE: Keep inspection and research focused to avoid bloating the conversation context.`,
             `  8. SURGICAL EDITS: Inspect before editing. Use replace_file_content or multi_replace_file_content for targeted changes; write_file for new files only.`,
             `  9. VERIFICATION: Run tests, linters, or build commands with run_task. Always set a concise 2–4 word task_name for UI tagging.`,
             `  10. EXECUTION DISCIPLINE: Never stop after announcing an action. Issue the tool call in the same turn.`

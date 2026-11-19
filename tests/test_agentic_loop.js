@@ -9,20 +9,13 @@ async function runTests() {
     const { getTool, hasTool, tools } = toolsModule;
 
     assert(hasTool("write_todos"), "Tool registry must contain 'write_todos'");
-    assert(hasTool("task"), "Tool registry must contain 'task'");
+    assert(hasTool("run_task"), "Tool registry must contain 'run_task'");
 
     const writeTodos = getTool("write_todos");
     assert.strictEqual(writeTodos.name, "write_todos");
     assert.strictEqual(writeTodos.schema.type, "function");
     assert.strictEqual(writeTodos.schema.function.name, "write_todos");
     assert(writeTodos.schema.function.parameters.properties.todos, "Schema must require 'todos' array");
-
-    const taskTool = getTool("task");
-    assert.strictEqual(taskTool.name, "task");
-    assert.strictEqual(taskTool.schema.type, "function");
-    assert.strictEqual(taskTool.schema.function.name, "task");
-    assert(taskTool.schema.function.parameters.properties.instruction, "Schema must require 'instruction'");
-    assert(taskTool.schema.function.parameters.properties.subagent_type, "Schema must support 'subagent_type'");
 
     // 2. Testing write_todos handler logic
     console.log("Test: write_todos handler normalizes tasks and computes counts");
@@ -46,12 +39,7 @@ async function runTests() {
     assert.strictEqual(result.pending, 2);
     assert.strictEqual(result.todos[3].status, "pending", "Unknown status must fallback to pending");
 
-    // 3. Subagent module exports
-    console.log("Test: Subagent engine exports runSubagent");
-    const subagentModule = await import("../UI/webui/src/agent/subagent.js");
-    assert.strictEqual(typeof subagentModule.runSubagent, "function", "runSubagent must be an exported function");
-
-    // 4. Plan Serializer & Artifact path
+    // 3. Plan Serializer & Artifact path
     console.log("Test: Plan serializer formats markdown and resolves artifact path");
     const { formatTodosMarkdown, resolvePlanArtifactPath } = await import("../UI/webui/src/tools/planning/plan-serializer.js");
     const sampleTodos = [
@@ -156,9 +144,8 @@ async function runTests() {
     assert(ws.workspacePrompt.includes("BUILD MODE AGENTIC GUIDELINES"), "Workspace prompt must contain agentic guidelines");
     assert(ws.workspacePrompt.includes("DUAL-TRACK EXECUTION"), "Workspace prompt must reference dual-track execution");
     assert(ws.workspacePrompt.includes("MODULAR ARCHITECTURE"), "Workspace prompt must mandate modular architecture");
-    assert(ws.workspacePrompt.includes("BUG FINDING RULES"), "Workspace prompt must include bug finding rules");
+    assert(ws.workspacePrompt.includes("BUG FINDING"), "Workspace prompt must include bug finding rules");
     assert(ws.workspacePrompt.includes("write_todos"), "Workspace prompt must reference write_todos");
-    assert(ws.workspacePrompt.includes("SUBAGENT DELEGATION (task)"), "Workspace prompt must reference task delegation");
 
     console.log("✓ ALL AGENTIC LOOP & PLANNING TESTS PASSED CLEANLY!");
 }

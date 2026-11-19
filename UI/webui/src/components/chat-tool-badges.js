@@ -92,27 +92,30 @@ export function deriveCommandTag(rawCmd) {
 export function getToolBadgeConfig(toolName, args = {}) {
     let icon = "terminal";
     let label = "Executed";
+    let runningLabel = "Executing";
     let detail = "";
     let detailHtml = null;
     let diffStatsHtml = "";
     let isCommandTask = false;
-    let isSubagent = false;
 
     if (toolName === "web_search") {
         const isFetch = String(args.type || "").toLowerCase() === "fetch" || /^https?:\/\//i.test(args.query || "");
         icon = isFetch ? "globe" : "search";
         label = isFetch ? "Fetched" : "Searched for";
+        runningLabel = isFetch ? "Fetching" : "Searching";
         detail = args.query || args.url || args.search || "web query";
         isCommandTask = true;
     } else if (toolName === "fetch_web_content" || toolName === "web_fetch") {
         icon = "globe";
         label = "Fetched";
+        runningLabel = "Fetching";
         const urlList = Array.isArray(args.urls) ? args.urls : (args.url ? [args.url] : (args.query ? [args.query] : []));
         detail = urlList.length === 1 ? urlList[0] : (urlList.length > 1 ? `${urlList.length} pages (${urlList[0]}...)` : "web content");
         isCommandTask = true;
     } else if (toolName === "run_task" || toolName === "run_command") {
         icon = "play";
         label = "Ran command";
+        runningLabel = "Running command";
         const taskName = args.task_name || args.name;
         const cmdStr = args.command || args.CommandLine || args.cmd;
         const derivedTag = (!taskName && cmdStr) ? deriveCommandTag(cmdStr) : "";
@@ -175,10 +178,12 @@ export function getToolBadgeConfig(toolName, args = {}) {
         if (isImg) {
             icon = "image";
             label = "Viewed Image";
+            runningLabel = "Viewing Image";
             detail = filePath || "image";
         } else {
             icon = "file-text";
             label = "Read file";
+            runningLabel = "Reading file";
             const start = args.start_line !== undefined ? args.start_line : args.StartLine;
             const end = args.end_line !== undefined ? args.end_line : args.EndLine;
             const offset = args.content_offset !== undefined ? args.content_offset : (args.ContentOffset !== undefined ? args.ContentOffset : args.offset);
@@ -190,12 +195,14 @@ export function getToolBadgeConfig(toolName, args = {}) {
     } else if (toolName === "list_dir") {
         icon = "folder";
         label = "Listed directory";
+        runningLabel = "Listing directory";
         detail = args.DirectoryPath || args.path || args.dir_path || args.dirPath || ".";
         isCommandTask = true;
     } else if (toolName === "write_file") {
         const isArtifact = (args.path || "").startsWith("$ARTIFACTS/") || (args.path || "").startsWith("${ARTIFACTS}/");
         icon = isArtifact ? "file-code" : "file-edit";
         label = isArtifact ? "Wrote artifact" : "Wrote file";
+        runningLabel = isArtifact ? "Writing artifact" : "Writing file";
         const filePath = args.path || args.TargetFile || "file";
         detail = filePath;
         const contentStr = args.content || args.CodeContent || "";
@@ -207,6 +214,7 @@ export function getToolBadgeConfig(toolName, args = {}) {
     } else if (toolName === "grep_search") {
         icon = "search";
         label = "Searched code";
+        runningLabel = "Searching code";
         const targetPath = args.SearchPath || args.path || args.search_path || "";
         const scope = targetPath && targetPath !== "." ? ` in ${targetPath}` : "";
         const queryTerm = args.Query !== undefined ? args.Query : (args.query || args.pattern || "");
@@ -215,6 +223,7 @@ export function getToolBadgeConfig(toolName, args = {}) {
     } else if (toolName === "replace_file_content" || toolName === "search_and_replace" || toolName === "edit_file" || toolName === "replace_in_file" || toolName === "str_replace") {
         icon = "edit-3";
         label = "Edited file";
+        runningLabel = "Editing file";
         const filePath = args.path || args.Path || args.TargetFile || args.file_path || args.file || "file";
         const targetStr = args.target_content || args.TargetContent || args.target || args.Target || args.old_str || "";
         const replStr = args.replacement_content || args.ReplacementContent || args.replacement || args.Replacement || args.new_str || "";
@@ -230,6 +239,8 @@ export function getToolBadgeConfig(toolName, args = {}) {
         isCommandTask = true;
     } else if (toolName === "multi_replace_file_content") {
         icon = "edit-3";
+        label = "Multi-edited file";
+        runningLabel = "Editing file";
         label = "Multi-edited file";
         const filePath = args.path || args.TargetFile || "file";
         const chunks = Array.isArray(args.replacement_chunks) ? args.replacement_chunks : [];
@@ -274,34 +285,29 @@ export function getToolBadgeConfig(toolName, args = {}) {
         const inProgText = inProg ? ` • In progress: ${inProg.content}` : (todos.length > 0 && completed === todos.length ? " • All completed" : "");
         detail = `${completed}/${todos.length} completed${inProgText}`;
         isCommandTask = true;
-    } else if (toolName === "define_subagent") {
-        icon = "bot";
-        label = "Defined subagent";
-        detail = args.name || "custom subagent";
-        isCommandTask = true;
-    } else if (toolName === "manage_subagents") {
-        icon = "shield";
-        label = "Subagent manager";
-        detail = `${args.Action || args.action || "manage"}`;
-        isCommandTask = true;
-    } else if (toolName === "send_message") {
-        icon = "send";
-        label = "Sent subagent message";
-        detail = `To: ${args.Recipient || args.recipient || "subagent"}`;
-        isCommandTask = true;
-    } else if (toolName === "task" || toolName === "invoke_subagent") {
-        icon = "bot";
-        const subType = args.subagent_type || args.type || "designer";
-        label = `Subagent [${subType}]`;
-        detail = args.task || args.instruction || args.prompt || "subagent task";
-        isCommandTask = true;
-        isSubagent = true;
     } else if (toolName === "ask_question" || toolName === "ask_questions") {
         icon = "help-circle";
         label = "Asked question";
         const qList = Array.isArray(args.questions) ? args.questions : (args.question ? [args] : []);
         const firstQ = qList[0]?.question || args.question || "clarifying question";
         detail = qList.length > 1 ? `${firstQ} (+${qList.length - 1} more)` : firstQ;
+        isCommandTask = true;
+    } else if (toolName === "list_mcp" || toolName === "list_mcp_tools" || toolName === "mcp_list") {
+        icon = "plug";
+        label = "Listed MCP";
+        runningLabel = "Listing MCP";
+        const serverTarget = args.server || args.serverId || "";
+        detail = serverTarget ? `server: ${serverTarget}` : "all servers";
+        isCommandTask = true;
+    } else if (toolName === "call_mcp" || toolName === "call_mcp_tool" || toolName === "mcp_call") {
+        icon = "plug";
+        const sId = args.server || "";
+        label = sId ? `MCP [${sId}]` : "MCP";
+        runningLabel = sId ? `Calling [${sId}]` : "Calling MCP";
+        const targetTool = args.tool || args.name || "tool";
+        const argKeys = Object.keys(args.args || {});
+        const argSummary = argKeys.length > 0 ? ` (${argKeys.slice(0, 3).join(", ")})` : "";
+        detail = `${targetTool}${argSummary}`;
         isCommandTask = true;
     } else if (toolName.startsWith("mcp_")) {
         icon = "plug";
@@ -334,21 +340,6 @@ export function getToolBadgeConfig(toolName, args = {}) {
             return `${sym} ${t.content}`;
         }).join("\n");
         displayCmd = `PLAN (${completed}/${todos.length} completed):\n${items}`;
-    } else if (toolName === "define_subagent") {
-        const toolsList = Array.isArray(args.tools) ? args.tools.join(", ") : "default";
-        displayCmd = `DEFINED SUBAGENT [${args.name || "custom"}]:\nDescription: ${args.description || ""}\nTools: ${toolsList}\n\nSystem Prompt:\n${args.system_prompt || args.SystemPrompt || ""}`;
-    } else if (toolName === "manage_subagents") {
-        const action = args.Action || args.action || "list";
-        const ids = args.ConversationIds || args.conversation_ids || args.conversationIds || [];
-        displayCmd = `MANAGE SUBAGENTS [${action.toUpperCase()}]:\nTarget IDs: ${ids.length ? ids.join(", ") : "all/none"}`;
-    } else if (toolName === "send_message") {
-        const rec = args.Recipient || args.recipient || "subagent";
-        const msg = args.Message || args.message || "";
-        displayCmd = `SEND MESSAGE [-> ${rec}]:\n${msg}`;
-    } else if (toolName === "task" || toolName === "invoke_subagent") {
-        const subType = args.subagent_type || args.type || "designer";
-        const taskText = args.task || args.instruction || args.prompt || "";
-        displayCmd = `SUBAGENT [${subType}]:\n${taskText}`;
     } else if (toolName === "ask_question" || toolName === "ask_questions") {
         const qList = Array.isArray(args.questions) ? args.questions : (args.question ? [args] : []);
         displayCmd = qList.map((q, idx) => {
@@ -379,10 +370,13 @@ export function getToolBadgeConfig(toolName, args = {}) {
         const taskInfo = (args.task || args.task_id) ? ` (hooked on ${args.task || args.task_id}, wake: ${args.wake_on || "exit"})` : "";
         displayCmd = `Schedule timer: ${duration}s${taskInfo}${args.reason ? ` - ${args.reason}` : ""}${args.end_response ? `\nEnd response: ${args.end_response}` : ""}`;
     } else {
-        displayCmd = args.command || args.CommandLine || args.cmd || args.input_string || (Array.isArray(args.urls) ? args.urls.join("\n") : args.url) || (args.task_id ? `Task: ${args.task_id}` : "Task execution");
+        displayCmd = args.command || args.CommandLine || args.cmd || args.script || args.code || args.input_string || (Array.isArray(args.urls) ? args.urls.join("\n") : args.url) || (args.task_id ? `Task: ${args.task_id}` : "");
+        if (!displayCmd) {
+            displayCmd = args.task_name || args.name || "Task execution";
+        }
     }
 
-    const isRunTaskWithTitle = (toolName === "run_task" || toolName === "run_command") && (args.task_name || args.name || (displayCmd && displayCmd !== detail ? detail : false));
+    const isRunTaskWithTitle = (toolName === "run_task" || toolName === "run_command") && (args.task_name || args.name || (displayCmd && detail && displayCmd !== detail && detail !== "task command" && displayCmd !== "Task execution" ? detail : false));
     const isArtifact = toolName === "write_file" && ((args.path || "").startsWith("$ARTIFACTS/") || (args.path || "").startsWith("${ARTIFACTS}/"));
 
     const cmdLines = String(displayCmd || "").split("\n");
@@ -394,6 +388,7 @@ export function getToolBadgeConfig(toolName, args = {}) {
     return {
         icon,
         label,
+        runningLabel,
         detail,
         detailHtml,
         diffStatsHtml,
@@ -406,7 +401,6 @@ export function getToolBadgeConfig(toolName, args = {}) {
         hasRing,
         isArtifact,
         isRunTaskWithTitle,
-        isSubagent,
         displayCmd,
         compactCmd,
         isCmdMulti,
@@ -433,6 +427,7 @@ export function addToolBadge(element, toolName, args) {
     const {
         icon,
         label,
+        runningLabel,
         detail,
         detailHtml,
         diffStatsHtml,
@@ -444,7 +439,6 @@ export function addToolBadge(element, toolName, args) {
         hasRing,
         isArtifact,
         isRunTaskWithTitle,
-        isSubagent,
         displayCmd,
         compactCmd,
         isCmdMulti,
@@ -491,7 +485,7 @@ export function addToolBadge(element, toolName, args) {
     }
 
     const item = document.createElement("div");
-    item.className = "search-badge-item" + (hasRing ? " timer-badge" : "") + (isCommandTask ? " clickable-badge" : "") + (isDetailMulti ? " has-multiline" : "");
+    item.className = "search-badge-item is-running" + (hasRing ? " timer-badge" : "") + (isCommandTask ? " clickable-badge" : "") + (isDetailMulti ? " has-multiline" : "");
     if (isFileEditTool && editFilePath) {
         item.classList.add("file-edit-badge", "is-editing");
         item.dataset.editFile = editFilePath;
@@ -520,17 +514,10 @@ export function addToolBadge(element, toolName, args) {
                 <circle class="timer-ring-bar" cx="18" cy="18" r="17.25" transform="rotate(-90 18 18)" />
             </svg>
             ` : ''}
-            ${isSubagent ? `
-            <div class="subagent-spinner-dots" aria-hidden="true">
-                <span class="subagent-spinner-dot"></span>
-                <span class="subagent-spinner-dot"></span>
-                <span class="subagent-spinner-dot"></span>
-                <span class="subagent-spinner-dot"></span>
-            </div>
-            ` : `<i data-lucide="${icon}" aria-hidden="true"></i>`}
+            <i data-lucide="${icon}" aria-hidden="true"></i>
         </div>
         <div>
-            <span class="search-label">${isFileEditTool ? "Editing" : label}</span>
+            <span class="search-label">${runningLabel || label}</span>
             ${codeIconHtml}
             <span class="search-query ${detailLines.length > 1 ? 'is-multiline' : ''}" data-full="${escapeHTML(detail)}" data-compact="${escapeHTML(compactDetail)}">${detailHtml || escapeHTML(compactDetail)}</span>
             ${isFileEditTool ? `<span class="badge-edit-count">(1 edit)</span>` : ''}
@@ -572,7 +559,7 @@ export function addToolBadge(element, toolName, args) {
         collapseDiv.innerHTML = `
             <div class="badge-collapse-inner">
                 <div class="command-output-box">
-                    <pre><div class="command-output-cmd ${isCmdMulti ? 'is-compact' : ''}" data-full="${escapeHTML(displayCmd)}" data-compact="${escapeHTML(compactCmd)}"><div class="command-cmd-text">${escapeHTML(compactCmd)}</div><button type="button" class="badge-open-pty-btn" title="Open Interactive Terminal (Ctrl+\`)"><i data-lucide="terminal"></i><span>Terminal</span></button>${isCmdMulti ? `<div class="cmd-toggle-row"><button type="button" class="cmd-compact-toggle" aria-expanded="false"><span class="cmd-toggle-label">Expand</span> <span class="cmd-toggle-lines">(${cmdLines.length} lines)</span></button></div>` : ''}</div><hr class="command-output-sep"><div class="command-output-res"></div></pre>
+                    <pre>${isCommand ? `<div class="command-output-cmd ${isCmdMulti ? 'is-compact' : ''}" data-full="${escapeHTML(displayCmd)}" data-compact="${escapeHTML(compactCmd)}"><div class="command-cmd-text">${escapeHTML(compactCmd)}</div><button type="button" class="badge-open-pty-btn" title="Open Interactive Terminal (Ctrl+\`)"><i data-lucide="terminal"></i><span>Terminal</span></button>${isCmdMulti ? `<div class="cmd-toggle-row"><button type="button" class="cmd-compact-toggle" aria-expanded="false"><span class="cmd-toggle-label">Expand</span> <span class="cmd-toggle-lines">(${cmdLines.length} lines)</span></button></div>` : ''}</div><hr class="command-output-sep">` : ''}<div class="command-output-res"></div></pre>
                 </div>
             </div>
         `;
@@ -590,9 +577,10 @@ export function addToolBadge(element, toolName, args) {
             collapseDiv.querySelector(".badge-collapse-inner pre")?.appendChild(noteEl);
         }
 
+        item._displayCmd = displayCmd;
         collapseDiv.querySelector(".badge-open-pty-btn")?.addEventListener("click", (e) => {
             e.stopPropagation();
-            openTerminal({ command: displayCmd });
+            openTerminal({ command: item._displayCmd || displayCmd });
         });
 
         searchContainer.appendChild(collapseDiv);
@@ -613,6 +601,44 @@ export function addToolBadge(element, toolName, args) {
 export function extractStreamingPath(rawJson) {
     if (!rawJson || typeof rawJson !== "string") return "";
     const m = rawJson.match(/"(?:path|Path|TargetFile|target_file|file_path|FilePath|file|File|filename|fileName)"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"?/i);
+    if (m && m[1]) {
+        try {
+            return JSON.parse(`"${m[1]}"`);
+        } catch (_) {
+            return m[1].replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+        }
+    }
+    return "";
+}
+
+/**
+ * Extracts a partial or complete command string from in-flight streaming JSON arguments.
+ *
+ * @param {string} rawJson
+ * @returns {string}
+ */
+export function extractStreamingCommand(rawJson) {
+    if (!rawJson || typeof rawJson !== "string") return "";
+    const m = rawJson.match(/"(?:command|CommandLine|cmd|script|code|input_string)"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"?/i);
+    if (m && m[1]) {
+        try {
+            return JSON.parse(`"${m[1]}"`);
+        } catch (_) {
+            return m[1].replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+        }
+    }
+    return "";
+}
+
+/**
+ * Extracts a partial or complete task name/title from in-flight streaming JSON arguments.
+ *
+ * @param {string} rawJson
+ * @returns {string}
+ */
+export function extractStreamingTaskName(rawJson) {
+    if (!rawJson || typeof rawJson !== "string") return "";
+    const m = rawJson.match(/"(?:task_name|taskName|title|name)"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"?/i);
     if (m && m[1]) {
         try {
             return JSON.parse(`"${m[1]}"`);
@@ -824,6 +850,8 @@ export function updateStreamingToolBadge(element, toolData, overallStartTime) {
 
     const accumulatedArgs = toolData.accumulatedArgs || "";
     const partialPath = extractStreamingPath(accumulatedArgs);
+    const partialCmd = extractStreamingCommand(accumulatedArgs);
+    const partialTaskName = extractStreamingTaskName(accumulatedArgs);
     const diffCounts = extractStreamingDiffCounts(toolName, accumulatedArgs);
 
     // Update activity status label with real-time diff counter (+N -M) so user sees live counter stream
@@ -848,7 +876,11 @@ export function updateStreamingToolBadge(element, toolData, overallStartTime) {
     }
 
     if (!badgeEl) {
-        const initialArgs = { path: partialPath };
+        const initialArgs = {
+            path: partialPath,
+            command: partialCmd,
+            task_name: partialTaskName
+        };
         badgeEl = addToolBadge(element, toolName, initialArgs);
         badgeEl.classList.add("is-streaming-tool");
         element._streamingToolBadges.set(badgeKey, badgeEl);
@@ -862,6 +894,10 @@ export function updateStreamingToolBadge(element, toolData, overallStartTime) {
             labelEl.textContent = isArtifact ? "Writing artifact" : "Writing file";
         } else if (isEditTool) {
             labelEl.textContent = "Editing file";
+        } else if (toolName === "run_task" || toolName === "run_command") {
+            labelEl.textContent = "Running command";
+        } else if (toolName === "read_file") {
+            labelEl.textContent = "Reading file";
         }
     }
 
@@ -870,6 +906,28 @@ export function updateStreamingToolBadge(element, toolData, overallStartTime) {
         queryEl.textContent = partialPath;
         queryEl.dataset.full = partialPath;
         queryEl.dataset.compact = partialPath;
+    }
+
+    const isCmdTool = toolName === "run_task" || toolName === "run_command" || toolName === "run_python";
+    if (isCmdTool && (partialCmd || partialTaskName)) {
+        const displayDetail = partialTaskName || partialCmd;
+        if (queryEl && displayDetail && queryEl.textContent !== displayDetail) {
+            queryEl.textContent = displayDetail;
+            queryEl.dataset.full = displayDetail;
+            queryEl.dataset.compact = displayDetail;
+        }
+        if (partialCmd && badgeEl._collapseDiv) {
+            const cmdBox = badgeEl._collapseDiv.querySelector(".command-output-cmd");
+            const cmdText = badgeEl._collapseDiv.querySelector(".command-cmd-text");
+            if (cmdBox) {
+                cmdBox.dataset.full = partialCmd;
+                cmdBox.dataset.compact = partialCmd;
+            }
+            if (cmdText && cmdText.textContent !== partialCmd) {
+                cmdText.textContent = partialCmd;
+            }
+            badgeEl._displayCmd = partialCmd;
+        }
     }
 
     if (diffCounts) {
@@ -971,8 +1029,24 @@ export function syncToolBadgeArgs(badgeEl, toolName, args) {
     const queryEl = badgeEl.querySelector(".search-query");
 
     if (labelEl && config.label) {
-        labelEl.textContent = isFileEditTool ? "Editing" : config.label;
+        if (badgeEl.classList && typeof badgeEl.classList.contains === "function" && badgeEl.classList.contains("is-finished")) {
+            labelEl.textContent = isFileEditTool ? "Edited file" : config.label;
+        } else {
+            labelEl.textContent = isFileEditTool ? "Editing file" : (config.runningLabel || config.label);
+        }
     }
+
+    let previewIcon = badgeEl.querySelector(".preview-icon");
+    if (config.isRunTaskWithTitle) {
+        if (!previewIcon && labelEl && typeof document !== "undefined" && typeof document.createElement === "function") {
+            const span = document.createElement("span");
+            span.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-code preview-icon" aria-hidden="true" style="display:inline-block; vertical-align:-2px; margin: 0 4px; opacity:0.8;"><path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/></svg>`;
+            labelEl.insertAdjacentElement("afterend", span.firstElementChild);
+        }
+    } else if (previewIcon) {
+        previewIcon.remove();
+    }
+
     if (queryEl && config.compactDetail) {
         queryEl.textContent = config.compactDetail;
         queryEl.dataset.full = config.detail;
@@ -992,6 +1066,42 @@ export function syncToolBadgeArgs(badgeEl, toolName, args) {
             badgeEl.dataset.editFile = editFilePath;
         }
     }
+
+    if (badgeEl._collapseDiv) {
+        const cmdBox = badgeEl._collapseDiv.querySelector(".command-output-cmd");
+        const cmdText = badgeEl._collapseDiv.querySelector(".command-cmd-text");
+        if (cmdBox && config.displayCmd) {
+            cmdBox.dataset.full = config.displayCmd;
+            cmdBox.dataset.compact = config.compactCmd;
+            if (config.isCmdMulti) {
+                cmdBox.classList.add("is-compact");
+            } else {
+                cmdBox.classList.remove("is-compact");
+            }
+        }
+        if (cmdText && config.compactCmd) {
+            cmdText.textContent = config.compactCmd;
+        }
+        badgeEl._displayCmd = config.displayCmd;
+
+        if (cmdBox) {
+            let toggleRow = cmdBox.querySelector(".cmd-toggle-row");
+            if (config.isCmdMulti) {
+                if (!toggleRow && typeof document !== "undefined" && typeof document.createElement === "function") {
+                    toggleRow = document.createElement("div");
+                    toggleRow.className = "cmd-toggle-row";
+                    toggleRow.innerHTML = `<button type="button" class="cmd-compact-toggle" aria-expanded="false"><span class="cmd-toggle-label">Expand</span> <span class="cmd-toggle-lines">(${config.cmdLines.length} lines)</span></button>`;
+                    cmdBox.appendChild(toggleRow);
+                } else {
+                    const linesSpan = toggleRow.querySelector(".cmd-toggle-lines");
+                    if (linesSpan) linesSpan.textContent = `(${config.cmdLines.length} lines)`;
+                }
+            } else if (toggleRow) {
+                toggleRow.remove();
+            }
+        }
+    }
+
     if (toolName === "write_file" && badgeEl._collapseDiv) {
         const finalContent = args.content || args.CodeContent || "";
         const filePath = args.path || args.TargetFile || args.file_path || "";

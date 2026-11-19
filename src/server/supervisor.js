@@ -401,6 +401,10 @@ function initSupervisor() {
     });
 
     process.on("uncaughtException", (err) => {
+        if (err && (err.code === "ERR_STREAM_WRITE_AFTER_END" || err.code === "ECONNRESET" || err.code === "EPIPE")) {
+            console.warn("[PROCESS] Handled client connection disconnect / stream error:", err.code);
+            return;
+        }
         console.error("[PROCESS] Uncaught exception:", err);
         cleanupAndExit(1);
     });

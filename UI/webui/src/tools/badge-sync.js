@@ -92,9 +92,46 @@ export function streamTerminalOutput(resEl, fullText) {
  */
 export function onToolStart(name, args, badgeEl) {
     if (!badgeEl) return;
+    badgeEl.classList.add("is-running");
+    badgeEl.classList.remove("is-finished");
+
+    const labelEl = badgeEl.querySelector(".search-label");
+    if (labelEl) {
+        if (name === "run_task" || name === "run_command") {
+            labelEl.textContent = "Running command";
+        } else if (name === "write_file") {
+            const isArtifact = (args?.path || "").startsWith("$ARTIFACTS/") || (args?.path || "").startsWith("${ARTIFACTS}/");
+            labelEl.textContent = isArtifact ? "Writing artifact" : "Writing file";
+        } else if (["replace_file_content", "multi_replace_file_content", "search_and_replace", "edit_file", "replace_in_file", "str_replace"].includes(name)) {
+            labelEl.textContent = "Editing file";
+        } else if (name === "read_file") {
+            labelEl.textContent = "Reading file";
+        } else if (name === "web_search" || name === "fetch_web_content" || name === "web_fetch") {
+            const isFetch = String(args?.type || "").toLowerCase() === "fetch" || /^https?:\/\//i.test(args?.query || "");
+            labelEl.textContent = isFetch ? "Fetching" : "Searching";
+        } else if (name === "list_dir") {
+            labelEl.textContent = "Listing directory";
+        }
+    }
 
     const isCommand = (name === "run_task" || name === "run_command" || Boolean(args && (args.command || args.CommandLine || args.cmd)));
     if (isCommand && badgeEl._collapseDiv) {
+        const cmdStr = args?.command || args?.CommandLine || args?.cmd || args?.script || args?.code;
+        if (cmdStr) {
+            const cmdText = badgeEl._collapseDiv.querySelector(".command-cmd-text");
+            const cmdBox = badgeEl._collapseDiv.querySelector(".command-output-cmd");
+            if (cmdText && (cmdText.textContent === "Task execution" || cmdText.textContent === "Command execution" || !cmdText.textContent.trim())) {
+                const cmdLines = String(cmdStr).split("\n");
+                const isMulti = cmdLines.length > 3;
+                const compact = isMulti ? cmdLines.slice(0, 3).join("\n") + "\n…" : cmdStr;
+                cmdText.textContent = compact;
+                if (cmdBox) {
+                    cmdBox.dataset.full = cmdStr;
+                    cmdBox.dataset.compact = compact;
+                }
+                badgeEl._displayCmd = cmdStr;
+            }
+        }
         const resEl = badgeEl._collapseDiv.querySelector(".command-output-res");
         if (resEl) {
             resEl.innerHTML = `<span class="terminal-stream-running">Running command…</span> <span class="terminal-stream-cursor">█</span>`;
@@ -228,6 +265,28 @@ export function setBadgeDiffStats(badgeEl, queryEl, statHtml) {
  */
 export function onToolComplete(name, args, badgeEl, data, options = {}) {
     if (!badgeEl) return;
+    badgeEl.classList.remove("is-running");
+    badgeEl.classList.add("is-finished");
+
+    const labelEl = badgeEl.querySelector(".search-label");
+    if (labelEl) {
+        if (name === "run_task" || name === "run_command") {
+            const isRunning = data && (data.running === true || data.status === "running" || data.status === "in_progress");
+            labelEl.textContent = isRunning ? "Running in background" : "Ran command";
+        } else if (name === "write_file") {
+            const isArtifact = (args?.path || "").startsWith("$ARTIFACTS/") || (args?.path || "").startsWith("${ARTIFACTS}/");
+            labelEl.textContent = isArtifact ? "Wrote artifact" : "Wrote file";
+        } else if (["replace_file_content", "multi_replace_file_content", "search_and_replace", "edit_file", "replace_in_file", "str_replace"].includes(name)) {
+            labelEl.textContent = "Edited file";
+        } else if (name === "read_file") {
+            labelEl.textContent = "Read file";
+        } else if (name === "web_search" || name === "fetch_web_content" || name === "web_fetch") {
+            const isFetch = String(args?.type || "").toLowerCase() === "fetch" || /^https?:\/\//i.test(args?.query || "");
+            labelEl.textContent = isFetch ? "Fetched" : "Searched for";
+        } else if (name === "list_dir") {
+            labelEl.textContent = "Listed directory";
+        }
+    }
 
     if (name === "run_task" || name === "schedule") {
         const ringBar = badgeEl.querySelector(".timer-ring-bar");
@@ -484,67 +543,6 @@ export function onToolComplete(name, args, badgeEl, data, options = {}) {
         }
     }
 
-    if (name === "define_subagent" && data) {
-        const iconCircle = badgeEl.querySelector(".search-icon-circle");
-        if (iconCircle) {
-            iconCircle.innerHTML = `<i data-lucide="bot" aria-hidden="true"></i>`;
-            renderIcons(iconCircle);
-        }
-        const labelEl = badgeEl.querySelector(".search-label");
-        const queryEl = badgeEl.querySelector(".search-query");
-        if (labelEl) labelEl.textContent = `Defined subagent [${data.name || args.name}]`;
-        if (queryEl) {
-            queryEl.textContent = `${data.description || "Custom subagent registered"} • ${(data.allowed_tools || []).length} tools`;
-        }
-    }
-
-    if (name === "manage_subagents" && data) {
-        const iconCircle = badgeEl.querySelector(".search-icon-circle");
-        if (iconCircle) {
-            iconCircle.innerHTML = `<i data-lucide="shield" aria-hidden="true"></i>`;
-            renderIcons(iconCircle);
-        }
-        const labelEl = badgeEl.querySelector(".search-label");
-        const queryEl = badgeEl.querySelector(".search-query");
-        if (labelEl) labelEl.textContent = `Managed subagents [${data.action || args.Action || args.action || "list"}]`;
-        if (queryEl) {
-            queryEl.textContent = data.message || `${data.count || 0} subagents`;
-        }
-    }
-
-    if (name === "send_message" && data) {
-        const iconCircle = badgeEl.querySelector(".search-icon-circle");
-        if (iconCircle) {
-            iconCircle.innerHTML = `<i data-lucide="send" aria-hidden="true"></i>`;
-            renderIcons(iconCircle);
-        }
-        const labelEl = badgeEl.querySelector(".search-label");
-        const queryEl = badgeEl.querySelector(".search-query");
-        if (labelEl) labelEl.textContent = `Sent subagent message`;
-        if (queryEl) {
-            queryEl.textContent = `To: ${data.recipient || args.Recipient || args.recipient} • Status: ${data.status || "delivered"}`;
-        }
-    }
-
-    if ((name === "task" || name === "invoke_subagent") && data) {
-        const iconCircle = badgeEl.querySelector(".search-icon-circle");
-        if (iconCircle) {
-            iconCircle.innerHTML = `<i data-lucide="bot" aria-hidden="true"></i>`;
-            renderIcons(iconCircle);
-        }
-        const labelEl = badgeEl.querySelector(".search-label");
-        const queryEl = badgeEl.querySelector(".search-query");
-        const subType = data.subagent_type || args.subagent_type || args.type || "designer";
-        if (labelEl) labelEl.textContent = `Subagent [${subType}]`;
-        if (queryEl) {
-            if (data.background || data.status === "running") {
-                queryEl.textContent = "Running in background...";
-            } else {
-                queryEl.textContent = `Completed (${data.rounds || 1} round${data.rounds === 1 ? '' : 's'})`;
-            }
-        }
-    }
-
     // Format output in collapse div if present
     if (badgeEl._collapseDiv && data) {
         const resEl = badgeEl._collapseDiv.querySelector(".command-output-res");
@@ -682,20 +680,7 @@ export function onToolComplete(name, args, badgeEl, data, options = {}) {
             let outText = "";
             const isRunning = data.running === true || data.status === "running" || data.status === "in_progress";
             const isLarge = data.is_large_output || (data.stdout && data.stdout.split("\n").length > 150);
-            if (name === "define_subagent") {
-                outText = `[Defined Subagent: ${data.name || args.name}]\nDescription: ${data.description || args.description || ""}\nAllowed Tools: ${(data.allowed_tools || args.tools || []).join(", ") || "default"}\n\nStatus: ${data.status || "defined"}\nMessage: ${data.message || "Ready to invoke"}`;
-            } else if (name === "manage_subagents") {
-                const act = data.action || args.Action || args.action || "list";
-                outText = `[Manage Subagents: ${act.toUpperCase()}]\nStatus: ${data.status || "success"}\n${data.message || ""}\n${data.subagents ? JSON.stringify(data.subagents, null, 2) : ""}`;
-            } else if (name === "send_message") {
-                const rec = data.recipient || args.Recipient || args.recipient || "subagent";
-                outText = `[Message Sent to Subagent: ${rec}]\nStatus: ${data.status || "delivered"}\nSubagent Response:\n${data.response || data.report || data.message || "Delivered"}`;
-            } else if (name === "task" || name === "invoke_subagent") {
-                const subType = data.subagent_type || args.subagent_type || args.type || "designer";
-                const taskText = args.task || args.instruction || args.prompt || "";
-                const repText = data.report || (data.status === "running" ? "Subagent running in background..." : "(No report provided)");
-                outText = `[Subagent: ${subType}] (${data.rounds || 1} rounds)\nTask: ${taskText}\n\nReport:\n${repText}`;
-            } else if (name === "run_task" || name === "run_command") {
+            if (name === "run_task" || name === "run_command") {
                 const rawOutput = data.truncated_lines || data.stdout || "";
                 outText = `id: ${data.task_id || args.task_id || args.task_name || "task"}\n`;
                 if (isRunning) {
@@ -831,6 +816,26 @@ export function onToolComplete(name, args, badgeEl, data, options = {}) {
                 if (data.end_response) outText += `\nEnd Response: ${data.end_response}`;
                 if (data.stdout || data.stderr || data.output) {
                     outText += "\n\n" + (data.stdout || data.output || "") + (data.stderr ? ("\n" + data.stderr) : "");
+                }
+            } else if (name === "list_mcp" || name === "list_mcp_tools" || name === "mcp_list") {
+                if (data.tools && Array.isArray(data.tools)) {
+                    outText = `MCP Server: ${data.server} (${data.tool_count} tools)\n` +
+                        data.tools.map(t => `• ${t.name}: ${t.description}`).join("\n");
+                } else if (data.servers && Array.isArray(data.servers)) {
+                    outText = `Connected MCP Servers (${data.server_count}):\n` +
+                        data.servers.map(s => `• ${s.id} (${s.status}): ${s.tool_count} tools [${(s.tools || []).join(", ") || "none"}]`).join("\n");
+                } else {
+                    outText = JSON.stringify(data, null, 2);
+                }
+            } else if (name === "call_mcp" || name === "call_mcp_tool" || name === "mcp_call" || (typeof name === "string" && name.startsWith("mcp_"))) {
+                if (typeof data === "string") {
+                    outText = data;
+                } else if (data.content && Array.isArray(data.content)) {
+                    outText = data.content.map(c => c.text || JSON.stringify(c)).join("\n");
+                } else if (data.result !== undefined) {
+                    outText = typeof data.result === "string" ? data.result : JSON.stringify(data.result, null, 2);
+                } else {
+                    outText = JSON.stringify(data, null, 2);
                 }
             } else if (data.stdout || data.stderr) {
                 outText = (data.stdout || "") + (data.stderr ? ("\n" + data.stderr) : "");

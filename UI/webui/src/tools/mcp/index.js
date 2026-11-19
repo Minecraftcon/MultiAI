@@ -14,6 +14,7 @@ export class McpActiveToolsManager {
     constructor() {
         this.registeredToolNames = new Set();
         this.tools = [];
+        this.servers = [];
         this.isFetching = false;
         this.lastSynced = null;
         this.listeners = new Set();
@@ -81,6 +82,9 @@ export class McpActiveToolsManager {
             }
 
             this.lastSynced = Date.now();
+            try {
+                this.servers = await this.getServers();
+            } catch (_) {}
             this._notify();
             return this.tools;
         } catch (err) {
@@ -137,3 +141,136 @@ export const McpActiveTools = new McpActiveToolsManager();
 
 // Also expose manager class on instance for polymorphic usage
 McpActiveTools.McpActiveTools = McpActiveToolsManager;
+
+/**
+ * list_mcp: On-demand discovery of connected Model Context Protocol (MCP) servers and tools.
+ */
+export const listMcpTool = {
+    name: "list_mcp",
+    schema: {
+        type: "function",
+        function: {
+            name: "list_mcp",
+            description: "Discover connected Model Context Protocol (MCP) servers and their available tools. Call with no arguments to list all servers and tool summaries, or provide 'server' to inspect complete parameter schemas for a server's tools.",
+            parameters: {
+                type: "object",
+                properties: {
+                    server: {
+                        type: "string",
+                        description: "Optional ID or name of an MCP server (e.g. 'example-tools', 'github') to inspect its tools and parameters."
+                    }
+                }
+            }
+        }
+    },
+    handler: async (args = {}) => {
+        const targetServer = (args?.server || args?.serverId || args?.name || "").trim();
+        const activeTools = McpActiveTools.getActiveTools();
+        let servers = McpActiveTools.servers;
+        if (!servers || servers.length === 0) {
+            servers = await McpActiveTools.getServers();
+            McpActiveTools.servers = servers;
+        }
+
+        if (targetServer) {
+            const matchedServer = servers.find(s => (s.id || "").toLowerCase() === targetServer.toLowerCase()) || { id: targetServer, status: "unknown" };
+            const serverTools = activeTools.filter(t => 
+                (t.serverId || "").toLowerCase() === targetServer.toLowerCase() || 
+                (t.name || "").toLowerCase().startsWith(`mcp_${targetServer.toLowerCase()}_`)
+            );
+
+            if (serverTools.length === 0) {
+                const availableServerIds = servers.map(s => s.id).filter(Boolean);
+                return {
+                    status: "not_found",
+                    server: targetServer,
+                    message: `No active tools found for MCP server '${targetServer}'.`,
+                    connected_servers: availableServerIds
+                };
+            }
+
+            return {
+                status: "success",
+                server: matchedServer.id || targetServer,
+                server_status: matchedServer.status || "connected",
+                tool_count: serverTools.length,
+                tools: serverTools.map(t => ({
+                    name: t.originalName || t.name.replace(/^mcp_[^_]+_/, ""),
+                    fullName: t.name,
+                    description: t.schema?.function?.description || t.description || "",
+                    parameters: t.schema?.function?.parameters || { type: "object", properties: {} }
+                })),
+                usage: `Call call_mcp(tool: "<name>", args: {...}) to execute any of these tools.`
+            };
+        }
+
+        // List all connected servers with tool summaries
+        const serverSummaries = (servers.length > 0 ? servers : []).map(s => {
+            const sTools = activeTools.filter(t => (t.serverId || "").toLowerCase() === (s.id || "").toLowerCase());
+            const toolNames = sTools.length > 0 
+                ? sTools.map(t => t.originalName || t.name.replace(/^mcp_[^_]+_/, ""))
+                : (s.tools || []).map(t => t.originalName || t.name || t);
+            return {
+                id: s.id,
+                status: s.status,
+                tool_count: sTools.length || toolNames.length,
+                tools: toolNames
+            };
+        });
+
+        return {
+            status: "success",
+            server_count: servers.length,
+            servers: serverSummaries,
+            usage: "Call list_mcp(server: '<server_id>') to see full parameter schemas for a server, or call_mcp(tool: '<tool_name>', args: {...}) to execute."
+        };
+    }
+};
+
+/**
+ * call_mcp: On-demand execution of an MCP tool.
+ */
+export const callMcpTool = {
+    name: "call_mcp",
+    schema: {
+        type: "function",
+        function: {
+            name: "call_mcp",
+            description: "Execute a tool from a connected Model Context Protocol (MCP) server discovered via list_mcp.",
+            parameters: {
+                type: "object",
+                properties: {
+                    tool: {
+                        type: "string",
+                        description: "The name of the MCP tool to execute (e.g. 'get_current_time' or 'mcp_example-tools_get_current_time')."
+                    },
+                    server: {
+                        type: "string",
+                        description: "Optional server ID if the tool name is ambiguous across multiple servers."
+                    },
+                    args: {
+                        type: "object",
+                        description: "Arguments/parameters to pass to the MCP tool."
+                    }
+                },
+                required: ["tool"]
+            }
+        }
+    },
+    handler: async (args = {}) => {
+        const toolName = (args?.tool || args?.name || "").trim();
+        const serverId = (args?.server || args?.serverId || "").trim();
+        const toolArgs = args?.args || args?.arguments || {};
+
+        if (!toolName) {
+            throw new Error("Missing required parameter 'tool' for call_mcp.");
+        }
+
+        let targetIdentifier = toolName;
+        if (!targetIdentifier.startsWith("mcp_") && serverId) {
+            targetIdentifier = `mcp_${serverId.toLowerCase().replace(/[^a-z0-9_-]/g, "_")}_${toolName.toLowerCase().replace(/[^a-z0-9_-]/g, "_")}`;
+        }
+
+        return await McpActiveTools.callTool(targetIdentifier, toolArgs);
+    }
+};

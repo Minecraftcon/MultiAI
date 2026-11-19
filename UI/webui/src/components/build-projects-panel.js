@@ -302,7 +302,25 @@ export async function switchToBuildChat(projectId, chatId) {
     }
 
     if (session.model && modelSelect) {
-        modelSelect.value = session.model;
+        let matched = false;
+        if (session.provider) {
+            for (const opt of modelSelect.options) {
+                if (opt.value === session.model && opt.dataset.provider === session.provider) {
+                    opt.selected = true;
+                    matched = true;
+                    break;
+                }
+            }
+        }
+        if (!matched) {
+            for (const opt of modelSelect.options) {
+                if (opt.value === session.model) {
+                    opt.selected = true;
+                    matched = true;
+                    break;
+                }
+            }
+        }
         updateModelPickerDisplay();
     }
 

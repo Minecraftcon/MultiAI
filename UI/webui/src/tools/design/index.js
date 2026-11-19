@@ -1,7 +1,7 @@
 /* =========================================================
-   DESIGN & VISUAL PREVIEW SUBTOOLS (ISOLATED SUBAGENT TOOLS)
-   These tools are subagent-only (subagentOnly: true) and
-   do NOT clutter the main agent's prompt context.
+   DESIGN & VISUAL PREVIEW TOOLS
+   Tools for rendering interactive HTML previews and controlling
+   workspace preview panels.
    ========================================================= */
 
 /**
@@ -10,7 +10,6 @@
  */
 export const showHtmlPreviewTool = {
     name: "show_html_preview",
-    subagentOnly: true,
     schema: {
         type: "function",
         function: {
@@ -100,7 +99,6 @@ export const showHtmlPreviewTool = {
  */
 export const openBrowserTabTool = {
     name: "open_browser_tab",
-    subagentOnly: true,
     schema: {
         type: "function",
         function: {
@@ -153,7 +151,6 @@ export const openBrowserTabTool = {
  */
 export const togglePanelTool = {
     name: "toggle_panel",
-    subagentOnly: true,
     schema: {
         type: "function",
         function: {

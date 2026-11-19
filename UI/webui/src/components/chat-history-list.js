@@ -47,7 +47,7 @@ export function renderChatList(filterQuery = "") {
 
     let ids = Object.keys(state.chatSessions || {}).filter(id => {
         const s = state.chatSessions[id];
-        return s && !s.projectId && s.mode !== "build" && !s.isSubagent && !s.parentChatId;
+        return s && !s.projectId && s.mode !== "build";
     });
 
     // Clear the keyed-diff map if we had an empty state placeholder
@@ -271,14 +271,30 @@ export async function switchToChat(id) {
         ? structuredClone(session.messages)
         : [{ role: "system", content: state.activeSystemPrompt }];
 
-    if (session.isSubagent && session.subagentType) {
-        // Keep the specialized subagent persona prompt
-    } else if (state.messages[0]?.role === "system") {
+    if (state.messages[0]?.role === "system") {
         state.messages[0].content = state.activeSystemPrompt;
     }
 
     if (session.model && modelSelect) {
-        modelSelect.value = session.model;
+        let matched = false;
+        if (session.provider) {
+            for (const opt of modelSelect.options) {
+                if (opt.value === session.model && opt.dataset.provider === session.provider) {
+                    opt.selected = true;
+                    matched = true;
+                    break;
+                }
+            }
+        }
+        if (!matched) {
+            for (const opt of modelSelect.options) {
+                if (opt.value === session.model) {
+                    opt.selected = true;
+                    matched = true;
+                    break;
+                }
+            }
+        }
         updateModelPickerDisplay();
     }
 
@@ -379,7 +395,7 @@ export async function switchToChat(id) {
         (chat && chat.querySelector(".message.user")) ||
         session.messages?.some(m => m.role === "user")
     );
-    setStartPageMode(!hasUserMsg && !session.isSubagent);
+    setStartPageMode(!hasUserMsg);
     if (session && session.isDeepSearch) {
         setDeepSearchActive(true);
     } else if (hasUserMsg) {
@@ -392,10 +408,7 @@ export async function switchToChat(id) {
 
     const input = document.getElementById("input");
     if (input) {
-        if (session.isSubagent && session.subagentType) {
-            const pretty = session.subagentType.charAt(0).toUpperCase() + session.subagentType.slice(1);
-            input.placeholder = `Message ${pretty} subagent...`;
-        } else if (session.isBuildChat || session.projectId) {
+        if (session.isBuildChat || session.projectId) {
             input.placeholder = `Build task...`;
         } else {
             input.placeholder = `Message AI…`;
@@ -421,19 +434,11 @@ export function deleteChatSession(id) {
     hideChatItemMenu();
     fetch("/api/chats/" + encodeURIComponent(id), { method: "DELETE" }).catch(() => {});
 
-    // Cascade delete any child subagents bound to this main chat
-    for (const [subId, sess] of Object.entries(state.chatSessions)) {
-        if (sess && (sess.isSubagent || sess.parentChatId) && sess.parentChatId === id) {
-            delete state.chatSessions[subId];
-            fetch("/api/chats/" + encodeURIComponent(subId), { method: "DELETE" }).catch(() => {});
-        }
-    }
-
     if (state.currentChatId === id) {
         state.currentChatId = null;
         const remaining = Object.keys(state.chatSessions).filter(cid => {
             const s = state.chatSessions[cid];
-            return s && !s.projectId && s.mode !== "build" && !s.isSubagent && !s.parentChatId;
+            return s && !s.projectId && s.mode !== "build";
         });
         if (remaining.length > 0) {
             remaining.sort((a, b) => (state.chatSessions[b].updatedAt || 0) - (state.chatSessions[a].updatedAt || 0));

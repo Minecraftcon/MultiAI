@@ -10,16 +10,16 @@ import { mediaTools } from "./media/index.js";
 import { filesystemTools } from "./filesystem/index.js";
 import { planningTools } from "./planning/index.js";
 import { designTools } from "./design/index.js";
-import { McpActiveTools } from "./mcp/index.js";
-import { SUBAGENT_ALLOWED_TOOLS } from "../agent/subagent.js";
+import { McpActiveTools, listMcpTool, callMcpTool } from "./mcp/index.js";
 
-// Register terminal, web, media, filesystem, planning, and design tools
+// Register core agent execution tools: terminal, web, media, filesystem, planning, and on-demand MCP tools
 terminalTools.forEach(registerTool);
 webTools.forEach(registerTool);
 mediaTools.forEach(registerTool);
 filesystemTools.forEach(registerTool);
 planningTools.forEach(registerTool);
-designTools.forEach(registerTool);
+registerTool(listMcpTool);
+registerTool(callMcpTool);
 
 /**
  * Array of all tool schemas provided to LLM chat requests.
@@ -37,25 +37,8 @@ export function syncToolsArray() {
 
 /**
  * Returns dynamic tool schemas filtering out tools disabled by configuration.
- * When in a dedicated subagent chat session, returns the persona's allowed tools.
  */
-function getActiveToolSchemas(session = null) {
-    const currentSession = session || (state.currentChatId ? state.chatSessions[state.currentChatId] : null);
-
-    // If active conversation is a dedicated subagent chat session, provide that persona's allowed tools
-    if (currentSession?.isSubagent && currentSession?.subagentType) {
-        const allowedNames = SUBAGENT_ALLOWED_TOOLS[currentSession.subagentType] || SUBAGENT_ALLOWED_TOOLS["general-purpose"] || [];
-        const allowedSet = new Set(allowedNames);
-        const list = [];
-        for (const name of allowedSet) {
-            const registered = getTool(name);
-            if (registered && registered.schema) {
-                list.push(registered.schema);
-            }
-        }
-        return list;
-    }
-
+function getActiveToolSchemas() {
     const toolsConfig = state.config?.Tools || {};
     return getAllToolSchemas().filter(schema => {
         const name = schema?.function?.name || "";
@@ -63,7 +46,9 @@ function getActiveToolSchemas(session = null) {
         if (toolsConfig.EnableWebSearch === false && name === "web_search") return false;
         if (toolsConfig.EnableImageGeneration === false && name === "generate_image") return false;
         if (toolsConfig.EnableFilesystem === false && (name === "list_dir" || name === "read_file" || name === "write_file" || name === "replace_file_content" || name === "multi_replace_file_content" || name === "grep_search")) return false;
-        if (toolsConfig.EnableMcp === false && name.startsWith("mcp_")) return false;
+        if (toolsConfig.EnableMcp === false && (name.startsWith("mcp_") || name === "list_mcp" || name === "call_mcp")) return false;
+        // In on-demand MCP mode (default), do not expose individual mcp_* tool schemas all at once; expose list_mcp and call_mcp instead
+        if (name.startsWith("mcp_") && !toolsConfig.ExposeAllMcpTools) return false;
         return true;
     });
 }

@@ -21,7 +21,15 @@ if (typeof global.document === "undefined") {
         body: { classList: { add() {}, remove() {}, contains() { return false; } } },
         addEventListener() {},
         removeEventListener() {},
-        getElementById() { return null; }
+        getElementById() { return null; },
+        createElement() {
+            return {
+                innerHTML: "",
+                firstElementChild: {},
+                classList: { add() {}, remove() {} },
+                querySelector() { return null; }
+            };
+        }
     };
 }
 
@@ -62,6 +70,44 @@ async function runTests() {
         const cfg2 = getToolBadgeConfig("run_command", { command: "ls -la" });
         assert.strictEqual(cfg2.detail, "ls -la");
         assert.strictEqual(cfg2.displayCmd, "ls -la");
+
+        // Empty args (streaming initial mount) must not claim false title
+        const cfgEmpty = getToolBadgeConfig("run_task", {});
+        assert.strictEqual(cfgEmpty.isRunTaskWithTitle, false, "Empty args must not have isRunTaskWithTitle");
+        assert.strictEqual(cfgEmpty.displayCmd, "Task execution");
+
+        // Streaming command extraction
+        const { extractStreamingCommand, extractStreamingTaskName, syncToolBadgeArgs } = badgesModule;
+        const rawJson = '{"command":"flatpak list","task_name":"Find game installs"}';
+        assert.strictEqual(extractStreamingCommand(rawJson), "flatpak list");
+        assert.strictEqual(extractStreamingTaskName(rawJson), "Find game installs");
+
+        // Mock badge element with collapse div
+        const mockBadge = {
+            classList: { add() {}, remove() {}, contains() { return false; } },
+            querySelector(sel) {
+                if (sel === ".search-label") return this._labelEl;
+                if (sel === ".search-query") return this._queryEl;
+                if (sel === ".preview-icon") return null;
+                return null;
+            },
+            _labelEl: { textContent: "Ran command", insertAdjacentElement() {} },
+            _queryEl: { textContent: "task command", dataset: {} },
+            _collapseDiv: {
+                querySelector(sel) {
+                    if (sel === ".command-output-cmd") return this._cmdBox;
+                    if (sel === ".command-cmd-text") return this._cmdText;
+                    return null;
+                },
+                _cmdBox: { dataset: {}, classList: { add() {}, remove() {} }, querySelector() { return null; }, appendChild() {} },
+                _cmdText: { textContent: "Task execution" }
+            }
+        };
+
+        syncToolBadgeArgs(mockBadge, "run_task", { command: "flatpak list", task_name: "Find game installs" });
+        assert.strictEqual(mockBadge._queryEl.textContent, "Find game installs");
+        assert.strictEqual(mockBadge._collapseDiv._cmdText.textContent, "flatpak list");
+        assert.strictEqual(mockBadge._displayCmd, "flatpak list");
     }
 
     // 3. manage_tasks
@@ -123,8 +169,8 @@ async function runTests() {
         assert.strictEqual(listDirCfg.displayCmd, "LIST DIR: src");
     }
 
-    // 4.5. Planning & Subagent tools
-    console.log("Test: planning & subagent tools (write_todos, task)");
+    // 4.5. Planning tools
+    console.log("Test: planning tools (write_todos)");
     {
         const todoCfg = getToolBadgeConfig("write_todos", {
             todos: [
@@ -140,15 +186,6 @@ async function runTests() {
         assert.strictEqual(todoCfg.isCommandTask, true);
         assert(todoCfg.displayCmd.includes("[✓] Inspect codebase"), "Display command must format completed todo");
         assert(todoCfg.displayCmd.includes("[▶] Implement feature"), "Display command must format active todo");
-
-        const subagentCfg = getToolBadgeConfig("task", {
-            instruction: "Search for documentation on React view transitions",
-            subagent_type: "researcher"
-        });
-        assert.strictEqual(subagentCfg.icon, "bot");
-        assert.strictEqual(subagentCfg.label, "Subagent [researcher]");
-        assert.strictEqual(subagentCfg.detail, "Search for documentation on React view transitions");
-        assert.strictEqual(subagentCfg.isCommandTask, true);
     }
 
     // 5. Timer tools

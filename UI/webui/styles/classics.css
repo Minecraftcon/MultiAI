@@ -9,6 +9,7 @@
 .ui-style-classics .composer,
 .ui-style-classics .composer-dock {
     border-radius: 8px !important;
+    background: var(--input-bg, var(--surface, #ffffff)) !important;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 0 0 1px var(--border) !important;
     padding: 6px 10px !important;
 }
@@ -157,6 +158,339 @@
     .ui-style-classics .composer,
     .ui-style-classics .composer-dock {
         border-radius: 8px !important;
+        background: var(--input-bg, var(--surface, #ffffff)) !important;
     }
+}
+
+/* ── 6. Activity & Tool Execution List (Classics Style - Clean, Indented, No Circles/Hierarchy Line) ── */
+[data-ui-style="classics"] .activity-wrapper,
+.ui-style-classics .activity-wrapper {
+    margin-bottom: 8px !important;
+}
+
+[data-ui-style="classics"] .activity-toggle,
+.ui-style-classics .activity-toggle {
+    font-size: 13px !important;
+    font-weight: 500 !important;
+    color: var(--text-secondary) !important;
+    padding: 2px 0 !important;
+    gap: 6px !important;
+}
+
+[data-ui-style="classics"] .activity-toggle:hover,
+.ui-style-classics .activity-toggle:hover {
+    color: var(--text-primary) !important;
+}
+
+[data-ui-style="classics"] .activity-toggle .chevron,
+.ui-style-classics .activity-toggle .chevron {
+    font-size: 8px !important;
+    width: 12px !important;
+    opacity: 0.7 !important;
+}
+
+/* Remove the vertical connecting line between badges entirely */
+[data-ui-style="classics"] .search-items-container::before,
+.ui-style-classics .search-items-container::before {
+    display: none !important;
+}
+
+/* Indent the child tool execution rows cleanly */
+[data-ui-style="classics"] .search-items-container,
+.ui-style-classics .search-items-container {
+    padding-left: 14px !important;
+    gap: 4px !important;
+    margin: 4px 0 !important;
+    border-left: none !important;
+}
+
+/* Remove the circular badge / ring chrome entirely */
+[data-ui-style="classics"] .search-badge-item .search-icon-circle,
+.ui-style-classics .search-badge-item .search-icon-circle {
+    display: none !important;
+}
+
+/* Hide the < > code icon tag in classics mode */
+[data-ui-style="classics"] .search-badge-item .preview-icon,
+.ui-style-classics .search-badge-item .preview-icon {
+    display: none !important;
+}
+
+/* Clean, indented text row for each tool execution */
+[data-ui-style="classics"] .search-badge-item,
+.ui-style-classics .search-badge-item {
+    display: flex !important;
+    align-items: baseline !important;
+    gap: 6px !important;
+    padding: 2px 0 !important;
+    min-height: auto !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    font-size: 13px !important;
+    line-height: 1.5 !important;
+}
+
+/* Minimal bullet / prompt indicator */
+[data-ui-style="classics"] .search-badge-item::before,
+.ui-style-classics .search-badge-item::before {
+    content: "•";
+    display: inline-block;
+    color: var(--text-tertiary, #71717a);
+    font-size: 11px;
+    line-height: 1;
+    margin-right: 2px;
+    flex-shrink: 0;
+    transition: color 0.2s ease;
+}
+
+[data-ui-style="classics"] .search-badge-item.is-running::before,
+.ui-style-classics .search-badge-item.is-running::before {
+    content: "›";
+    color: var(--accent, #6366f1);
+    font-weight: 700;
+    font-size: 13px;
+    animation: classicsPulse 1.2s infinite ease-in-out;
+}
+
+@keyframes classicsPulse {
+    0%, 100% { opacity: 1; transform: translateX(0); }
+    50% { opacity: 0.4; transform: translateX(1px); }
+}
+
+/* Label styling: Running vs Completed */
+[data-ui-style="classics"] .search-badge-item .search-label,
+.ui-style-classics .search-badge-item .search-label {
+    font-size: 13px !important;
+    font-weight: 500 !important;
+    color: var(--text-secondary, #a1a1aa) !important;
+    transition: color 0.2s ease;
+}
+
+[data-ui-style="classics"] .search-badge-item.is-running .search-label,
+.ui-style-classics .search-badge-item.is-running .search-label {
+    color: var(--accent, #6366f1) !important;
+}
+
+[data-ui-style="classics"] .search-badge-item.is-finished .search-label,
+.ui-style-classics .search-badge-item.is-finished .search-label {
+    color: var(--text-secondary, #a1a1aa) !important;
+}
+
+/* Target detail / command / path — monospace only for command-type tools */
+[data-ui-style="classics"] .search-badge-item .search-query,
+.ui-style-classics .search-badge-item .search-query {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+    font-size: 12.5px !important;
+    color: var(--text-primary, #e4e4e7) !important;
+    font-weight: 500 !important;
+}
+
+/* Non-command tool query (web search, file read label) — back to regular font */
+[data-ui-style="classics"] .search-badge-item:not(.timer-badge) .search-query,
+.ui-style-classics .search-badge-item:not(.timer-badge) .search-query {
+    font-family: inherit !important;
+    font-weight: 400 !important;
+    color: var(--text-secondary, #a1a1aa) !important;
+}
+
+/* Keep monospace + bold for timer-badge and explicitly command-type badges */
+[data-ui-style="classics"] .search-badge-item.timer-badge .search-query,
+.ui-style-classics .search-badge-item.timer-badge .search-query {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+    font-size: 12px !important;
+    color: var(--text-primary, #e4e4e7) !important;
+    font-weight: 500 !important;
+}
+
+/* Expand chevron */
+[data-ui-style="classics"] .search-badge-item .badge-expand-chevron,
+.ui-style-classics .search-badge-item .badge-expand-chevron {
+    font-size: 8px !important;
+    color: var(--text-tertiary) !important;
+    opacity: 0.6 !important;
+    margin-left: 4px !important;
+}
+
+[data-ui-style="classics"] .search-badge-item.open .badge-expand-chevron,
+.ui-style-classics .search-badge-item.open .badge-expand-chevron {
+    transform: rotate(90deg);
+    opacity: 1 !important;
+    color: var(--text-primary) !important;
+}
+
+/* Collapsible output — keep collapsed during streaming in classics.
+   Only open on explicit .open (user click). No card chrome at all. */
+[data-ui-style="classics"] .badge-collapse,
+.ui-style-classics .badge-collapse {
+    grid-template-rows: 0fr !important;
+    margin-left: 14px !important;
+    margin-top: 1px !important;
+    margin-bottom: 2px !important;
+    max-width: calc(100% - 14px) !important;
+    border-radius: 0 !important;
+    border: none !important;
+    border-left: 2px solid var(--border, rgba(255,255,255,0.1)) !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    padding-left: 8px !important;
+}
+
+/* Allow expand only when user clicks (open class), not during streaming */
+[data-ui-style="classics"] .search-badge-item.open + .badge-collapse,
+.ui-style-classics .search-badge-item.open + .badge-collapse {
+    grid-template-rows: 1fr !important;
+}
+
+/* Strip the card chrome off the command output box itself */
+[data-ui-style="classics"] .command-output-box,
+.ui-style-classics .command-output-box {
+    background: transparent !important;
+    border: none !important;
+    border-radius: 0 !important;
+    margin: 0 !important;
+    padding: 4px 0 !important;
+}
+
+[data-ui-style="classics"] .command-output-box pre,
+.ui-style-classics .command-output-box pre {
+    padding: 0 !important;
+    font-size: 11.5px !important;
+    color: var(--text-secondary) !important;
+    max-height: 200px !important;
+    border-radius: 0 !important;
+}
+
+/* Hide the command label line (redundant with badge detail) */
+[data-ui-style="classics"] .command-output-cmd,
+.ui-style-classics .command-output-cmd {
+    display: none !important;
+}
+
+/* Hide the Terminal chip button */
+[data-ui-style="classics"] .badge-open-pty-btn,
+.ui-style-classics .badge-open-pty-btn {
+    display: none !important;
+}
+
+/* Subtle separator */
+[data-ui-style="classics"] .command-output-sep,
+.ui-style-classics .command-output-sep {
+    border-top-color: var(--border) !important;
+    margin: 2px 0 !important;
+    opacity: 0.4 !important;
+}
+
+/* Result text */
+[data-ui-style="classics"] .command-output-res,
+.ui-style-classics .command-output-res {
+    color: var(--text-secondary) !important;
+    font-size: 11.5px !important;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+}
+
+[data-ui-style="classics"] .command-output-res:empty::after,
+.ui-style-classics .command-output-res:empty::after {
+    content: "running…" !important;
+    color: var(--text-tertiary) !important;
+    font-style: italic !important;
+    font-family: inherit !important;
+}
+
+/* Intermediate reasoning / thought items inside activity in classics mode */
+[data-ui-style="classics"] .activity-thought-item,
+.ui-style-classics .activity-thought-item {
+    padding: 0 !important;
+    border-left: none !important;
+    margin: 2px 0 !important;
+    font-style: normal !important;
+}
+
+/* Thought disclosure in classics mode — minimal, no brain SVG, clean indent */
+[data-ui-style="classics"] .thought-box,
+.ui-style-classics .thought-box {
+    margin: 2px 0 4px 0 !important;
+}
+
+[data-ui-style="classics"] .thought-summary,
+.ui-style-classics .thought-summary {
+    padding: 2px 0 !important;
+    gap: 4px !important;
+}
+
+[data-ui-style="classics"] .thought-header,
+.ui-style-classics .thought-header {
+    font-size: 12px !important;
+    font-weight: 400 !important;
+    color: var(--text-tertiary, #71717a) !important;
+    gap: 5px !important;
+}
+
+[data-ui-style="classics"] .thought-summary:hover .thought-header,
+.ui-style-classics .thought-summary:hover .thought-header {
+    color: var(--text-secondary, #a1a1aa) !important;
+}
+
+/* Hide bulky brain SVG icon in classics mode, replace with subtle minimal bullet */
+[data-ui-style="classics"] .thought-brain-icon,
+.ui-style-classics .thought-brain-icon {
+    display: none !important;
+}
+
+[data-ui-style="classics"] .thought-summary::before,
+.ui-style-classics .thought-summary::before {
+    content: "•";
+    display: inline-block;
+    color: var(--text-tertiary, #71717a);
+    font-size: 11px;
+    margin-right: 4px;
+}
+
+[data-ui-style="classics"] .thought-chevron,
+.ui-style-classics .thought-chevron {
+    font-size: 9px !important;
+    color: var(--text-tertiary, #71717a) !important;
+}
+
+[data-ui-style="classics"] .thought-body,
+.ui-style-classics .thought-body {
+    margin-top: 2px !important;
+    margin-left: 5px !important;
+    padding-left: 10px !important;
+    border-left: 2px solid var(--border, rgba(255,255,255,0.08)) !important;
+}
+
+[data-ui-style="classics"] .thought-content,
+.ui-style-classics .thought-content {
+    font-size: 12.5px !important;
+    line-height: 1.5 !important;
+    color: var(--text-tertiary, #71717a) !important;
+    font-style: italic !important;
+}
+
+/* File / Code viewer in classics mode — crisp minimal frame, no heavy shadow */
+[data-ui-style="classics"] .modern-viewer-window,
+.ui-style-classics .modern-viewer-window {
+    border-radius: 4px !important;
+    box-shadow: none !important;
+    border: 1px solid var(--border) !important;
+    margin: 4px 0 !important;
+    background: transparent !important;
+}
+
+[data-ui-style="classics"] .mv-header,
+.ui-style-classics .mv-header {
+    background: var(--surface-1, rgba(255, 255, 255, 0.03)) !important;
+    border-bottom: 1px solid var(--border) !important;
+    padding: 4px 10px !important;
+    font-size: 12px !important;
+}
+
+[data-ui-style="classics"] .checkpoint-view-btn,
+.ui-style-classics .checkpoint-view-btn {
+    border-radius: 3px !important;
+    font-size: 11px !important;
+    padding: 1px 6px !important;
+    box-shadow: none !important;
 }
 

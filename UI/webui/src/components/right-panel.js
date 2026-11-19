@@ -9,12 +9,7 @@ import { terminalDrawer } from "./terminal-drawer.js";
 import { closePanel, getIsPanelOpen } from "./gestures.js";
 import { state } from "../state/index.js";
 import { saveStoredChats, persistChatToDisk } from "../services/storage.js";
-import { switchToChat } from "./chat-history-list.js";
-import { renderSessionMessages, createAIMessageShell, finalizeStopped } from "./chat-ui.js";
-import { runAgent } from "../agent/orchestrator.js";
-import { openModelPicker } from "./model-picker.js";
-import { getActiveSubagents, onSubagentsChange } from "../agent/subagent.js";
-import { getActiveMainChatId, recoverPastSubagentsFromMainChat } from "./subagents-panel.js";
+
 
 function getFileBadgeInfo(fileName = "") {
     const ext = fileName.split(".").pop()?.toLowerCase() || "";
@@ -167,12 +162,7 @@ class RightPanelManager {
         this.itemOpenFile = document.getElementById("launcherItemOpenFile");
         this.itemTerminal = document.getElementById("launcherItemTerminal");
         this.itemBrowser = document.getElementById("launcherItemBrowser");
-        this.itemSubagents = document.getElementById("launcherItemSubagents");
-        this.subagentsBadgeEl = document.getElementById("launcherSubagentsBadge");
         this.itemExtensions = document.getElementById("launcherItemExtensions");
-
-        this.subagentsCountBadgeEl = document.getElementById("launcherSubagentsCountBadge");
-        this.subagentsListEl = document.getElementById("launcherSubagentsList");
 
         this.tasksBadgeEl = document.getElementById("launcherTasksCountBadge");
         this.tasksListEl = document.getElementById("launcherTasksList");
@@ -182,26 +172,6 @@ class RightPanelManager {
         this.terminalMountEl = document.getElementById("rightPanelTerminalMount");
         this.fusedTerminalContainer = document.getElementById("fusedTerminalContainer");
         this.browserMountEl = document.getElementById("rightPanelBrowserMount");
-        this.subagentMountEl = document.getElementById("rightPanelSubagentMount");
-        this.subagentBackBtn = document.getElementById("rpSubagentBackBtn");
-        this.subagentPersonaBadge = document.getElementById("rpSubagentPersonaBadge");
-        this.subagentStatusBadge = document.getElementById("rpSubagentStatusBadge");
-        this.subagentTaskTitle = document.getElementById("rpSubagentTaskTitle");
-        this.subagentOpenFullBtn = document.getElementById("rpSubagentOpenFullBtn");
-        this.subagentMessagesList = document.getElementById("rpSubagentMessagesList");
-
-        this.subagentChatboxDock = document.getElementById("rpSubagentChatboxDock");
-        this.subagentInput = document.getElementById("rpSubagentInput");
-        this.subagentSendBtn = document.getElementById("rpSubagentSendBtn");
-        this.subagentAttachBtn = document.getElementById("rpSubagentAttachBtn");
-        this.subagentFileInput = document.getElementById("rpSubagentFileInput");
-        this.subagentModelPickerBtn = document.getElementById("rpSubagentModelPickerBtn");
-        this.subagentModelPickerName = document.getElementById("rpSubagentModelPickerName");
-        this.subagentClearBtn = document.getElementById("rpSubagentClearBtn");
-        this.subagentStagedStrip = document.getElementById("rpSubagentStagedAttachments");
-        this.subagentTopResizer = document.getElementById("rpSubagentTopResizer");
-        this.stagedSubagentAttachments = [];
-        this.initSubagentComposerResizer();
         this.browserUrlInput = document.getElementById("browserUrlInput");
         this.browserIframe = document.getElementById("rightPanelBrowserFrame");
         this.browserBackBtn = document.getElementById("browserBackBtn");
@@ -347,75 +317,9 @@ class RightPanelManager {
         if (this.itemBrowser) {
             this.itemBrowser.addEventListener("click", () => this.openBrowserTab("https://duckduckgo.com"));
         }
-        if (this.itemSubagents) {
-            this.itemSubagents.addEventListener("click", () => this.openSubagentsTab());
-        }
         if (this.itemExtensions) {
             this.itemExtensions.addEventListener("click", () => this.openExtensionsTab());
         }
-
-        // Subagent Tab controls
-        if (this.subagentBackBtn) {
-            this.subagentBackBtn.addEventListener("click", () => this.switchToLauncher());
-        }
-        if (this.subagentOpenFullBtn) {
-            this.subagentOpenFullBtn.addEventListener("click", () => this.openCurrentSubagentInFullChat());
-        }
-        if (this.subagentSendBtn) {
-            this.subagentSendBtn.addEventListener("click", () => this.sendSubagentDirectMessage());
-        }
-        if (this.subagentAttachBtn && this.subagentFileInput) {
-            this.subagentAttachBtn.addEventListener("click", () => {
-                this.subagentFileInput.click();
-            });
-            this.subagentFileInput.addEventListener("change", (e) => {
-                this.handleSubagentFilesSelected(Array.from(e.target.files || []));
-                this.subagentFileInput.value = "";
-            });
-        }
-        if (this.subagentModelPickerBtn) {
-            this.subagentModelPickerBtn.addEventListener("click", () => {
-                openModelPicker("subagent");
-            });
-        }
-        if (this.subagentClearBtn) {
-            this.subagentClearBtn.addEventListener("click", () => {
-                if (this.subagentInput) {
-                    this.subagentInput.value = "";
-                    this.handleSubagentInputResize();
-                }
-            });
-        }
-        if (this.subagentInput) {
-            this.subagentInput.addEventListener("input", () => {
-                this.handleSubagentInputResize();
-            });
-            this.subagentInput.addEventListener("keydown", (e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    this.sendSubagentDirectMessage();
-                }
-            });
-        }
-
-        // Live Subagent state updates & Model changes
-        document.addEventListener("modelChanged", () => {
-            this.updateSubagentModelPickerDisplay();
-        });
-        document.addEventListener("chatsUpdated", () => {
-            this.loadSubagents(true);
-            const activeTab = this.tabs.find(t => t.id === this.activeTabId);
-            if (activeTab && activeTab.type === "subagent") {
-                this.renderSubagentTab(activeTab);
-            }
-        });
-        onSubagentsChange(() => {
-            this.loadSubagents(true);
-            const activeTab = this.tabs.find(t => t.id === this.activeTabId);
-            if (activeTab && activeTab.type === "subagent") {
-                this.renderSubagentTab(activeTab);
-            }
-        });
 
         // See all tasks button
         if (this.seeAllBtn) {
@@ -603,7 +507,6 @@ class RightPanelManager {
         this.renderTabStrip();
         this.renderActiveTab();
         this.loadTasks();
-        this.loadSubagents();
         this.checkWorkspaceChanges();
         this.debouncedRefreshFileTree();
         this.startPolling();
@@ -708,7 +611,6 @@ class RightPanelManager {
         this.pollTimer = setInterval(() => {
             if (!this.isOpen) return;
             this.loadTasks(true);
-            this.loadSubagents(true);
             this.checkWorkspaceChanges();
         }, 3000);
     }
@@ -807,8 +709,6 @@ class RightPanelManager {
                 iconOrBadgeHtml = '<i data-lucide="square-terminal"></i>';
             } else if (tab.type === "browser") {
                 iconOrBadgeHtml = '<i data-lucide="globe"></i>';
-            } else if (tab.type === "subagent") {
-                iconOrBadgeHtml = '<i data-lucide="bot" style="color: #38bdf8;"></i>';
             } else if (tab.type === "extensions") {
                 iconOrBadgeHtml = '<i data-lucide="puzzle" style="color: #fca5a5;"></i>';
             } else if (tab.path) {
@@ -912,7 +812,6 @@ class RightPanelManager {
             this.searchInputEl.focus();
         }
         this.loadTasks();
-        this.loadSubagents();
     }
 
     renderActiveTab() {
@@ -923,7 +822,6 @@ class RightPanelManager {
             this.launcherViewEl.style.display = "flex";
             this.tabContentEl.style.display = "none";
             this.loadTasks();
-            this.loadSubagents();
             return;
         }
 
@@ -941,7 +839,6 @@ class RightPanelManager {
         if (this.viewerMountEl) this.viewerMountEl.style.display = "none";
         if (this.terminalMountEl) this.terminalMountEl.style.display = "none";
         if (this.browserMountEl) this.browserMountEl.style.display = "none";
-        if (this.subagentMountEl) this.subagentMountEl.style.display = "none";
 
         if (activeTab.type === "diff") {
             if (this.viewerMountEl) {
@@ -967,11 +864,6 @@ class RightPanelManager {
             if (this.browserMountEl) {
                 this.browserMountEl.style.display = "flex";
                 this.renderBrowserTab(activeTab);
-            }
-        } else if (activeTab.type === "subagent") {
-            if (this.subagentMountEl) {
-                this.subagentMountEl.style.display = "flex";
-                this.renderSubagentTab(activeTab);
             }
         } else if (activeTab.type === "extensions") {
             if (this.viewerMountEl) {
@@ -3288,528 +3180,6 @@ class RightPanelManager {
             } else {
                 this.hideSearchResults();
             }
-        }
-    }
-
-    // ── Subagents Management & Direct Chat ─────────────────────
-    loadSubagents(isBackground = false) {
-        try {
-            const mainChatId = getActiveMainChatId();
-            if (mainChatId) {
-                recoverPastSubagentsFromMainChat(mainChatId);
-            }
-
-            const allSessions = Object.values(state.chatSessions || {});
-            const boundSubagents = allSessions.filter(s => s && s.isSubagent && (s.parentChatId === mainChatId || !mainChatId));
-
-            const liveActive = getActiveSubagents().filter(a => !mainChatId || a.parentChatId === mainChatId);
-            const liveMap = new Map(liveActive.map(a => [a.id, a]));
-
-            const subagentsList = boundSubagents.map(s => {
-                const live = liveMap.get(s.id);
-                const isRunning = s.subagentStatus === "running" || Boolean(live);
-                return {
-                    id: s.id,
-                    type: s.subagentType || "designer",
-                    task: s.task || s.title || "Subagent task",
-                    status: isRunning ? "running" : "completed",
-                    updatedAt: s.updatedAt || s.createdAt || 0
-                };
-            });
-
-            // Also include any live active that aren't yet in chatSessions
-            liveActive.forEach(a => {
-                if (!subagentsList.some(s => s.id === a.id)) {
-                    subagentsList.unshift({
-                        id: a.id,
-                        type: a.type || "designer",
-                        task: a.task || "Subagent running...",
-                        status: "running",
-                        updatedAt: Date.now()
-                    });
-                }
-            });
-
-            subagentsList.sort((a, b) => {
-                if (a.status === "running" && b.status !== "running") return -1;
-                if (a.status !== "running" && b.status === "running") return 1;
-                return b.updatedAt - a.updatedAt;
-            });
-
-            // Deduplicate any accidental duplicate entries for the same task
-            const seenTasks = new Set();
-            const uniqueSubagentsList = [];
-            for (const item of subagentsList) {
-                const normTask = (item.task || "").trim();
-                if (normTask && seenTasks.has(normTask)) {
-                    continue;
-                }
-                if (normTask) seenTasks.add(normTask);
-                uniqueSubagentsList.push(item);
-            }
-
-            const runningCount = uniqueSubagentsList.filter(s => s.status === "running").length;
-
-            if (this.subagentsBadgeEl) {
-                if (runningCount > 0) {
-                    this.subagentsBadgeEl.textContent = String(runningCount);
-                    this.subagentsBadgeEl.style.display = "inline-block";
-                } else {
-                    this.subagentsBadgeEl.style.display = "none";
-                }
-            }
-
-            if (this.subagentsCountBadgeEl) {
-                if (uniqueSubagentsList.length > 0) {
-                    this.subagentsCountBadgeEl.textContent = String(uniqueSubagentsList.length);
-                    this.subagentsCountBadgeEl.style.display = "inline-block";
-                } else {
-                    this.subagentsCountBadgeEl.style.display = "none";
-                }
-            }
-
-            this.renderSubagentsList(uniqueSubagentsList);
-        } catch (err) {
-            if (!isBackground) console.error("[RightPanel] Load subagents error:", err);
-        }
-    }
-
-    renderSubagentsList(subagents = []) {
-        if (!this.subagentsListEl) return;
-
-        if (!subagents || subagents.length === 0) {
-            this.subagentsListEl.innerHTML = '<div class="launcher-subagents-empty">No active subagents.</div>';
-            return;
-        }
-
-        let html = "";
-        subagents.slice(0, 5).forEach((sub) => {
-            const isRunning = sub.status === "running";
-            html += `
-                <div class="launcher-subagent-row ${isRunning ? 'running' : ''}" data-subagent-id="${escapeHTML(sub.id)}" role="button" tabindex="0">
-                    <div class="launcher-subagent-left">
-                        <i data-lucide="bot"></i>
-                        <div class="launcher-subagent-info">
-                            <span class="launcher-subagent-type">${escapeHTML(sub.type)}</span>
-                            <span class="launcher-subagent-task" title="${escapeHTML(sub.task)}">${escapeHTML(sub.task)}</span>
-                        </div>
-                    </div>
-                    <div class="launcher-subagent-right">
-                        ${isRunning ? `
-                            <span class="launcher-subagent-status running">
-                                <span class="pulse-dot"></span>
-                                <span>Running</span>
-                            </span>
-                        ` : `
-                            <span class="launcher-subagent-status completed">Completed</span>
-                        `}
-                    </div>
-                </div>
-            `;
-        });
-
-        this.subagentsListEl.innerHTML = html;
-        renderIcons(this.subagentsListEl);
-
-        this.subagentsListEl.querySelectorAll(".launcher-subagent-row").forEach(row => {
-            row.addEventListener("click", () => {
-                const sid = row.getAttribute("data-subagent-id");
-                if (sid) {
-                    this.openSubagentTab(sid);
-                }
-            });
-        });
-    }
-
-    openSubagentsTab() {
-        const allSessions = Object.values(state.chatSessions || {});
-        const mainChatId = getActiveMainChatId();
-        const bound = allSessions.filter(s => s && s.isSubagent && (s.parentChatId === mainChatId || !mainChatId));
-        const live = getActiveSubagents().filter(a => !mainChatId || a.parentChatId === mainChatId);
-
-        let targetId = live[0]?.id;
-        if (!targetId && bound.length > 0) {
-            bound.sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
-            targetId = bound[0].id;
-        }
-
-        if (targetId) {
-            this.openSubagentTab(targetId);
-        } else {
-            this.switchToLauncher();
-            this.subagentsListEl?.scrollIntoView({ behavior: "smooth", block: "center" });
-        }
-    }
-
-    openSubagentTab(subagentId) {
-        if (!this.isOpen) {
-            this.open();
-        }
-
-        const subSession = state.chatSessions[subagentId];
-        const subType = subSession?.subagentType || "designer";
-        const tabTitle = `Subagent: ${subType}`;
-        const tabId = `subagent_${subagentId}`;
-
-        let tab = this.tabs.find(t => t.id === tabId);
-        if (!tab) {
-            tab = {
-                id: tabId,
-                type: "subagent",
-                subagentId: subagentId,
-                title: tabTitle
-            };
-            this.tabs.push(tab);
-        }
-
-        this.switchTab(tabId);
-    }
-
-    initSubagentComposerResizer() {
-        if (!this.subagentTopResizer || !this.subagentChatboxDock) return;
-        let startY = 0;
-        let startHeight = 0;
-
-        const onMouseMove = (e) => {
-            const deltaY = startY - e.clientY;
-            const newHeight = Math.max(50, Math.min(260, startHeight + deltaY));
-            if (this.subagentInput) {
-                this.subagentInput.style.height = `${newHeight}px`;
-            }
-        };
-
-        const onMouseUp = () => {
-            document.removeEventListener("mousemove", onMouseMove);
-            document.removeEventListener("mouseup", onMouseUp);
-            this.subagentTopResizer?.classList.remove("is-resizing");
-        };
-
-        this.subagentTopResizer.addEventListener("mousedown", (e) => {
-            e.preventDefault();
-            startY = e.clientY;
-            startHeight = this.subagentInput ? this.subagentInput.offsetHeight : 50;
-            this.subagentTopResizer.classList.add("is-resizing");
-            document.addEventListener("mousemove", onMouseMove);
-            document.addEventListener("mouseup", onMouseUp);
-        });
-    }
-
-    handleSubagentInputResize() {
-        if (!this.subagentInput) return;
-        this.subagentInput.style.height = "auto";
-        const scrollH = this.subagentInput.scrollHeight;
-        this.subagentInput.style.height = `${Math.min(Math.max(scrollH, 24), 160)}px`;
-        if (this.subagentClearBtn) {
-            this.subagentClearBtn.style.display = this.subagentInput.value.length > 0 ? "inline-flex" : "none";
-        }
-    }
-
-    handleSubagentFilesSelected(files = []) {
-        if (!files || files.length === 0) return;
-        this.stagedSubagentAttachments = this.stagedSubagentAttachments || [];
-
-        for (const file of files) {
-            if (file.type.startsWith("image/")) {
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    this.stagedSubagentAttachments.push({
-                        name: file.name,
-                        type: "image",
-                        dataUrl: e.target.result
-                    });
-                    this.renderSubagentStagedAttachments();
-                };
-                reader.readAsDataURL(file);
-            } else {
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    this.stagedSubagentAttachments.push({
-                        name: file.name,
-                        type: "document",
-                        text: e.target.result
-                    });
-                    this.renderSubagentStagedAttachments();
-                };
-                reader.readAsText(file);
-            }
-        }
-    }
-
-    renderSubagentStagedAttachments() {
-        if (!this.subagentStagedStrip) return;
-        const list = this.stagedSubagentAttachments || [];
-        if (list.length === 0) {
-            this.subagentStagedStrip.style.display = "none";
-            this.subagentStagedStrip.innerHTML = "";
-            return;
-        }
-
-        this.subagentStagedStrip.style.display = "flex";
-        let html = "";
-        list.forEach((item, idx) => {
-            if (item.type === "image") {
-                html += `
-                    <div class="staged-pill">
-                        <img src="${escapeHTML(item.dataUrl)}" class="staged-thumb" alt="${escapeHTML(item.name)}" />
-                        <span class="staged-name">${escapeHTML(item.name)}</span>
-                        <button type="button" class="staged-remove" data-idx="${idx}" title="Remove attachment"><i data-lucide="x"></i></button>
-                    </div>
-                `;
-            } else {
-                html += `
-                    <div class="staged-pill">
-                        <i data-lucide="file-text"></i>
-                        <span class="staged-name">${escapeHTML(item.name)}</span>
-                        <button type="button" class="staged-remove" data-idx="${idx}" title="Remove attachment"><i data-lucide="x"></i></button>
-                    </div>
-                `;
-            }
-        });
-
-        this.subagentStagedStrip.innerHTML = html;
-        renderIcons(this.subagentStagedStrip);
-
-        this.subagentStagedStrip.querySelectorAll(".staged-remove").forEach((btn) => {
-            btn.addEventListener("click", () => {
-                const idx = parseInt(btn.getAttribute("data-idx"), 10);
-                if (!isNaN(idx)) {
-                    this.stagedSubagentAttachments.splice(idx, 1);
-                    this.renderSubagentStagedAttachments();
-                }
-            });
-        });
-    }
-
-    updateSubagentModelPickerDisplay() {
-        if (!this.subagentModelPickerName) return;
-        const modelSelect = document.getElementById("modelSelect");
-        const activeTab = this.tabs.find(t => t.id === this.activeTabId);
-        const subSession = activeTab?.subagentId ? state.chatSessions[activeTab.subagentId] : null;
-
-        let modelName = subSession?.model;
-        if (!modelName && modelSelect) {
-            const opt = modelSelect.selectedOptions?.[0];
-            modelName = opt ? (opt.textContent || opt.value) : modelSelect.value;
-        }
-        if (modelName) {
-            const cleanName = modelName.replace(/\s*\[Vision\]/i, "").trim();
-            this.subagentModelPickerName.textContent = cleanName;
-            this.subagentModelPickerName.title = modelName;
-        }
-    }
-
-    setSubagentModel(modelValue) {
-        if (!modelValue) return;
-        const activeTab = this.tabs.find(t => t.id === this.activeTabId);
-        if (!activeTab || activeTab.type !== "subagent") return;
-
-        const subagentId = activeTab.subagentId;
-        const subSession = state.chatSessions[subagentId];
-        if (!subSession) return;
-
-        const modelSelect = document.getElementById("modelSelect");
-        const opt = modelSelect ? Array.from(modelSelect.options).find(o => o.value === modelValue) : null;
-        const provider = opt?.dataset?.provider || null;
-
-        subSession.model = modelValue;
-        subSession.provider = provider;
-        subSession.updatedAt = Date.now();
-        saveStoredChats();
-
-        const activeSub = activeSubagents.get(subagentId);
-        if (activeSub) {
-            activeSub.model = modelValue;
-            activeSub.provider = provider;
-        }
-
-        this.updateSubagentModelPickerDisplay();
-        if (typeof document !== "undefined" && typeof document.dispatchEvent === "function") {
-            document.dispatchEvent(new CustomEvent("chatsUpdated"));
-        }
-    }
-
-    updateSubagentSendButton(isGenerating) {
-        if (!this.subagentSendBtn) return;
-        if (isGenerating) {
-            this.subagentSendBtn.classList.add("generating");
-            this.subagentSendBtn.setAttribute("title", "Stop generation");
-            this.subagentSendBtn.setAttribute("aria-label", "Stop generation");
-            this.subagentSendBtn.innerHTML = '<i data-lucide="square" style="width:14px; height:14px; fill:currentColor;"></i>';
-        } else {
-            this.subagentSendBtn.classList.remove("generating");
-            this.subagentSendBtn.setAttribute("title", "Send message");
-            this.subagentSendBtn.setAttribute("aria-label", "Send message");
-            this.subagentSendBtn.innerHTML = '<i data-lucide="arrow-up" style="width:18px; height:18px;"></i>';
-        }
-        renderIcons(this.subagentSendBtn);
-    }
-
-    stopSubagentGeneration(subagentId) {
-        const genState = state.activeGenerations[subagentId];
-        if (genState) {
-            genState.abortRequested = true;
-            try { genState.abortController?.abort(); } catch (_) {}
-            if (typeof genState.sleepResolve === "function") {
-                try { genState.sleepResolve(); } catch (_) {}
-            }
-        }
-        this.updateSubagentSendButton(false);
-    }
-
-    renderSubagentTab(tab) {
-        if (!this.subagentMountEl) return;
-        const subagentId = tab.subagentId;
-        const subSession = state.chatSessions[subagentId];
-
-        const subType = subSession?.subagentType || "designer";
-        const isGenerating = Boolean(state.activeGenerations[subagentId]?.isGenerating);
-        const isRunning = isGenerating || subSession?.subagentStatus === "running" || getActiveSubagents().some(a => a.id === subagentId);
-        const taskText = subSession?.task || subSession?.title || "Direct Subagent Session";
-
-        if (this.subagentPersonaBadge) {
-            this.subagentPersonaBadge.textContent = subType;
-            this.subagentPersonaBadge.className = `subagent-persona-chip ${subType}`;
-        }
-        if (this.subagentStatusBadge) {
-            this.subagentStatusBadge.textContent = isRunning ? "Running" : "Completed";
-            this.subagentStatusBadge.className = `subagent-status-tag ${isRunning ? 'running' : 'completed'}`;
-        }
-        if (this.subagentTaskTitle) {
-            this.subagentTaskTitle.textContent = taskText;
-            this.subagentTaskTitle.title = taskText;
-        }
-        if (this.subagentInput) {
-            this.subagentInput.placeholder = `Message ${subType} subagent…`;
-        }
-
-        this.updateSubagentModelPickerDisplay();
-        this.updateSubagentSendButton(isGenerating);
-
-        if (this.subagentMessagesList && !isGenerating) {
-            if (subSession) {
-                renderSessionMessages(subSession, this.subagentMessagesList);
-                renderIcons(this.subagentMessagesList);
-                this.subagentMessagesList.scrollTop = this.subagentMessagesList.scrollHeight;
-            } else {
-                this.subagentMessagesList.innerHTML = '<div class="launcher-subagents-empty">Subagent session not found.</div>';
-            }
-        }
-    }
-
-    async sendSubagentDirectMessage() {
-        const activeTab = this.tabs.find(t => t.id === this.activeTabId);
-        if (!activeTab || activeTab.type !== "subagent") return;
-
-        const subagentId = activeTab.subagentId;
-        const subSession = state.chatSessions[subagentId];
-        if (!subSession) return;
-
-        // If currently generating for this subagent, stop/cancel generation:
-        if (state.activeGenerations[subagentId]?.isGenerating) {
-            this.stopSubagentGeneration(subagentId);
-            return;
-        }
-
-        const rawText = this.subagentInput?.value?.trim() || "";
-        const staged = (this.stagedSubagentAttachments || []).slice();
-        if (!rawText && staged.length === 0) return;
-
-        if (this.subagentInput) {
-            this.subagentInput.value = "";
-            this.handleSubagentInputResize();
-        }
-        if (this.subagentClearBtn) {
-            this.subagentClearBtn.style.display = "none";
-        }
-        this.stagedSubagentAttachments = [];
-        this.renderSubagentStagedAttachments();
-
-        // 1. Render optimistic user message into subagent chat list
-        if (this.subagentMessagesList) {
-            const userDiv = document.createElement("div");
-            userDiv.className = "message user";
-
-            let attachmentsHtml = "";
-            const images = staged.filter(a => a.type === "image");
-            const docs = staged.filter(a => a.type === "document");
-
-            if (docs.length > 0) {
-                attachmentsHtml += `<div class="composer-doc-strip">${docs.map(d => `<span class="doc-badge"><i data-lucide="file-text"></i> ${escapeHTML(d.name)}</span>`).join("")}</div>`;
-            }
-            if (images.length > 0) {
-                attachmentsHtml += `<div class="composer-media-strip">${images.map(img => `<div class="msg-img-card"><img src="${escapeHTML(img.dataUrl)}" alt="Attached image"></div>`).join("")}</div>`;
-            }
-
-            userDiv.innerHTML = `
-                <div class="user-bubble-content">
-                    ${attachmentsHtml}
-                    ${rawText ? `<div class="msg-bubble-text">${escapeHTML(rawText)}</div>` : ""}
-                </div>
-            `;
-            this.subagentMessagesList.appendChild(userDiv);
-
-            // 2. Render live AI streaming shell
-            const aiShell = createAIMessageShell();
-            this.subagentMessagesList.appendChild(aiShell);
-            renderIcons(this.subagentMessagesList);
-            this.subagentMessagesList.scrollTop = this.subagentMessagesList.scrollHeight;
-
-            // 3. Mark active generation state
-            state.activeGenerations[subagentId] = {
-                isGenerating: true,
-                abortRequested: false,
-                abortController: new AbortController(),
-                sleepResolve: null,
-                chatId: subagentId
-            };
-            this.updateSubagentSendButton(true);
-
-            // Update subagent status to running
-            subSession.subagentStatus = "running";
-            if (this.subagentStatusBadge) {
-                this.subagentStatusBadge.textContent = "Running";
-                this.subagentStatusBadge.className = "subagent-status-tag running";
-            }
-
-            try {
-                // If subSession does not have a model configured, fall back to current selection
-                if (!subSession.model) {
-                    const modelSelect = document.getElementById("modelSelect");
-                    if (modelSelect && modelSelect.value) {
-                        subSession.model = modelSelect.value;
-                        subSession.provider = modelSelect.selectedOptions?.[0]?.dataset?.provider || null;
-                    }
-                }
-
-                // Run the full MultiAI streaming agent orchestrator!
-                await runAgent(rawText, aiShell, subagentId, images);
-            } catch (err) {
-                console.error("[Subagent Direct Chat] runAgent error:", err);
-                if (aiShell) {
-                    finalizeStopped(aiShell, Date.now(), false);
-                }
-            } finally {
-                delete state.activeGenerations[subagentId];
-                this.updateSubagentSendButton(false);
-                subSession.subagentStatus = "completed";
-                subSession.updatedAt = Date.now();
-                saveStoredChats();
-                persistChatToDisk(subSession);
-                if (this.subagentStatusBadge) {
-                    this.subagentStatusBadge.textContent = "Completed";
-                    this.subagentStatusBadge.className = "subagent-status-tag completed";
-                }
-                this.loadSubagents(true);
-            }
-        }
-    }
-
-    async openCurrentSubagentInFullChat() {
-        const activeTab = this.tabs.find(t => t.id === this.activeTabId);
-        if (!activeTab || activeTab.type !== "subagent") return;
-        const subagentId = activeTab.subagentId;
-        if (subagentId) {
-            await switchToChat(subagentId);
         }
     }
 

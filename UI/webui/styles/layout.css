@@ -123,8 +123,7 @@ header::after {
     height: 32px;
     background: var(--surface);
     border: 1px solid var(--border);
-    box-shadow: 0 1px 3px var(--shadow);
-    border-radius: 9999px;
+    border-radius: 8px;
     color: var(--text-primary);
     font-family: inherit;
     font-size: 13px;
@@ -137,7 +136,7 @@ header::after {
 }
 
 .model-picker-btn:hover {
-    background: var(--border);
+    background: var(--hover);
     border-color: var(--border-strong);
     color: var(--text-primary);
 }
@@ -556,10 +555,9 @@ header::after {
     width: 15px;
     height: 15px;
 }
-
 /* =========================================================
-   DESKTOP VIEW TWO-PANE COMMAND PALETTE (MINIMALIST UI)
-   Active exclusively on desktop viewports (> 768px, non-Android)
+   DESKTOP MODEL PICKER — flat editorial two-pane palette
+   Desktop only (> 768px, non-Android). Theme-token driven.
    ========================================================= */
 @media (min-width: 769px) {
     html:not(.is-android) .model-picker-dropdown.is-desktop-view {
@@ -568,15 +566,15 @@ header::after {
         left: 50% !important;
         bottom: auto !important;
         right: auto !important;
-        transform: translate(-50%, -48%) scale(0.97) !important;
-        width: min(760px, calc(100vw - 48px)) !important;
-        max-width: 760px !important;
-        height: 520px !important;
-        max-height: calc(100vh - 100px) !important;
-        background: #111113 !important;
-        border: 1px solid rgba(255, 255, 255, 0.08) !important;
-        border-radius: 8px !important;
-        box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35) !important;
+        transform: translate(-50%, -50%) !important;
+        width: min(680px, calc(100vw - 48px)) !important;
+        max-width: 680px !important;
+        height: 480px !important;
+        max-height: calc(100vh - 96px) !important;
+        background: var(--surface) !important;
+        border: 1px solid var(--border) !important;
+        border-radius: 10px !important;
+        box-shadow: 0 8px 32px -16px rgba(0, 0, 0, 0.18) !important;
         padding: 0 !important;
         display: flex !important;
         flex-direction: column !important;
@@ -585,18 +583,18 @@ header::after {
     }
 
     html:not(.is-android) .model-picker-dropdown.is-desktop-view.is-open {
+        transform: translate(-50%, -50%) !important;
         opacity: 1 !important;
         pointer-events: auto !important;
-        transform: translate(-50%, -50%) scale(1) !important;
     }
 
+    /* Mobile-only shell is replaced by the desktop container */
     html:not(.is-android) .model-picker-dropdown.is-desktop-view > .model-picker-header,
     html:not(.is-android) .model-picker-dropdown.is-desktop-view > .model-picker-list {
         display: none !important;
     }
 }
 
-/* Fallback / hide desktop container on mobile */
 @media (max-width: 768px) {
     .desktop-picker-container {
         display: none !important;
@@ -607,48 +605,43 @@ html.is-android .desktop-picker-container {
     display: none !important;
 }
 
-/* Desktop Picker Container Structure */
 .desktop-picker-container {
     display: flex;
     flex-direction: column;
     width: 100%;
     height: 100%;
     overflow: hidden;
-    background: #111113;
+    background: var(--surface);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
 }
 
-/* Desktop Header */
+/* ---- Search ---- */
 .desktop-picker-header {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    padding: 12px 14px 10px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
-    background: #131316;
+    padding: 12px 12px 0;
     flex-shrink: 0;
 }
 
 .desktop-search-wrap {
     display: flex;
     align-items: center;
-    gap: 10px;
-    height: 36px;
-    padding: 0 10px;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 6px;
-    transition: border-color 0.15s ease, background 0.15s ease;
+    gap: 8px;
+    height: 34px;
+    padding: 0 8px;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    transition: border-color 0.15s ease;
 }
 
 .desktop-search-wrap:focus-within {
-    border-color: rgba(255, 255, 255, 0.2);
-    background: rgba(255, 255, 255, 0.05);
+    border-color: var(--border-strong);
 }
 
 .desktop-search-icon {
-    width: 15px;
-    height: 15px;
-    color: #71717a;
+    width: 13px;
+    height: 13px;
+    color: var(--text-tertiary);
     flex-shrink: 0;
 }
 
@@ -658,13 +651,13 @@ html.is-android .desktop-picker-container {
     background: transparent;
     border: none;
     outline: none;
-    color: #ffffff;
+    color: var(--text-primary);
     font-family: inherit;
     font-size: 13px;
 }
 
 .desktop-search-input::placeholder {
-    color: #71717a;
+    color: var(--text-tertiary);
     font-size: 12.5px;
 }
 
@@ -672,83 +665,65 @@ html.is-android .desktop-picker-container {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 20px;
-    height: 20px;
+    width: 18px;
+    height: 18px;
+    padding: 0;
     background: transparent;
     border: none;
-    color: #a1a1aa;
-    cursor: pointer;
     border-radius: 4px;
-    padding: 0;
-    transition: color 0.15s ease;
+    color: var(--text-tertiary);
+    cursor: pointer;
 }
 
 .desktop-search-clear:hover {
-    color: #ffffff;
+    color: var(--text-primary);
 }
 
 .desktop-search-clear svg {
-    width: 12px;
-    height: 12px;
+    width: 11px;
+    height: 11px;
 }
 
 .desktop-kbd-hint {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    font-size: 11px;
-    color: #71717a;
+    display: none;
 }
 
-.desktop-kbd-hint kbd {
-    display: inline-block;
-    padding: 1px 4px;
-    font-size: 10px;
-    font-family: 'JetBrains Mono', monospace;
-    color: #a1a1aa;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 3px;
-}
-
-/* Filter Chips Bar */
+/* ---- Filter row: plain text tabs ---- */
 .desktop-filter-chips {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 18px;
+    padding: 12px 2px 0;
+    border-bottom: 1px solid var(--border);
 }
 
 .desktop-filter-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    height: 24px;
-    padding: 0 8px;
+    height: 28px;
+    padding: 0 0 10px;
     background: transparent;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 4px;
-    color: #a1a1aa;
-    font-size: 11px;
-    font-weight: 500;
+    border: none;
+    border-bottom: 1px solid transparent;
+    border-radius: 0;
+    color: var(--text-tertiary);
     font-family: inherit;
+    font-size: 12px;
+    font-weight: 400;
     cursor: pointer;
-    transition: all 0.12s ease;
+    white-space: nowrap;
+    transition: color 0.15s ease, border-color 0.15s ease;
 }
 
 .desktop-filter-chip:hover {
-    color: #ffffff;
-    background: rgba(255, 255, 255, 0.04);
-    border-color: rgba(255, 255, 255, 0.14);
+    color: var(--text-secondary);
 }
 
 .desktop-filter-chip.active {
-    color: #111111;
-    background: #ffffff;
-    border-color: #ffffff;
-    font-weight: 600;
+    color: var(--text-primary);
+    font-weight: 500;
+    border-bottom-color: var(--text-primary);
 }
 
-/* Desktop Split-Pane Body */
+/* ---- Split ---- */
 .desktop-picker-split {
     display: flex;
     flex: 1;
@@ -756,38 +731,40 @@ html.is-android .desktop-picker-container {
     overflow: hidden;
 }
 
-/* Left Pane: Providers */
 .desktop-providers-pane {
-    width: 220px;
+    width: 190px;
     flex-shrink: 0;
-    border-right: 1px solid rgba(255, 255, 255, 0.07);
-    background: #131316;
+    border-right: 1px solid var(--border);
+    background: transparent;
     display: flex;
     flex-direction: column;
+    min-height: 0;
 }
 
 .desktop-pane-title {
-    padding: 10px 12px 4px;
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 0.06em;
+    padding: 14px 12px 6px;
+    font-size: 9.5px;
+    font-weight: 500;
+    letter-spacing: 0.09em;
     text-transform: uppercase;
-    color: #71717a;
+    color: var(--text-tertiary);
     flex-shrink: 0;
 }
 
 .desktop-providers-list {
     flex: 1;
     overflow-y: auto;
-    padding: 4px 6px 12px;
+    padding: 0 8px 12px;
 }
 
-.desktop-providers-list::-webkit-scrollbar {
-    width: 4px;
+.desktop-providers-list::-webkit-scrollbar,
+.desktop-models-list::-webkit-scrollbar {
+    width: 3px;
 }
 
-.desktop-providers-list::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.08);
+.desktop-providers-list::-webkit-scrollbar-thumb,
+.desktop-models-list::-webkit-scrollbar-thumb {
+    background: var(--border-strong);
     border-radius: 2px;
 }
 
@@ -796,323 +773,320 @@ html.is-android .desktop-picker-container {
     align-items: center;
     gap: 8px;
     width: 100%;
-    height: 34px;
-    padding: 0 8px;
-    border-radius: 6px;
-    border: 1px solid transparent;
+    height: 30px;
+    padding: 0 6px;
+    border: none;
+    border-radius: 5px;
     background: transparent;
+    color: var(--text-secondary);
     cursor: pointer;
     text-align: left;
-    transition: background 0.12s ease, border-color 0.12s ease;
-    margin-bottom: 2px;
+    font-family: inherit;
+    font-size: 12.5px;
+    font-weight: 400;
+    transition: background 0.12s ease, color 0.12s ease;
 }
 
 .desktop-provider-item:hover {
-    background: rgba(255, 255, 255, 0.04);
+    background: var(--hover);
+    color: var(--text-primary);
 }
 
 .desktop-provider-item.active {
-    background: rgba(255, 255, 255, 0.08);
-    border-color: rgba(255, 255, 255, 0.12);
+    background: var(--surface-2);
+    color: var(--text-primary);
+    font-weight: 500;
 }
 
 .desktop-provider-monogram {
-    width: 22px;
-    height: 22px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 4px;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    font-size: 9.5px;
-    font-weight: 600;
-    font-family: 'JetBrains Mono', monospace;
-    color: #a1a1aa;
+    width: 14px;
     flex-shrink: 0;
+    background: none;
+    border: none;
+    border-radius: 0;
+    font-family: var(--font-mono);
+    font-size: 8.5px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-tertiary);
+    text-align: center;
 }
 
 .desktop-provider-item.active .desktop-provider-monogram {
-    color: #111111;
-    background: #ffffff;
-    border-color: #ffffff;
+    color: var(--text-secondary);
 }
 
 .desktop-provider-name {
     flex: 1;
     min-width: 0;
-    font-size: 12.5px;
-    font-weight: 500;
-    color: #f4f4f5;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    color: inherit;
 }
 
 .desktop-provider-count {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 10px;
-    color: #71717a;
-    background: rgba(255, 255, 255, 0.04);
-    padding: 1px 5px;
-    border-radius: 3px;
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    color: var(--text-tertiary);
+    background: none;
+    padding: 0;
     flex-shrink: 0;
 }
 
-.desktop-provider-item.active .desktop-provider-count {
-    color: #ffffff;
-    background: rgba(255, 255, 255, 0.14);
-}
-
-/* Right Pane: Models */
+/* ---- Models pane ---- */
 .desktop-models-pane {
     flex: 1;
     display: flex;
     flex-direction: column;
     min-width: 0;
-    background: #0f0f11;
+    min-height: 0;
+    background: transparent;
 }
 
 .desktop-models-header {
     display: flex;
-    align-items: center;
+    align-items: baseline;
     justify-content: space-between;
-    padding: 10px 14px;
-    background: #131316;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    gap: 10px;
+    padding: 13px 14px 0;
+    border-bottom: none;
     flex-shrink: 0;
 }
 
 .desktop-models-header-title {
-    font-size: 12.5px;
-    font-weight: 600;
-    color: #f4f4f5;
+    font-size: 9.5px;
+    font-weight: 500;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--text-tertiary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .desktop-models-header-meta {
-    font-size: 11px;
-    font-family: 'JetBrains Mono', monospace;
-    color: #71717a;
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    color: var(--text-tertiary);
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
 .desktop-models-list {
     flex: 1;
     overflow-y: auto;
-    padding: 8px 12px 14px;
+    overflow-x: hidden;
+    padding: 4px 6px 8px;
 }
 
-.desktop-models-list::-webkit-scrollbar {
-    width: 4px;
-}
-
-.desktop-models-list::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.08);
-    border-radius: 2px;
-}
-
-/* Model Card */
+/* ---- Model row: one flat line, quiet metadata ---- */
 .desktop-model-card {
     display: flex;
-    flex-direction: column;
-    gap: 4px;
-    padding: 8px 12px;
-    border-radius: 6px;
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    background: rgba(255, 255, 255, 0.015);
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    min-height: 36px;
+    padding: 7px 8px;
+    border: none;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--text-primary);
     cursor: pointer;
     text-align: left;
-    transition: background 0.12s ease, border-color 0.12s ease;
-    margin-bottom: 4px;
-    width: 100%;
+    font-family: inherit;
+    transition: background 0.1s ease;
 }
 
 .desktop-model-card:hover {
-    background: rgba(255, 255, 255, 0.04);
-    border-color: rgba(255, 255, 255, 0.1);
+    background: var(--hover);
 }
 
 .desktop-model-card.keyboard-focused {
-    background: rgba(255, 255, 255, 0.06);
-    border-color: rgba(255, 255, 255, 0.22);
+    background: var(--hover);
 }
 
 .desktop-model-card.selected {
-    background: rgba(255, 255, 255, 0.05);
-    border-color: rgba(255, 255, 255, 0.16);
+    background: var(--surface-2);
 }
 
 .desktop-model-top {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
+    align-items: baseline;
+    gap: 7px;
+    min-width: 0;
+    flex: 1 1 auto;
 }
 
 .desktop-model-name {
     font-size: 13px;
-    font-weight: 550;
-    color: #f4f4f5;
+    font-weight: 400;
+    color: var(--text-primary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    min-width: 0;
+    flex-shrink: 1;
 }
 
-.desktop-model-badges {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    flex-shrink: 0;
-}
-
-.desktop-badge-vision {
-    background: #E1F3FE;
-    color: #1F6C9F;
-    border-radius: 3px;
-    padding: 1px 5px;
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 0.02em;
-}
-
-.desktop-badge-free {
-    background: #EDF3EC;
-    color: #346538;
-    border-radius: 3px;
-    padding: 1px 5px;
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 0.02em;
-}
-
-.desktop-badge-tools {
-    background: rgba(255, 255, 255, 0.05);
-    color: #a1a1aa;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 3px;
-    padding: 0 4px;
-    font-size: 10px;
+.desktop-model-card.selected .desktop-model-name {
     font-weight: 500;
 }
 
+/* Capability badges reduced to plain inline labels */
+.desktop-model-badges {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.desktop-badge-tools {
+    display: none;
+}
+
+.desktop-badge-vision,
+.desktop-badge-free,
 .desktop-badge-rolling {
-    background: #FBF3DB;
-    color: #956400;
-    border-radius: 3px;
-    padding: 1px 5px;
-    font-size: 10px;
-    font-weight: 600;
+    background: none;
+    border: none;
+    border-radius: 0;
+    padding: 0;
+    font-family: var(--font-mono);
+    font-size: 9px;
+    font-weight: 400;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--text-tertiary);
+    white-space: nowrap;
 }
 
 .desktop-model-check {
-    width: 14px;
-    height: 14px;
-    color: #346538;
+    width: 12px;
+    height: 12px;
+    color: var(--text-secondary);
     flex-shrink: 0;
     margin-left: 2px;
 }
 
+/* Bottom meta row folds into a single muted line on the right */
 .desktop-model-bottom {
     display: flex;
-    align-items: center;
+    align-items: baseline;
+    justify-content: flex-end;
     gap: 8px;
-    font-size: 11px;
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 190px;
+    font-size: 10px;
+    color: var(--text-tertiary);
+    overflow: hidden;
 }
 
 .desktop-model-id {
-    font-family: 'JetBrains Mono', monospace;
-    color: #71717a;
-    font-size: 11px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    display: none;
 }
 
 .desktop-model-provider-tag {
-    font-size: 10.5px;
-    color: #a1a1aa;
-    background: rgba(255, 255, 255, 0.04);
-    padding: 0 5px;
-    border-radius: 3px;
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    color: var(--text-tertiary);
+    background: none;
+    border: none;
+    border-radius: 0;
+    padding: 0;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
 }
 
 .desktop-model-ctx {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 10px;
-    color: #71717a;
-    background: rgba(255, 255, 255, 0.04);
-    padding: 0 4px;
-    border-radius: 3px;
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    color: var(--text-tertiary);
+    background: none;
+    border: none;
+    border-radius: 0;
+    padding: 0;
     white-space: nowrap;
+    flex-shrink: 0;
 }
 
 .desktop-models-empty {
-    padding: 36px 16px;
+    padding: 48px 16px;
     text-align: center;
-    color: #71717a;
+    color: var(--text-tertiary);
     font-size: 12.5px;
 }
 
-/* Desktop Footer */
+/* ---- Footer ---- */
 .desktop-picker-footer {
     height: 38px;
     flex-shrink: 0;
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 12px;
     padding: 0 14px;
-    border-top: 1px solid rgba(255, 255, 255, 0.07);
-    background: #131316;
-    font-size: 11.5px;
+    border-top: 1px solid var(--border);
+    background: transparent;
+    font-size: 11px;
 }
 
 .desktop-active-summary {
     display: flex;
-    align-items: center;
-    gap: 6px;
+    align-items: baseline;
+    gap: 5px;
+    min-width: 0;
+    overflow: hidden;
 }
 
 .desktop-status-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: #346538;
+    display: none;
 }
 
 .desktop-active-label {
-    color: #71717a;
+    color: var(--text-tertiary);
+    flex-shrink: 0;
 }
 
 .desktop-active-model-name {
-    font-weight: 600;
-    color: #ffffff;
+    color: var(--text-secondary);
+    font-weight: 400;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .desktop-active-provider-name {
-    color: #a1a1aa;
+    color: var(--text-tertiary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .desktop-footer-shortcuts {
     display: flex;
-    align-items: center;
-    gap: 12px;
+    align-items: baseline;
+    gap: 14px;
+    flex-shrink: 0;
 }
 
 .desktop-shortcut-item {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    color: #71717a;
-    font-size: 11px;
+    color: var(--text-tertiary);
+    font-size: 10.5px;
+    white-space: nowrap;
 }
 
 .desktop-shortcut-item kbd {
     display: inline-block;
-    padding: 1px 4px;
-    font-size: 10px;
-    font-family: 'JetBrains Mono', monospace;
-    color: #a1a1aa;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 0 4px;
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    color: var(--text-tertiary);
+    background: transparent;
+    border: 1px solid var(--border);
     border-radius: 3px;
 }

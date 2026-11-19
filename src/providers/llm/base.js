@@ -897,20 +897,28 @@ class BaseProvider {
                     while (true) {
                         const { done, value } = await reader.read();
                         if (done) break;
+                        if (res.writableEnded || res.destroyed) break;
                         if (value) {
-                            res.write(value);
-                            if (typeof res.flush === "function") res.flush();
+                            try {
+                                res.write(value);
+                                if (typeof res.flush === "function") res.flush();
+                            } catch (_) { break; }
                         }
                     }
                 } else {
                     for await (const chunk of upstreamRes.body) {
-                        res.write(chunk);
-                        if (typeof res.flush === "function") res.flush();
+                        if (res.writableEnded || res.destroyed) break;
+                        try {
+                            res.write(chunk);
+                            if (typeof res.flush === "function") res.flush();
+                        } catch (_) { break; }
                     }
                 }
             }
             clearTimeout(timeout);
-            res.end();
+            if (res && !res.writableEnded && !res.destroyed) {
+                try { res.end(); } catch (_) {}
+            }
             return { status: 200 };
         } catch (err) {
             clearTimeout(timeout);

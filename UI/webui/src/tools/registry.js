@@ -31,7 +31,7 @@ export function getTool(name) {
 export function getAllToolSchemas() {
     const schemas = [];
     for (const tool of toolRegistry.values()) {
-        if (tool.schema && !tool.subagentOnly) {
+        if (tool.schema) {
             schemas.push(tool.schema);
         }
     }

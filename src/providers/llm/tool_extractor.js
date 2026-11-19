@@ -292,12 +292,22 @@ function normalizeToolCalls(tool_calls, parseArgs = parseToolCallArgs) {
     return tool_calls.map(tc => {
         if (!tc || typeof tc !== "object") return tc;
         let name = String(tc.function?.name || tc.name || "").trim();
+        // Clean repeated tool name tokens caused by streamed duplicate chunks e.g. "run_taskrun_task" -> "run_task"
+        if (/^([a-zA-Z0-9_]+?)\1+$/.test(name)) {
+            const unrepeated = name.replace(/^([a-zA-Z0-9_]+?)\1+$/, "$1");
+            if (unrepeated) name = unrepeated;
+        }
+
         let rawArgs = tc.function?.arguments !== undefined ? tc.function.arguments : (tc.arguments !== undefined ? tc.arguments : tc.parameters);
         let argsObj = {};
 
         if (typeof rawArgs === "object" && rawArgs !== null) {
             argsObj = { ...rawArgs };
         } else if (typeof rawArgs === "string") {
+            const doubleJsonMatch = /^\s*(\{[\s\S]*?\})\s*\{[\s\S]*\}\s*$/.exec(rawArgs);
+            if (doubleJsonMatch) {
+                rawArgs = doubleJsonMatch[1];
+            }
             try {
                 argsObj = JSON.parse(rawArgs);
             } catch (_) {
@@ -322,7 +332,6 @@ function normalizeToolCalls(tool_calls, parseArgs = parseToolCallArgs) {
         // Strip any remaining XML or HTML tags from the tool name
         name = name.replace(/<[^>]+>/g, "").trim();
 
-        // Known alias & hallucination mapping to valid system tools:
         const nameLower = name.toLowerCase();
         if (nameLower === "read_task_command" || nameLower === "task_command" || nameLower === "exec_command" ||
             nameLower === "run_command" || nameLower === "execute_command" || nameLower === "terminal" ||
@@ -349,6 +358,30 @@ function normalizeToolCalls(tool_calls, parseArgs = parseToolCallArgs) {
         } else if (nameLower === "google_search" || nameLower === "duckduckgo_search" || nameLower === "search") {
             name = "web_search";
             if (!argsObj.type) argsObj.type = "search";
+        } else if (nameLower === "execute" || nameLower === "exec") {
+            const code = String(argsObj.code || argsObj.command || argsObj.cmd || argsObj.script || "");
+            const shellMatch = code.match(/tools\.shell\(\s*\{\s*command:\s*(?:["'`])([\s\S]*?)(?:["'`])\s*\}\s*\)/) ||
+                               code.match(/tools\.shell\(\s*(?:["'`])([\s\S]*?)(?:["'`])\s*\)/);
+            if (shellMatch) {
+                name = "run_task";
+                argsObj.command = shellMatch[1];
+                if (!argsObj.task_name) argsObj.task_name = "Run shell command";
+            } else {
+                const globMatch = code.match(/tools\.glob\(\s*\{\s*(?:pattern:\s*[^,]+,\s*)?path:\s*(?:["'`])([^"'`]+)(?:["'`])/);
+                if (globMatch) {
+                    name = "list_dir";
+                    argsObj = { DirectoryPath: globMatch[1] };
+                } else {
+                    name = "run_task";
+                    if (!argsObj.command && code) argsObj.command = code;
+                    if (!argsObj.task_name) argsObj.task_name = "Run shell command";
+                }
+            }
+        } else if (nameLower === "glob" || nameLower === "list_dir" || nameLower === "ls" || nameLower === "dir") {
+            name = "list_dir";
+            if (!argsObj.DirectoryPath && (argsObj.path || argsObj.dir)) {
+                argsObj.DirectoryPath = argsObj.path || argsObj.dir;
+            }
         } else if (nameLower === "manage_task" || nameLower === "task_manager") {
             name = "manage_tasks";
         } else if (nameLower === "task_send_input" || nameLower === "send_input") {
@@ -362,6 +395,10 @@ function normalizeToolCalls(tool_calls, parseArgs = parseToolCallArgs) {
             if (!argsObj.action) argsObj.action = "status";
         } else if (nameLower === "sleep" || nameLower === "wait") {
             name = "idle";
+        } else if (nameLower === "list_mcp" || nameLower === "list_mcp_tools" || nameLower === "mcp_list" || nameLower === "mcp_tools") {
+            name = "list_mcp";
+        } else if (nameLower === "call_mcp" || nameLower === "call_mcp_tool" || nameLower === "mcp_call" || nameLower === "execute_mcp") {
+            name = "call_mcp";
         }
 
         return {

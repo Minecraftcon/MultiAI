@@ -381,45 +381,9 @@ export function renderSessionMessages(session, chat) {
     if (!chat || !session) return;
     chat.innerHTML = "";
 
-    const isInRightPanel = chat.id === "rpSubagentMessagesList" || (typeof chat.closest === "function" && chat.closest("#rightPanel"));
-    if (session.isSubagent && session.parentChatId && !isInRightPanel) {
-        const parentSession = state.chatSessions ? state.chatSessions[session.parentChatId] : null;
-        const parentTitle = parentSession?.title || "Main Conversation";
-        const prettyType = (session.subagentType || "subagent").charAt(0).toUpperCase() + (session.subagentType || "subagent").slice(1);
-        const header = document.createElement("div");
-        header.className = "subagent-chat-view-header";
-        header.innerHTML = `
-            <button type="button" class="subagent-back-btn" id="subagentHeaderBackBtn" title="Back to main conversation">
-                <i data-lucide="arrow-left"></i>
-                <span>Back to <strong>${escapeHTML(parentTitle)}</strong></span>
-            </button>
-            <div class="subagent-header-meta">
-                <span class="subagent-persona-chip ${escapeHTML(session.subagentType || '')}">${escapeHTML(prettyType)}</span>
-                <span class="subagent-status-tag ${session.subagentStatus === 'running' ? 'running' : 'completed'}">${session.subagentStatus === 'running' ? 'Running' : 'Completed'}</span>
-            </div>
-        `;
-        const backBtn = header.querySelector("#subagentHeaderBackBtn");
-        if (backBtn) {
-            backBtn.addEventListener("click", () => {
-                import("./chat-history-list.js").then(m => m.switchToChat(session.parentChatId));
-            });
-        }
-        chat.appendChild(header);
-    }
-
     const messages = Array.isArray(session.messages) ? session.messages : [];
     const nonSystem = messages.filter(m => m && m.role !== "system" && !(m.role === "user" && typeof m.content === "string" && m.content.startsWith("[System Notice]:")));
     if (nonSystem.length === 0) {
-        if (session.isSubagent) {
-            const prettyType = (session.subagentType || "subagent").charAt(0).toUpperCase() + (session.subagentType || "subagent").slice(1);
-            const hint = document.createElement("div");
-            hint.className = "subagent-empty-chat-hint";
-            hint.innerHTML = `
-                <div class="subagent-empty-chat-title">Chat with ${escapeHTML(prettyType)} Subagent</div>
-                <div class="subagent-empty-chat-sub">This subagent is bound to your conversation. You can send instructions, inspect generated output, or ask it to make changes.</div>
-            `;
-            chat.appendChild(hint);
-        }
         return;
     }
 

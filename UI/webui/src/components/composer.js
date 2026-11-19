@@ -233,7 +233,7 @@ export async function send() {
         if (isRenderCommand) {
             const userPrompt = (rawText || "").trim().replace(/^\/render\s*/i, "").trim();
             const renderTask = userPrompt || "Design a modern, minimalist interface prototype with clean responsive layout and live preview";
-            const renderInstruction = `[RENDER COMMAND]: Launch the Designer subagent immediately using invoke_subagent(task: "${renderTask.replace(/"/g, '\\"')}", subagent_type: "designer") to inspect, create, style, and preview the requested interface live in the workspace browser panel.`;
+            const renderInstruction = `[RENDER COMMAND]: Create, style, and build the requested interface cleanly in HTML/CSS/JS with modern responsive layout.`;
             promptText = userPrompt ? `${renderInstruction}\n\nUser Design Request: ${userPrompt}` : renderInstruction;
         }
 

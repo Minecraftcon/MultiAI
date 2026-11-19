@@ -35,14 +35,14 @@
 
     .composer,
     .composer-dock {
-        background: #1c1c1e !important;
-        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45) !important;
+        background: var(--input-bg) !important;
+        box-shadow: 0 2px 10px var(--shadow) !important;
     }
 
     .chat-scroll-btn {
-        background: #242426 !important;
-        border: 1px solid rgba(255, 255, 255, 0.14) !important;
-        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45) !important;
+        background: var(--surface-2) !important;
+        border: 1px solid var(--border) !important;
+        box-shadow: 0 2px 10px var(--shadow) !important;
         transition: opacity 0.15s ease, visibility 0.15s ease !important;
     }
 }
@@ -74,8 +74,8 @@
 
 .is-android .composer,
 .is-android .composer-dock {
-    background: #1c1c1e !important;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45) !important;
+    background: var(--input-bg) !important;
+    box-shadow: 0 2px 10px var(--shadow) !important;
 }
 
 @media (max-width: 600px) {
@@ -98,7 +98,7 @@
         /* Mobile GPU acceleration: bypass expensive multi-pass blur on mobile GPUs */
         backdrop-filter: none !important;
         -webkit-backdrop-filter: none !important;
-        background: #1c1c1e !important;
+        background: var(--input-bg) !important;
     }
     #inputArea {
         padding: 10px max(12px, env(safe-area-inset-right, 0px)) calc(14px + env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px));

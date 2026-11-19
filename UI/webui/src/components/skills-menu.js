@@ -133,7 +133,7 @@ const BUILTIN_SLASH_COMMANDS = [
     {
         id: "render",
         name: "/render",
-        description: "Launch Designer subagent to create, style, and preview UI in live browser panel",
+        description: "Create, style, and build clean UI with HTML/CSS/JS",
         source: "command"
     }
 ];
