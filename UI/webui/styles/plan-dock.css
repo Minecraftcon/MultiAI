@@ -588,14 +588,18 @@ svg.plan-lucide-spin,
     -webkit-backdrop-filter: blur(16px);
     margin-bottom: 4px;
     will-change: transform, opacity;
+}
+
+.dock-window-view.is-entering .dock-changes-box,
+.dock-window-view.is-entering .dock-tasks-box {
     animation: dockBoxEnter 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-.dock-window-view .dock-window-header {
+.dock-window-view.is-entering .dock-window-header {
     animation: dockBarEnter 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-.dock-window-view .dock-back-btn {
+.dock-window-view.is-entering .dock-back-btn {
     animation: dockBackBtnSlide 0.24s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 

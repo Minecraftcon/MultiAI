@@ -25,6 +25,7 @@ let activeTab = null; // null (collapsed toolbar), "changes", "tasks", or "runni
 let autoDismissTimer = null;
 let userManuallyToggled = false;
 let runningTasksPollTimer = null;
+let runningTasksSecTimer = null;
 
 /**
  * Initializes the dock listeners and fetches initial state.
@@ -117,6 +118,7 @@ async function fetchRunningTasks() {
 
             const prevLength = runningTasks.length;
             runningTasks = list;
+            ensureSecTimer();
 
             if (activeTab === "running-tasks" && runningTasks.length === 0) {
                 activeTab = null;
@@ -127,6 +129,7 @@ async function fetchRunningTasks() {
     } catch (_) {}
     const hadTasks = runningTasks.length > 0;
     runningTasks = [];
+    ensureSecTimer();
     return hadTasks;
 }
 
@@ -210,6 +213,10 @@ export function dismissPlanDock() {
     if (autoDismissTimer) {
         clearTimeout(autoDismissTimer);
         autoDismissTimer = null;
+    }
+    if (runningTasksSecTimer) {
+        clearInterval(runningTasksSecTimer);
+        runningTasksSecTimer = null;
     }
     isTransitioning = false;
     activeTab = null;
@@ -338,6 +345,132 @@ function formatFileDisplay(rawPath, maxFileNameLen = 28) {
 }
 
 /**
+ * Ensures a 1-second timer smoothly ticks elapsed duration for running tasks without polling server.
+ */
+function ensureSecTimer() {
+    if (!runningTasksSecTimer && runningTasks.length > 0) {
+        runningTasksSecTimer = setInterval(() => {
+            if (runningTasks.length === 0) {
+                clearInterval(runningTasksSecTimer);
+                runningTasksSecTimer = null;
+                return;
+            }
+            let changed = false;
+            const nowSec = Math.round(Date.now() / 1000);
+            for (const t of runningTasks) {
+                if (t.startTime) {
+                    const newElapsed = Math.max(1, nowSec - t.startTime);
+                    if (t.elapsed !== newElapsed) {
+                        t.elapsed = newElapsed;
+                        changed = true;
+                    }
+                }
+            }
+            if (changed && activeTab === "running-tasks") {
+                const card = document.getElementById("planDockCard");
+                if (card) {
+                    const updated = updateRunningTasksInPlace(card);
+                    if (!updated) syncDockState();
+                }
+            }
+        }, 1000);
+    } else if (runningTasksSecTimer && runningTasks.length === 0) {
+        clearInterval(runningTasksSecTimer);
+        runningTasksSecTimer = null;
+    }
+}
+
+/**
+ * Updates running tasks view in-place to completely prevent DOM thrashing and flickering.
+ */
+function updateRunningTasksInPlace(card) {
+    const windowView = card.querySelector(".dock-window-view");
+    if (!windowView) return false;
+    const listEl = windowView.querySelector(".dock-changes-list");
+    if (!listEl) return false;
+
+    const existingRows = Array.from(listEl.querySelectorAll(".dock-running-task-row"));
+    if (existingRows.length !== runningTasks.length) return false;
+
+    for (let i = 0; i < runningTasks.length; i++) {
+        if (existingRows[i].getAttribute("data-task-id") !== runningTasks[i].id) {
+            return false;
+        }
+    }
+
+    // All row IDs match! Update elapsed counter and names without touching DOM tree or animations
+    runningTasks.forEach((t, i) => {
+        const row = existingRows[i];
+        let dirEl = row.querySelector(".dock-file-dir");
+        const durText = t.elapsed ? `(${t.elapsed}s)` : "";
+        if (dirEl) {
+            if (dirEl.textContent !== durText) dirEl.textContent = durText;
+        } else if (durText) {
+            const span = document.createElement("span");
+            span.className = "dock-file-dir";
+            span.textContent = durText;
+            row.querySelector(".dock-change-left")?.appendChild(span);
+        }
+
+        const nameEl = row.querySelector(".dock-file-name");
+        if (nameEl && nameEl.textContent !== t.name) {
+            nameEl.textContent = t.name;
+        }
+    });
+
+    const countEl = windowView.querySelector(".dock-title-count");
+    if (countEl && countEl.textContent !== String(runningTasks.length)) {
+        countEl.textContent = String(runningTasks.length);
+    }
+    const fullEl = windowView.querySelector(".dock-title-full");
+    if (fullEl) {
+        fullEl.textContent = runningTasks.length === 1 ? "Running Task" : "Running Tasks";
+    }
+    const shortEl = windowView.querySelector(".dock-title-short");
+    if (shortEl) {
+        shortEl.textContent = `${runningTasks.length} Running`;
+    }
+    const killAllBtn = windowView.querySelector(".dock-kill-all-btn");
+    if (killAllBtn) {
+        killAllBtn.disabled = runningTasks.length === 0;
+    }
+
+    return true;
+}
+
+/**
+ * Updates floating bottom toolbar in-place to avoid re-creating tab buttons or re-running icon replacements.
+ */
+function updateToolbarInPlace(card, { hasChanges, unacceptedChanges, hasTodos, hasRunningTasks, runningTasks }) {
+    const toolbar = card.querySelector(".dock-bottom-toolbar");
+    if (!toolbar) return false;
+
+    const existingChangesBtn = toolbar.querySelector('.dock-tab-btn[data-tab="changes"]');
+    const existingTodosBtn = toolbar.querySelector('.dock-tab-btn[data-tab="tasks"]');
+    const existingRunningBtn = toolbar.querySelector('.dock-tab-btn[data-tab="running-tasks"]');
+
+    if (Boolean(existingChangesBtn) !== hasChanges) return false;
+    if (Boolean(existingTodosBtn) !== hasTodos) return false;
+    if (Boolean(existingRunningBtn) !== hasRunningTasks) return false;
+
+    if (existingChangesBtn) {
+        const badge = existingChangesBtn.querySelector(".dock-tab-badge");
+        if (badge && badge.textContent !== String(unacceptedChanges.length)) {
+            badge.textContent = String(unacceptedChanges.length);
+        }
+    }
+    if (existingRunningBtn) {
+        const badge = existingRunningBtn.querySelector(".dock-tab-badge");
+        if (badge && badge.textContent !== String(runningTasks.length)) {
+            badge.textContent = String(runningTasks.length);
+        }
+        existingRunningBtn.title = `Running Tasks (${runningTasks.length})`;
+    }
+
+    return true;
+}
+
+/**
  * Renders the integrated dock.
  */
 function renderDock(transitionMeta = {}) {
@@ -374,6 +507,16 @@ function renderDock(transitionMeta = {}) {
     const isWindowOpen = activeTab !== null;
     card.classList.toggle("is-collapsed", !isWindowOpen);
     card.classList.toggle("is-expanded", isWindowOpen);
+
+    // Fast-path: Update in-place if already mounted and not undergoing an entrance transition
+    if (!transitionMeta.entering) {
+        if (isWindowOpen && activeTab === "running-tasks" && updateRunningTasksInPlace(card)) {
+            return;
+        }
+        if (!isWindowOpen && updateToolbarInPlace(card, { hasChanges, unacceptedChanges, hasTodos, hasRunningTasks, runningTasks })) {
+            return;
+        }
+    }
 
     const windowAnimClass = transitionMeta.entering === 'window' ? 'is-entering' : (transitionMeta.entering === 'window-switch' ? 'is-switching-in' : '');
 
