@@ -128,31 +128,51 @@ providers:
     base_url: https://api.arliai.com/v1
     default_max_tokens: 65536
     models:
-      - id: Qwen3.5-27B-Derestricted
-        name: Qwen 3.5 27B Derestricted (ArliAI — Reasoning)
+      - id: DeepSeek-V4.1-Flash-1017
+        name: DeepSeek V4.1 Flash (ArliAI 552B)
         supports_tools: true
         supports_vision: true
-      - id: Fastest
-        name: ArliAI Fastest
+        max_context_tokens: 524288
+      - id: Qwen3.8-Flash-Next
+        name: Qwen 3.8 Flash Next (ArliAI 180B)
+        supports_tools: true
+        supports_vision: true
+        max_context_tokens: 262144
+      - id: MiMo-V2.6-Flash-MOPD
+        name: MiMo V2.6 Flash MOPD (ArliAI 310B)
         supports_tools: true
         supports_vision: false
-      - id: (TRIAL) GLM-4.7
-        name: GLM 4.7 (ArliAI Trial)
+        max_context_tokens: 524288
+      - id: GLM-4.7
+        name: GLM 4.7 (ArliAI 355B)
         supports_tools: true
         supports_vision: false
-        max_context_tokens: 110000
-      - id: (TRIAL) Gemma-4-31B-it
-        name: Gemma 4 31B IT (ArliAI Trial)
+        max_context_tokens: 202752
+      - id: GLM-4.6-Derestricted-v5
+        name: GLM 4.6 Derestricted v5 (ArliAI 355B)
         supports_tools: true
         supports_vision: false
-      - id: (TRIAL) Qwen3.5-27B-Writer-V2-Derestricted
-        name: Qwen 3.5 27B Writer V2 (ArliAI Trial)
+        max_context_tokens: 202752
+      - id: Qwen3.8-27B-Derestricted
+        name: Qwen 3.8 27B Derestricted (ArliAI)
         supports_tools: true
-        supports_vision: false
-      - id: (TRIAL) DeepSeek-V4-Flash-0731
-        name: DeepSeek V4 Flash (ArliAI Trial)
+        supports_vision: true
+        max_context_tokens: 262144
+      - id: Qwen3.8-27B-Swift
+        name: Qwen 3.8 27B Swift (ArliAI)
         supports_tools: true
-        supports_vision: false
+        supports_vision: true
+        max_context_tokens: 262144
+      - id: Gemma-4-31B-it
+        name: Gemma 4 31B IT (ArliAI)
+        supports_tools: true
+        supports_vision: true
+        max_context_tokens: 262144
+      - id: Gemma-4-31B-Derestricted
+        name: Gemma 4 31B Derestricted (ArliAI)
+        supports_tools: true
+        supports_vision: true
+        max_context_tokens: 262144
   groq:
     name: Groq Cloud
     type: openai_compatible
