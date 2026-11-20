@@ -1,5 +1,6 @@
 import { toolFetch } from "../http.js";
 import { parseTerminalAnsi, cleanTerminalScreen } from "./term-emulator.js";
+import { watchBackgroundTask } from "./task-watcher.js";
 
 /* =========================================================
    TERMINAL & TASK MANAGEMENT TOOLS (CLEAN & MINIMAL)
@@ -419,7 +420,6 @@ export const scheduleTool = {
         const isDetached = args.detach !== false && args.blocking !== true;
 
         if (isDetached || cronExpr) {
-            const { watchBackgroundTask } = await import("./task-watcher.js");
             watchBackgroundTask({
                 chatId: genState?.chatId,
                 taskId,
