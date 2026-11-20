@@ -261,15 +261,15 @@
 }
 
 .composer-mode-pill.active {
-    border-color: rgba(59, 130, 246, 0.45);
-    background: linear-gradient(180deg, var(--surface-2) 0%, rgba(33, 33, 33, 0.95) 100%);
-    box-shadow: 0 2px 6px -1px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(59, 130, 246, 0.25);
+    border-color: var(--accent);
+    background: var(--surface-2);
+    box-shadow: 0 1px 4px var(--shadow), 0 0 0 1px var(--accent-subtle);
 }
 
 .composer-mode-pill svg {
     width: 14px;
     height: 14px;
-    color: #ccc;
+    color: var(--text-secondary);
     transition: transform 0.24s cubic-bezier(0.34, 1.5, 0.64, 1);
 }
 
