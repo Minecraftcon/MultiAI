@@ -1316,6 +1316,39 @@
     box-shadow: 0 0 0 2px var(--hover-2);
 }
 
+.kobold-textarea {
+    width: 100%;
+    min-height: 52px;
+    padding: 8px 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 12.5px;
+    font-family: inherit;
+    line-height: 1.45;
+    outline: none;
+    resize: vertical;
+    transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+.kobold-textarea::placeholder {
+    color: #52525b;
+}
+.kobold-textarea:focus {
+    border-color: #52525b;
+    background: var(--surface-2);
+    box-shadow: 0 0 0 2px var(--hover-2);
+}
+
+.lc-label-tag {
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-left: 4px;
+}
+
 .kobold-hint {
     font-size: 11.5px;
     color: var(--text-secondary);
@@ -1567,18 +1600,19 @@
     margin-bottom: 4px;
 }
 
-/* ── Advanced (collapsible) ─────────────────────────────────────── */
+/* ── Advanced (collapsible with smooth expansion) ─────────────────── */
 .lc-advanced {
     border: 1px solid var(--border);
     border-radius: 10px;
     overflow: hidden;
+    transition: border-color 0.15s ease;
 }
 .lc-advanced-toggle {
     display: flex;
     align-items: center;
     gap: 7px;
-    padding: 11px 14px;
-    font-size: 12.5px;
+    padding: 10px 14px;
+    font-size: 12px;
     font-weight: 600;
     color: var(--text-primary);
     cursor: pointer;
@@ -1601,21 +1635,37 @@
 }
 .lc-advanced-badge {
     margin-left: auto;
-    font-size: 10px;
+    font-size: 9.5px;
     font-weight: 500;
     color: var(--text-secondary);
     background: var(--border);
     border-radius: 4px;
-    padding: 1px 6px;
+    padding: 1px 5px;
     text-transform: uppercase;
     letter-spacing: 0.04em;
 }
 .lc-chevron {
-    transition: transform 0.2s ease;
+    transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
     margin-left: 2px;
 }
 .lc-advanced[open] .lc-chevron {
     transform: rotate(180deg);
+}
+
+.lc-advanced-content {
+    animation: lcExpand 0.24s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    transform-origin: top;
+}
+
+@keyframes lcExpand {
+    from {
+        opacity: 0;
+        transform: translateY(-6px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 /* ── Generation grid ────────────────────────────────────────────── */

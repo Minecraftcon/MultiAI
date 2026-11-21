@@ -9,6 +9,7 @@ let localSessionState = {
     top_p: null,
     top_k: null,
     repetition_penalty: null,
+    system_prompt: null,
 };
 
 function getLocalSession() { return { ...localSessionState }; }
@@ -111,7 +112,7 @@ async function handleLocalProbe(req, res) {
         for await (const chunk of req) body += chunk;
         const parsed = JSON.parse(body || "{}");
         const api_format = parsed.api_format || parsed.format || "kobold";
-        const { base_url, temperature, top_p, top_k, repetition_penalty } = parsed;
+        const { base_url, temperature, top_p, top_k, repetition_penalty, system_prompt } = parsed;
 
         if (!base_url || typeof base_url !== "string") {
             return sendJSON(res, 400, { error: "base_url is required" });
@@ -189,6 +190,7 @@ async function handleLocalProbe(req, res) {
             top_p: top_p !== undefined ? top_p : null,
             top_k: top_k !== undefined ? top_k : null,
             repetition_penalty: repetition_penalty !== undefined ? repetition_penalty : null,
+            system_prompt: typeof system_prompt === "string" ? system_prompt : null,
         });
 
         console.log(`[LOCAL] Connected to ${cleanUrl} — format: ${api_format}, model: ${modelName}, ctx: ${contextSize}`);

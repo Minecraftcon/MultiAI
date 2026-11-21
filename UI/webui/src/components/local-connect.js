@@ -161,8 +161,22 @@ function _renderModal() {
                 </div>
             </div>
 
+            <!-- Custom System Prompt -->
+            <div class="lc-field-group">
+                <label class="lc-label" for="localSystemPromptInput">
+                    System Instructions <span class="lc-label-tag">Optional</span>
+                </label>
+                <textarea
+                    id="localSystemPromptInput"
+                    class="kobold-textarea"
+                    rows="2"
+                    placeholder="Custom directives prepended to system instructions for this local model..."
+                    spellcheck="false"
+                >${lastOpts.system_prompt || ""}</textarea>
+            </div>
+
             <!-- Generation Controls (collapsible) -->
-            <details class="lc-advanced" ${Object.keys(lastOpts).some(k => lastOpts[k] !== null && lastOpts[k] !== "") ? "open" : ""}>
+            <details class="lc-advanced" id="lcAdvancedDetails" ${Object.keys(lastOpts).some(k => k !== "system_prompt" && lastOpts[k] !== null && lastOpts[k] !== "") ? "open" : ""}>
                 <summary class="lc-advanced-toggle">
                     <i data-lucide="sliders" style="width: 14px; height: 14px;"></i>
                     Sampling Parameters
@@ -170,75 +184,77 @@ function _renderModal() {
                     <i data-lucide="chevron-down" class="lc-chevron"></i>
                 </summary>
 
-                <div class="lc-gen-grid">
-                    <div class="lc-gen-field">
-                        <label class="lc-gen-label" for="lcTemperature">
-                            <span>Temperature</span>
-                            <span class="lc-gen-value" id="lcTemperatureVal">${lastOpts.temperature ?? ""}</span>
-                        </label>
-                        <div class="lc-range-row">
-                            <input type="range" id="lcTemperatureRange" class="lc-range"
-                                min="0" max="2" step="0.05"
-                                value="${lastOpts.temperature ?? 1.0}" />
-                            <input type="number" id="lcTemperature" class="lc-num-input"
-                                min="0" max="2" step="0.05"
-                                placeholder="default"
-                                value="${lastOpts.temperature ?? ""}" />
+                <div class="lc-advanced-content">
+                    <div class="lc-gen-grid">
+                        <div class="lc-gen-field">
+                            <label class="lc-gen-label" for="lcTemperature">
+                                <span>Temperature</span>
+                                <span class="lc-gen-value" id="lcTemperatureVal">${lastOpts.temperature ?? ""}</span>
+                            </label>
+                            <div class="lc-range-row">
+                                <input type="range" id="lcTemperatureRange" class="lc-range"
+                                    min="0" max="2" step="0.05"
+                                    value="${lastOpts.temperature ?? 1.0}" />
+                                <input type="number" id="lcTemperature" class="lc-num-input"
+                                    min="0" max="2" step="0.05"
+                                    placeholder="default"
+                                    value="${lastOpts.temperature ?? ""}" />
+                            </div>
+                        </div>
+
+                        <div class="lc-gen-field">
+                            <label class="lc-gen-label" for="lcTopP">
+                                <span>Top-P</span>
+                                <span class="lc-gen-value" id="lcTopPVal">${lastOpts.top_p ?? ""}</span>
+                            </label>
+                            <div class="lc-range-row">
+                                <input type="range" id="lcTopPRange" class="lc-range"
+                                    min="0" max="1" step="0.01"
+                                    value="${lastOpts.top_p ?? 1.0}" />
+                                <input type="number" id="lcTopP" class="lc-num-input"
+                                    min="0" max="1" step="0.01"
+                                    placeholder="default"
+                                    value="${lastOpts.top_p ?? ""}" />
+                            </div>
+                        </div>
+
+                        <div class="lc-gen-field">
+                            <label class="lc-gen-label" for="lcTopK">
+                                <span>Top-K</span>
+                                <span class="lc-gen-value" id="lcTopKVal">${lastOpts.top_k ?? ""}</span>
+                            </label>
+                            <div class="lc-range-row">
+                                <input type="range" id="lcTopKRange" class="lc-range"
+                                    min="0" max="200" step="1"
+                                    value="${lastOpts.top_k ?? 40}" />
+                                <input type="number" id="lcTopK" class="lc-num-input"
+                                    min="0" max="200" step="1"
+                                    placeholder="default"
+                                    value="${lastOpts.top_k ?? ""}" />
+                            </div>
+                        </div>
+
+                        <div class="lc-gen-field">
+                            <label class="lc-gen-label" for="lcRepPenalty">
+                                <span>Repetition Penalty</span>
+                                <span class="lc-gen-value" id="lcRepPenaltyVal">${lastOpts.repetition_penalty ?? ""}</span>
+                            </label>
+                            <div class="lc-range-row">
+                                <input type="range" id="lcRepPenaltyRange" class="lc-range"
+                                    min="1" max="2" step="0.01"
+                                    value="${lastOpts.repetition_penalty ?? 1.1}" />
+                                <input type="number" id="lcRepPenalty" class="lc-num-input"
+                                    min="1" max="2" step="0.01"
+                                    placeholder="default"
+                                    value="${lastOpts.repetition_penalty ?? ""}" />
+                            </div>
                         </div>
                     </div>
 
-                    <div class="lc-gen-field">
-                        <label class="lc-gen-label" for="lcTopP">
-                            <span>Top-P</span>
-                            <span class="lc-gen-value" id="lcTopPVal">${lastOpts.top_p ?? ""}</span>
-                        </label>
-                        <div class="lc-range-row">
-                            <input type="range" id="lcTopPRange" class="lc-range"
-                                min="0" max="1" step="0.01"
-                                value="${lastOpts.top_p ?? 1.0}" />
-                            <input type="number" id="lcTopP" class="lc-num-input"
-                                min="0" max="1" step="0.01"
-                                placeholder="default"
-                                value="${lastOpts.top_p ?? ""}" />
-                        </div>
-                    </div>
-
-                    <div class="lc-gen-field">
-                        <label class="lc-gen-label" for="lcTopK">
-                            <span>Top-K</span>
-                            <span class="lc-gen-value" id="lcTopKVal">${lastOpts.top_k ?? ""}</span>
-                        </label>
-                        <div class="lc-range-row">
-                            <input type="range" id="lcTopKRange" class="lc-range"
-                                min="0" max="200" step="1"
-                                value="${lastOpts.top_k ?? 40}" />
-                            <input type="number" id="lcTopK" class="lc-num-input"
-                                min="0" max="200" step="1"
-                                placeholder="default"
-                                value="${lastOpts.top_k ?? ""}" />
-                        </div>
-                    </div>
-
-                    <div class="lc-gen-field">
-                        <label class="lc-gen-label" for="lcRepPenalty">
-                            <span>Repetition Penalty</span>
-                            <span class="lc-gen-value" id="lcRepPenaltyVal">${lastOpts.repetition_penalty ?? ""}</span>
-                        </label>
-                        <div class="lc-range-row">
-                            <input type="range" id="lcRepPenaltyRange" class="lc-range"
-                                min="1" max="2" step="0.01"
-                                value="${lastOpts.repetition_penalty ?? 1.1}" />
-                            <input type="number" id="lcRepPenalty" class="lc-num-input"
-                                min="1" max="2" step="0.01"
-                                placeholder="default"
-                                value="${lastOpts.repetition_penalty ?? ""}" />
-                        </div>
-                    </div>
+                    <button class="lc-reset-btn" id="lcResetGenBtn" type="button">
+                        <i data-lucide="rotate-ccw"></i> Reset to defaults
+                    </button>
                 </div>
-
-                <button class="lc-reset-btn" id="lcResetGenBtn" type="button">
-                    <i data-lucide="rotate-ccw"></i> Reset to defaults
-                </button>
             </details>
 
             <div id="localStatus" class="kobold-status" aria-live="polite"></div>
@@ -311,6 +327,8 @@ function _renderModal() {
             const el = document.getElementById(id);
             if (el) el.textContent = "";
         });
+        const sysPrompt = document.getElementById("localSystemPromptInput");
+        if (sysPrompt) sysPrompt.value = "";
     });
 
     const urlInput = document.getElementById("localUrlInput");
@@ -357,11 +375,13 @@ async function _handleConnect() {
         const v  = el ? parseFloat(el.value) : NaN;
         return isNaN(v) || el.value === "" ? null : v;
     };
+    const sysPromptInput = document.getElementById("localSystemPromptInput");
     const genOpts = {
         temperature:         numVal("lcTemperature"),
         top_p:               numVal("lcTopP"),
         top_k:               numVal("lcTopK") !== null ? Math.round(numVal("lcTopK")) : null,
         repetition_penalty:  numVal("lcRepPenalty"),
+        system_prompt:       sysPromptInput?.value?.trim() || null,
     };
 
     if (btn) { btn.disabled = true; btn.innerHTML = `<span class="kobold-spinner"></span> Connecting…`; }

@@ -95,6 +95,19 @@ class LocalProvider extends BaseProvider {
             options,
         });
 
+        // Prepend custom local system prompt if configured in local session
+        if (config.system_prompt && typeof config.system_prompt === "string" && config.system_prompt.trim()) {
+            const trimmedPrompt = config.system_prompt.trim();
+            if (Array.isArray(payload.messages)) {
+                const sysIdx = payload.messages.findIndex(m => m.role === "system");
+                if (sysIdx >= 0) {
+                    payload.messages[sysIdx].content = `${trimmedPrompt}\n\n${payload.messages[sysIdx].content}`;
+                } else {
+                    payload.messages.unshift({ role: "system", content: trimmedPrompt });
+                }
+            }
+        }
+
         // Strip provider prefix for local server payload
         const cleanModel = (model || "").replace(/^(local|koboldcpp|kobold):/, "") || config.model;
         if (cleanModel) payload.model = cleanModel;

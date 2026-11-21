@@ -45,6 +45,7 @@ async function handleChat(req, res) {
                 if (localSession.top_p !== null) effectiveProviderConfig.top_p = localSession.top_p;
                 if (localSession.top_k !== null) effectiveProviderConfig.top_k = localSession.top_k;
                 if (localSession.repetition_penalty !== null) effectiveProviderConfig.repetition_penalty = localSession.repetition_penalty;
+                if (localSession.system_prompt) effectiveProviderConfig.system_prompt = localSession.system_prompt;
             }
         }
 
