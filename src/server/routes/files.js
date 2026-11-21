@@ -26,9 +26,20 @@ async function handleFileRead(args, chatId) {
 
     const stat = await fs.promises.stat(targetPath);
 
-    // 1. Strict directory guard: do not allow directory reads via read_file
+    // 1. Directory support: return directory listing directly
     if (stat.isDirectory()) {
-        throw new Error(`Path '${rawPath}' is a directory, not a file. Use the 'list_dir' tool to inspect directory contents.`);
+        const dirResult = await handleListDir({ path: rawPath }, chatId, { resolveSafePath });
+        return {
+            path: rawPath,
+            resolved_path: targetPath,
+            type: "directory",
+            is_directory: true,
+            entries: dirResult.entries,
+            subdirectories: dirResult.subdirectories,
+            files: dirResult.files,
+            content: dirResult.output,
+            output: dirResult.output
+        };
     }
 
     // 2. Automatic Image Detection & Multimodal Preview

@@ -39,13 +39,13 @@ export const readFileTool = {
         type: "function",
         function: {
             name: "read_file",
-            description: "Read contents from a file. Supports text/source code files and image files (PNG, JPG, WEBP, GIF, SVG, etc.). When reading an image file, the image is automatically attached to your vision context so you can visually view, inspect, and analyze it. For text files, lines are 1-indexed and capped at max 400 lines per read (with a 45KB byte limit). Supports bidirectional slicing: specify start_line only (next 400 lines), end_line only (preceding 400 lines), or both. If content exceeds 45KB, use content_offset to paginate. NOTE: Do not use read_file on directories; use list_dir to inspect directory contents.",
+            description: "Read contents from a file or list contents of a directory. For directories, returns directory tree and files. For images (PNG, JPG, SVG, etc.), attaches image to vision context. For text files, lines are 1-indexed (capped at 400 lines / 45KB per read). Use start_line/end_line to slice and content_offset to paginate.",
             parameters: {
                 type: "object",
                 properties: {
                     path: {
                         type: "string",
-                        description: "Path to the file to inspect."
+                        description: "Path to the file or directory to inspect (e.g. '.' for workspace root)."
                     },
                     start_line: {
                         type: "integer",
@@ -66,7 +66,7 @@ export const readFileTool = {
     },
     handler: async (args, { genState }) => {
         const payload = {
-            path: args.path || args.AbsolutePath || args.target_file || args.file_path,
+            path: args.path || args.AbsolutePath || args.target_file || args.file_path || args.DirectoryPath || args.dir_path || ".",
             start_line: args.start_line !== undefined ? args.start_line : args.StartLine,
             end_line: args.end_line !== undefined ? args.end_line : args.EndLine,
             content_offset: args.content_offset !== undefined ? args.content_offset : (args.ContentOffset !== undefined ? args.ContentOffset : args.offset),
@@ -120,7 +120,7 @@ export const replaceFileContentTool = {
         type: "function",
         function: {
             name: "replace_file_content",
-            description: "Surgically edit a file by replacing a single block of text with new content. Can be constrained to a line range for precise disambiguation.",
+            description: "Edit a file by replacing code blocks. Supports single replacement (via target_content and replacement_content) or multiple non-contiguous edits (via replacement_chunks array).",
             parameters: {
                 type: "object",
                 properties: {
@@ -130,23 +130,38 @@ export const replaceFileContentTool = {
                     },
                     target_content: {
                         type: "string",
-                        description: "The exact lines/block of code to replace (must match whitespace and indentation exactly)."
+                        description: "Single edit: exact lines/block of code to replace (must match whitespace/indentation)."
                     },
                     replacement_content: {
                         type: "string",
-                        description: "The new content to insert in place of target_content."
+                        description: "Single edit: new content to insert in place of target_content."
+                    },
+                    replacement_chunks: {
+                        type: "array",
+                        description: "Multiple edits: array of non-contiguous {target_content, replacement_content} blocks.",
+                        items: {
+                            type: "object",
+                            properties: {
+                                target_content: { type: "string", description: "Exact content to be replaced." },
+                                replacement_content: { type: "string", description: "Content to replace target_content with." },
+                                start_line: { type: "integer", description: "Optional 1-based start line." },
+                                end_line: { type: "integer", description: "Optional 1-based end line." },
+                                allow_multiple: { type: "boolean", description: "Allow multiple replacements if matched." }
+                            },
+                            required: ["target_content", "replacement_content"]
+                        }
                     },
                     start_line: {
                         type: "integer",
-                        description: "Optional 1-based start line of the search window."
+                        description: "Optional 1-based start line of the search window for single replacement."
                     },
                     end_line: {
                         type: "integer",
-                        description: "Optional 1-based end line of the search window."
+                        description: "Optional 1-based end line of the search window for single replacement."
                     },
                     allow_multiple: {
                         type: "boolean",
-                        description: "If true, replaces all occurrences in the window. If false, errors if multiple matches exist (default: false)."
+                        description: "If true, replaces all occurrences in the window. If false (default), errors if multiple matches exist."
                     },
                     instruction: {
                         type: "string",
@@ -157,11 +172,28 @@ export const replaceFileContentTool = {
                         description: "Optional user-facing summary of why this change is made."
                     }
                 },
-                required: ["path", "target_content", "replacement_content"]
+                required: ["path"]
             }
         }
     },
     handler: async (args, { genState }) => {
+        const chunks = args.replacement_chunks || args.ReplacementChunks;
+        if (Array.isArray(chunks) && chunks.length > 0) {
+            const payload = {
+                path: args.path || args.TargetFile || args.target_file,
+                replacement_chunks: chunks,
+                instruction: args.instruction || args.Instruction,
+                description: args.description || args.Description,
+                chatId: state.currentChatId
+            };
+            const result = await toolFetch("/api/file/multi-replace", { method: "POST", body: payload, genState });
+            if (result && !result.error) {
+                try { document.dispatchEvent(new CustomEvent("changesUpdated", { detail: { chatId: state.currentChatId } })); } catch (_) {}
+                try { window.dispatchEvent(new CustomEvent("workspace-files-changed")); } catch (_) {}
+            }
+            return result;
+        }
+
         const payload = {
             path: args.path || args.TargetFile || args.target_file,
             target_content: args.target_content !== undefined ? args.target_content : args.TargetContent,
@@ -318,10 +350,8 @@ export const grepSearchTool = {
 };
 
 export const filesystemTools = [
-    listDirTool,
     readFileTool,
     writeFileTool,
     replaceFileContentTool,
-    multiReplaceFileContentTool,
     grepSearchTool
 ];

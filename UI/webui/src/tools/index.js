@@ -7,7 +7,7 @@ import { onToolStart, onToolComplete, onToolError } from "./badge-sync.js";
 import { terminalTools } from "./terminal/index.js";
 import { webTools } from "./web/index.js";
 import { mediaTools } from "./media/index.js";
-import { filesystemTools } from "./filesystem/index.js";
+import { filesystemTools, listDirTool, multiReplaceFileContentTool } from "./filesystem/index.js";
 import { planningTools } from "./planning/index.js";
 import { designTools } from "./design/index.js";
 import { McpActiveTools, listMcpTool, callMcpTool } from "./mcp/index.js";
@@ -17,6 +17,9 @@ terminalTools.forEach(registerTool);
 webTools.forEach(registerTool);
 mediaTools.forEach(registerTool);
 filesystemTools.forEach(registerTool);
+// Register legacy aliases for backward compatibility with older prompts/sessions
+registerTool(listDirTool);
+registerTool(multiReplaceFileContentTool);
 planningTools.forEach(registerTool);
 registerTool(listMcpTool);
 registerTool(callMcpTool);
@@ -24,7 +27,7 @@ registerTool(callMcpTool);
 /**
  * Array of all tool schemas provided to LLM chat requests.
  */
-export const tools = getAllToolSchemas();
+export const tools = getActiveToolSchemas();
 
 /**
  * Synchronizes the exported tools array in-place when dynamic tools (like MCP) update.
@@ -73,8 +76,11 @@ function isToolEnabled(name, toolsConfig = state.config?.Tools || {}) {
  */
 function getActiveToolSchemas() {
     const toolsConfig = state.config?.Tools || {};
+    // Deprecated tools merged into read_file & replace_file_content; omit from exposed active schemas
+    const deprecatedTools = new Set(["list_dir", "multi_replace_file_content"]);
     return getAllToolSchemas().filter(schema => {
         const name = schema?.function?.name || "";
+        if (deprecatedTools.has(name)) return false;
         if (!isToolEnabled(name, toolsConfig)) return false;
         // In on-demand MCP mode (default), do not expose individual mcp_* tool schemas all at once; expose list_mcp and call_mcp instead
         if (name.startsWith("mcp_") && !toolsConfig.ExposeAllMcpTools) return false;

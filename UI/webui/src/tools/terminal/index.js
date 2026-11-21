@@ -342,45 +342,29 @@ export const scheduleTool = {
         type: "function",
         function: {
             name: "schedule",
-            description: "Schedule a one-shot timer (DurationSeconds) or a recurring cron job (CronExpression) that notifies you via Prompt. This tool call runs as a background task and returns immediately; end your turn (call no more tools) to wait for notifications. A timer with a TimerCondition is cancelled early by a matching message or task completion, which is itself your wakeup. Set IsDaemon only for a cron that should keep firing after the current task is done. Set ExactTiming only when a cron must fire at the exact wall-clock time without jitter. Use manage_tasks to cancel active schedules, and never use a shell sleep command as a timer.",
+            description: "Schedule a one-shot timer (DurationSeconds) or recurring cron job (CronExpression) that notifies you via Prompt. Cancels early if a hooked task completes (TimerCondition). Returns immediately.",
             parameters: {
                 type: "object",
                 properties: {
-                    CronExpression: {
-                        type: "string",
-                        description: "Standard 5-field cron expression for a recurring schedule (e.g. '*/5 * * * *' for every 5 minutes). Mutually exclusive with DurationSeconds."
-                    },
                     DurationSeconds: {
                         type: "integer",
-                        description: "Seconds to wait for a one-shot timer. Mutually exclusive with CronExpression."
+                        description: "Seconds to wait for a one-shot timer (e.g. 10, 30, 60). Mutually exclusive with CronExpression."
+                    },
+                    CronExpression: {
+                        type: "string",
+                        description: "Standard 5-field cron expression for recurring schedules (e.g. '*/5 * * * *')."
                     },
                     Prompt: {
                         type: "string",
-                        description: "Message sent to you as a high-priority notification when the timer fires or the cron triggers."
+                        description: "Notification message delivered to you when the timer fires or cron triggers."
                     },
                     TimerCondition: {
                         type: "string",
-                        description: "Timer only. Cancels the timer early when a matching message arrives or task finishes: 'never' (default), 'any' (any message/task event), or a sender/task ID."
-                    },
-                    IsDaemon: {
-                        type: "boolean",
-                        description: "Cron only. Set true only for an independent standing job that should keep firing after the current task is done."
-                    },
-                    MaxIterations: {
-                        type: "integer",
-                        description: "Cron only. Maximum number of triggers before the schedule stops; defaults to unlimited."
-                    },
-                    ExactTiming: {
-                        type: "boolean",
-                        description: "Cron only. Set true only when the user explicitly requires the schedule to fire at the exact wall-clock time without jitter."
+                        description: "Cancel early on task exit or event: 'never' (default), 'any', or a task_id (e.g. 't_...')."
                     },
                     task: {
                         type: "string",
-                        description: "Optional background task_id (e.g. 't_...') or shell command to run and monitor in the background."
-                    },
-                    detach: {
-                        type: "boolean",
-                        description: "Set to true to conclude your turn immediately; MultiAI will monitor in background and re-awaken you when complete (default: true)."
+                        description: "Optional task_id or shell command to hook and monitor."
                     }
                 }
             }

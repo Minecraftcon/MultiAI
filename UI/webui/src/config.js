@@ -44,7 +44,7 @@ export const CORE_TOOLS_PROMPT = `
 - Detach (>15s): schedule(task: "<cmd_or_id>", time: <sec>, detach: true, status_message: "...") — immediately ends your response turn; MultiAI auto-resumes when done.
 
 [DUAL-TRACK EXECUTION]:
-- Track A (Quick Fix): read_file/list_dir → write_todos → surgical edit → verify → done.
+- Track A (Quick Fix): read_file/grep_search → write_todos → replace_file_content → verify → done.
 - Track B (Complex Build): investigate → structured plan + open questions → write_todos ($ARTIFACTS/Tasklist-{name}.md) → pause for approval → execute step by step.
 
 [PLANNING & USER INPUT]:
