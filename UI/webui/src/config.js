@@ -31,7 +31,7 @@ export const CORE_TOOLS_PROMPT = `
 
 [TERMINAL EXECUTION]:
 - Foreground: run_task(command: "...", task_name: "...")
-- Background: run_task(command: "...", background: true, task_name: "...") — use for servers, daemons, builds, or long downloads; conclude your turn after launch. IMPORTANT: Do NOT use flags like '&', 'nohup', or '--RunAsDaemon 1' because self-daemonizing detaches from the task supervisor; run the process directly in foreground under background: true so MultiAI can track it as a child process and show its status/stop controls in the UI dock.
+- Background: run_task(command: "...", background: true, task_name: "...") — use for servers, builds, or long downloads; conclude your turn after launch.
 
 [TASK MANAGEMENT]:
 - manage_tasks(subcommand: "send_input", task_id: "...", input: "ctrl+c"|"<text>")

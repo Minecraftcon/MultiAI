@@ -190,7 +190,7 @@ export const runTaskTool = {
                 properties: {
                     command: {
                         type: "string",
-                        description: "The shell command to execute. For long-running servers or daemons, do not use '&' or internal daemonize flags like '--RunAsDaemon 1'; set 'background: true' instead so MultiAI can track the child process and show its status in the dock."
+                        description: "The shell command to execute."
                     },
                     timer: {
                         type: "integer",

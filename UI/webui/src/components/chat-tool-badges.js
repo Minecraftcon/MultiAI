@@ -323,7 +323,8 @@ export function getToolBadgeConfig(rawToolName, args = {}) {
     }
 
     const isTimer = toolName === "sleep" || toolName === "idle" || toolName === "schedule";
-    const isCommand = (toolName === "run_task" || toolName === "run_command" || toolName === "terminal" || toolName === "bash" || toolName === "shell") && Boolean(args && (args.command || args.CommandLine || args.cmd || args.script || args.code));
+    const isCommandToolType = (toolName === "run_task" || toolName === "run_command" || toolName === "terminal" || toolName === "bash" || toolName === "shell");
+    const isCommand = isCommandToolType || Boolean(args && (args.command || args.CommandLine || args.cmd || args.script || args.code));
     const hasRing = isTimer || isCommand;
 
     const detailLines = String(detail || "").split("\n");
@@ -922,8 +923,27 @@ export function updateStreamingToolBadge(element, toolData, overallStartTime) {
             queryEl.dataset.compact = displayDetail;
         }
         if (partialCmd && badgeEl._collapseDiv) {
-            const cmdBox = badgeEl._collapseDiv.querySelector(".command-output-cmd");
-            const cmdText = badgeEl._collapseDiv.querySelector(".command-cmd-text");
+            let cmdBox = badgeEl._collapseDiv.querySelector(".command-output-cmd");
+            let cmdText = badgeEl._collapseDiv.querySelector(".command-cmd-text");
+            if (!cmdBox) {
+                const pre = badgeEl._collapseDiv.querySelector(".command-output-box pre");
+                const resEl = badgeEl._collapseDiv.querySelector(".command-output-res");
+                if (pre) {
+                    const temp = document.createElement("div");
+                    const lines = String(partialCmd).split("\n");
+                    const isMulti = lines.length > 3;
+                    const compact = isMulti ? lines.slice(0, 3).join("\n") + "\n…" : partialCmd;
+                    temp.innerHTML = `<div class="command-output-cmd ${isMulti ? 'is-compact' : ''}" data-full="${escapeHTML(partialCmd)}" data-compact="${escapeHTML(compact)}"><div class="command-cmd-text">${escapeHTML(compact)}</div><button type="button" class="badge-open-pty-btn" title="Open Interactive Terminal (Ctrl+\`)"><i data-lucide="terminal"></i><span>Terminal</span></button>${isMulti ? `<div class="cmd-toggle-row"><button type="button" class="cmd-compact-toggle" aria-expanded="false"><span class="cmd-toggle-label">Expand</span> <span class="cmd-toggle-lines">(${lines.length} lines)</span></button></div>` : ''}</div><hr class="command-output-sep">`;
+                    if (resEl) {
+                        while (temp.firstChild) pre.insertBefore(temp.firstChild, resEl);
+                    } else {
+                        while (temp.firstChild) pre.appendChild(temp.firstChild);
+                    }
+                    cmdBox = badgeEl._collapseDiv.querySelector(".command-output-cmd");
+                    cmdText = badgeEl._collapseDiv.querySelector(".command-cmd-text");
+                    renderIcons(badgeEl._collapseDiv);
+                }
+            }
             if (cmdBox) {
                 cmdBox.dataset.full = partialCmd;
                 cmdBox.dataset.compact = partialCmd;
@@ -1065,11 +1085,27 @@ export function syncToolBadgeArgs(badgeEl, toolName, args) {
     if (badgeEl._collapseDiv) {
         const cmdStr = args.command || args.CommandLine || args.cmd || args.script || args.code;
         if (cmdStr) {
-            const cmdText = badgeEl._collapseDiv.querySelector(".command-cmd-text");
-            const cmdBox = badgeEl._collapseDiv.querySelector(".command-output-cmd");
+            let cmdBox = badgeEl._collapseDiv.querySelector(".command-output-cmd");
+            let cmdText = badgeEl._collapseDiv.querySelector(".command-cmd-text");
             const cmdLines = String(cmdStr).split("\n");
             const isMulti = cmdLines.length > 3;
             const compact = isMulti ? cmdLines.slice(0, 3).join("\n") + "\n…" : cmdStr;
+            if (!cmdBox) {
+                const pre = badgeEl._collapseDiv.querySelector(".command-output-box pre");
+                const resEl = badgeEl._collapseDiv.querySelector(".command-output-res");
+                if (pre) {
+                    const temp = document.createElement("div");
+                    temp.innerHTML = `<div class="command-output-cmd ${isMulti ? 'is-compact' : ''}" data-full="${escapeHTML(cmdStr)}" data-compact="${escapeHTML(compact)}"><div class="command-cmd-text">${escapeHTML(compact)}</div><button type="button" class="badge-open-pty-btn" title="Open Interactive Terminal (Ctrl+\`)"><i data-lucide="terminal"></i><span>Terminal</span></button>${isMulti ? `<div class="cmd-toggle-row"><button type="button" class="cmd-compact-toggle" aria-expanded="false"><span class="cmd-toggle-label">Expand</span> <span class="cmd-toggle-lines">(${cmdLines.length} lines)</span></button></div>` : ''}</div><hr class="command-output-sep">`;
+                    if (resEl) {
+                        while (temp.firstChild) pre.insertBefore(temp.firstChild, resEl);
+                    } else {
+                        while (temp.firstChild) pre.appendChild(temp.firstChild);
+                    }
+                    cmdBox = badgeEl._collapseDiv.querySelector(".command-output-cmd");
+                    cmdText = badgeEl._collapseDiv.querySelector(".command-cmd-text");
+                    renderIcons(badgeEl._collapseDiv);
+                }
+            }
             if (cmdText) {
                 cmdText.textContent = compact;
             }
