@@ -447,7 +447,7 @@ export async function runAgent(userText, currentAIMessage, chatId, images = [], 
                 // (e.g. "Okay! Ive found the issue, lemme fix properly:" or "Please wait for the output..."), route to activity trace and continue
                 const isPromissory = isPromissoryAnnouncement(finalDisplay);
                 const isPassiveWaitingNotice = /please wait|waiting for (the )?output|task is (still )?running/i.test(finalDisplay);
-                if ((isPromissory || isPassiveWaitingNotice) && (hasRunTools || round > 0) && round < 10 && promissoryRetries < 2) {
+                if ((isPromissory || isPassiveWaitingNotice) && (hasRunTools || round > 0) && round < 10 && promissoryRetries < 3) {
                     promissoryRetries++;
                     logEvent("PROMISSORY_CONTINUE", { round, model: selectedModel, text: finalDisplay });
                     addThoughtTrace(currentAIMessage, finalDisplay);
@@ -455,7 +455,7 @@ export async function runAgent(userText, currentAIMessage, chatId, images = [], 
                         scope: "promissory_continuation",
                         priority: "high",
                         instruction: isPassiveWaitingNotice
-                            ? "Do not tell the user to wait for output. If the task is running in the background, use 'schedule(task: \"<task_id>\", time: <sec>, wake_on: \"exit\")' or conclude with a clear summary."
+                            ? "The task was automatically backgrounded because it exceeded 10s without exit code. Do not tell the user to wait or stop; continue immediately with your next step, inspect other files, or proceed with your plan."
                             : "Do not announce intent. Execute the tool action immediately in this turn."
                     };
                     continue;

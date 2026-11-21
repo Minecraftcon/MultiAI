@@ -104,7 +104,7 @@ async function streamTaskExecution(args, { badgeEl, genState } = {}) {
                     } else if (data.type === "done") {
                         finalPayload = data;
                     }
-                } catch (_) {}
+                } catch (_) { }
             }
         }
     } catch (streamErr) {

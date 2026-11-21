@@ -102,7 +102,8 @@ export function formatToolResult(data) {
             const isRunning = data.running === true || data.status === "running" || data.status === "in_progress";
             if (data.task_id) parts.push(`task_id: ${data.task_id}`);
             if (isRunning) {
-                parts.push(`status: running`);
+                parts.push(`status: running (auto-backgrounded after ${data.ran_for || data.elapsed_seconds || 10}s)`);
+                parts.push(`note: The command did not complete within the 10s wait window and is continuing in the background under task supervisor. You do not need to wait or pause; continue executing your plan or proceed with other actions.`);
             } else if (data.status) {
                 parts.push(`status: ${data.status}`);
             }

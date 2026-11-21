@@ -30,7 +30,7 @@ export const CORE_TOOLS_PROMPT = `
 - Fetch: web_search(type: "fetch", query: "<url>")
 
 [TERMINAL EXECUTION]:
-- Foreground: run_task(command: "...", task_name: "...")
+- Foreground: run_task(command: "...", task_name: "...") — automatically continues in the background if taking longer than 10s without an exit code; you receive its task_id and can proceed immediately without waiting.
 - Background: run_task(command: "...", background: true, task_name: "...") — use for servers, builds, or long downloads; conclude your turn after launch.
 
 [TASK MANAGEMENT]:
