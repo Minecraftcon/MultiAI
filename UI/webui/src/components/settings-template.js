@@ -416,18 +416,8 @@ export function getSettingsHTML() {
                         <div class="settings-tool-group-header">Filesystem & Codebase</div>
                         <div class="settings-row">
                             <div class="settings-item-info">
-                                <span class="settings-item-title"><code>list_dir</code></span>
-                                <span class="settings-item-desc">List workspace directories and inspect project file trees</span>
-                            </div>
-                            <label class="settings-switch">
-                                <input type="checkbox" id="cfgEnable_list_dir" checked>
-                                <span class="settings-slider"></span>
-                            </label>
-                        </div>
-                        <div class="settings-row">
-                            <div class="settings-item-info">
                                 <span class="settings-item-title"><code>read_file</code></span>
-                                <span class="settings-item-desc">Read contents from text, code, or image files</span>
+                                <span class="settings-item-desc">Read files (code, text, images) or list directory file trees</span>
                             </div>
                             <label class="settings-switch">
                                 <input type="checkbox" id="cfgEnable_read_file" checked>
@@ -447,20 +437,10 @@ export function getSettingsHTML() {
                         <div class="settings-row">
                             <div class="settings-item-info">
                                 <span class="settings-item-title"><code>replace_file_content</code></span>
-                                <span class="settings-item-desc">Surgically edit a single contiguous block of code or text</span>
+                                <span class="settings-item-desc">Surgically edit code blocks (supports single or multi-chunk edits)</span>
                             </div>
                             <label class="settings-switch">
                                 <input type="checkbox" id="cfgEnable_replace_file_content" checked>
-                                <span class="settings-slider"></span>
-                            </label>
-                        </div>
-                        <div class="settings-row">
-                            <div class="settings-item-info">
-                                <span class="settings-item-title"><code>multi_replace_file_content</code></span>
-                                <span class="settings-item-desc">Apply multiple non-contiguous surgical edits in a single pass</span>
-                            </div>
-                            <label class="settings-switch">
-                                <input type="checkbox" id="cfgEnable_multi_replace_file_content" checked>
                                 <span class="settings-slider"></span>
                             </label>
                         </div>

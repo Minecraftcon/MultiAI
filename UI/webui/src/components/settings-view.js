@@ -239,7 +239,7 @@ export function populateSettingsValues() {
     const granularToolNames = [
         "run_task", "manage_tasks", "schedule",
         "web_search", "generate_image",
-        "list_dir", "read_file", "write_file", "replace_file_content", "multi_replace_file_content", "grep_search",
+        "read_file", "write_file", "replace_file_content", "grep_search",
         "write_todos", "ask_questions",
         "list_mcp", "call_mcp"
     ];
@@ -731,7 +731,7 @@ export function initSettingsView() {
     const granularToolNames = [
         "run_task", "manage_tasks", "schedule",
         "web_search", "generate_image",
-        "list_dir", "read_file", "write_file", "replace_file_content", "multi_replace_file_content", "grep_search",
+        "read_file", "write_file", "replace_file_content", "grep_search",
         "write_todos", "ask_questions",
         "list_mcp", "call_mcp"
     ];
