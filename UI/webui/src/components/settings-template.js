@@ -106,6 +106,8 @@ export function getSettingsHTML() {
                                 <option value="developer">Senior Software Engineer (Deep Code)</option>
                                 <option value="creative">Creative Thinker & Writer</option>
                                 <option value="concise">Direct & Concise (Zero Fluff)</option>
+                                <option value="kis">KIS — Keep It Simple (Direct & Minimal)</option>
+                                <option value="kids">KIDS — Keep It Dead Simple (No Loops, Script Files)</option>
                                 <option value="custom">Custom Instructions...</option>
                             </select>
                         </div>
