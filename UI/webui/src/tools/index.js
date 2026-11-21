@@ -36,17 +36,46 @@ export function syncToolsArray() {
 }
 
 /**
+ * Checks whether an individual tool is enabled in config.
+ * Checks both individual toggle (Tools.Enable_<name>) and category toggle.
+ */
+function isToolEnabled(name, toolsConfig = state.config?.Tools || {}) {
+    const canonicalName = normalizeToolName(name);
+
+    // 1. Check granular individual toggle if explicitly set
+    const granularKey = `Enable_${canonicalName}`;
+    if (toolsConfig[granularKey] === false) return false;
+    // Also check alias for ask_questions / ask_question
+    if (canonicalName === "ask_question" && toolsConfig.Enable_ask_questions === false) return false;
+    if (canonicalName === "ask_questions" && toolsConfig.Enable_ask_question === false) return false;
+
+    // 2. Category level checks
+    const isTerminalTool = canonicalName === "run_task" || canonicalName === "manage_tasks" || canonicalName === "schedule";
+    if (toolsConfig.EnableTerminal === false && isTerminalTool) return false;
+
+    const isWebTool = canonicalName === "web_search";
+    if (toolsConfig.EnableWebSearch === false && isWebTool) return false;
+
+    const isImageTool = canonicalName === "generate_image";
+    if (toolsConfig.EnableImageGeneration === false && isImageTool) return false;
+
+    const isFilesystemTool = canonicalName === "list_dir" || canonicalName === "read_file" || canonicalName === "write_file" || canonicalName === "replace_file_content" || canonicalName === "multi_replace_file_content" || canonicalName === "grep_search";
+    if (toolsConfig.EnableFilesystem === false && isFilesystemTool) return false;
+
+    const isMcpTool = canonicalName.startsWith("mcp_") || canonicalName === "list_mcp" || canonicalName === "call_mcp";
+    if (toolsConfig.EnableMcp === false && isMcpTool) return false;
+
+    return true;
+}
+
+/**
  * Returns dynamic tool schemas filtering out tools disabled by configuration.
  */
 function getActiveToolSchemas() {
     const toolsConfig = state.config?.Tools || {};
     return getAllToolSchemas().filter(schema => {
         const name = schema?.function?.name || "";
-        if (toolsConfig.EnableTerminal === false && (name === "run_task" || name === "manage_tasks" || name === "schedule")) return false;
-        if (toolsConfig.EnableWebSearch === false && name === "web_search") return false;
-        if (toolsConfig.EnableImageGeneration === false && name === "generate_image") return false;
-        if (toolsConfig.EnableFilesystem === false && (name === "list_dir" || name === "read_file" || name === "write_file" || name === "replace_file_content" || name === "multi_replace_file_content" || name === "grep_search")) return false;
-        if (toolsConfig.EnableMcp === false && (name.startsWith("mcp_") || name === "list_mcp" || name === "call_mcp")) return false;
+        if (!isToolEnabled(name, toolsConfig)) return false;
         // In on-demand MCP mode (default), do not expose individual mcp_* tool schemas all at once; expose list_mcp and call_mcp instead
         if (name.startsWith("mcp_") && !toolsConfig.ExposeAllMcpTools) return false;
         return true;
@@ -88,40 +117,11 @@ export async function executeTool(name, args, badgeEl, genState) {
     const resolvedArgs = normalizeToolArguments(canonicalName, args);
     const toolsConfig = state.config?.Tools || {};
 
-    // Check if terminal execution is disabled in config.ini
-    const isTerminalTool = canonicalName === "run_task" || canonicalName === "manage_tasks" || canonicalName === "schedule";
-    if (toolsConfig.EnableTerminal === false && isTerminalTool) {
-        throw new Error("Terminal execution is disabled in config.ini");
-    }
-
-    // Check if web search is disabled in config.ini
-    const isWebTool = canonicalName === "web_search";
-    if (toolsConfig.EnableWebSearch === false && isWebTool) {
-        throw new Error("Web search is disabled in config.ini");
-    }
-
-    // Check if image generation is disabled in config.ini
-    const isImageTool = canonicalName === "generate_image";
-    if (toolsConfig.EnableImageGeneration === false && isImageTool) {
-        throw new Error("Image generation is disabled in config.ini");
-    }
-
-    // Check if filesystem tools are disabled in config.ini
-    const isFilesystemTool = canonicalName === "list_dir" || canonicalName === "read_file" || canonicalName === "write_file" || canonicalName === "replace_file_content" || canonicalName === "multi_replace_file_content" || canonicalName === "grep_search";
-    if (toolsConfig.EnableFilesystem === false && isFilesystemTool) {
-        throw new Error("Filesystem tools are disabled in config.ini");
+    if (!isToolEnabled(canonicalName, toolsConfig)) {
+        throw new Error(`Tool '${canonicalName}' is disabled in configuration`);
     }
 
     const tool = getTool(canonicalName);
-    if (!tool) {
-        throw new Error("Unknown tool: " + name);
-    }
-
-    // Check if MCP tools are disabled in config.ini
-    const isMcpTool = canonicalName.startsWith("mcp_") || tool.isMcp;
-    if (toolsConfig.EnableMcp === false && isMcpTool) {
-        throw new Error("MCP tools are disabled in config.ini");
-    }
 
     onToolStart(canonicalName, resolvedArgs, badgeEl);
 
@@ -142,6 +142,7 @@ export {
     getTool,
     getAllToolSchemas,
     getActiveToolSchemas,
+    isToolEnabled,
     hasTool,
     normalizeToolName,
     normalizeToolArguments,

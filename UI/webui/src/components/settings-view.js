@@ -235,6 +235,35 @@ export function populateSettingsValues() {
     const toolMcp = document.getElementById("cfgEnableMcp");
     if (toolMcp) toolMcp.checked = tools.EnableMcp !== false;
 
+    // Granular per-tool checkboxes
+    const granularToolNames = [
+        "run_task", "manage_tasks", "schedule",
+        "web_search", "generate_image",
+        "list_dir", "read_file", "write_file", "replace_file_content", "multi_replace_file_content", "grep_search",
+        "write_todos", "ask_questions",
+        "list_mcp", "call_mcp"
+    ];
+    granularToolNames.forEach(tName => {
+        const el = document.getElementById(`cfgEnable_${tName}`);
+        if (el) {
+            const key = `Enable_${tName}`;
+            el.checked = tools[key] !== false;
+        }
+    });
+
+    // Update Local LLM Server status desc
+    const localDesc = document.getElementById("cfgLocalServerStatusDesc");
+    if (localDesc) {
+        import("./local-connect.js").then(lc => {
+            const url = lc.getLocalSessionUrl();
+            if (url) {
+                localDesc.textContent = `Connected: ${url}`;
+            } else {
+                localDesc.textContent = "Connect to localhost or LAN endpoint";
+            }
+        }).catch(() => {});
+    }
+
     // Load MCP servers list
     renderMcpServersList();
 
@@ -695,6 +724,38 @@ export function initSettingsView() {
     if (toolMcp) {
         toolMcp.addEventListener("change", (e) => {
             saveSetting("Tools", "EnableMcp", e.target.checked);
+        });
+    }
+
+    // Granular per-tool event listeners
+    const granularToolNames = [
+        "run_task", "manage_tasks", "schedule",
+        "web_search", "generate_image",
+        "list_dir", "read_file", "write_file", "replace_file_content", "multi_replace_file_content", "grep_search",
+        "write_todos", "ask_questions",
+        "list_mcp", "call_mcp"
+    ];
+    granularToolNames.forEach(tName => {
+        const el = document.getElementById(`cfgEnable_${tName}`);
+        if (el) {
+            el.addEventListener("change", (e) => {
+                saveSetting("Tools", `Enable_${tName}`, e.target.checked);
+            });
+        }
+    });
+
+    // Local model setup button in settings
+    const btnLocalConnect = document.getElementById("btnOpenLocalConnectSettings");
+    if (btnLocalConnect) {
+        btnLocalConnect.addEventListener("click", () => {
+            import("./local-connect.js").then(lc => {
+                lc.showLocalConnectModal((data) => {
+                    const localDesc = document.getElementById("cfgLocalServerStatusDesc");
+                    if (localDesc) {
+                        localDesc.textContent = `Connected: ${data.base_url} (${data.model_name})`;
+                    }
+                });
+            });
         });
     }
 

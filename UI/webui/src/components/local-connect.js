@@ -10,11 +10,11 @@ const SESSION_FMT  = "local_api_format";
 const SESSION_OPTS = "local_gen_opts";
 
 const API_FORMATS = [
-    { id: "kobold",  label: "KoboldCPP  (api/v1)",           hint: "Default KoboldCPP endpoint" },
-    { id: "openai",  label: "OpenAI-compat  (v1/)",           hint: "llama.cpp server, LocalAI, LM Studio…" },
-    { id: "llama",   label: "llama.cpp  (/chat/completions)", hint: "Bare llama.cpp without /v1 prefix" },
-    { id: "vllm",    label: "vLLM  (v1/)",                   hint: "vLLM OpenAI-compatible server" },
-    { id: "ollama",  label: "Ollama  (api/chat)",             hint: "Ollama native API" },
+    { id: "kobold",  label: "KoboldCPP",     badge: "api/v1",           hint: "Standard endpoint" },
+    { id: "openai",  label: "OpenAI-compat", badge: "v1/",              hint: "LM Studio, LocalAI" },
+    { id: "llama",   label: "llama.cpp",     badge: "chat/completions", hint: "Bare server" },
+    { id: "vllm",    label: "vLLM",          badge: "v1/",              hint: "vLLM server" },
+    { id: "ollama",  label: "Ollama",        badge: "api/chat",         hint: "Native API" },
 ];
 
 let _onConnectSuccess = null;
@@ -113,12 +113,9 @@ function _renderModal() {
 
     modal.innerHTML = `
         <div class="kobold-modal-header">
-            <div class="kobold-modal-icon">
-                <i data-lucide="cpu"></i>
-            </div>
             <div>
-                <h2 id="localModalTitle" class="kobold-modal-title">Connect Local LLM</h2>
-                <p class="kobold-modal-subtitle">KoboldCPP · llama.cpp · vLLM · Ollama · any OpenAI-compat server</p>
+                <h2 id="localModalTitle" class="kobold-modal-title">Connect Local Model</h2>
+                <p class="kobold-modal-subtitle">KoboldCPP, llama.cpp, vLLM, Ollama, or OpenAI-compatible server</p>
             </div>
             <button class="kobold-close-btn" id="localModalClose" aria-label="Close">
                 <i data-lucide="x"></i>
@@ -130,32 +127,34 @@ function _renderModal() {
             <!-- Base URL -->
             <div class="lc-field-group">
                 <label class="lc-label" for="localUrlInput">
-                    <i data-lucide="link"></i>
-                    Base URL
+                    Server Address
                 </label>
-                <input
-                    id="localUrlInput"
-                    class="kobold-input"
-                    type="url"
-                    placeholder="http://localhost:5001"
-                    value="${lastUrl}"
-                    autocomplete="url"
-                    spellcheck="false"
-                />
-                <p class="lc-hint">The root address of your running LLM server (no path suffix needed).</p>
+                <div class="kobold-input-row">
+                    <input
+                        id="localUrlInput"
+                        class="kobold-input"
+                        type="url"
+                        placeholder="http://localhost:5001"
+                        value="${lastUrl}"
+                        autocomplete="url"
+                        spellcheck="false"
+                    />
+                </div>
             </div>
 
             <!-- API Format -->
             <div class="lc-field-group">
-                <label class="lc-label" for="localFormatSelect">
-                    <i data-lucide="layers"></i>
-                    API Format
+                <label class="lc-label">
+                    Server Type
                 </label>
                 <div class="lc-format-grid">
                     ${API_FORMATS.map(f => `
                         <label class="lc-format-chip ${f.id === lastFmt ? "is-selected" : ""}" data-format="${f.id}">
                             <input type="radio" name="localApiFormat" value="${f.id}" ${f.id === lastFmt ? "checked" : ""} />
-                            <span class="lc-format-label">${f.label}</span>
+                            <div class="lc-format-header">
+                                <span class="lc-format-label">${f.label}</span>
+                                <span class="lc-format-badge">${f.badge}</span>
+                            </div>
                             <span class="lc-format-hint">${f.hint}</span>
                         </label>
                     `).join("")}
@@ -165,16 +164,16 @@ function _renderModal() {
             <!-- Generation Controls (collapsible) -->
             <details class="lc-advanced" ${Object.keys(lastOpts).some(k => lastOpts[k] !== null && lastOpts[k] !== "") ? "open" : ""}>
                 <summary class="lc-advanced-toggle">
-                    <i data-lucide="sliders-horizontal"></i>
-                    Generation Settings
-                    <span class="lc-advanced-badge">optional</span>
+                    <i data-lucide="sliders" style="width: 14px; height: 14px;"></i>
+                    Sampling Parameters
+                    <span class="lc-advanced-badge">Optional</span>
                     <i data-lucide="chevron-down" class="lc-chevron"></i>
                 </summary>
 
                 <div class="lc-gen-grid">
                     <div class="lc-gen-field">
                         <label class="lc-gen-label" for="lcTemperature">
-                            Temperature
+                            <span>Temperature</span>
                             <span class="lc-gen-value" id="lcTemperatureVal">${lastOpts.temperature ?? ""}</span>
                         </label>
                         <div class="lc-range-row">
@@ -186,12 +185,11 @@ function _renderModal() {
                                 placeholder="default"
                                 value="${lastOpts.temperature ?? ""}" />
                         </div>
-                        <p class="lc-gen-hint">0 = deterministic · 1 = default · 2 = very creative</p>
                     </div>
 
                     <div class="lc-gen-field">
                         <label class="lc-gen-label" for="lcTopP">
-                            Top-P (nucleus sampling)
+                            <span>Top-P</span>
                             <span class="lc-gen-value" id="lcTopPVal">${lastOpts.top_p ?? ""}</span>
                         </label>
                         <div class="lc-range-row">
@@ -203,12 +201,11 @@ function _renderModal() {
                                 placeholder="default"
                                 value="${lastOpts.top_p ?? ""}" />
                         </div>
-                        <p class="lc-gen-hint">Restrict sampling to top cumulative probability mass</p>
                     </div>
 
                     <div class="lc-gen-field">
                         <label class="lc-gen-label" for="lcTopK">
-                            Top-K
+                            <span>Top-K</span>
                             <span class="lc-gen-value" id="lcTopKVal">${lastOpts.top_k ?? ""}</span>
                         </label>
                         <div class="lc-range-row">
@@ -220,12 +217,11 @@ function _renderModal() {
                                 placeholder="default"
                                 value="${lastOpts.top_k ?? ""}" />
                         </div>
-                        <p class="lc-gen-hint">0 = disabled · 40 = KoboldCPP default</p>
                     </div>
 
                     <div class="lc-gen-field">
                         <label class="lc-gen-label" for="lcRepPenalty">
-                            Repetition Penalty
+                            <span>Repetition Penalty</span>
                             <span class="lc-gen-value" id="lcRepPenaltyVal">${lastOpts.repetition_penalty ?? ""}</span>
                         </label>
                         <div class="lc-range-row">
@@ -237,12 +233,11 @@ function _renderModal() {
                                 placeholder="default"
                                 value="${lastOpts.repetition_penalty ?? ""}" />
                         </div>
-                        <p class="lc-gen-hint">1 = disabled · 1.1 = mild · 1.3 = strong</p>
                     </div>
                 </div>
 
                 <button class="lc-reset-btn" id="lcResetGenBtn" type="button">
-                    <i data-lucide="rotate-ccw"></i> Reset to server defaults
+                    <i data-lucide="rotate-ccw"></i> Reset to defaults
                 </button>
             </details>
 
@@ -252,8 +247,7 @@ function _renderModal() {
         <div class="kobold-modal-footer">
             <button class="kobold-btn-secondary" id="localCancelBtn">Cancel</button>
             <button class="kobold-btn-primary" id="localConnectBtn">
-                <i data-lucide="zap"></i>
-                Connect
+                Connect Server
             </button>
         </div>
     `;
@@ -384,7 +378,7 @@ async function _handleConnect() {
 
         if (!res.ok || !data.success) {
             _showStatus("error", data.error || `Server error (${res.status})`);
-            if (btn) { btn.disabled = false; btn.innerHTML = `<i data-lucide="zap"></i> Connect`; renderIcons(btn); }
+            if (btn) { btn.disabled = false; btn.innerHTML = `Connect Server`; }
             return;
         }
 
@@ -400,7 +394,7 @@ async function _handleConnect() {
             ? "Timed out — is the server running at that URL?"
             : (err.message || "Connection failed");
         _showStatus("error", msg);
-        if (btn) { btn.disabled = false; btn.innerHTML = `<i data-lucide="zap"></i> Connect`; renderIcons(btn); }
+        if (btn) { btn.disabled = false; btn.innerHTML = `Connect Server`; }
     }
 }
 

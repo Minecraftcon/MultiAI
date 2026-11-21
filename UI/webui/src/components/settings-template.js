@@ -199,6 +199,24 @@ export function getSettingsHTML() {
                             </select>
                         </div>
                     </div>
+
+                    <!-- LOCAL MODEL SETUP-ER -->
+                    <div class="settings-card">
+                        <span class="settings-card-title">Local Models & Self-Hosted</span>
+                        <div class="settings-card-desc" style="font-size: 12px; color: var(--text-secondary); margin: -4px 0 12px 0;">
+                            Connect local inference servers like KoboldCPP, llama.cpp, vLLM, or Ollama with zero telemetry.
+                        </div>
+                        <div class="settings-row">
+                            <div class="settings-item-info">
+                                <span class="settings-item-title">Local LLM Server</span>
+                                <span class="settings-item-desc" id="cfgLocalServerStatusDesc">Connect to localhost or LAN endpoint</span>
+                            </div>
+                            <button id="btnOpenLocalConnectSettings" type="button" class="kobold-btn-secondary" style="height: 32px; padding: 0 14px; font-size: 12px; font-weight: 500;">
+                                <i data-lucide="cpu" style="width: 13px; height: 13px; margin-right: 6px;"></i>
+                                Setup Local Model
+                            </button>
+                        </div>
+                    </div>
                 </section>
 
                 <!-- 3. IMAGE GENERATION -->
@@ -257,7 +275,7 @@ export function getSettingsHTML() {
                     </div>
 
                     <div class="settings-card">
-                        <span class="settings-card-title">Tool Toggles</span>
+                        <span class="settings-card-title">Category Toggles</span>
                         <div class="settings-row">
                             <div class="settings-item-info">
                                 <span class="settings-item-title">Web Search</span>
@@ -323,6 +341,182 @@ export function getSettingsHTML() {
                             </div>
                             <label class="settings-switch">
                                 <input type="checkbox" id="cfgEnableImageGeneration" checked>
+                                <span class="settings-slider"></span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- INDIVIDUAL TOOL TOGGLES -->
+                    <div class="settings-card">
+                        <span class="settings-card-title">Granular Tool Controls</span>
+                        <div class="settings-card-desc" style="font-size: 12px; color: var(--text-secondary); margin: -4px 0 12px 0;">
+                            Individually enable or disable specific tools available to the model.
+                        </div>
+
+                        <!-- Terminal & Execution -->
+                        <div class="settings-tool-group-header">Terminal & Scheduling</div>
+                        <div class="settings-row">
+                            <div class="settings-item-info">
+                                <span class="settings-item-title"><code>run_task</code></span>
+                                <span class="settings-item-desc">Execute shell commands, processes, and terminal tasks</span>
+                            </div>
+                            <label class="settings-switch">
+                                <input type="checkbox" id="cfgEnable_run_task" checked>
+                                <span class="settings-slider"></span>
+                            </label>
+                        </div>
+                        <div class="settings-row">
+                            <div class="settings-item-info">
+                                <span class="settings-item-title"><code>manage_tasks</code></span>
+                                <span class="settings-item-desc">Inspect, deliver input, or terminate running background tasks</span>
+                            </div>
+                            <label class="settings-switch">
+                                <input type="checkbox" id="cfgEnable_manage_tasks" checked>
+                                <span class="settings-slider"></span>
+                            </label>
+                        </div>
+                        <div class="settings-row">
+                            <div class="settings-item-info">
+                                <span class="settings-item-title"><code>schedule</code></span>
+                                <span class="settings-item-desc">Schedule one-shot timers or recurring cron triggers</span>
+                            </div>
+                            <label class="settings-switch">
+                                <input type="checkbox" id="cfgEnable_schedule" checked>
+                                <span class="settings-slider"></span>
+                            </label>
+                        </div>
+
+                        <!-- Web & Search -->
+                        <div class="settings-tool-group-header">Web & Research</div>
+                        <div class="settings-row">
+                            <div class="settings-item-info">
+                                <span class="settings-item-title"><code>web_search</code></span>
+                                <span class="settings-item-desc">Search the live web or fetch full content from webpage URLs</span>
+                            </div>
+                            <label class="settings-switch">
+                                <input type="checkbox" id="cfgEnable_web_search" checked>
+                                <span class="settings-slider"></span>
+                            </label>
+                        </div>
+
+                        <!-- Media -->
+                        <div class="settings-tool-group-header">Media Generation</div>
+                        <div class="settings-row">
+                            <div class="settings-item-info">
+                                <span class="settings-item-title"><code>generate_image</code></span>
+                                <span class="settings-item-desc">Synthesize images and artwork from descriptive prompts</span>
+                            </div>
+                            <label class="settings-switch">
+                                <input type="checkbox" id="cfgEnable_generate_image" checked>
+                                <span class="settings-slider"></span>
+                            </label>
+                        </div>
+
+                        <!-- Filesystem -->
+                        <div class="settings-tool-group-header">Filesystem & Codebase</div>
+                        <div class="settings-row">
+                            <div class="settings-item-info">
+                                <span class="settings-item-title"><code>list_dir</code></span>
+                                <span class="settings-item-desc">List workspace directories and inspect project file trees</span>
+                            </div>
+                            <label class="settings-switch">
+                                <input type="checkbox" id="cfgEnable_list_dir" checked>
+                                <span class="settings-slider"></span>
+                            </label>
+                        </div>
+                        <div class="settings-row">
+                            <div class="settings-item-info">
+                                <span class="settings-item-title"><code>read_file</code></span>
+                                <span class="settings-item-desc">Read contents from text, code, or image files</span>
+                            </div>
+                            <label class="settings-switch">
+                                <input type="checkbox" id="cfgEnable_read_file" checked>
+                                <span class="settings-slider"></span>
+                            </label>
+                        </div>
+                        <div class="settings-row">
+                            <div class="settings-item-info">
+                                <span class="settings-item-title"><code>write_file</code></span>
+                                <span class="settings-item-desc">Create or overwrite files on the filesystem</span>
+                            </div>
+                            <label class="settings-switch">
+                                <input type="checkbox" id="cfgEnable_write_file" checked>
+                                <span class="settings-slider"></span>
+                            </label>
+                        </div>
+                        <div class="settings-row">
+                            <div class="settings-item-info">
+                                <span class="settings-item-title"><code>replace_file_content</code></span>
+                                <span class="settings-item-desc">Surgically edit a single contiguous block of code or text</span>
+                            </div>
+                            <label class="settings-switch">
+                                <input type="checkbox" id="cfgEnable_replace_file_content" checked>
+                                <span class="settings-slider"></span>
+                            </label>
+                        </div>
+                        <div class="settings-row">
+                            <div class="settings-item-info">
+                                <span class="settings-item-title"><code>multi_replace_file_content</code></span>
+                                <span class="settings-item-desc">Apply multiple non-contiguous surgical edits in a single pass</span>
+                            </div>
+                            <label class="settings-switch">
+                                <input type="checkbox" id="cfgEnable_multi_replace_file_content" checked>
+                                <span class="settings-slider"></span>
+                            </label>
+                        </div>
+                        <div class="settings-row">
+                            <div class="settings-item-info">
+                                <span class="settings-item-title"><code>grep_search</code></span>
+                                <span class="settings-item-desc">Regex and keyword search through directory files</span>
+                            </div>
+                            <label class="settings-switch">
+                                <input type="checkbox" id="cfgEnable_grep_search" checked>
+                                <span class="settings-slider"></span>
+                            </label>
+                        </div>
+
+                        <!-- Planning & Interaction -->
+                        <div class="settings-tool-group-header">Planning & Clarification</div>
+                        <div class="settings-row">
+                            <div class="settings-item-info">
+                                <span class="settings-item-title"><code>write_todos</code></span>
+                                <span class="settings-item-desc">Manage structured multi-step engineering checklists</span>
+                            </div>
+                            <label class="settings-switch">
+                                <input type="checkbox" id="cfgEnable_write_todos" checked>
+                                <span class="settings-slider"></span>
+                            </label>
+                        </div>
+                        <div class="settings-row">
+                            <div class="settings-item-info">
+                                <span class="settings-item-title"><code>ask_questions</code></span>
+                                <span class="settings-item-desc">Prompt the user with interactive choice questions to clarify requirements</span>
+                            </div>
+                            <label class="settings-switch">
+                                <input type="checkbox" id="cfgEnable_ask_questions" checked>
+                                <span class="settings-slider"></span>
+                            </label>
+                        </div>
+
+                        <!-- MCP Integration -->
+                        <div class="settings-tool-group-header">Model Context Protocol (MCP)</div>
+                        <div class="settings-row">
+                            <div class="settings-item-info">
+                                <span class="settings-item-title"><code>list_mcp</code></span>
+                                <span class="settings-item-desc">Discover connected MCP servers and inspect their tool parameters</span>
+                            </div>
+                            <label class="settings-switch">
+                                <input type="checkbox" id="cfgEnable_list_mcp" checked>
+                                <span class="settings-slider"></span>
+                            </label>
+                        </div>
+                        <div class="settings-row">
+                            <div class="settings-item-info">
+                                <span class="settings-item-title"><code>call_mcp</code></span>
+                                <span class="settings-item-desc">Execute external tools hosted by connected MCP servers</span>
+                            </div>
+                            <label class="settings-switch">
+                                <input type="checkbox" id="cfgEnable_call_mcp" checked>
                                 <span class="settings-slider"></span>
                             </label>
                         </div>
