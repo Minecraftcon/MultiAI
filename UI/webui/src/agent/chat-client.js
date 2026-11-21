@@ -126,6 +126,7 @@ export async function callChatModel(messages, { model, provider: explicitProvide
             clearTimeout(watchdogTimer);
             watchdogTimer = null;
         }
+        state.activeStreamWatchdog = null;
     };
 
     const onParentAbort = () => {
@@ -156,13 +157,28 @@ export async function callChatModel(messages, { model, provider: explicitProvide
     const toolCallsMap = {};
     let buffer = "";
 
-    // Client-side Dead Man's Watchdog (Stall Detection)
-    const initialTimeoutMs = Number(state.config?.Agent?.StreamInitialTimeoutMs) || 45000;
-    const stallTimeoutMs = Number(state.config?.Agent?.StreamStallTimeoutMs) || 45000;
+    // Client-side Dead Man's Watchdog (Stall Detection & Dynamic Timer Control)
+    const rejectStreamTimeout = Boolean(state.config?.Agent?.RejectStreamTimeout);
+    const configuredTimeoutSec = Number(state.config?.Agent?.StreamTimeoutSeconds);
+    const configuredTimeoutMs = (configuredTimeoutSec !== undefined && !isNaN(configuredTimeoutSec))
+        ? (configuredTimeoutSec <= 0 ? 0 : configuredTimeoutSec * 1000)
+        : (Number(state.config?.Agent?.StreamInitialTimeoutMs) || 60000);
+
+    let watchdogDisabled = rejectStreamTimeout || configuredTimeoutMs === 0;
+    let currentTimeoutMs = configuredTimeoutMs || 60000;
+    let lastActivityTime = Date.now();
     let isStalled = false;
 
-    const armWatchdog = (timeoutMs) => {
-        if (watchdogTimer) clearTimeout(watchdogTimer);
+    const armWatchdog = (timeoutMs = currentTimeoutMs) => {
+        lastActivityTime = Date.now();
+        if (watchdogTimer) {
+            clearTimeout(watchdogTimer);
+            watchdogTimer = null;
+        }
+        if (watchdogDisabled || timeoutMs <= 0) {
+            return;
+        }
+        currentTimeoutMs = timeoutMs;
         watchdogTimer = setTimeout(() => {
             isStalled = true;
             logEvent("STREAM_STALL_WATCHDOG_TRIGGERED", {
@@ -184,8 +200,42 @@ export async function callChatModel(messages, { model, provider: explicitProvide
         }, timeoutMs);
     };
 
+    // Expose active watchdog controller so user can extend, shorten, or reject during stream
+    state.activeStreamWatchdog = {
+        extend(seconds = 30) {
+            if (watchdogDisabled) return;
+            const extraMs = (Number(seconds) || 30) * 1000;
+            const elapsed = Date.now() - lastActivityTime;
+            const remaining = Math.max(0, currentTimeoutMs - elapsed);
+            armWatchdog(remaining + extraMs);
+            if (typeof this.onUpdate === "function") this.onUpdate();
+        },
+        shorten(seconds = 15) {
+            if (watchdogDisabled) return;
+            const subMs = (Number(seconds) || 15) * 1000;
+            const elapsed = Date.now() - lastActivityTime;
+            const remaining = Math.max(0, currentTimeoutMs - elapsed);
+            const newRemaining = Math.max(3000, remaining - subMs);
+            armWatchdog(newRemaining);
+            if (typeof this.onUpdate === "function") this.onUpdate();
+        },
+        reject() {
+            watchdogDisabled = true;
+            disarmWatchdog();
+            if (typeof this.onUpdate === "function") this.onUpdate();
+        },
+        getRemainingSeconds() {
+            if (watchdogDisabled || currentTimeoutMs <= 0) return Infinity;
+            const elapsed = Date.now() - lastActivityTime;
+            return Math.max(0, Math.round((currentTimeoutMs - elapsed) / 1000));
+        },
+        isDisabled() {
+            return watchdogDisabled;
+        }
+    };
+
     // Arm watchdog immediately so stalls before HTTP headers arrive are intercepted
-    armWatchdog(initialTimeoutMs);
+    armWatchdog(currentTimeoutMs);
 
     let res;
     try {
@@ -256,7 +306,7 @@ export async function callChatModel(messages, { model, provider: explicitProvide
 
                 // Chunks received: reset watchdog for next expected chunk
                 if (value && value.length > 0) {
-                    armWatchdog(stallTimeoutMs);
+                    armWatchdog(currentTimeoutMs);
                 }
 
                 buffer += decoder.decode(value, { stream: true });

@@ -59,10 +59,18 @@ export function createAIMessageShell() {
     div.innerHTML = `
         <div class="pre-search-content"></div>
         <div class="activity-wrapper">
-            <button type="button" class="activity-toggle">
-                <span class="chevron">▶</span>
-                <span class="activity-label">Initializing...</span>
-            </button>
+            <div class="activity-header-row">
+                <button type="button" class="activity-toggle">
+                    <span class="chevron">▶</span>
+                    <span class="activity-label">Initializing...</span>
+                </button>
+                <div class="stream-watchdog-controls" style="display: none;">
+                    <span class="stream-watchdog-label">Timeout: <span class="stream-watchdog-sec">60s</span></span>
+                    <button type="button" class="stream-watchdog-btn stream-watchdog-extend" title="Extend timeout (+30s)">+30s</button>
+                    <button type="button" class="stream-watchdog-btn stream-watchdog-shorten" title="Shorten timeout (-15s)">-15s</button>
+                    <button type="button" class="stream-watchdog-btn stream-watchdog-reject" title="Reject timer (wait indefinitely without timeout)">No timeout</button>
+                </div>
+            </div>
             <div class="activity-collapse">
                 <div class="activity-overflow">
                     <div class="activity-content">
@@ -170,10 +178,18 @@ export function renderTurn(turn, session, compactionRef, isLastTurn) {
         aiDiv.innerHTML = `
             <div class="pre-search-content"></div>
             <div class="activity-wrapper" style="display: none;">
-                <button type="button" class="activity-toggle">
-                    <span class="chevron">▶</span>
-                    <span class="activity-label">Activity</span>
-                </button>
+                <div class="activity-header-row">
+                    <button type="button" class="activity-toggle">
+                        <span class="chevron">▶</span>
+                        <span class="activity-label">Activity</span>
+                    </button>
+                    <div class="stream-watchdog-controls" style="display: none;">
+                        <span class="stream-watchdog-label">Timeout: <span class="stream-watchdog-sec">60s</span></span>
+                        <button type="button" class="stream-watchdog-btn stream-watchdog-extend" title="Extend timeout (+30s)">+30s</button>
+                        <button type="button" class="stream-watchdog-btn stream-watchdog-shorten" title="Shorten timeout (-15s)">-15s</button>
+                        <button type="button" class="stream-watchdog-btn stream-watchdog-reject" title="Reject timer (wait indefinitely without timeout)">No timeout</button>
+                    </div>
+                </div>
                 <div class="activity-collapse">
                     <div class="activity-overflow">
                         <div class="activity-content">
@@ -702,6 +718,41 @@ class StreamBatchRenderer {
     }
 }
 
+function updateWatchdogDisplay(element) {
+    if (!element) return;
+    const watchdogControls = element.querySelector(".stream-watchdog-controls");
+    const watchdogSec = element.querySelector(".stream-watchdog-sec");
+    if (!watchdogControls) return;
+
+    const watchdog = state.activeStreamWatchdog;
+    if (!watchdog) {
+        watchdogControls.style.display = "none";
+        return;
+    }
+
+    watchdogControls.style.display = "inline-flex";
+    const disabled = watchdog.isDisabled();
+    const remaining = watchdog.getRemainingSeconds();
+
+    if (disabled) {
+        if (watchdogSec) watchdogSec.textContent = "Disabled";
+        watchdogControls.classList.add("is-disabled");
+        watchdogControls.classList.remove("is-warning");
+    } else if (!isFinite(remaining)) {
+        if (watchdogSec) watchdogSec.textContent = "Unlimited";
+        watchdogControls.classList.remove("is-warning");
+        watchdogControls.classList.remove("is-disabled");
+    } else {
+        if (watchdogSec) watchdogSec.textContent = `${remaining}s`;
+        watchdogControls.classList.remove("is-disabled");
+        if (remaining <= 15) {
+            watchdogControls.classList.add("is-warning");
+        } else {
+            watchdogControls.classList.remove("is-warning");
+        }
+    }
+}
+
 export function updateAIStream(element, fullText, isDone, startTime, hasTools) {
     const chat = document.getElementById("chat");
     const activityWrapper = element.querySelector(".activity-wrapper");
@@ -715,13 +766,38 @@ export function updateAIStream(element, fullText, isDone, startTime, hasTools) {
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
 
     if (isDone) {
+        if (element._streamWatchdogTicker) {
+            clearInterval(element._streamWatchdogTicker);
+            element._streamWatchdogTicker = null;
+        }
+        const watchdogControls = element.querySelector(".stream-watchdog-controls");
+        if (watchdogControls) watchdogControls.style.display = "none";
+
         if (activityLabel) activityLabel.textContent = `Worked for ${elapsed} seconds`;
         const hasCommentary = activityWrapper && Boolean(activityWrapper.querySelector(".activity-thought-item"));
         if (!hasCommentary && activityWrapper && activityWrapper.classList.contains("open") && !element.dataset.manuallyToggled) {
             activityWrapper.classList.remove("open");
         }
-    } else if (activityLabel && !activityLabel.textContent.trim()) {
-        activityLabel.textContent = `Working... (${elapsed}s)`;
+    } else {
+        if (state.activeStreamWatchdog) {
+            updateWatchdogDisplay(element);
+            if (!element._streamWatchdogTicker) {
+                element._streamWatchdogTicker = setInterval(() => {
+                    if (state.activeStreamWatchdog) {
+                        updateWatchdogDisplay(element);
+                    } else if (element._streamWatchdogTicker) {
+                        clearInterval(element._streamWatchdogTicker);
+                        element._streamWatchdogTicker = null;
+                        const wc = element.querySelector(".stream-watchdog-controls");
+                        if (wc) wc.style.display = "none";
+                    }
+                }, 1000);
+                state.activeStreamWatchdog.onUpdate = () => updateWatchdogDisplay(element);
+            }
+        }
+        if (activityLabel && !activityLabel.textContent.trim()) {
+            activityLabel.textContent = `Working... (${elapsed}s)`;
+        }
     }
 
     if (!answerText.trim()) {
@@ -1051,6 +1127,13 @@ export function finalizeStopped(element, startTime, hasTools) {
         activeStreamers.delete(element);
     }
 
+    if (element._streamWatchdogTicker) {
+        clearInterval(element._streamWatchdogTicker);
+        element._streamWatchdogTicker = null;
+    }
+    const watchdogControls = element.querySelector(".stream-watchdog-controls");
+    if (watchdogControls) watchdogControls.style.display = "none";
+
     const cursor = element.querySelector(".blinking-cursor");
     if (cursor) cursor.remove();
 
@@ -1110,6 +1193,13 @@ export function finalizeStalled(element, startTime, hasTools, errorInfo) {
         streamer.stop();
         activeStreamers.delete(element);
     }
+
+    if (element._streamWatchdogTicker) {
+        clearInterval(element._streamWatchdogTicker);
+        element._streamWatchdogTicker = null;
+    }
+    const watchdogControls = element.querySelector(".stream-watchdog-controls");
+    if (watchdogControls) watchdogControls.style.display = "none";
 
     const cursor = element.querySelector(".blinking-cursor");
     if (cursor) cursor.remove();
@@ -1203,6 +1293,27 @@ export function initChatDelegation() {
                     parentAi.dataset.manuallyToggled = "true";
                 }
                 saveCurrentChatState();
+            }
+            return;
+        }
+
+        const watchdogBtn = e.target.closest(".stream-watchdog-btn");
+        if (watchdogBtn) {
+            e.stopPropagation();
+            e.preventDefault();
+            const watchdog = state.activeStreamWatchdog;
+            if (!watchdog) return;
+
+            if (watchdogBtn.classList.contains("stream-watchdog-extend")) {
+                watchdog.extend(30);
+            } else if (watchdogBtn.classList.contains("stream-watchdog-shorten")) {
+                watchdog.shorten(15);
+            } else if (watchdogBtn.classList.contains("stream-watchdog-reject")) {
+                watchdog.reject();
+            }
+            const parentMsg = watchdogBtn.closest(".message.ai");
+            if (parentMsg) {
+                updateWatchdogDisplay(parentMsg);
             }
             return;
         }

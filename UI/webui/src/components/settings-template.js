@@ -189,6 +189,32 @@ export function getSettingsHTML() {
 
                         <div class="settings-row">
                             <div class="settings-item-info">
+                                <span class="settings-item-title">Stream Stall Timeout</span>
+                                <span class="settings-item-desc">Max seconds between streamed chunks before watchdog aborts</span>
+                            </div>
+                            <select id="cfgStreamTimeoutSeconds" class="settings-select">
+                                <option value="0">0 (Infinite / No timeout)</option>
+                                <option value="30">30 seconds</option>
+                                <option value="45">45 seconds</option>
+                                <option value="60">60 seconds (Default)</option>
+                                <option value="120">120 seconds (2 mins)</option>
+                                <option value="300">300 seconds (5 mins)</option>
+                            </select>
+                        </div>
+
+                        <div class="settings-row">
+                            <div class="settings-item-info">
+                                <span class="settings-item-title">Reject Stream Timeout</span>
+                                <span class="settings-item-desc">Never abort streaming turns (wait indefinitely for slow or local models)</span>
+                            </div>
+                            <label class="settings-switch">
+                                <input type="checkbox" id="cfgRejectStreamTimeout">
+                                <span class="settings-slider"></span>
+                            </label>
+                        </div>
+
+                        <div class="settings-row">
+                            <div class="settings-item-info">
                                 <span class="settings-item-title">Context History Messages</span>
                                 <span class="settings-item-desc">Max past turns sent to the LLM per prompt</span>
                             </div>

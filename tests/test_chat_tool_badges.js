@@ -255,15 +255,11 @@ async function runTests() {
         assert(fileErr, "handleListDir must reject non-directory file");
         assert(fileErr.message.includes("is a file, not a directory"), "Error must state path is a file");
 
-        // 3. handleFileRead on a directory should throw
-        let dirErr = null;
-        try {
-            await handleFileRead({ path: "tests" }, "");
-        } catch (e) {
-            dirErr = e;
-        }
-        assert(dirErr, "handleFileRead must reject directory");
-        assert(dirErr.message.includes("is a directory, not a file"), "Error must state path is a directory");
+        // 3. handleFileRead on a directory should return directory listing (streamlined toolset)
+        const readDirRes = await handleFileRead({ path: "tests" }, "");
+        assert(readDirRes.is_directory === true, "handleFileRead on directory must return is_directory: true");
+        assert(readDirRes.files > 0, "handleFileRead on directory must list files");
+        assert(readDirRes.output.includes("Summary: This directory contains"), "Output must contain directory summary");
     }
 
     console.log("✓ ALL CHAT TOOL BADGES CHARACTERIZATION TESTS PASSED!");

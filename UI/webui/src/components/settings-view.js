@@ -189,6 +189,12 @@ export function populateSettingsValues() {
     const turnTimeout = document.getElementById("cfgTurnTimeout");
     if (turnTimeout) turnTimeout.value = String(agent.TurnTimeoutSeconds || 120);
 
+    const streamTimeout = document.getElementById("cfgStreamTimeoutSeconds");
+    if (streamTimeout) streamTimeout.value = String(agent.StreamTimeoutSeconds !== undefined ? agent.StreamTimeoutSeconds : 60);
+
+    const rejectStreamTimeout = document.getElementById("cfgRejectStreamTimeout");
+    if (rejectStreamTimeout) rejectStreamTimeout.checked = Boolean(agent.RejectStreamTimeout);
+
     const maxHistory = document.getElementById("cfgMaxHistory");
     if (maxHistory) maxHistory.value = String(gen.MaxChatHistory || 100);
 
@@ -641,6 +647,20 @@ export function initSettingsView() {
     if (turnTimeout) {
         turnTimeout.addEventListener("change", (e) => {
             saveSetting("Agent", "TurnTimeoutSeconds", parseInt(e.target.value, 10));
+        });
+    }
+
+    const streamTimeout = document.getElementById("cfgStreamTimeoutSeconds");
+    if (streamTimeout) {
+        streamTimeout.addEventListener("change", (e) => {
+            saveSetting("Agent", "StreamTimeoutSeconds", parseInt(e.target.value, 10));
+        });
+    }
+
+    const rejectStreamTimeout = document.getElementById("cfgRejectStreamTimeout");
+    if (rejectStreamTimeout) {
+        rejectStreamTimeout.addEventListener("change", (e) => {
+            saveSetting("Agent", "RejectStreamTimeout", e.target.checked);
         });
     }
 

@@ -59,8 +59,9 @@ export const CORE_TOOLS_PROMPT = `
 - Unprefixed relative paths resolve against the project workspace root.
 
 [FILESYSTEM]:
-- list_dir(path: "...") — directory listing with file sizes and child counts. Use '.' for project root.
-- read_file(path: "...") — reads text, source code, or images. NEVER call read_file on a directory.
+- read_file(path: "...") — reads text, source code, or images; when given a directory, lists directory contents with file sizes and child counts.
+- write_file(path: "...", content: "...") — create or overwrite files.
+- replace_file_content(path: "...", target: "...", replacement: "...") — surgical block edits (supports single or multi-chunk edits).
 
 [IMAGE GENERATION]:
 - generate_image(prompt: "...") — auto-backgrounds if >15s or background: true is set.

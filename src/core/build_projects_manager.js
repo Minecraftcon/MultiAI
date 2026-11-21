@@ -204,7 +204,7 @@ function createBuildProjectsManager(getBuildProjectsRoot, resolveHome) {
             `  1. Execute all file operations and commands relative to the project root (${rootPath}).`,
             `  2. SCRATCH ISOLATION: Write one-off experiments, prototype builds, and test scripts into '$SCRATCH/<subfolder>/...' (resolves to ${scratchDir}). NEVER overwrite project source files when asked to build in scratch.`,
             `  3. DUAL-TRACK EXECUTION:`,
-            `     - Track A (Quick Fix): read_file/list_dir/grep_search → write_todos → surgical edit → verify → done.`,
+            `     - Track A (Quick Fix): read_file/grep_search → write_todos → surgical edit → verify → done.`,
             `     - Track B (Complex Build): investigate → structured plan + open questions → write_todos ($ARTIFACTS/Tasklist-{name}.md) → pause for approval → execute step by step.`,
             `  4. MODULAR ARCHITECTURE: Single-purpose ES modules only. Never create monolithic files.`,
             `  5. BUG FINDING: Trace every execution point to root cause. Never apply blind fixes — explain what causes what, then apply the surgical fix.`,

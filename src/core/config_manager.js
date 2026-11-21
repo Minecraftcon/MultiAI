@@ -26,6 +26,8 @@ const DEFAULT_CONFIG = {
         AutoScroll: true,
         StreamResponse: true,
         StreamReasoning: false,
+        StreamTimeoutSeconds: 60,
+        RejectStreamTimeout: false,
         TurnTimeoutSeconds: 120,
         Temperature: 0.7,
         TaskDaemon: "node",
