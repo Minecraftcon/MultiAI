@@ -71,9 +71,8 @@ export function createAIMessageShell() {
                 </div>
             </div>
         </div>
-        <div class="final-content"></div>
+        <div class="final-content"><span class="blinking-cursor"></span></div>
         <div class="followup-suggestions" style="display: none;"></div>
-        <span class="blinking-cursor"></span>
     `;
 
     chat.appendChild(div);
@@ -667,6 +666,9 @@ class StreamBatchRenderer {
         if (this.cursor) {
             this.cursor.remove();
         }
+        if (this.element) {
+            this.element.querySelectorAll(".blinking-cursor").forEach(c => c.remove());
+        }
         this.renderFrame(performance.now());
         this.finalize();
         return this.promise;
@@ -680,6 +682,9 @@ class StreamBatchRenderer {
         }
         if (this.cursor) {
             this.cursor.remove();
+        }
+        if (this.element) {
+            this.element.querySelectorAll(".blinking-cursor").forEach(c => c.remove());
         }
         if (this.resolvePromise) {
             this.resolvePromise();
@@ -722,6 +727,7 @@ export function updateAIStream(element, fullText, isDone, startTime, hasTools) {
     if (!answerText.trim()) {
         if (isDone) {
             if (cursor) cursor.remove();
+            element.querySelectorAll(".blinking-cursor").forEach(c => c.remove());
             finalizeFileEditBadges(element);
             if (hasTools) {
                 finalContent.innerHTML = "<em>(Command execution completed without trailing commentary)</em>";
@@ -868,6 +874,7 @@ export function updateAIStream(element, fullText, isDone, startTime, hasTools) {
     if (!content || !content.trim()) {
         if (isDone) {
             if (cursor) cursor.remove();
+            element.querySelectorAll(".blinking-cursor").forEach(c => c.remove());
             finalizeFileEditBadges(element);
             renderFollowupSuggestions(element, followups, isDone);
             renderPlanApprovalActions(element, answerText, isDone);
@@ -894,6 +901,7 @@ export function updateAIStream(element, fullText, isDone, startTime, hasTools) {
 
         if (isDone) {
             if (cursor) cursor.remove();
+            element.querySelectorAll(".blinking-cursor").forEach(c => c.remove());
             finalizeFileEditBadges(element);
 
             renderFollowupSuggestions(element, followups, true);
@@ -951,6 +959,7 @@ export function updateAIStream(element, fullText, isDone, startTime, hasTools) {
                 bindAIImageCards(finalContent);
             }
             if (cursor) cursor.remove();
+            element.querySelectorAll(".blinking-cursor").forEach(c => c.remove());
             finalizeFileEditBadges(element);
 
             renderFollowupSuggestions(element, followups, true);

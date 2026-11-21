@@ -542,6 +542,8 @@
 }
 
 /* ── 6. Silica Follow-up Suggestion Cards ── */
+[data-ui-style="silica"] .followup-item,
+.ui-style-silica .followup-item,
 [data-ui-style="silica"] .follow-up-card,
 .ui-style-silica .follow-up-card,
 [data-ui-style="silica"] .suggestion-item,

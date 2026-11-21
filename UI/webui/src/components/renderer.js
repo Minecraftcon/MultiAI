@@ -364,6 +364,9 @@ export function formatThoughtHtml(content, durationStr = "") {
 
 function cleanFollowupPrompt(q) {
     let text = (q || "").trim();
+    // Strip trailing partial or unclosed tags
+    text = text.replace(/<\s*\/?\s*(?:f(?:o(?:l(?:l(?:o(?:w(?:u(?:p)?)?)?)?)?)?)?|fw\d*)[^>]*$/i, "").trim();
+    text = text.replace(/<[^>]*>?/g, "").trim();
     text = text.replace(/^[-*•\d.)\]\s]+/, "").trim();
     // Normalize assistant-style questions into direct user-side prompts
     text = text.replace(/^(?:would\s+you\s+like\s+me\s+to|do\s+you\s+want\s+me\s+to|should\s+i)\s+/i, "Can you ");
@@ -395,6 +398,18 @@ export function extractFollowups(text) {
         }
         return "";
     });
+
+    // Strip [FOLLOW-UP PROMPT SUGGESTIONS] header if present
+    cleanText = cleanText.replace(/\[FOLLOW-UP PROMPT SUGGESTIONS\]:?/gi, "");
+
+    // Strip in-flight partial followup tags at the end so markdown parser never creates
+    // a spurious new paragraph below the text while the tag is streaming in
+    const partialTagRegex = /(?:[\r\n]+[ \t]*<[ \t]*(?:\/)?\s*(?:f(?:o(?:l(?:l(?:o(?:w(?:u(?:p)?)?)?)?)?)?)?|fw\d*)?[^>]*$)|(?:[ \t]*<[ \t]*(?:\/)?\s*(?:f(?:o(?:l(?:l(?:o(?:w(?:u(?:p)?)?)?)?)?)?)?|fw\d+)[^>]*$)/gi;
+    cleanText = cleanText.replace(partialTagRegex, "");
+
+    // Strip in-flight followup header at the end if model started typing it
+    const partialHeaderRegex = /(?:[\r\n]+[ \t]*\[(?:F(?:O(?:L(?:L(?:O(?:W(?:-(?:U(?:P)?)?)?)?)?)?)?)?)?[^\]]*$)/gi;
+    cleanText = cleanText.replace(partialHeaderRegex, "");
 
     return { cleanText: cleanText.trimEnd(), followups };
 }

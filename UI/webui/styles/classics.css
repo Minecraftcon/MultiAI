@@ -499,3 +499,29 @@
     box-shadow: none !important;
 }
 
+/* ── 7. Follow-up Suggestions in Classics Style ── */
+[data-ui-style="classics"] .followup-suggestions,
+.ui-style-classics .followup-suggestions {
+    gap: 6px !important;
+    margin-top: 14px !important;
+}
+
+[data-ui-style="classics"] .followup-item,
+.ui-style-classics .followup-item {
+    border-radius: 6px !important;
+    border: 1px solid var(--border) !important;
+    background: var(--surface) !important;
+    box-shadow: none !important;
+    padding: 6px 12px !important;
+    font-size: 13px !important;
+    line-height: 1.4 !important;
+}
+
+[data-ui-style="classics"] .followup-item:hover,
+.ui-style-classics .followup-item:hover {
+    background: var(--surface-hover, var(--hover)) !important;
+    border-color: var(--border-strong) !important;
+    transform: none !important;
+}
+
+
