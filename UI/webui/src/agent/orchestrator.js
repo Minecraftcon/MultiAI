@@ -444,16 +444,19 @@ export async function runAgent(userText, currentAIMessage, chatId, images = [], 
                 }
 
                 // If the model merely announced an action intent without calling tools
-                // (e.g. "Okay! Ive found the issue, lemme fix properly:"), route to activity trace and continue
+                // (e.g. "Okay! Ive found the issue, lemme fix properly:" or "Please wait for the output..."), route to activity trace and continue
                 const isPromissory = isPromissoryAnnouncement(finalDisplay);
-                if (isPromissory && (hasRunTools || round > 0) && round < 10 && promissoryRetries < 2) {
+                const isPassiveWaitingNotice = /please wait|waiting for (the )?output|task is (still )?running/i.test(finalDisplay);
+                if ((isPromissory || isPassiveWaitingNotice) && (hasRunTools || round > 0) && round < 10 && promissoryRetries < 2) {
                     promissoryRetries++;
                     logEvent("PROMISSORY_CONTINUE", { round, model: selectedModel, text: finalDisplay });
                     addThoughtTrace(currentAIMessage, finalDisplay);
                     ephemeralServerDirective = {
                         scope: "promissory_continuation",
                         priority: "high",
-                        instruction: "Do not announce intent. Execute the tool action immediately in this turn."
+                        instruction: isPassiveWaitingNotice
+                            ? "Do not tell the user to wait for output. If the task is running in the background, use 'schedule(task: \"<task_id>\", time: <sec>, wake_on: \"exit\")' or conclude with a clear summary."
+                            : "Do not announce intent. Execute the tool action immediately in this turn."
                     };
                     continue;
                 }

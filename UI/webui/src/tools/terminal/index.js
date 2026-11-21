@@ -121,18 +121,19 @@ async function streamTaskExecution(args, { badgeEl, genState } = {}) {
         finalPayload.clean_stderr = cleanTerminalScreen(finalPayload.stderr || accumulatedStderr);
 
         const shouldDetach = Boolean(args.detach || args.exit || args.Exit);
-        if (shouldDetach && isBg && finalPayload.running) {
-            finalPayload.detached = true;
-            finalPayload.status_message = args.status_message || args.message || args.messege || `Background task '${finalPayload.task_id}' is running. I will monitor it and notify you when finished.`;
-            if (finalPayload.task_id && genState?.chatId) {
-                watchBackgroundTask({
-                    chatId: genState.chatId,
-                    taskId: finalPayload.task_id,
-                    time: Number(args.time || args.timeout || 3600),
-                    wakeOn: "exit",
-                    reason: args.task_name || args.command,
-                    statusMessage: finalPayload.status_message
-                });
+        const isRunning = Boolean(finalPayload.running || finalPayload.status === "running");
+        if ((shouldDetach || isRunning) && finalPayload.task_id && genState?.chatId) {
+            watchBackgroundTask({
+                chatId: genState.chatId,
+                taskId: finalPayload.task_id,
+                time: Number(args.time || args.timeout || (args.timer ? Math.max(Number(args.timer), 60) : 3600)),
+                wakeOn: "exit",
+                reason: args.task_name || args.command,
+                statusMessage: args.status_message || args.message || args.messege || `Background task '${finalPayload.task_id}' is running. I will monitor it and notify you when finished.`
+            });
+            if (shouldDetach && isBg && isRunning) {
+                finalPayload.detached = true;
+                finalPayload.status_message = args.status_message || args.message || args.messege || `Background task '${finalPayload.task_id}' is running. I will monitor it and notify you when finished.`;
             }
         }
         return finalPayload;
