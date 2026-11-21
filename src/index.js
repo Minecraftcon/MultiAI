@@ -58,6 +58,9 @@ async function startServer() {
     const HOST = process.env.HOST || appConfig.General?.Host || "0.0.0.0";
 
     const server = http.createServer(routeRequest);
+    // Disable HTTP request timeout so long-running local model generations and streaming turns never get truncated by Node.js
+    server.requestTimeout = 0;
+    server.headersTimeout = 0;
     initPtyWebSocket(server);
 
     server.listen(PORT, HOST, () => {

@@ -54,6 +54,15 @@ async function handleChat(req, res) {
             system_server: system_server || system_instructions || options.system_server
         };
 
+        // Disable socket timeouts during AI generation so slow/local models never drop TCP connection
+        if (req.socket) req.socket.setTimeout(0);
+        if (res.socket) res.socket.setTimeout(0);
+
+        // For local models, ensure backend timeout floor is at least 5 minutes (300,000ms)
+        if (isLocalProvider) {
+            effectiveOptions.timeoutMs = Math.max(effectiveOptions.timeoutMs || 0, 300000);
+        }
+
         // Streaming execution if requested and supported by provider handler
         if (data.stream && typeof providerHandler.handleChatStream === "function") {
             const streamResult = await providerHandler.handleChatStream({

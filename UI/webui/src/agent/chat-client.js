@@ -157,6 +157,26 @@ export async function callChatModel(messages, { model, provider: explicitProvide
     const toolCallsMap = {};
     let buffer = "";
 
+    // Detect if current model is running via local inference (KoboldCPP, llama.cpp, Ollama, vLLM, GGUF file paths)
+    const isLocalModel = Boolean(
+        provider === "local" ||
+        provider === "koboldcpp" ||
+        providerFromSelect === "local" ||
+        providerFromSelect === "koboldcpp" ||
+        (typeof effectiveModel === "string" && (
+            effectiveModel.startsWith("/") ||
+            effectiveModel.startsWith("http://") ||
+            effectiveModel.includes("localhost") ||
+            effectiveModel.includes("127.0.0.1") ||
+            effectiveModel.endsWith(".gguf") ||
+            effectiveModel.includes(".gguf:") ||
+            effectiveModel.toLowerCase().includes("kobold") ||
+            effectiveModel.toLowerCase().includes("ollama")
+        )) ||
+        modelProviderMap[effectiveModel] === "local" ||
+        modelProviderMap[effectiveModel] === "koboldcpp"
+    );
+
     // Client-side Dead Man's Watchdog (Stall Detection & Dynamic Timer Control)
     const rejectStreamTimeout = Boolean(state.config?.Agent?.RejectStreamTimeout);
     const configuredTimeoutSec = Number(state.config?.Agent?.StreamTimeoutSeconds);
@@ -165,7 +185,18 @@ export async function callChatModel(messages, { model, provider: explicitProvide
         : (Number(state.config?.Agent?.StreamInitialTimeoutMs) || 60000);
 
     let watchdogDisabled = rejectStreamTimeout || configuredTimeoutMs === 0;
-    let currentTimeoutMs = configuredTimeoutMs || 60000;
+
+    // For local models, automatically scale timeout floor up to 5 minutes (300,000 ms = 300s)
+    // so long prompt evaluation / ingestion phases on CPU or large models do not prematurely abort.
+    const localTimeoutFloorMs = 300000;
+    let currentTimeoutMs = configuredTimeoutMs;
+    if (!watchdogDisabled) {
+        if (isLocalModel) {
+            currentTimeoutMs = Math.max(configuredTimeoutMs || 0, localTimeoutFloorMs);
+        } else {
+            currentTimeoutMs = configuredTimeoutMs || 60000;
+        }
+    }
     let lastActivityTime = Date.now();
     let isStalled = false;
 
@@ -202,6 +233,7 @@ export async function callChatModel(messages, { model, provider: explicitProvide
 
     // Expose active watchdog controller so user can extend, shorten, or reject during stream
     state.activeStreamWatchdog = {
+        isLocal: isLocalModel,
         extend(seconds = 30) {
             if (watchdogDisabled) return;
             const extraMs = (Number(seconds) || 30) * 1000;
@@ -263,7 +295,11 @@ export async function callChatModel(messages, { model, provider: explicitProvide
             throw err;
         }
         if (isStalled || streamController.signal.reason?.isStall) {
-            throw new StreamStallError("Stream connection stalled: initial response timed out before headers arrived.", {
+            const timeoutSec = Math.round(currentTimeoutMs / 1000);
+            const hint = isLocalModel
+                ? ` (Prompt evaluation on local model exceeded ${timeoutSec}s window. You can extend or disable timeouts via the turn header or Settings).`
+                : "";
+            throw new StreamStallError(`Stream connection stalled: initial response timed out after ${timeoutSec}s before headers arrived.${hint}`, {
                 partialText: "",
                 partialContent: "",
                 accumulatedReasoning: "",
@@ -474,7 +510,8 @@ export async function callChatModel(messages, { model, provider: explicitProvide
             }
 
             if (isStalled || streamController.signal.reason?.isStall) {
-                throw new StreamStallError("Stream connection stalled: no data received from server within expected window.", {
+                const timeoutSec = Math.round(currentTimeoutMs / 1000);
+                throw new StreamStallError(`Stream connection stalled: no data received from server within ${timeoutSec}s window.`, {
                     partialText: finalContent,
                     partialContent: accumulatedContent,
                     accumulatedReasoning,
@@ -511,7 +548,8 @@ export async function callChatModel(messages, { model, provider: explicitProvide
                 .map(k => toolCallsMap[k])
                 .filter(tc => Boolean(tc.function?.name));
 
-            throw new StreamStallError("Stream connection stalled: no data received from server within expected window.", {
+            const timeoutSec = Math.round(currentTimeoutMs / 1000);
+            throw new StreamStallError(`Stream connection stalled: no data received from server within ${timeoutSec}s window.`, {
                 partialText: finalContent,
                 partialContent: accumulatedContent,
                 accumulatedReasoning,

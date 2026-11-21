@@ -722,6 +722,7 @@ function updateWatchdogDisplay(element) {
     if (!element) return;
     const watchdogControls = element.querySelector(".stream-watchdog-controls");
     const watchdogSec = element.querySelector(".stream-watchdog-sec");
+    const watchdogLabel = element.querySelector(".stream-watchdog-label");
     if (!watchdogControls) return;
 
     const watchdog = state.activeStreamWatchdog;
@@ -750,6 +751,12 @@ function updateWatchdogDisplay(element) {
         } else {
             watchdogControls.classList.remove("is-warning");
         }
+    }
+
+    if (watchdogLabel) {
+        watchdogLabel.title = watchdog.isLocal
+            ? "Local model: auto-scaled timeout floor to 5 minutes (300s)"
+            : "Stream stall watchdog timer";
     }
 }
 
