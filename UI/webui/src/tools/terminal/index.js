@@ -243,7 +243,7 @@ export const runTaskTool = {
                     },
                     pty: {
                         type: "boolean",
-                        description: "Set to true to execute inside a real pseudo-terminal (PTY) with full TTY capabilities, ANSI escape codes, and terminal discipline."
+                        description: "Optional. Set to true ONLY if the command requires interactive terminal emulation (e.g. curses). For standard commands and scripts (python, bash, curl, git), leave false (default) for clean output."
                     }
                 },
                 required: ["command"]

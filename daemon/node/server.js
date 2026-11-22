@@ -241,6 +241,21 @@ class TaskManager {
 
     getOutput(taskId) {
         let task = this.tasks.get(taskId);
+        if (!task && taskId && taskId.startsWith("pty_") && typeof ptyManager !== "undefined") {
+            const pty = ptyManager.ptys.get(taskId);
+            if (pty) {
+                const history = ptyManager.getHistory(taskId);
+                return {
+                    task_id: taskId,
+                    running: pty.running,
+                    exit_code: pty.exitCode,
+                    stdout: history,
+                    stderr: "",
+                    accumulated_stdout: history,
+                    accumulated_stderr: ""
+                };
+            }
+        }
         if (!task) {
             task = loadTaskRecordFromDisk(taskId);
         }
@@ -267,6 +282,11 @@ class TaskManager {
     }
 
     sendInput(taskId, options = {}) {
+        if (taskId && taskId.startsWith("pty_") && typeof ptyManager !== "undefined") {
+            const payload = options.input_string !== undefined ? options.input_string : (options.text || "");
+            const res = ptyManager.writeInput(taskId, payload + (options.press_enter !== false ? "\n" : ""));
+            return res.error ? { error: res.error } : { status: "sent", task_id: taskId };
+        }
         const task = this.tasks.get(taskId);
         if (!task) return { error: `Task ${taskId} not found.` };
         if (!task.running || !task.process.stdin || task.process.stdin.destroyed) {
@@ -309,6 +329,10 @@ class TaskManager {
     }
 
     killTask(taskId) {
+        if (taskId && taskId.startsWith("pty_") && typeof ptyManager !== "undefined") {
+            const res = ptyManager.kill(taskId);
+            return res.error ? { error: res.error } : { status: "killed", task_id: taskId };
+        }
         const task = this.tasks.get(taskId);
         if (!task) return { error: `Task ${taskId} not found.` };
 
@@ -370,6 +394,16 @@ class TaskManager {
                 command: task.command,
                 start_time: task.startTime
             };
+        }
+        if (typeof ptyManager !== "undefined") {
+            for (const [pid, pty] of ptyManager.ptys.entries()) {
+                result[pid] = {
+                    running: pty.running,
+                    exit_code: pty.exitCode,
+                    command: pty.command,
+                    start_time: pty.startTime
+                };
+            }
         }
         return result;
     }
@@ -951,7 +985,8 @@ const server = http.createServer(async (req, res) => {
                 artifactsDir: body.artifacts_dir,
                 shell: body.shell,
                 cols: body.cols || 100,
-                rows: body.rows || 30
+                rows: body.rows || 30,
+                runAndExit: true
             });
 
             res.writeHead(200, {
@@ -970,12 +1005,46 @@ const server = http.createServer(async (req, res) => {
 
             writeSSE({ type: "start", task_id: ptySession.id, pty: true });
 
+            let timeoutSec = 0;
+            if (body.background || body.is_daemon || body.isDaemon) {
+                timeoutSec = 0.5;
+            } else if (body.timer !== undefined) {
+                timeoutSec = parseFloat(body.timer) || 0;
+            } else if (body.timeout !== undefined) {
+                timeoutSec = parseFloat(body.timeout) || 0;
+            }
+
+            let ptyTimer = null;
             let accStdout = "";
+
+            if (timeoutSec > 0) {
+                ptyTimer = setTimeout(() => {
+                    if (ptySession.running) {
+                        const elapsed = ((Date.now() - ptySession.startTime) / 1000).toFixed(2);
+                        writeSSE({
+                            type: "done",
+                            task_id: ptySession.id,
+                            done: false,
+                            status: "running",
+                            running: true,
+                            exit_code: null,
+                            stdout: accStdout,
+                            stderr: "",
+                            ran_for: elapsed,
+                            pty: true
+                        });
+                        ptySession.listeners.delete(listener);
+                        res.end();
+                    }
+                }, timeoutSec * 1000);
+            }
+
             const listener = (event) => {
                 if (event.type === "data") {
                     accStdout += event.data;
                     writeSSE({ type: "chunk", stdout: event.data, stderr: "" });
                 } else if (event.type === "exit") {
+                    if (ptyTimer) clearTimeout(ptyTimer);
                     const elapsed = ((Date.now() - ptySession.startTime) / 1000).toFixed(2);
                     writeSSE({
                         type: "done",
@@ -989,6 +1058,16 @@ const server = http.createServer(async (req, res) => {
                         ran_for: elapsed,
                         pty: true
                     });
+                    saveTaskRecordToDisk({
+                        id: ptySession.id,
+                        command,
+                        startTime: ptySession.startTime,
+                        endTime: Date.now(),
+                        running: false,
+                        exitCode: event.exitCode,
+                        accumulatedStdout: accStdout,
+                        accumulatedStderr: ""
+                    });
                     ptySession.listeners.delete(listener);
                     res.end();
                 }
@@ -996,6 +1075,7 @@ const server = http.createServer(async (req, res) => {
 
             ptySession.listeners.add(listener);
             req.on("close", () => {
+                if (ptyTimer) clearTimeout(ptyTimer);
                 ptySession.listeners.delete(listener);
             });
             return;

@@ -118,6 +118,32 @@ async function runRetentionTests() {
         assert.strictEqual(badgeConfig.detail, "t_test_sample");
         assert.strictEqual(badgeConfig.icon, "file-text");
 
+        // 8. Verify PTY execution terminates cleanly and does not hang
+        console.log("8. Verifying PTY task execution completes cleanly without hanging...");
+        const ptyStreamRes = await new Promise((resolve, reject) => {
+            const req = http.request({
+                hostname: "127.0.0.1",
+                port: testPort,
+                path: "/api/task/stream",
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                timeout: 5000
+            }, res => {
+                let data = "";
+                res.on("data", chunk => data += chunk);
+                res.on("end", () => resolve(data));
+            });
+            req.on("error", reject);
+            req.write(JSON.stringify({
+                command: "echo 'PTY_TEST_OUTPUT'",
+                pty: true,
+                timer: 5
+            }));
+            req.end();
+        });
+        assert(ptyStreamRes.includes("PTY_TEST_OUTPUT"), "PTY output should be in stream");
+        assert(ptyStreamRes.includes('"type":"done"'), "PTY stream must send done event and close");
+
         console.log("\n All Task Retention & Anti-Reaping tests passed successfully!");
     } finally {
         daemonProc.kill("SIGTERM");
