@@ -337,6 +337,15 @@ function _renderModal() {
         if (e.key === "Enter") _handleConnect();
         if (e.key === "Escape") _closeModal();
     });
+    urlInput?.addEventListener("blur", () => {
+        const current = (urlInput.value || "").trim();
+        if (current) {
+            const norm = normalizeServerUrl(current);
+            if (norm && norm !== current) {
+                urlInput.value = norm;
+            }
+        }
+    });
 
     requestAnimationFrame(() => {
         backdrop.classList.add("is-visible");
@@ -354,6 +363,54 @@ function _closeModal() {
     setTimeout(() => { modal?.remove(); backdrop?.remove(); }, 220);
 }
 
+/* ── URL Normalization ─────────────────────────────────────────────────── */
+
+export function normalizeServerUrl(rawUrl) {
+    if (!rawUrl || typeof rawUrl !== "string") return "";
+    let url = rawUrl.trim();
+    url = url.replace(/^['"]+|['"]+$/g, "");
+    if (!url) return "";
+
+    // If scheme is missing, intelligently prepend https:// or http://
+    if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(url)) {
+        if (/trycloudflare\.com|ngrok|loca\.lt|hf\.space|runpod\.net|\.app$|\.dev$|\.org$|\.io$/i.test(url) && !/:\d+/.test(url)) {
+            url = "https://" + url;
+        } else {
+            url = "http://" + url;
+        }
+    }
+
+    try {
+        const parsed = new URL(url);
+        let pathname = parsed.pathname.replace(/\/+$/, "");
+
+        const suffixesToStrip = [
+            "/v1/chat/completions",
+            "/chat/completions",
+            "/v1/models",
+            "/api/v1/model",
+            "/api/v1/chat/completions",
+            "/api/v1/generate",
+            "/api/v1",
+            "/v1",
+            "/api/tags",
+            "/api/chat"
+        ];
+
+        for (const suffix of suffixesToStrip) {
+            if (pathname.endsWith(suffix)) {
+                pathname = pathname.slice(0, -suffix.length);
+                break;
+            }
+        }
+
+        parsed.pathname = pathname;
+        return parsed.origin + (parsed.pathname === "/" ? "" : parsed.pathname);
+    } catch (_) {
+        return url.replace(/\/+$/, "");
+    }
+}
+
 /* ── Connect handler ────────────────────────────────────────────────────── */
 
 async function _handleConnect() {
@@ -362,10 +419,18 @@ async function _handleConnect() {
 
     const rawUrl = (urlInput?.value || "").trim();
     if (!rawUrl) { _showStatus("error", "Please enter a URL."); urlInput?.focus(); return; }
-    try { new URL(rawUrl); } catch (_) {
-        _showStatus("error", "Invalid URL — example: http://localhost:5001");
+
+    const normalizedUrl = normalizeServerUrl(rawUrl);
+    try {
+        new URL(normalizedUrl);
+    } catch (_) {
+        _showStatus("error", "Invalid URL format. Example: http://localhost:5001 or https://your-tunnel.trycloudflare.com");
         urlInput?.focus();
         return;
+    }
+
+    if (urlInput && urlInput.value !== normalizedUrl) {
+        urlInput.value = normalizedUrl;
     }
 
     const selectedFormat = document.querySelector("input[name='localApiFormat']:checked")?.value || "kobold";
@@ -391,7 +456,7 @@ async function _handleConnect() {
         const res = await fetch("/api/local/probe", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ base_url: rawUrl, api_format: selectedFormat, ...genOpts }),
+            body: JSON.stringify({ base_url: normalizedUrl, api_format: selectedFormat, ...genOpts }),
             signal: AbortSignal.timeout(10000)
         });
         const data = await res.json();

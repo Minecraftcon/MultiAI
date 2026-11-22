@@ -1,5 +1,5 @@
 const { getConfig, saveConfig } = require("../../core/config_manager");
-const { getEnvKey, loadModelsConfig, getModelDefaultContext, getSystemInfo, sendJSON } = require("../utils");
+const { getEnvKey, loadModelsConfig, getModelDefaultContext, getSystemInfo, normalizeServerUrl, sendJSON } = require("../utils");
 
 // In-memory session state for the rolling local provider (resets on server restart)
 let localSessionState = {
@@ -118,7 +118,10 @@ async function handleLocalProbe(req, res) {
             return sendJSON(res, 400, { error: "base_url is required" });
         }
 
-        const cleanUrl = base_url.replace(/\/+$/, "");
+        const cleanUrl = normalizeServerUrl(base_url);
+        if (!cleanUrl) {
+            return sendJSON(res, 400, { error: "Invalid URL provided." });
+        }
 
         // Format-specific model detection paths
         const MODEL_PATHS = {
@@ -206,9 +209,18 @@ async function handleLocalProbe(req, res) {
         });
     } catch (err) {
         if (err.name === "TimeoutError") {
-            return sendJSON(res, 504, { error: "Connection timed out — is the server running at that URL?" });
+            return sendJSON(res, 504, { error: `Connection timed out — is the server reachable at ${cleanUrl}?` });
         }
-        return sendJSON(res, 500, { error: err.message });
+        const causeMsg = String(err.cause?.message || err.cause?.code || err.cause || "");
+        if (causeMsg.includes("ENOTFOUND")) {
+            const hostMatch = causeMsg.match(/ENOTFOUND\s+([^\s]+)/);
+            const host = hostMatch ? hostMatch[1] : cleanUrl;
+            return sendJSON(res, 502, { error: `Host not found (${host}). Please check for missing letters or typos.` });
+        }
+        if (causeMsg.includes("ECONNREFUSED")) {
+            return sendJSON(res, 502, { error: `Connection refused at ${cleanUrl}. Please ensure your local server or tunnel is running.` });
+        }
+        return sendJSON(res, 500, { error: causeMsg || err.message || "Failed to connect" });
     }
 }
 

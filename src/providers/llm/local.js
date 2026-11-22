@@ -2,6 +2,7 @@
 // Supports any locally-running LLM server: KoboldCPP, llama.cpp, vLLM, Ollama, etc.
 // No API key required. base_url and format are discovered at runtime via the rolling flow.
 const BaseProvider = require("./base");
+const { normalizeServerUrl } = require("../../server/utils");
 
 /**
  * API format descriptors.
@@ -63,7 +64,7 @@ class LocalProvider extends BaseProvider {
 
     getEndpoint(config = {}, model, apiKey) {
         const baseUrl = config.base_url || config.endpoint || "http://localhost:5001";
-        const clean = baseUrl.replace(/\/+$/, "");
+        const clean = normalizeServerUrl ? normalizeServerUrl(baseUrl) : baseUrl.replace(/\/+$/, "");
         const format = this._getFormat(config);
         return `${clean}${format.chatPath}`;
     }

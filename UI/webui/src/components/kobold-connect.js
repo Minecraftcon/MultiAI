@@ -147,6 +147,15 @@ function _renderModal() {
         if (e.key === "Enter") _handleConnect();
         if (e.key === "Escape") _closeModal();
     });
+    input?.addEventListener("blur", () => {
+        const current = (input.value || "").trim();
+        if (current) {
+            const norm = normalizeServerUrl(current);
+            if (norm && norm !== current) {
+                input.value = norm;
+            }
+        }
+    });
 
     // Animate in
     requestAnimationFrame(() => {
@@ -171,6 +180,52 @@ function _closeModal() {
     }, 220);
 }
 
+function normalizeServerUrl(rawUrl) {
+    if (!rawUrl || typeof rawUrl !== "string") return "";
+    let url = rawUrl.trim();
+    url = url.replace(/^['"]+|['"]+$/g, "");
+    if (!url) return "";
+
+    // If scheme is missing, intelligently prepend https:// or http://
+    if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(url)) {
+        if (/trycloudflare\.com|ngrok|loca\.lt|hf\.space|runpod\.net|\.app$|\.dev$|\.org$|\.io$/i.test(url) && !/:\d+/.test(url)) {
+            url = "https://" + url;
+        } else {
+            url = "http://" + url;
+        }
+    }
+
+    try {
+        const parsed = new URL(url);
+        let pathname = parsed.pathname.replace(/\/+$/, "");
+
+        const suffixesToStrip = [
+            "/v1/chat/completions",
+            "/chat/completions",
+            "/v1/models",
+            "/api/v1/model",
+            "/api/v1/chat/completions",
+            "/api/v1/generate",
+            "/api/v1",
+            "/v1",
+            "/api/tags",
+            "/api/chat"
+        ];
+
+        for (const suffix of suffixesToStrip) {
+            if (pathname.endsWith(suffix)) {
+                pathname = pathname.slice(0, -suffix.length);
+                break;
+            }
+        }
+
+        parsed.pathname = pathname;
+        return parsed.origin + (parsed.pathname === "/" ? "" : parsed.pathname);
+    } catch (_) {
+        return url.replace(/\/+$/, "");
+    }
+}
+
 async function _handleConnect() {
     const input = document.getElementById("koboldUrlInput");
     const btn = document.getElementById("koboldConnectBtn");
@@ -183,13 +238,17 @@ async function _handleConnect() {
         return;
     }
 
-    // Basic URL validation
+    const normalizedUrl = normalizeServerUrl(rawUrl);
     try {
-        new URL(rawUrl);
+        new URL(normalizedUrl);
     } catch (_) {
-        _showStatus("error", "Invalid URL format. Example: http://localhost:5001");
+        _showStatus("error", "Invalid URL format. Example: http://localhost:5001 or https://your-tunnel.trycloudflare.com");
         input?.focus();
         return;
+    }
+
+    if (input && input.value !== normalizedUrl) {
+        input.value = normalizedUrl;
     }
 
     // Loading state
@@ -203,7 +262,7 @@ async function _handleConnect() {
         const res = await fetch("/api/kobold/probe", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ base_url: rawUrl }),
+            body: JSON.stringify({ base_url: normalizedUrl }),
             signal: AbortSignal.timeout(10000)
         });
 

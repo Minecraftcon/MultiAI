@@ -375,6 +375,52 @@ function formatFileNotFoundError(rawPath, targetPath) {
     return new Error(`File not found: ${rawPath}.${suggestion}`);
 }
 
+function normalizeServerUrl(rawUrl) {
+    if (!rawUrl || typeof rawUrl !== "string") return "";
+    let url = rawUrl.trim();
+    url = url.replace(/^['"]+|['"]+$/g, "");
+    if (!url) return "";
+
+    // If scheme is missing, intelligently prepend https:// or http://
+    if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(url)) {
+        if (/trycloudflare\.com|ngrok|loca\.lt|hf\.space|runpod\.net|\.app$|\.dev$|\.org$|\.io$/i.test(url) && !/:\d+/.test(url)) {
+            url = "https://" + url;
+        } else {
+            url = "http://" + url;
+        }
+    }
+
+    try {
+        const parsed = new URL(url);
+        let pathname = parsed.pathname.replace(/\/+$/, "");
+
+        const suffixesToStrip = [
+            "/v1/chat/completions",
+            "/chat/completions",
+            "/v1/models",
+            "/api/v1/model",
+            "/api/v1/chat/completions",
+            "/api/v1/generate",
+            "/api/v1",
+            "/v1",
+            "/api/tags",
+            "/api/chat"
+        ];
+
+        for (const suffix of suffixesToStrip) {
+            if (pathname.endsWith(suffix)) {
+                pathname = pathname.slice(0, -suffix.length);
+                break;
+            }
+        }
+
+        parsed.pathname = pathname;
+        return parsed.origin + (parsed.pathname === "/" ? "" : parsed.pathname);
+    } catch (_) {
+        return url.replace(/\/+$/, "");
+    }
+}
+
 function resolveSafePath(inputPath, chatId) {
     const raw = String(inputPath || "").trim();
     if (!raw) throw new Error("Path parameter is empty or missing");
@@ -637,6 +683,7 @@ module.exports = {
     getChatArtifactsDir,
     resolveSafePath,
     formatFileNotFoundError,
+    normalizeServerUrl,
     postJSON,
     sendJSON
 };
