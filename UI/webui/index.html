@@ -106,6 +106,7 @@
     <link rel="stylesheet" href="./styles/silica.css">
     <link rel="stylesheet" href="./styles/right-panel.css">
     <link rel="stylesheet" href="./styles/element-inspector.css">
+    <link rel="stylesheet" href="./styles/history-editor.css">
 </head>
 <body>
 
@@ -460,6 +461,10 @@
 
 <!-- ================= RIGHT CLICK CONTEXT MENU (SIDEBAR CHAT ITEM) ================= -->
 <div id="chatItemContextMenu" class="context-menu" style="display: none;">
+    <button type="button" class="context-menu-item" id="chatCtxEditHistoryBtn">
+        <i data-lucide="history"></i>
+        <span>Edit History</span>
+    </button>
     <button type="button" class="context-menu-item" id="chatCtxBranchBtn">
         <i data-lucide="git-branch"></i>
         <span>Branch</span>
@@ -513,6 +518,10 @@
 </div>
 <!-- ================= CHAT ITEM CONTEXT MENU (POPUP FOR ...) ================= -->
 <div id="chatItemMenu" class="context-menu chat-item-popover" style="display: none;">
+    <button type="button" class="context-menu-item" id="chatEditHistoryBtn">
+        <i data-lucide="history"></i>
+        <span>Edit History</span>
+    </button>
     <button type="button" class="context-menu-item" id="chatRenameBtn">
         <i data-lucide="pencil"></i>
         <span>Rename</span>

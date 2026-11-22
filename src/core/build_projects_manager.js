@@ -345,8 +345,14 @@ function createBuildProjectsManager(getBuildProjectsRoot, resolveHome) {
             savedAt: Date.now()
         };
 
-        const actualMsgCount = safelyWriteMessages(ws.messagesFile, messages, hasMeaningfulMessages);
-        metaPayload.messageCount = Math.max(actualMsgCount || 0, existingMeta.messageCount || 0, messages.length);
+        const forceOverwrite = Boolean(chatSession.forceOverwrite || chatSession.force);
+        if (forceOverwrite && fs.existsSync(ws.messagesFile)) {
+            try {
+                fs.copyFileSync(ws.messagesFile, ws.messagesFile + ".bak");
+            } catch (_) {}
+        }
+        const actualMsgCount = safelyWriteMessages(ws.messagesFile, messages, hasMeaningfulMessages, forceOverwrite);
+        metaPayload.messageCount = forceOverwrite ? messages.length : Math.max(actualMsgCount || 0, existingMeta.messageCount || 0, messages.length);
         writeJsonFile(ws.metaFile, metaPayload);
         if (ws.metadataFile) {
             writeJsonFile(ws.metadataFile, metaPayload);

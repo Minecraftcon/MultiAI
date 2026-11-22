@@ -296,9 +296,17 @@ function saveChat(chatSession) {
     const existingMeta = readJsonFile(ws.metadataFile, null) || readJsonFile(ws.metaFile, {});
     const messages = Array.isArray(chatSession.messages) ? chatSession.messages : [];
     const hasMeaningfulMessages = messages.some(m => m.role !== "system");
+    const forceOverwrite = Boolean(chatSession.forceOverwrite || chatSession.force);
 
-    // 1. Safely write messages without truncating existing disk history
-    const actualMsgCount = safelyWriteMessages(ws.messagesFile, messages, hasMeaningfulMessages);
+    // Silent micro-backup before forced overwrite
+    if (forceOverwrite && fs.existsSync(ws.messagesFile)) {
+        try {
+            fs.copyFileSync(ws.messagesFile, ws.messagesFile + ".bak");
+        } catch (_) {}
+    }
+
+    // 1. Safely write messages without truncating existing disk history (unless forced)
+    const actualMsgCount = safelyWriteMessages(ws.messagesFile, messages, hasMeaningfulMessages, forceOverwrite);
 
     // 2. Write metadata to meta.json and metadata.json
     const metaPayload = {
@@ -317,7 +325,7 @@ function saveChat(chatSession) {
             imagesDir: ws.imagesDir,
             dateStr: ws.dateStr
         },
-        messageCount: Math.max(actualMsgCount || 0, existingMeta.messageCount || 0, messages.length),
+        messageCount: forceOverwrite ? messages.length : Math.max(actualMsgCount || 0, existingMeta.messageCount || 0, messages.length),
         savedAt: Date.now()
     };
     writeJsonFile(ws.metaFile, metaPayload);

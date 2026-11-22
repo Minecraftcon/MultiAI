@@ -58,9 +58,17 @@ function appendMessage(messagesFile, message) {
 /**
  * Safely writes messages to messages.jsonl, protecting existing disk history
  * from being truncated if incoming payload is a smaller client-side cache slice.
+ * When forceOverwrite is true (e.g. user manually deleted turns or edited history),
+ * writes the incoming messages array directly to disk.
  */
-function safelyWriteMessages(messagesFile, incomingMessages, hasMeaningfulMessages) {
+function safelyWriteMessages(messagesFile, incomingMessages, hasMeaningfulMessages, forceOverwrite = false) {
     if (!Array.isArray(incomingMessages)) return 0;
+
+    if (forceOverwrite) {
+        const lines = incomingMessages.map(m => JSON.stringify(m)).join("\n");
+        fs.writeFileSync(messagesFile, lines ? lines + "\n" : "", "utf8");
+        return incomingMessages.length;
+    }
 
     if (!hasMeaningfulMessages) {
         if (!fs.existsSync(messagesFile)) {

@@ -13,6 +13,7 @@ import { createAIMessageShell, requestScrollToBottom } from "./chat-ui.js";
 import { runAgent } from "../services/agent.js";
 import { logEvent } from "../utils/logger.js";
 import { showErrorRecoveryPopup } from "./error-recovery.js";
+import { openHistoryEditor } from "./history-editor.js";
 
 let contextMenuTargetEl = null;
 let contextMenuTargetText = "";
@@ -777,6 +778,7 @@ export function initContextMenu() {
     const ctxDeleteBtn = document.getElementById("ctxDeleteBtn");
 
     const chatItemContextMenu = document.getElementById("chatItemContextMenu");
+    const chatCtxEditHistoryBtn = document.getElementById("chatCtxEditHistoryBtn");
     const chatCtxBranchBtn = document.getElementById("chatCtxBranchBtn");
     const chatCtxExportBtn = document.getElementById("chatCtxExportBtn");
     const chatCtxDeleteBtn = document.getElementById("chatCtxDeleteBtn");
@@ -998,6 +1000,17 @@ export function initContextMenu() {
     }
 
     // Sidebar Chat Item context menu buttons
+    if (chatCtxEditHistoryBtn) {
+        chatCtxEditHistoryBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const targetId = chatMenuTargetId;
+            hideChatItemContextMenu();
+            if (targetId) {
+                openHistoryEditor(targetId);
+            }
+        });
+    }
+
     if (chatCtxBranchBtn) {
         chatCtxBranchBtn.addEventListener("click", (e) => {
             e.stopPropagation();

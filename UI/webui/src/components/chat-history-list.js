@@ -20,6 +20,7 @@ import { updateModelPickerDisplay } from "./model-picker.js";
 import { setStartPageMode } from "./chatbox.js";
 import { syncPlanDock } from "./chat-plan-dock.js";
 import { wrapHugeThoughts, renderSessionMessages } from "./chat-ui.js";
+import { openHistoryEditor } from "./history-editor.js";
 import { 
     renderProjectList, 
     hideProjectMenu, 
@@ -517,8 +518,19 @@ export function hideChatItemMenu() {
  * Binds Rename and Delete actions on the shared chatItemMenu.
  */
 export function initChatListListeners() {
+    const chatEditHistoryBtn = document.getElementById("chatEditHistoryBtn");
     const chatRenameBtn = document.getElementById("chatRenameBtn");
     const chatDeleteBtn = document.getElementById("chatDeleteBtn");
+
+    if (chatEditHistoryBtn) {
+        chatEditHistoryBtn.addEventListener("click", () => {
+            const targetId = activeMenuProjectChatId || activeMenuChatId;
+            hideChatItemMenu();
+            if (targetId) {
+                openHistoryEditor(targetId);
+            }
+        });
+    }
 
     if (chatRenameBtn) {
         chatRenameBtn.addEventListener("click", () => {

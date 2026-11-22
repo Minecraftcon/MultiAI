@@ -29,6 +29,7 @@ import { initTaskWatcher } from "./tools/terminal/task-watcher.js";
 import { initTerminalDrawer } from "./components/terminal-drawer.js";
 import { initRightPanel } from "./components/right-panel.js";
 import { initElementInspector } from "./components/element-inspector.js";
+import { initHistoryEditor } from "./components/history-editor.js";
 
 async function initChatSessions() {
     loadStoredChats();
@@ -115,6 +116,7 @@ async function bootstrap() {
     initTerminalDrawer();
     initRightPanel();
     initElementInspector();
+    initHistoryEditor();
 
     await initConfig();
     if (state.config?.Tools?.EnableMcp !== false) {
