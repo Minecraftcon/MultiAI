@@ -549,16 +549,16 @@
 [data-ui-style="silica"] .suggestion-item,
 .ui-style-silica .suggestion-item {
     border-radius: 4px !important;
-    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border: none !important;
     background: #101012 !important;
-    padding: 7px 12px !important;
+    padding: 8px 14px !important;
     font-size: 12.5px !important;
     color: var(--text-secondary, #9ca3af) !important;
     cursor: pointer !important;
     position: relative !important;
     overflow: hidden !important;
     box-shadow: none !important;
-    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease !important;
+    transition: background-color 0.15s ease, color 0.15s ease !important;
 }
 
 [data-ui-style="silica"] .followup-item:hover,
@@ -568,7 +568,7 @@
 [data-ui-style="silica"] .suggestion-item:hover,
 .ui-style-silica .suggestion-item:hover {
     background: #17171a !important;
-    border-color: rgba(255, 255, 255, 0.18) !important;
+    border: none !important;
     color: var(--text-primary, #ffffff) !important;
     transform: none !important;
 }
@@ -593,27 +593,37 @@
     pointer-events: none !important;
     flex-shrink: 0 !important;
     color: var(--text-primary, #ffffff) !important;
-    margin-top: 3.5px !important;
-    transform: translateY(var(--followup-cursor-y, 0px)) translateX(-4px) !important;
+    margin-top: 2px !important;
+    transform: translateY(0px) translateX(-4px) !important;
     transition: opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1),
                 max-width 0.2s cubic-bezier(0.16, 1, 0.3, 1),
                 width 0.2s cubic-bezier(0.16, 1, 0.3, 1),
                 margin-right 0.2s cubic-bezier(0.16, 1, 0.3, 1),
-                transform 0.08s ease-out !important;
+                transform 0.28s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+/* Bigger play icon */
+[data-ui-style="silica"] .followup-play-icon,
+.ui-style-silica .followup-play-icon {
+    display: inline-block !important;
+    width: 14px !important;
+    height: 14px !important;
+    fill: currentColor !important;
+    flex-shrink: 0 !important;
 }
 
 /* Reveal play arrow on hover */
 [data-ui-style="silica"] .followup-item:hover .followup-play-arrow,
 .ui-style-silica .followup-item:hover .followup-play-arrow {
     opacity: 1 !important;
-    max-width: 16px !important;
-    width: 13px !important;
-    margin-right: 8px !important;
-    transform: translateY(var(--followup-cursor-y, 0px)) translateX(0) !important;
+    max-width: 22px !important;
+    width: 15px !important;
+    margin-right: 10px !important;
+    transform: translateY(0px) translateX(0) !important;
 }
 
-/* Hovering left-to-right animation on play icon */
+/* Quicker hovering left-to-right animation on play icon */
 [data-ui-style="silica"] .followup-item:hover .followup-play-icon,
 .ui-style-silica .followup-item:hover .followup-play-icon {
-    animation: followupPlayHover 1.1s cubic-bezier(0.45, 0, 0.55, 1) infinite alternate !important;
+    animation: followupPlayHover 0.65s cubic-bezier(0.4, 0, 0.2, 1) infinite alternate !important;
 }

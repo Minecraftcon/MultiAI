@@ -1113,8 +1113,8 @@ export function renderFollowupSuggestions(element, followups, isDone) {
         container.innerHTML = followups.map(q => `
             <button type="button" class="followup-item" data-question="${escapeHTML(q)}" aria-label="Ask: ${escapeHTML(q)}">
                 <span class="followup-play-arrow" aria-hidden="true">
-                    <svg viewBox="0 0 16 16" class="followup-play-icon" width="11" height="11">
-                        <path d="M4.5 3.5v9l8-4.5z" fill="currentColor"/>
+                    <svg viewBox="0 0 16 16" class="followup-play-icon" width="14" height="14">
+                        <path d="M4.5 3v10l8.5-5z" fill="currentColor"/>
                     </svg>
                 </span>
                 <i data-lucide="corner-down-right" class="followup-icon"></i>
@@ -1277,22 +1277,76 @@ export function initChatDelegation() {
     const chat = document.getElementById("chat");
     if (!chat) return;
 
-    // Fluid vertical cursor tracking for followup play arrow
+    // Adaptive vertical gliding for followup play arrow between items
+    let lastHoveredFollowup = null;
+    let lastHoveredRect = null;
+    let lastCursorY = 0;
+    let cursorSpeedY = 0;
+
     chat.addEventListener("mousemove", (e) => {
+        cursorSpeedY = e.clientY - lastCursorY;
+        lastCursorY = e.clientY;
+    }, { passive: true });
+
+    chat.addEventListener("pointerover", (e) => {
         const followupBtn = e.target.closest(".followup-item");
-        if (!followupBtn) return;
-        const rect = followupBtn.getBoundingClientRect();
-        if (rect.height > 0) {
-            const deltaY = e.clientY - (rect.top + rect.height / 2);
-            const offsetY = Math.max(-5, Math.min(5, Math.round(deltaY * 0.35 * 10) / 10));
-            followupBtn.style.setProperty("--followup-cursor-y", `${offsetY}px`);
+        if (!followupBtn || followupBtn === lastHoveredFollowup) return;
+
+        const currRect = followupBtn.getBoundingClientRect();
+        const arrow = followupBtn.querySelector(".followup-play-arrow");
+
+        if (arrow) {
+            let startOffsetY = 0;
+
+            if (lastHoveredFollowup && lastHoveredFollowup.isConnected && lastHoveredRect) {
+                // Smooth transition between followups: start from the exact position of the previous item
+                startOffsetY = lastHoveredRect.top - currRect.top;
+            } else if (cursorSpeedY < 0) {
+                // Cursor moved upwards into this followup: animate smoothly upwards
+                startOffsetY = 28;
+            } else if (cursorSpeedY > 0) {
+                // Cursor moved downwards into this followup: animate smoothly downwards
+                startOffsetY = -28;
+            }
+
+            if (startOffsetY !== 0) {
+                // Position arrow at start position instantly without animation
+                arrow.style.transition = "none";
+                arrow.style.transform = `translateY(${startOffsetY}px)`;
+
+                // Force reflow
+                void arrow.offsetHeight;
+
+                // Animate smoothly to natural position
+                arrow.style.transition = "transform 0.28s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1), width 0.2s cubic-bezier(0.16, 1, 0.3, 1), margin-right 0.2s cubic-bezier(0.16, 1, 0.3, 1)";
+                arrow.style.transform = "translateY(0px)";
+            } else {
+                arrow.style.transition = "";
+                arrow.style.transform = "translateY(0px)";
+            }
         }
+
+        lastHoveredFollowup = followupBtn;
+        lastHoveredRect = currRect;
     }, { passive: true });
 
     chat.addEventListener("pointerout", (e) => {
         const followupBtn = e.target.closest(".followup-item");
         if (followupBtn && (!e.relatedTarget || !followupBtn.contains(e.relatedTarget))) {
-            followupBtn.style.setProperty("--followup-cursor-y", "0px");
+            if (lastHoveredFollowup === followupBtn) {
+                lastHoveredRect = followupBtn.getBoundingClientRect();
+                setTimeout(() => {
+                    if (!chat.querySelector(".followup-item:hover")) {
+                        lastHoveredFollowup = null;
+                        lastHoveredRect = null;
+                    }
+                }, 350);
+            }
+            const arrow = followupBtn.querySelector(".followup-play-arrow");
+            if (arrow) {
+                arrow.style.transition = "";
+                arrow.style.transform = "";
+            }
         }
     }, { passive: true });
 
