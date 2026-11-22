@@ -147,15 +147,6 @@ function _renderModal() {
         if (e.key === "Enter") _handleConnect();
         if (e.key === "Escape") _closeModal();
     });
-    input?.addEventListener("blur", () => {
-        const current = (input.value || "").trim();
-        if (current) {
-            const norm = normalizeServerUrl(current);
-            if (norm && norm !== current) {
-                input.value = norm;
-            }
-        }
-    });
 
     // Animate in
     requestAnimationFrame(() => {
@@ -247,8 +238,10 @@ async function _handleConnect() {
         return;
     }
 
-    if (input && input.value !== normalizedUrl) {
-        input.value = normalizedUrl;
+    // If scheme was missing, prepend protocol in input field while preserving trailing slash
+    if (input && !/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(rawUrl)) {
+        const proto = /trycloudflare\.com|ngrok|loca\.lt|hf\.space|runpod\.net|\.app$|\.dev$|\.org$|\.io$/i.test(rawUrl) && !/:\d+/.test(rawUrl) ? "https://" : "http://";
+        input.value = proto + rawUrl;
     }
 
     // Loading state

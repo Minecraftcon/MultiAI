@@ -529,6 +529,8 @@ function openInBrowser(url) {
 
 function runConsole(supervisor, rootDir, workspaceDir, port, host) {
     if (!process.stdin || !process.stdin.isTTY) {
+        // Keep supervisor process alive when running non-interactively (e.g. background daemon)
+        setInterval(() => {}, 1000 * 60 * 60);
         return;
     }
     const displayHost = (host === "0.0.0.0" || host === "127.0.0.1" || !host) ? "localhost" : host;

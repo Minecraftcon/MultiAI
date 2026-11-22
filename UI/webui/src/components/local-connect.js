@@ -337,15 +337,6 @@ function _renderModal() {
         if (e.key === "Enter") _handleConnect();
         if (e.key === "Escape") _closeModal();
     });
-    urlInput?.addEventListener("blur", () => {
-        const current = (urlInput.value || "").trim();
-        if (current) {
-            const norm = normalizeServerUrl(current);
-            if (norm && norm !== current) {
-                urlInput.value = norm;
-            }
-        }
-    });
 
     requestAnimationFrame(() => {
         backdrop.classList.add("is-visible");
@@ -429,8 +420,10 @@ async function _handleConnect() {
         return;
     }
 
-    if (urlInput && urlInput.value !== normalizedUrl) {
-        urlInput.value = normalizedUrl;
+    // If scheme was missing, prepend protocol in input field while preserving trailing slash
+    if (urlInput && !/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(rawUrl)) {
+        const proto = /trycloudflare\.com|ngrok|loca\.lt|hf\.space|runpod\.net|\.app$|\.dev$|\.org$|\.io$/i.test(rawUrl) && !/:\d+/.test(rawUrl) ? "https://" : "http://";
+        urlInput.value = proto + rawUrl;
     }
 
     const selectedFormat = document.querySelector("input[name='localApiFormat']:checked")?.value || "kobold";
