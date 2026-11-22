@@ -1112,6 +1112,11 @@ export function renderFollowupSuggestions(element, followups, isDone) {
     if (isDone && Array.isArray(followups) && followups.length > 0) {
         container.innerHTML = followups.map(q => `
             <button type="button" class="followup-item" data-question="${escapeHTML(q)}" aria-label="Ask: ${escapeHTML(q)}">
+                <span class="followup-play-arrow" aria-hidden="true">
+                    <svg viewBox="0 0 16 16" class="followup-play-icon" width="11" height="11">
+                        <path d="M4.5 3.5v9l8-4.5z" fill="currentColor"/>
+                    </svg>
+                </span>
                 <i data-lucide="corner-down-right" class="followup-icon"></i>
                 <span class="followup-text">${escapeHTML(q)}</span>
             </button>
@@ -1271,6 +1276,25 @@ export function finalizeStalled(element, startTime, hasTools, errorInfo) {
 export function initChatDelegation() {
     const chat = document.getElementById("chat");
     if (!chat) return;
+
+    // Fluid vertical cursor tracking for followup play arrow
+    chat.addEventListener("mousemove", (e) => {
+        const followupBtn = e.target.closest(".followup-item");
+        if (!followupBtn) return;
+        const rect = followupBtn.getBoundingClientRect();
+        if (rect.height > 0) {
+            const deltaY = e.clientY - (rect.top + rect.height / 2);
+            const offsetY = Math.max(-5, Math.min(5, Math.round(deltaY * 0.35 * 10) / 10));
+            followupBtn.style.setProperty("--followup-cursor-y", `${offsetY}px`);
+        }
+    }, { passive: true });
+
+    chat.addEventListener("pointerout", (e) => {
+        const followupBtn = e.target.closest(".followup-item");
+        if (followupBtn && (!e.relatedTarget || !followupBtn.contains(e.relatedTarget))) {
+            followupBtn.style.setProperty("--followup-cursor-y", "0px");
+        }
+    }, { passive: true });
 
     chat.addEventListener("click", (e) => {
         if (handlePlanApprovalClick(e)) {

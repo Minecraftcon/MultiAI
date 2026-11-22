@@ -629,6 +629,33 @@
     box-shadow: 0 0 0 2px var(--accent-subtle);
 }
 
+.followup-play-arrow {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 0;
+    max-width: 0;
+    margin-right: 0;
+    opacity: 0;
+    overflow: hidden;
+    pointer-events: none;
+    flex-shrink: 0;
+    color: var(--text-primary);
+    transform: translateY(var(--followup-cursor-y, 0px));
+    transition: opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+                max-width 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+                margin-right 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+                transform 0.08s ease-out;
+}
+
+.followup-play-icon {
+    display: inline-block;
+    width: 11px;
+    height: 11px;
+    fill: currentColor;
+    flex-shrink: 0;
+}
+
 .followup-icon {
     width: 15px;
     height: 15px;
