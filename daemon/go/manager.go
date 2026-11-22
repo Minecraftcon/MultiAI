@@ -23,6 +23,8 @@ type TaskItem struct {
 	Stdin     io.WriteCloser
 	stdoutBuf bytes.Buffer
 	stderrBuf bytes.Buffer
+	accStdout bytes.Buffer
+	accStderr bytes.Buffer
 	mu        sync.Mutex
 	running   bool
 	exitCode  *int
@@ -153,6 +155,7 @@ func (m *TaskManager) RunTask(command, shellOverride, scratchDir, artifactsDir, 
 			if n > 0 {
 				item.mu.Lock()
 				item.stdoutBuf.Write(buf[:n])
+				item.accStdout.Write(buf[:n])
 				item.mu.Unlock()
 			}
 			if err != nil {
@@ -169,6 +172,7 @@ func (m *TaskManager) RunTask(command, shellOverride, scratchDir, artifactsDir, 
 			if n > 0 {
 				item.mu.Lock()
 				item.stderrBuf.Write(buf[:n])
+				item.accStderr.Write(buf[:n])
 				item.mu.Unlock()
 			}
 			if err != nil {
@@ -216,6 +220,15 @@ func (m *TaskManager) GetOutput(taskID string) (TaskOutput, error) {
 
 	stderrStr := item.stderrBuf.String()
 	item.stderrBuf.Reset()
+
+	if !item.running {
+		if stdoutStr == "" {
+			stdoutStr = item.accStdout.String()
+		}
+		if stderrStr == "" {
+			stderrStr = item.accStderr.String()
+		}
+	}
 
 	return TaskOutput{
 		TaskID:   taskID,

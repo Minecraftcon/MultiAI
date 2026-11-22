@@ -199,14 +199,39 @@ async function handleTaskRoute(req, res) {
                     const logFilePath = path.join(scratchDir, logFileName);
                     const logRelPath = `scratch/${logFileName}`;
 
-                    // If reading via manage_tasks /api/task/stdout/:taskId and python queue was empty, read historical log
-                    if (urlParts.startsWith("/api/task/stdout/") && (!json.stdout || !json.stdout.trim()) && fs.existsSync(logFilePath)) {
-                        try {
-                            const diskLog = fs.readFileSync(logFilePath, "utf8");
-                            if (diskLog.trim()) {
-                                json.stdout = diskLog;
+                    // If reading via manage_tasks /api/task/stdout/:taskId and output is empty or daemon returned 404
+                    if (urlParts.startsWith("/api/task/stdout/")) {
+                        let diskContent = "";
+                        if (fs.existsSync(logFilePath)) {
+                            try {
+                                diskContent = fs.readFileSync(logFilePath, "utf8");
+                            } catch (_) {}
+                        }
+                        if (!diskContent) {
+                            const taskRecordPath = path.join(conversationsManager.getStorageRoot(), "tasks", `${taskId}.json`);
+                            if (fs.existsSync(taskRecordPath)) {
+                                try {
+                                    const rec = JSON.parse(fs.readFileSync(taskRecordPath, "utf8"));
+                                    diskContent = rec.stdout || rec.output || "";
+                                } catch (_) {}
                             }
-                        } catch (_) {}
+                        }
+                        if (!diskContent && fs.existsSync(scratchDir)) {
+                            try {
+                                const matched = fs.readdirSync(scratchDir).find(f => f.includes(taskId) && f.endsWith(".log"));
+                                if (matched) {
+                                    diskContent = fs.readFileSync(path.join(scratchDir, matched), "utf8");
+                                }
+                            } catch (_) {}
+                        }
+
+                        if (diskContent && diskContent.trim()) {
+                            json.stdout = diskContent;
+                            json.task_id = taskId;
+                            json.running = false;
+                            json.status = "completed";
+                            delete json.error;
+                        }
                     }
 
                     const combinedOutput = (json.stdout || "") + (json.stderr ? "\n" + json.stderr : "");
@@ -248,7 +273,8 @@ async function handleTaskRoute(req, res) {
                         }
                     }
 
-                    return sendJSON(res, proxyRes.statusCode, json);
+                    const finalStatus = (urlParts.startsWith("/api/task/stdout/") && json.stdout && !json.error) ? 200 : proxyRes.statusCode;
+                    return sendJSON(res, finalStatus, json);
                 }
 
                 res.writeHead(proxyRes.statusCode, proxyRes.headers);

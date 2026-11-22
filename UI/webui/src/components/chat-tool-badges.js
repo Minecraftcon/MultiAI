@@ -128,12 +128,19 @@ export function getToolBadgeConfig(rawToolName, args = {}) {
         if (action === "kill_task" || action === "kill") {
             icon = "octagon";
             label = "Killed task";
+            runningLabel = "Killing task";
+            detail = taskId;
+        } else if (action === "status" || action === "stdout" || action === "get_output") {
+            icon = "file-text";
+            label = "Checked task";
+            runningLabel = "Checking task";
             detail = taskId;
         } else {
             icon = "keyboard";
             const val = args.input !== undefined ? args.input : (args.text !== undefined ? args.text : (args.key || ""));
             const isKey = typeof val === "string" && (/^(ctrl|alt|control|shift)[\+\-\s]/i.test(val.trim()) || ["enter", "esc", "escape", "tab"].includes(val.trim().toLowerCase()));
             label = isKey ? "Sent key" : "Sent input";
+            runningLabel = isKey ? "Sending key" : "Sending input";
             detail = `${taskId}: ${val}`;
         }
         isCommandTask = true;

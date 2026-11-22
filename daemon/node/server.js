@@ -75,6 +75,61 @@ function resolveKeyCombination(combo) {
     return { bytes: Buffer.from(combo, "utf8") };
 }
 
+function getTaskStorageDir() {
+    const base = process.env.MULTIAI_DATA_DIR || path.join(os.homedir(), ".MultiAI");
+    const dir = path.join(base, "tasks");
+    try {
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    } catch (_) {}
+    return dir;
+}
+
+function saveTaskRecordToDisk(task) {
+    if (!task || !task.id) return;
+    try {
+        const dir = getTaskStorageDir();
+        const filePath = path.join(dir, `${task.id}.json`);
+        const data = {
+            id: task.id,
+            command: task.command,
+            startTime: task.startTime,
+            endTime: task.endTime || Date.now(),
+            exitCode: task.exitCode,
+            running: false,
+            stdout: task.accumulatedStdout || "",
+            stderr: task.accumulatedStderr || ""
+        };
+        fs.writeFileSync(filePath, JSON.stringify(data), "utf8");
+    } catch (_) {}
+}
+
+function loadTaskRecordFromDisk(taskId) {
+    if (!taskId) return null;
+    try {
+        const dir = getTaskStorageDir();
+        const filePath = path.join(dir, `${taskId}.json`);
+        if (fs.existsSync(filePath)) {
+            const raw = fs.readFileSync(filePath, "utf8");
+            const data = JSON.parse(raw);
+            return {
+                id: data.id,
+                command: data.command,
+                startTime: data.startTime,
+                endTime: data.endTime,
+                exitCode: data.exitCode,
+                running: false,
+                accumulatedStdout: data.stdout || "",
+                accumulatedStderr: data.stderr || "",
+                unreadStdout: "",
+                unreadStderr: "",
+                listeners: new Set(),
+                isDiskRecord: true
+            };
+        }
+    } catch (_) {}
+    return null;
+}
+
 class TaskManager {
     constructor() {
         this.tasks = new Map();
@@ -163,6 +218,7 @@ class TaskManager {
             task.running = false;
             task.exitCode = code !== null ? code : (signal ? 128 : 0);
             task.endTime = Date.now();
+            saveTaskRecordToDisk(task);
             for (const l of task.listeners) {
                 try { l({ type: "close", exitCode: task.exitCode }); } catch (_) {}
             }
@@ -172,6 +228,8 @@ class TaskManager {
             task.running = false;
             task.exitCode = 1;
             task.accumulatedStderr += `\nProcess error: ${err.message}`;
+            task.endTime = Date.now();
+            saveTaskRecordToDisk(task);
             for (const l of task.listeners) {
                 try { l({ type: "close", exitCode: 1 }); } catch (_) {}
             }
@@ -182,20 +240,29 @@ class TaskManager {
     }
 
     getOutput(taskId) {
-        const task = this.tasks.get(taskId);
+        let task = this.tasks.get(taskId);
+        if (!task) {
+            task = loadTaskRecordFromDisk(taskId);
+        }
         if (!task) return { error: `Task ${taskId} not found.` };
 
-        const out = task.unreadStdout;
-        const err = task.unreadStderr;
-        task.unreadStdout = "";
-        task.unreadStderr = "";
+        const out = task.unreadStdout !== undefined ? task.unreadStdout : "";
+        const err = task.unreadStderr !== undefined ? task.unreadStderr : "";
+        if (task.unreadStdout !== undefined) task.unreadStdout = "";
+        if (task.unreadStderr !== undefined) task.unreadStderr = "";
+
+        // If task is completed and unread buffer is empty, return accumulated output
+        const finalStdout = (!task.running && !out) ? (task.accumulatedStdout || "") : out;
+        const finalStderr = (!task.running && !err) ? (task.accumulatedStderr || "") : err;
 
         return {
             task_id: taskId,
             running: task.running,
             exit_code: task.exitCode,
-            stdout: out,
-            stderr: err
+            stdout: finalStdout,
+            stderr: finalStderr,
+            accumulated_stdout: task.accumulatedStdout || "",
+            accumulated_stderr: task.accumulatedStderr || ""
         };
     }
 
@@ -271,10 +338,28 @@ class TaskManager {
 
     listTasks() {
         const now = Date.now();
-        // Prune finished tasks older than 60 seconds to prevent unbounded memory growth
+        // Retain completed tasks for at least 2 hours (7200000ms), capped at 1000 tasks
+        const RETENTION_MS = 2 * 60 * 60 * 1000;
+        const MAX_FINISHED_TASKS = 1000;
+        let finishedCount = 0;
         for (const [tid, task] of this.tasks.entries()) {
-            if (!task.running && task.endTime && (now - task.endTime > 60000)) {
-                this.tasks.delete(tid);
+            if (!task.running) {
+                finishedCount++;
+                if (task.endTime && (now - task.endTime > RETENTION_MS)) {
+                    this.tasks.delete(tid);
+                    finishedCount--;
+                }
+            }
+        }
+        if (finishedCount > MAX_FINISHED_TASKS) {
+            const finished = [];
+            for (const [tid, task] of this.tasks.entries()) {
+                if (!task.running) finished.push({ tid, endTime: task.endTime || 0 });
+            }
+            finished.sort((a, b) => (a.endTime || 0) - (b.endTime || 0));
+            const toRemove = finished.slice(0, finishedCount - MAX_FINISHED_TASKS);
+            for (const item of toRemove) {
+                this.tasks.delete(item.tid);
             }
         }
         const result = {};
@@ -1027,7 +1112,6 @@ const server = http.createServer(async (req, res) => {
             if (event.type === "close") {
                 clearTimeout(timer);
                 task.listeners.delete(listener);
-                manager.tasks.delete(task.id);
                 const elapsed = ((Date.now() - task.startTime) / 1000).toFixed(2);
                 sendJSON(res, 200, {
                     status: "completed",
@@ -1300,6 +1384,16 @@ function parseArgs() {
 const { port, host, socketPath } = parseArgs();
 
 if (socketPath && process.platform !== "win32") {
+    try {
+        const out = execSync(`lsof -t ${socketPath} 2>/dev/null`, { encoding: "utf8" });
+        const pids = out.trim().split(/\s+/).filter(Boolean);
+        for (const pidStr of pids) {
+            const pid = parseInt(pidStr, 10);
+            if (pid && pid !== process.pid) {
+                try { process.kill(pid, "SIGKILL"); } catch (_) {}
+            }
+        }
+    } catch (_) {}
     try {
         if (fs.existsSync(socketPath)) {
             fs.unlinkSync(socketPath);

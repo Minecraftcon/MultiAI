@@ -47,6 +47,18 @@ function killProcessTree(proc, signal = "SIGTERM") {
 function freePort(port) {
     try {
         const sockPath = getTaskServerSocketPath();
+        if (process.platform !== "win32") {
+            try {
+                const out = execSync(`lsof -t ${sockPath} 2>/dev/null`, { encoding: "utf8" });
+                const pids = out.trim().split(/\s+/).filter(Boolean);
+                for (const pidStr of pids) {
+                    const pid = parseInt(pidStr, 10);
+                    if (pid && pid !== process.pid) {
+                        try { process.kill(pid, "SIGKILL"); } catch (_) {}
+                    }
+                }
+            } catch (_) {}
+        }
         if (fs.existsSync(sockPath)) {
             fs.unlinkSync(sockPath);
         }
