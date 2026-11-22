@@ -71,6 +71,7 @@ async function streamTaskExecution(args, { badgeEl, genState } = {}) {
     let accumulatedStdout = "";
     let accumulatedStderr = "";
     let finalPayload = null;
+    let currentTaskId = null;
 
     try {
         while (true) {
@@ -89,6 +90,9 @@ async function streamTaskExecution(args, { badgeEl, genState } = {}) {
 
                 try {
                     const data = JSON.parse(jsonStr);
+                    if (data.task_id) {
+                        currentTaskId = data.task_id;
+                    }
                     if (data.type === "chunk") {
                         if (data.stdout) {
                             accumulatedStdout += data.stdout;
@@ -105,6 +109,26 @@ async function streamTaskExecution(args, { badgeEl, genState } = {}) {
                         finalPayload = data;
                     }
                 } catch (_) { }
+            }
+        }
+
+        if (buffer && buffer.trim()) {
+            const remainingEvents = buffer.split("\n\n");
+            for (const ev of remainingEvents) {
+                const trimmed = ev.trim();
+                if (!trimmed.startsWith("data:")) continue;
+                const jsonStr = trimmed.slice(5).trim();
+                if (!jsonStr) continue;
+                try {
+                    const data = JSON.parse(jsonStr);
+                    if (data.task_id) currentTaskId = data.task_id;
+                    if (data.type === "chunk") {
+                        if (data.stdout) accumulatedStdout += data.stdout;
+                        if (data.stderr) accumulatedStderr += data.stderr;
+                    } else if (data.type === "done") {
+                        finalPayload = data;
+                    }
+                } catch (_) {}
             }
         }
     } catch (streamErr) {
@@ -140,7 +164,7 @@ async function streamTaskExecution(args, { badgeEl, genState } = {}) {
     }
 
     return {
-        task_id: "task",
+        task_id: currentTaskId || "task",
         status: "completed",
         running: false,
         exit_code: 0,
