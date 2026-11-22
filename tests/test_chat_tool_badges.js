@@ -1,4 +1,5 @@
 const assert = require("assert");
+const fs = require("fs");
 
 if (typeof global.localStorage === "undefined") {
     global.localStorage = {
@@ -260,6 +261,20 @@ async function runTests() {
         assert(readDirRes.is_directory === true, "handleFileRead on directory must return is_directory: true");
         assert(readDirRes.files > 0, "handleFileRead on directory must list files");
         assert(readDirRes.output.includes("Summary: This directory contains"), "Output must contain directory summary");
+
+        // 4. Stray whitespace in path segments automatically resolves to real file
+        const strayResolved = resolveSafePath("tests/ test_chat_tool_badges.js", "");
+        assert(fs.existsSync(strayResolved), "Must resolve path with stray whitespace segment to existing file");
+
+        // 5. File not found error provides helpful filename suggestion when parent directory exists
+        let notFoundErr = null;
+        try {
+            await handleFileRead({ path: "tests/test_chat_tool_badge.js" }, "");
+        } catch (e) {
+            notFoundErr = e;
+        }
+        assert(notFoundErr, "Must throw on missing file");
+        assert(notFoundErr.message.includes("Did you mean 'test_chat_tool_badges.js'"), "Must suggest close match");
     }
 
     console.log("✓ ALL CHAT TOOL BADGES CHARACTERIZATION TESTS PASSED!");

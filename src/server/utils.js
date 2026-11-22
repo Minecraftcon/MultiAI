@@ -326,6 +326,55 @@ function getChatArtifactsDir(chatId) {
     return path.join(conversationsManager.getStorageRoot(), "artifacts");
 }
 
+function tryTrimmedSegmentsCandidate(baseDir, rel) {
+    if (!rel) return null;
+    const trimmedRel = rel.split(/[/\\]+/).map(s => s.trim()).filter(Boolean).join(path.sep);
+    if (trimmedRel !== rel) {
+        const candidate = path.resolve(baseDir, trimmedRel);
+        if (fs.existsSync(candidate) && (candidate.startsWith(baseDir + path.sep) || candidate === baseDir)) {
+            return candidate;
+        }
+    }
+    return null;
+}
+
+function formatFileNotFoundError(rawPath, targetPath) {
+    const dir = targetPath ? path.dirname(targetPath) : "";
+    let suggestion = "";
+    if (dir && fs.existsSync(dir)) {
+        try {
+            const entries = fs.readdirSync(dir).filter(e => !e.startsWith("."));
+            const targetBase = path.basename(targetPath).toLowerCase();
+            const targetStem = path.basename(targetBase, path.extname(targetBase));
+
+            let bestMatch = null;
+            let bestScore = -1;
+            for (const c of entries) {
+                const cl = c.toLowerCase();
+                const cStem = path.basename(cl, path.extname(cl));
+                if (cl === targetBase) {
+                    bestMatch = c;
+                    break;
+                }
+                if (cl.includes(targetBase) || targetBase.includes(cl) || cStem.includes(targetStem) || targetStem.includes(cStem)) {
+                    const score = 100 - Math.abs(cl.length - targetBase.length);
+                    if (score > bestScore) {
+                        bestScore = score;
+                        bestMatch = c;
+                    }
+                }
+            }
+
+            if (bestMatch) {
+                suggestion = ` Did you mean '${bestMatch}'? (Directory '${path.basename(dir)}' contains: ${entries.slice(0, 8).join(", ")})`;
+            } else if (entries.length > 0) {
+                suggestion = ` (Directory '${path.basename(dir)}' contains: ${entries.slice(0, 8).join(", ")})`;
+            }
+        } catch (_) {}
+    }
+    return new Error(`File not found: ${rawPath}.${suggestion}`);
+}
+
 function resolveSafePath(inputPath, chatId) {
     const raw = String(inputPath || "").trim();
     if (!raw) throw new Error("Path parameter is empty or missing");
@@ -372,6 +421,10 @@ function resolveSafePath(inputPath, chatId) {
         if (rel && !resolved.startsWith(scratchDir + path.sep) && resolved !== scratchDir) {
             throw new Error("Path traversal outside scratch directory is prohibited");
         }
+        if (!fs.existsSync(resolved) && rel) {
+            const trimmedCandidate = tryTrimmedSegmentsCandidate(scratchDir, rel);
+            if (trimmedCandidate) return trimmedCandidate;
+        }
         return resolved;
     }
 
@@ -399,6 +452,10 @@ function resolveSafePath(inputPath, chatId) {
         if (rel && !resolved.startsWith(artifactsDir + path.sep) && resolved !== artifactsDir) {
             throw new Error("Path traversal outside artifacts directory is prohibited");
         }
+        if (!fs.existsSync(resolved) && rel) {
+            const trimmedCandidate = tryTrimmedSegmentsCandidate(artifactsDir, rel);
+            if (trimmedCandidate) return trimmedCandidate;
+        }
         return resolved;
     }
 
@@ -416,6 +473,10 @@ function resolveSafePath(inputPath, chatId) {
         if (rel && !resolved.startsWith(scratchDir + path.sep) && resolved !== scratchDir) {
             throw new Error("Path traversal outside scratch directory is prohibited");
         }
+        if (!fs.existsSync(resolved) && rel) {
+            const trimmedCandidate = tryTrimmedSegmentsCandidate(scratchDir, rel);
+            if (trimmedCandidate) return trimmedCandidate;
+        }
         return resolved;
     }
 
@@ -431,6 +492,10 @@ function resolveSafePath(inputPath, chatId) {
         if (rel && !resolved.startsWith(artifactsDir + path.sep) && resolved !== artifactsDir) {
             throw new Error("Path traversal outside artifacts directory is prohibited");
         }
+        if (!fs.existsSync(resolved) && rel) {
+            const trimmedCandidate = tryTrimmedSegmentsCandidate(artifactsDir, rel);
+            if (trimmedCandidate) return trimmedCandidate;
+        }
         return resolved;
     }
 
@@ -443,14 +508,23 @@ function resolveSafePath(inputPath, chatId) {
     }
 
     const resolved = path.isAbsolute(processed) ? path.normalize(processed) : path.resolve(baseDir, processed);
-    if (!fs.existsSync(resolved) && chatId) {
-        const scratchDir = getChatScratchDir(chatId);
-        const scratchCandidate = path.resolve(scratchDir, processed);
-        if (fs.existsSync(scratchCandidate)) return scratchCandidate;
+    if (!fs.existsSync(resolved)) {
+        const trimmedCandidate = tryTrimmedSegmentsCandidate(baseDir, processed);
+        if (trimmedCandidate) return trimmedCandidate;
 
-        const artifactsDir = getChatArtifactsDir(chatId);
-        const artifactCandidate = path.resolve(artifactsDir, processed);
-        if (fs.existsSync(artifactCandidate)) return artifactCandidate;
+        if (chatId) {
+            const scratchDir = getChatScratchDir(chatId);
+            const scratchCandidate = path.resolve(scratchDir, processed);
+            if (fs.existsSync(scratchCandidate)) return scratchCandidate;
+            const scratchTrimmed = tryTrimmedSegmentsCandidate(scratchDir, processed);
+            if (scratchTrimmed) return scratchTrimmed;
+
+            const artifactsDir = getChatArtifactsDir(chatId);
+            const artifactCandidate = path.resolve(artifactsDir, processed);
+            if (fs.existsSync(artifactCandidate)) return artifactCandidate;
+            const artifactTrimmed = tryTrimmedSegmentsCandidate(artifactsDir, processed);
+            if (artifactTrimmed) return artifactTrimmed;
+        }
     }
 
     return resolved;
@@ -562,6 +636,7 @@ module.exports = {
     getChatScratchDir,
     getChatArtifactsDir,
     resolveSafePath,
+    formatFileNotFoundError,
     postJSON,
     sendJSON
 };

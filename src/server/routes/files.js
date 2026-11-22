@@ -1,6 +1,6 @@
 const fs = require("fs");
 const path = require("path");
-const { resolveSafePath, formatBytes, getMimeType, sendJSON, postJSON } = require("../utils");
+const { resolveSafePath, formatFileNotFoundError, formatBytes, getMimeType, sendJSON, postJSON } = require("../utils");
 const { handleCodeGrep, handleSearchAndReplace, handleReplaceFileContent, handleMultiReplaceFileContent, handleWriteFile, handleListDir, handleFindFiles } = require("../../tools/filesystem/code_tools");
 const { workspaceWatcher } = require("../../core/workspace_watcher");
 
@@ -21,7 +21,7 @@ async function handleFileRead(args, chatId) {
         targetPath = resolveSafePath(rawPath, chatId);
     }
     if (!fs.existsSync(targetPath)) {
-        throw new Error(`File or directory not found: ${rawPath}`);
+        throw formatFileNotFoundError(rawPath, targetPath);
     }
 
     const stat = await fs.promises.stat(targetPath);
@@ -223,7 +223,7 @@ async function handleFilesRoute(req, res) {
             let targetPath = resolveSafePath(rawPath, chatId);
 
             if (!fs.existsSync(targetPath)) {
-                return sendJSON(res, 404, { error: `File not found: ${rawPath}` });
+                return sendJSON(res, 404, { error: formatFileNotFoundError(rawPath, targetPath).message });
             }
 
             let stat = await fs.promises.stat(targetPath);

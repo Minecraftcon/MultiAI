@@ -2,6 +2,7 @@ const fs = require("fs");
 const path = require("path");
 const { execFile, execSync } = require("child_process");
 const shadowGit = require("../../core/shadow_git_manager");
+const { formatFileNotFoundError } = require("../../server/utils");
 
 function getWorkspaceForFile(targetPath, chatId) {
     let ws = null;
@@ -632,7 +633,7 @@ async function handleReplaceFileContent(args, chatId, { resolveSafePath }) {
 
     const targetPath = resolveSafePath(rawPath, chatId);
     if (!fs.existsSync(targetPath)) {
-        throw new Error(`File not found: ${rawPath}`);
+        throw formatFileNotFoundError(rawPath, targetPath);
     }
 
     const stat = await fs.promises.stat(targetPath);
@@ -787,7 +788,7 @@ async function handleMultiReplaceFileContent(args, chatId, { resolveSafePath }) 
 
     const targetPath = resolveSafePath(rawPath, chatId);
     if (!fs.existsSync(targetPath)) {
-        throw new Error(`File not found: ${rawPath}`);
+        throw formatFileNotFoundError(rawPath, targetPath);
     }
 
     const stat = await fs.promises.stat(targetPath);
