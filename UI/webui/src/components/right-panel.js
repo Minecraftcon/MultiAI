@@ -3198,7 +3198,9 @@ class RightPanelManager {
                 // Background tasks must be actively running
                 if (!t.running) continue;
 
-                const elapsed = t.start_time ? Math.max(0, nowSec - t.start_time) : 0;
+                const rawStart = t.start_time;
+                const startSec = rawStart ? (rawStart > 1e11 ? Math.round(rawStart / 1000) : Math.round(rawStart)) : null;
+                const elapsed = startSec ? Math.max(0, nowSec - startSec) : 0;
                 // Background tasks must be running over 30+ seconds
                 if (elapsed >= 30) {
                     backgroundTasks.push({
@@ -3206,7 +3208,7 @@ class RightPanelManager {
                         running: true,
                         exitCode: null,
                         command: t.command || "Shell task",
-                        startTime: t.start_time,
+                        startTime: startSec,
                         elapsed
                     });
                 }
@@ -3245,7 +3247,9 @@ class RightPanelManager {
         let html = "";
         visibleTasks.forEach((task) => {
             const nowSec = Math.round(Date.now() / 1000);
-            const elapsed = task.startTime ? Math.max(0, nowSec - task.startTime) : (task.elapsed || 30);
+            const rawStart = task.startTime;
+            const startSec = rawStart ? (rawStart > 1e11 ? Math.round(rawStart / 1000) : Math.round(rawStart)) : null;
+            const elapsed = startSec ? Math.max(0, nowSec - startSec) : (task.elapsed || 30);
             const durStr = elapsed >= 60 ? `${Math.floor(elapsed / 60)}m ${elapsed % 60}s` : `${elapsed}s`;
 
             html += `

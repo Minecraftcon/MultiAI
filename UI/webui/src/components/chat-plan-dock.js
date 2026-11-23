@@ -84,6 +84,16 @@ export function syncPlanDock(chatId = state.currentChatId) {
 }
 
 /**
+ * Normalizes epoch timestamps in seconds or milliseconds to seconds.
+ */
+function normalizeTimestampSec(ts) {
+    if (!ts) return null;
+    const num = Number(ts);
+    if (isNaN(num) || num <= 0) return null;
+    return num > 1e11 ? Math.round(num / 1000) : Math.round(num);
+}
+
+/**
  * Fetches running tasks from the task daemon and cross-references active watches.
  */
 async function fetchRunningTasks() {
@@ -101,17 +111,20 @@ async function fetchRunningTasks() {
                 if (w.taskId) watchMap.set(w.taskId, w);
             }
 
+            const nowSec = Math.round(Date.now() / 1000);
             for (const [id, t] of Object.entries(data)) {
                 if (t && t.running === true) {
                     const matchedWatch = watchMap.get(id);
                     const name = matchedWatch?.reason || deriveCommandTag(t.command) || `Task ${id}`;
-                    const elapsed = t.start_time ? Math.max(1, Math.round(Date.now() / 1000 - t.start_time)) : null;
+                    const rawStart = t.start_time || matchedWatch?.startedAt;
+                    const startSec = normalizeTimestampSec(rawStart);
+                    const elapsed = startSec ? Math.max(1, nowSec - startSec) : null;
                     list.push({
                         id,
                         name,
                         command: t.command,
                         elapsed,
-                        startTime: t.start_time
+                        startTime: startSec
                     });
                 }
             }
@@ -359,7 +372,8 @@ function ensureSecTimer() {
             const nowSec = Math.round(Date.now() / 1000);
             for (const t of runningTasks) {
                 if (t.startTime) {
-                    const newElapsed = Math.max(1, nowSec - t.startTime);
+                    const startSec = normalizeTimestampSec(t.startTime);
+                    const newElapsed = Math.max(1, nowSec - startSec);
                     if (t.elapsed !== newElapsed) {
                         t.elapsed = newElapsed;
                         changed = true;

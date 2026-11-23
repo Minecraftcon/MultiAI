@@ -392,7 +392,7 @@ class TaskManager {
                 running: task.running,
                 exit_code: task.exitCode,
                 command: task.command,
-                start_time: task.startTime
+                start_time: task.startTime ? (task.startTime > 1e11 ? Math.round(task.startTime / 1000) : task.startTime) : null
             };
         }
         if (typeof ptyManager !== "undefined") {
@@ -401,7 +401,7 @@ class TaskManager {
                     running: pty.running,
                     exit_code: pty.exitCode,
                     command: pty.command,
-                    start_time: pty.startTime
+                    start_time: pty.startTime ? (pty.startTime > 1e11 ? Math.round(pty.startTime / 1000) : pty.startTime) : null
                 };
             }
         }
