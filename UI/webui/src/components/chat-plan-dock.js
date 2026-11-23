@@ -94,6 +94,23 @@ function normalizeTimestampSec(ts) {
 }
 
 /**
+ * Formats elapsed seconds into concise duration string (e.g. 14s, 1m 24s, 2h 10m).
+ */
+export function formatDuration(sec) {
+    if (!sec || isNaN(sec) || sec <= 0) return "0s";
+    const s = Math.round(sec);
+    if (s < 60) return `${s}s`;
+    const m = Math.floor(s / 60);
+    const remS = s % 60;
+    if (m < 60) {
+        return remS > 0 ? `${m}m ${remS}s` : `${m}m`;
+    }
+    const h = Math.floor(m / 60);
+    const remM = m % 60;
+    return remM > 0 ? `${h}h ${remM}m` : `${h}h`;
+}
+
+/**
  * Fetches running tasks from the task daemon and cross-references active watches.
  */
 async function fetchRunningTasks() {
@@ -380,11 +397,21 @@ function ensureSecTimer() {
                     }
                 }
             }
-            if (changed && activeTab === "running-tasks") {
+            if (changed) {
                 const card = document.getElementById("planDockCard");
                 if (card) {
-                    const updated = updateRunningTasksInPlace(card);
-                    if (!updated) syncDockState();
+                    if (activeTab === "running-tasks") {
+                        const updated = updateRunningTasksInPlace(card);
+                        if (!updated) syncDockState();
+                    } else if (activeTab === null) {
+                        updateToolbarInPlace(card, {
+                            hasChanges: unacceptedChanges.length > 0,
+                            unacceptedChanges,
+                            hasTodos: Array.isArray(activeTodos) && activeTodos.length > 0,
+                            hasRunningTasks: runningTasks.length > 0,
+                            runningTasks
+                        });
+                    }
                 }
             }
         }, 1000);
@@ -416,7 +443,7 @@ function updateRunningTasksInPlace(card) {
     runningTasks.forEach((t, i) => {
         const row = existingRows[i];
         let dirEl = row.querySelector(".dock-file-dir");
-        const durText = t.elapsed ? `(${t.elapsed}s)` : "";
+        const durText = t.elapsed ? `(${formatDuration(t.elapsed)})` : "";
         if (dirEl) {
             if (dirEl.textContent !== durText) dirEl.textContent = durText;
         } else if (durText) {
@@ -444,6 +471,21 @@ function updateRunningTasksInPlace(card) {
     if (shortEl) {
         shortEl.textContent = `${runningTasks.length} Running`;
     }
+
+    const maxElapsed = runningTasks.length > 0 ? Math.max(...runningTasks.map(t => t.elapsed || 0)) : 0;
+    const durStr = maxElapsed > 0 ? formatDuration(maxElapsed) : "";
+    let headerTimerEl = windowView.querySelector(".dock-tasks-header-timer");
+    if (!headerTimerEl && durStr) {
+        headerTimerEl = document.createElement("span");
+        headerTimerEl.className = "dock-tasks-header-timer";
+        const titleEl = windowView.querySelector(".dock-window-title");
+        if (titleEl) titleEl.appendChild(headerTimerEl);
+    }
+    if (headerTimerEl) {
+        const text = durStr ? `· (${durStr})` : "";
+        if (headerTimerEl.textContent !== text) headerTimerEl.textContent = text;
+    }
+
     const killAllBtn = windowView.querySelector(".dock-kill-all-btn");
     if (killAllBtn) {
         killAllBtn.disabled = runningTasks.length === 0;
@@ -478,7 +520,21 @@ function updateToolbarInPlace(card, { hasChanges, unacceptedChanges, hasTodos, h
         if (badge && badge.textContent !== String(runningTasks.length)) {
             badge.textContent = String(runningTasks.length);
         }
-        existingRunningBtn.title = `Running Tasks (${runningTasks.length})`;
+        const maxElapsed = runningTasks.length > 0 ? Math.max(...runningTasks.map(t => t.elapsed || 0)) : 0;
+        const durStr = maxElapsed > 0 ? formatDuration(maxElapsed) : "";
+        let timerEl = existingRunningBtn.querySelector(".dock-tab-timer");
+        if (!timerEl && durStr) {
+            timerEl = document.createElement("span");
+            timerEl.className = "dock-tab-timer";
+            existingRunningBtn.appendChild(timerEl);
+        }
+        if (timerEl) {
+            const text = durStr ? `(${durStr})` : "";
+            if (timerEl.textContent !== text) timerEl.textContent = text;
+        }
+        existingRunningBtn.title = durStr
+            ? `Running Tasks (${runningTasks.length}) · ${durStr}`
+            : `Running Tasks (${runningTasks.length})`;
     }
 
     return true;
@@ -641,6 +697,8 @@ function renderDock(transitionMeta = {}) {
             </div>
         `;
     } else if (activeTab === "running-tasks") {
+        const maxElapsed = runningTasks.length > 0 ? Math.max(...runningTasks.map(t => t.elapsed || 0)) : 0;
+        const durStr = maxElapsed > 0 ? formatDuration(maxElapsed) : "";
         windowHtml = `
             <div class="dock-window-view ${windowAnimClass}">
                 <!-- Top: Running Tasks Box (HAS BG) -->
@@ -651,7 +709,7 @@ function renderDock(transitionMeta = {}) {
                                 <div class="dock-change-left" title="${escapeHTML(t.command || t.name)}">
                                     <span class="dock-running-pulse"></span>
                                     <span class="dock-file-name" style="font-weight: 500;">${escapeHTML(t.name)}</span>
-                                    ${t.elapsed ? `<span class="dock-file-dir">(${t.elapsed}s)</span>` : ""}
+                                    ${t.elapsed ? `<span class="dock-file-dir">(${formatDuration(t.elapsed)})</span>` : ""}
                                 </div>
                                 <div class="dock-change-actions">
                                     <button type="button" class="dock-row-action-btn dock-kill-task-btn" title="Kill task ${escapeHTML(t.id)}" data-task-id="${escapeHTML(t.id)}">
@@ -678,6 +736,7 @@ function renderDock(transitionMeta = {}) {
                             <span class="dock-title-count">${runningTasks.length}</span> 
                             <span class="dock-title-full">${runningTasks.length === 1 ? 'Running Task' : 'Running Tasks'}</span>
                             <span class="dock-title-short">${runningTasks.length} Running</span>
+                            ${durStr ? `<span class="dock-tasks-header-timer">· (${durStr})</span>` : ""}
                         </span>
                     </div>
                     <div class="dock-window-header-right">
@@ -709,13 +768,18 @@ function renderDock(transitionMeta = {}) {
                     </button>
                 ` : ""}
 
-                <!-- Terminal icon for running tasks -->
-                ${hasRunningTasks ? `
-                    <button type="button" class="dock-tab-btn ${activeTab === 'running-tasks' ? 'is-active' : ''} has-running-tasks" data-tab="running-tasks" title="Running Tasks (${runningTasks.length})">
+                <!-- Terminal icon for running tasks with live duration on top of chatbox -->
+                ${hasRunningTasks ? (() => {
+                    const maxElapsed = runningTasks.length > 0 ? Math.max(...runningTasks.map(t => t.elapsed || 0)) : 0;
+                    const durStr = maxElapsed > 0 ? formatDuration(maxElapsed) : "";
+                    return `
+                    <button type="button" class="dock-tab-btn ${activeTab === 'running-tasks' ? 'is-active' : ''} has-running-tasks" data-tab="running-tasks" title="${durStr ? `Running Tasks (${runningTasks.length}) · ${durStr}` : `Running Tasks (${runningTasks.length})`}">
                         <i data-lucide="terminal"></i>
                         <span class="dock-tab-badge">${runningTasks.length}</span>
+                        ${durStr ? `<span class="dock-tab-timer">(${durStr})</span>` : ""}
                     </button>
-                ` : ""}
+                    `;
+                })() : ""}
             </div>
 
             <div class="dock-toolbar-right">

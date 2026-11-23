@@ -38,4 +38,28 @@ assert.strictEqual(elapsedTicked, 70, "Timer tick should advance elapsed duratio
 const buggyElapsed = Math.max(1, Math.round(nowMs / 1000 - startMs));
 assert.strictEqual(buggyElapsed, 1, "Old bug locked elapsed at 1s");
 
-console.log("✓ All Running Tasks Timer tests passed successfully!");
+function formatDuration(sec) {
+    if (!sec || isNaN(sec) || sec <= 0) return "0s";
+    const s = Math.round(sec);
+    if (s < 60) return `${s}s`;
+    const m = Math.floor(s / 60);
+    const remS = s % 60;
+    if (m < 60) {
+        return remS > 0 ? `${m}m ${remS}s` : `${m}m`;
+    }
+    const h = Math.floor(m / 60);
+    const remM = m % 60;
+    return remM > 0 ? `${h}h ${remM}m` : `${h}h`;
+}
+
+// 5. Test formatDuration formatting across seconds, minutes, hours
+assert.strictEqual(formatDuration(0), "0s");
+assert.strictEqual(formatDuration(1), "1s");
+assert.strictEqual(formatDuration(45), "45s");
+assert.strictEqual(formatDuration(60), "1m");
+assert.strictEqual(formatDuration(65), "1m 5s");
+assert.strictEqual(formatDuration(120), "2m");
+assert.strictEqual(formatDuration(3600), "1h");
+assert.strictEqual(formatDuration(3665), "1h 1m");
+
+console.log("✓ All Running Tasks Timer & formatDuration tests passed successfully!");
