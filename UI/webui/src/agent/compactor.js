@@ -7,7 +7,40 @@ import { callChatModel } from "./chat-client.js";
 import { addCompactionBadge } from "../components/chat-ui.js";
 import { saveStoredChats } from "../services/storage.js";
 import { extractThoughtAndContent } from "../components/renderer.js";
-import { availableModels } from "../components/side-panel.js";
+import { availableModels, modelProviderMap } from "../components/side-panel.js";
+
+/**
+ * Resolves the model to use for context compaction.
+ * If a custom compactor model is configured (via local model options or localStorage),
+ * and it is non-empty, use that; otherwise fall back to the active conversation model.
+ *
+ * @param {string} currentModel
+ * @returns {string}
+ */
+export function resolveCompactorModel(currentModel) {
+    try {
+        if (typeof sessionStorage !== "undefined") {
+            const raw = sessionStorage.getItem("local_gen_opts");
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                if (parsed && typeof parsed.compactor_model === "string" && parsed.compactor_model.trim()) {
+                    return parsed.compactor_model.trim();
+                }
+            }
+        }
+    } catch (_) {}
+
+    try {
+        if (typeof localStorage !== "undefined") {
+            const stored = localStorage.getItem("multiai_compactor_model");
+            if (stored && typeof stored === "string" && stored.trim()) {
+                return stored.trim();
+            }
+        }
+    } catch (_) {}
+
+    return currentModel;
+}
 
 /**
  * Converts dialogue messages into a clean, structured transcript text.
@@ -431,9 +464,13 @@ export async function compactSessionContext({ session, currentAIMessage, selecte
         return false; // Not enough new messages to justify compaction
     }
 
+    const effectiveCompactorModel = resolveCompactorModel(selectedModel);
+    const isCustomCompactor = Boolean(effectiveCompactorModel && effectiveCompactorModel !== selectedModel);
+
     logEvent("CONTEXT_COMPACTION_START", {
         chatId: session.id,
         model: selectedModel,
+        compactorModel: effectiveCompactorModel,
         modelLimit: getModelContextLimit(selectedModel),
         compactionThreshold: threshold,
         tokensBefore,
@@ -446,7 +483,9 @@ export async function compactSessionContext({ session, currentAIMessage, selecte
     const activityLabel = currentAIMessage?.querySelector(".activity-label");
     if (activityLabel) {
         const sec = ((Date.now() - overallStartTime) / 1000).toFixed(1);
-        activityLabel.textContent = `Compacting context… (${sec}s)`;
+        activityLabel.textContent = isCustomCompactor
+            ? `Compacting context via ${effectiveCompactorModel}… (${sec}s)`
+            : `Compacting context… (${sec}s)`;
     }
 
     // Insert compaction badge into the loop UI
@@ -480,8 +519,10 @@ Be concise, clear, and omit conversational filler. Return ONLY the markdown brie
             }
         ];
 
+        const compactorProvider = modelProviderMap ? modelProviderMap[effectiveCompactorModel] : null;
         const compactRes = await callChatModel(compactionPrompt, {
-            model: selectedModel,
+            model: effectiveCompactorModel,
+            provider: compactorProvider,
             tools: [],
             signal: genState?.abortController?.signal
         });
@@ -521,7 +562,8 @@ Be concise, clear, and omit conversational filler. Return ONLY the markdown brie
         const artifactPath = `$ARTIFACTS/${artifactFileName}`;
         const checkpointMarkdown = `# Context Checkpoint #${checkpointNum}\n\n` +
             `**Archived Turns:** ${sliceStartIdx}–${sliceEndIdx}\n` +
-            `**Tokens Saved:** ~${Math.round(tokensSaved / 1000)}k\n\n` +
+            `**Tokens Saved:** ~${Math.round(tokensSaved / 1000)}k\n` +
+            `**Model:** ${selectedModel}${isCustomCompactor ? ` (Compacted via ${effectiveCompactorModel})` : ""}\n\n` +
             `## Context & Discoveries Briefing\n\n${summaryText}\n`;
 
         let absoluteArtifactPath = artifactPath;
@@ -555,6 +597,7 @@ Be concise, clear, and omit conversational filler. Return ONLY the markdown brie
             tokensSaved,
             compactedAt: Date.now(),
             model: selectedModel,
+            compactorModel: effectiveCompactorModel,
             checkpointNum,
             sliceStartIdx,
             sliceEndIdx,
@@ -570,7 +613,8 @@ Be concise, clear, and omit conversational filler. Return ONLY the markdown brie
             tokensAfter,
             tokensSaved,
             messagesCompactCount: newMessagesToCompact.length,
-            compactedThroughIndex: sliceEndIdx
+            compactedThroughIndex: sliceEndIdx,
+            compactorModel: effectiveCompactorModel
         });
 
         badge.update({
@@ -581,7 +625,8 @@ Be concise, clear, and omit conversational filler. Return ONLY the markdown brie
             artifactPath: absoluteArtifactPath,
             checkpointNum,
             sliceStartIdx,
-            sliceEndIdx
+            sliceEndIdx,
+            compactorModel: isCustomCompactor ? effectiveCompactorModel : null
         });
 
         return true;

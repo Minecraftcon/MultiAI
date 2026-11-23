@@ -1461,7 +1461,7 @@ export function addCompactionBadge(element, { messagesCount = 0, tokensBefore = 
     return {
         item,
         collapseDiv,
-        update({ status, summaryText, tokensSaved = 0, messagesCount = 0, artifactPath = null, checkpointNum = null, sliceStartIdx = 0, sliceEndIdx = 0, error = null, isEmergencyTrim = false }) {
+        update({ status, summaryText, tokensSaved = 0, messagesCount = 0, artifactPath = null, checkpointNum = null, sliceStartIdx = 0, sliceEndIdx = 0, error = null, isEmergencyTrim = false, compactorModel = null }) {
             const ringBar = item.querySelector(".timer-ring-bar");
             if (ringBar) {
                 ringBar.style.animation = "none";
@@ -1491,11 +1491,12 @@ export function addCompactionBadge(element, { messagesCount = 0, tokensBefore = 
                     queryEl.dataset.compact = finalDesc;
                 }
 
+                const modelSuffix = compactorModel ? ` (via ${compactorModel})` : "";
                 const cmdTitle = collapseDiv.querySelector(".command-cmd-text");
                 if (cmdTitle) {
                     cmdTitle.textContent = isEmergencyTrim
-                        ? `Emergency Checkpoint #${checkpointNum || 1} (Turns ${sliceStartIdx}–${sliceEndIdx}, ${savedStr})`
-                        : `Checkpoint #${checkpointNum || 1} Briefing (Turns ${sliceStartIdx}–${sliceEndIdx}, ${savedStr})`;
+                        ? `Emergency Checkpoint #${checkpointNum || 1}${modelSuffix} (Turns ${sliceStartIdx}–${sliceEndIdx}, ${savedStr})`
+                        : `Checkpoint #${checkpointNum || 1} Briefing${modelSuffix} (Turns ${sliceStartIdx}–${sliceEndIdx}, ${savedStr})`;
                 }
 
                 const resEl = collapseDiv.querySelector(".command-output-res");
@@ -1509,6 +1510,9 @@ export function addCompactionBadge(element, { messagesCount = 0, tokensBefore = 
                 item.dataset.sliceStart = String(sliceStartIdx || 0);
                 item.dataset.sliceEnd = String(sliceEndIdx || 0);
                 item.dataset.tokensSaved = String(tokensSaved || 0);
+                if (compactorModel) {
+                    item.dataset.compactorModel = String(compactorModel);
+                }
 
                 const fileName = artifactPath ? artifactPath.split("/").pop() : `checkpoint_${Date.now()}.md`;
 

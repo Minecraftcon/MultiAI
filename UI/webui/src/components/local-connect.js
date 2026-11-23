@@ -67,6 +67,14 @@ export async function tryLocalAutoReconnect(onSuccess) {
         if (!probeRes.ok) return false;
         const data = await probeRes.json();
         if (data.success) {
+            if (session.compactor_model) {
+                try {
+                    localStorage.setItem("multiai_compactor_model", session.compactor_model);
+                    const currentOpts = _loadSessionOpts();
+                    currentOpts.compactor_model = session.compactor_model;
+                    sessionStorage.setItem(SESSION_OPTS, JSON.stringify(currentOpts));
+                } catch (_) {}
+            }
             _injectLocalModel(data);
             if (typeof onSuccess === "function") onSuccess(data);
             return true;
@@ -173,6 +181,21 @@ function _renderModal() {
                     placeholder="Custom directives prepended to system instructions for this local model..."
                     spellcheck="false"
                 >${lastOpts.system_prompt || ""}</textarea>
+            </div>
+
+            <!-- Context Compactor (Use different model for compaction) -->
+            <div class="lc-field-group">
+                <label class="lc-label" for="lcCompactorSelect">
+                    Context Compactor <span class="lc-label-tag">Optional</span>
+                </label>
+                <div class="kobold-input-row">
+                    <select id="lcCompactorSelect" class="kobold-input lc-compactor-select">
+                        <option value="">Default (Active Local Model)</option>
+                    </select>
+                </div>
+                <span class="lc-format-hint">
+                    Select any configured model to run context compaction instead of this local model.
+                </span>
             </div>
 
             <!-- Generation Controls (collapsible) -->
@@ -313,6 +336,81 @@ function _renderModal() {
         });
     });
 
+    // Populate Compactor dropdown
+    const compactorSelect = modal.querySelector("#lcCompactorSelect");
+    const savedCompactor = lastOpts.compactor_model || (typeof localStorage !== "undefined" ? localStorage.getItem("multiai_compactor_model") : "") || "";
+
+    if (compactorSelect) {
+        const modelSelect = typeof document !== "undefined" ? document.getElementById("modelSelect") : null;
+        if (modelSelect && modelSelect.options.length > 0) {
+            Array.from(modelSelect.children).forEach(child => {
+                if (child.tagName === "OPTGROUP") {
+                    const groupProvider = child.dataset.provider;
+                    if (groupProvider === "local" || groupProvider === "koboldcpp") return;
+
+                    const group = document.createElement("optgroup");
+                    group.label = child.label;
+                    let count = 0;
+                    Array.from(child.children).forEach(opt => {
+                        if (opt.dataset.rolling === "true" || opt.value.startsWith("__rolling_connect__")) return;
+                        const newOpt = document.createElement("option");
+                        newOpt.value = opt.value;
+                        newOpt.textContent = opt.textContent;
+                        if (opt.value === savedCompactor) newOpt.selected = true;
+                        group.appendChild(newOpt);
+                        count++;
+                    });
+                    if (count > 0) {
+                        compactorSelect.appendChild(group);
+                    }
+                } else if (child.tagName === "OPTION") {
+                    if (!child.value.startsWith("__rolling_connect__") && child.value !== "local" && child.value !== "koboldcpp") {
+                        const newOpt = document.createElement("option");
+                        newOpt.value = child.value;
+                        newOpt.textContent = child.textContent;
+                        if (child.value === savedCompactor) newOpt.selected = true;
+                        compactorSelect.appendChild(newOpt);
+                    }
+                }
+            });
+        } else if (Array.isArray(availableModels) && availableModels.length > 0) {
+            const groups = {};
+            availableModels.forEach(m => {
+                if (!m.id || m.provider === "local" || m.provider === "koboldcpp") return;
+                const prov = m.provider || "Other";
+                if (!groups[prov]) groups[prov] = [];
+                groups[prov].push(m);
+            });
+            Object.entries(groups).forEach(([prov, models]) => {
+                const group = document.createElement("optgroup");
+                group.label = prov.charAt(0).toUpperCase() + prov.slice(1);
+                models.forEach(m => {
+                    const opt = document.createElement("option");
+                    opt.value = m.id;
+                    opt.textContent = m.name || m.id;
+                    if (m.id === savedCompactor) opt.selected = true;
+                    group.appendChild(opt);
+                });
+                compactorSelect.appendChild(group);
+            });
+        }
+
+        if (savedCompactor) {
+            compactorSelect.value = savedCompactor;
+        }
+
+        compactorSelect.addEventListener("change", (e) => {
+            const val = e.target.value.trim();
+            try {
+                if (val) {
+                    localStorage.setItem("multiai_compactor_model", val);
+                } else {
+                    localStorage.removeItem("multiai_compactor_model");
+                }
+            } catch (_) {}
+        });
+    }
+
     // Reset gen settings
     document.getElementById("lcResetGenBtn")?.addEventListener("click", () => {
         document.getElementById("lcTemperature").value = "";
@@ -329,6 +427,9 @@ function _renderModal() {
         });
         const sysPrompt = document.getElementById("localSystemPromptInput");
         if (sysPrompt) sysPrompt.value = "";
+        const compactorSel = document.getElementById("lcCompactorSelect");
+        if (compactorSel) compactorSel.value = "";
+        try { localStorage.removeItem("multiai_compactor_model"); } catch (_) {}
     });
 
     const urlInput = document.getElementById("localUrlInput");
@@ -434,12 +535,15 @@ async function _handleConnect() {
         return isNaN(v) || el.value === "" ? null : v;
     };
     const sysPromptInput = document.getElementById("localSystemPromptInput");
+    const compactorSelect = document.getElementById("lcCompactorSelect");
+    const compactorModel = compactorSelect?.value?.trim() || null;
     const genOpts = {
         temperature:         numVal("lcTemperature"),
         top_p:               numVal("lcTopP"),
         top_k:               numVal("lcTopK") !== null ? Math.round(numVal("lcTopK")) : null,
         repetition_penalty:  numVal("lcRepPenalty"),
         system_prompt:       sysPromptInput?.value?.trim() || null,
+        compactor_model:     compactorModel,
     };
 
     if (btn) { btn.disabled = true; btn.innerHTML = `<span class="kobold-spinner"></span> Connecting…`; }
@@ -461,6 +565,13 @@ async function _handleConnect() {
         }
 
         _saveSession(data.base_url, selectedFormat, genOpts);
+        try {
+            if (compactorModel) {
+                localStorage.setItem("multiai_compactor_model", compactorModel);
+            } else {
+                localStorage.removeItem("multiai_compactor_model");
+            }
+        } catch (_) {}
         _showStatus("success", `Connected — ${data.model_name} (${data.context_size?.toLocaleString() ?? "?"} ctx)`);
         _injectLocalModel(data);
 
