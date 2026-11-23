@@ -1,7 +1,9 @@
 /* =========================================================
-   CONVERSATION HISTORY EDITOR COMPONENT
+   CONVERSATION HISTORY EDITOR COMPONENT (FULLSCREEN WORKSPACE)
    Full visual & raw JSON history editor with snapshots, undo/redo,
-   message removal, filtering, and Ace Editor integration.
+   instant in-place message operations, debounced filtering,
+   modern field-sizing layout, and Ace Editor integration.
+   Complies with /minimalist-ui, /web-design-guidelines & /modern-web-guidance.
    ========================================================= */
 
 import { state } from "../state/index.js";
@@ -24,8 +26,14 @@ let _activeTab = "visual"; // "visual" | "json"
 let _snapshotsOpen = false;
 let _activeRoleFilter = "all";
 let _searchQuery = "";
+let _searchDebounceTimer = null;
 let _isSaving = false;
 let _hasJsonSyntaxError = false;
+
+// Fast inline SVG primitives to eliminate Lucide AST traversal bottlenecks on large lists
+const ICON_UP_SVG = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"><path d="m18 15-6-6-6 6"/></svg>`;
+const ICON_DOWN_SVG = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"><path d="m6 9 6 6 6-6"/></svg>`;
+const ICON_DEL_SVG = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"><path d="M18 6 6 18M6 6l12 12"/></svg>`;
 
 /* ── Snapshots Storage (Micro-backups) ──────────────────── */
 
@@ -208,19 +216,21 @@ function ensureAceEditor() {
         _aceEditor.session.setMode("ace/mode/json");
 
         _aceEditor.setOptions({
-            fontFamily: "'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace",
+            fontFamily: "'Geist Mono', 'SF Mono', 'JetBrains Mono', ui-monospace, monospace",
             fontSize: "13px",
             tabSize: 2,
             useSoftTabs: true,
             showPrintMargin: false,
-            wrap: true,
+            wrap: false,
             highlightActiveLine: true,
-            enableBasicAutocompletion: true,
+            enableBasicAutocompletion: false,
             enableLiveAutocompletion: false
         });
 
+        let aceDebounce = null;
         _aceEditor.on("change", () => {
-            validateAceJson();
+            clearTimeout(aceDebounce);
+            aceDebounce = setTimeout(validateAceJson, 200);
         });
 
         // Add Ctrl+S / Cmd+S save command inside Ace
@@ -278,29 +288,75 @@ function formatAceJson() {
     }
 }
 
-/* ── Visual Timeline Rendering ──────────────────────────── */
+/* ── Role & Message Count Badges ─────────────────────────── */
+
+function updateRoleCounts() {
+    let u = 0, a = 0, t = 0, s = 0;
+    _currentMessages.forEach(m => {
+        const r = (m.role || "").toLowerCase();
+        if (r === "user") u++;
+        else if (r === "assistant") a++;
+        else if (r === "tool") t++;
+        else if (r === "system") s++;
+    });
+
+    const total = _currentMessages.length;
+    const elAll = document.getElementById("hePillAllCount");
+    const elUser = document.getElementById("hePillUserCount");
+    const elAsst = document.getElementById("hePillAsstCount");
+    const elTool = document.getElementById("hePillToolCount");
+    const elSys = document.getElementById("hePillSysCount");
+
+    if (elAll) elAll.textContent = `(${total})`;
+    if (elUser) elUser.textContent = `(${u})`;
+    if (elAsst) elAsst.textContent = `(${a})`;
+    if (elTool) elTool.textContent = `(${t})`;
+    if (elSys) elSys.textContent = `(${s})`;
+
+    updateMessageCountBadge();
+}
+
+function updateMessageCountBadge() {
+    const badge = document.getElementById("heMsgCountBadge");
+    if (badge) {
+        badge.textContent = `${_currentMessages.length} turns`;
+    }
+}
+
+function updateSnapshotCountBadge() {
+    const badge = document.getElementById("heSnapshotCountBadge");
+    if (badge && _activeChatId) {
+        const snaps = loadSnapshots(_activeChatId);
+        badge.textContent = snaps.length;
+    }
+}
+
+/* ── In-Place DOM Renumbering for Instant Zero-Lag Updates ─ */
+
+function renumberVisibleCards() {
+    const listEl = document.getElementById("heMessageList");
+    if (!listEl) return;
+    const cards = Array.from(listEl.querySelectorAll(".he-msg-card"));
+    cards.forEach((c, i) => {
+        c.dataset.index = i;
+        const idxEl = c.querySelector(".he-msg-index");
+        if (idxEl) idxEl.textContent = `#${i + 1}`;
+        const upBtn = c.querySelector(".he-msg-action-btn-up");
+        if (upBtn) upBtn.disabled = (i === 0);
+        const downBtn = c.querySelector(".he-msg-action-btn-down");
+        if (downBtn) downBtn.disabled = (i === cards.length - 1);
+    });
+    updateRoleCounts();
+}
+
+/* ── Visual Timeline Rendering (Chunked & Smooth) ───────── */
 
 function renderVisualTimeline() {
     const listEl = document.getElementById("heMessageList");
     if (!listEl) return;
 
     listEl.innerHTML = "";
-
-    // Calculate role counts
-    let userCount = 0;
-    let asstCount = 0;
-    let toolCount = 0;
-    let sysCount = 0;
-
-    _currentMessages.forEach(m => {
-        const r = (m.role || "").toLowerCase();
-        if (r === "user") userCount++;
-        else if (r === "assistant") asstCount++;
-        else if (r === "tool") toolCount++;
-        else if (r === "system") sysCount++;
-    });
-
-    updateFilterPillCounts(userCount, asstCount, toolCount, sysCount);
+    updateRoleCounts();
 
     const q = _searchQuery.trim().toLowerCase();
     const filteredEntries = [];
@@ -328,23 +384,38 @@ function renderVisualTimeline() {
         const empty = document.createElement("div");
         empty.className = "he-empty-state";
         empty.innerHTML = `
-            <i data-lucide="search" style="width: 24px; height: 24px; opacity: 0.5;"></i>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity: 0.5;"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
             <span>${_currentMessages.length === 0 ? "No messages in conversation history." : "No messages match your search or filter."}</span>
         `;
         listEl.appendChild(empty);
-        renderIcons(empty);
         return;
     }
 
-    filteredEntries.forEach(({ msg, originalIndex }) => {
-        const card = createMessageCard(msg, originalIndex);
-        listEl.appendChild(card);
-    });
+    // Chunked batch mounting prevents UI thread blocking on 100+ turn chats
+    const CHUNK_SIZE = 50;
+    let currentIndex = 0;
 
-    renderIcons(listEl);
+    function appendNextChunk() {
+        const slice = filteredEntries.slice(currentIndex, currentIndex + CHUNK_SIZE);
+        if (slice.length === 0) return;
+
+        const fragment = document.createDocumentFragment();
+        slice.forEach(({ msg, originalIndex }, sliceIdx) => {
+            const card = createMessageCard(msg, originalIndex, currentIndex + sliceIdx);
+            fragment.appendChild(card);
+        });
+        listEl.appendChild(fragment);
+        currentIndex += slice.length;
+
+        if (currentIndex < filteredEntries.length) {
+            requestAnimationFrame(appendNextChunk);
+        }
+    }
+
+    appendNextChunk();
 }
 
-function createMessageCard(msg, index) {
+function createMessageCard(msg, index, visualIdx = index) {
     const card = document.createElement("div");
     card.className = "he-msg-card";
     card.dataset.index = index;
@@ -379,58 +450,77 @@ function createMessageCard(msg, index) {
     });
 
     roleSelect.addEventListener("change", (e) => {
+        const curIdx = parseInt(card.dataset.index, 10);
         const newRole = e.target.value;
         pushUndoState();
-        _currentMessages[index].role = newRole;
-        renderVisualTimeline();
+        _currentMessages[curIdx].role = newRole;
+        roleBadge.className = `he-role-badge role-${newRole}`;
+        roleBadge.textContent = newRole;
+        updateRoleCounts();
     });
 
     left.appendChild(indexSpan);
     left.appendChild(roleBadge);
     left.appendChild(roleSelect);
 
-    // Actions on right (Move up, Move down, Remove)
+    // Actions on right (Move up, Move down, Remove) using fast inline SVGs
     const actions = document.createElement("div");
     actions.className = "he-msg-actions";
 
     const moveUpBtn = document.createElement("button");
-    moveUpBtn.className = "he-msg-action-btn";
+    moveUpBtn.className = "he-msg-action-btn he-msg-action-btn-up";
     moveUpBtn.title = "Move Up";
-    moveUpBtn.disabled = index === 0;
-    moveUpBtn.innerHTML = '<i data-lucide="arrow-up" style="width: 13px; height: 13px;"></i>';
+    moveUpBtn.disabled = visualIdx === 0;
+    moveUpBtn.innerHTML = ICON_UP_SVG;
     moveUpBtn.addEventListener("click", () => {
-        if (index > 0) {
+        const curIdx = parseInt(card.dataset.index, 10);
+        if (curIdx > 0) {
             pushUndoState();
-            const temp = _currentMessages[index];
-            _currentMessages[index] = _currentMessages[index - 1];
-            _currentMessages[index - 1] = temp;
-            renderVisualTimeline();
+            const temp = _currentMessages[curIdx];
+            _currentMessages[curIdx] = _currentMessages[curIdx - 1];
+            _currentMessages[curIdx - 1] = temp;
+            const prevCard = card.previousElementSibling;
+            if (prevCard && prevCard.classList.contains("he-msg-card")) {
+                prevCard.before(card);
+                renumberVisibleCards();
+            } else {
+                renderVisualTimeline();
+            }
         }
     });
 
     const moveDownBtn = document.createElement("button");
-    moveDownBtn.className = "he-msg-action-btn";
+    moveDownBtn.className = "he-msg-action-btn he-msg-action-btn-down";
     moveDownBtn.title = "Move Down";
-    moveDownBtn.disabled = index === _currentMessages.length - 1;
-    moveDownBtn.innerHTML = '<i data-lucide="arrow-down" style="width: 13px; height: 13px;"></i>';
+    moveDownBtn.disabled = visualIdx === _currentMessages.length - 1;
+    moveDownBtn.innerHTML = ICON_DOWN_SVG;
     moveDownBtn.addEventListener("click", () => {
-        if (index < _currentMessages.length - 1) {
+        const curIdx = parseInt(card.dataset.index, 10);
+        if (curIdx < _currentMessages.length - 1) {
             pushUndoState();
-            const temp = _currentMessages[index];
-            _currentMessages[index] = _currentMessages[index + 1];
-            _currentMessages[index + 1] = temp;
-            renderVisualTimeline();
+            const temp = _currentMessages[curIdx];
+            _currentMessages[curIdx] = _currentMessages[curIdx + 1];
+            _currentMessages[curIdx + 1] = temp;
+            const nextCard = card.nextElementSibling;
+            if (nextCard && nextCard.classList.contains("he-msg-card")) {
+                nextCard.after(card);
+                renumberVisibleCards();
+            } else {
+                renderVisualTimeline();
+            }
         }
     });
 
     const deleteBtn = document.createElement("button");
     deleteBtn.className = "he-msg-action-btn danger";
     deleteBtn.title = "Remove Message";
-    deleteBtn.innerHTML = '<i data-lucide="trash-2" style="width: 13px; height: 13px;"></i>';
+    deleteBtn.innerHTML = ICON_DEL_SVG;
     deleteBtn.addEventListener("click", () => {
         pushUndoState();
-        _currentMessages.splice(index, 1);
-        renderVisualTimeline();
+        const curIdx = parseInt(card.dataset.index, 10);
+        _currentMessages.splice(curIdx, 1);
+        card.remove();
+        renumberVisibleCards();
         showToast("Message removed");
     });
 
@@ -442,7 +532,7 @@ function createMessageCard(msg, index) {
     header.appendChild(actions);
     card.appendChild(header);
 
-    // Body: Content textarea
+    // Body: Content textarea (auto-sized smoothly via CSS field-sizing: content without layout thrashing)
     const contentVal = typeof msg.content === "string" 
         ? msg.content 
         : JSON.stringify(msg.content ?? "", null, 2);
@@ -453,27 +543,19 @@ function createMessageCard(msg, index) {
     textarea.placeholder = "Message content…";
     textarea.spellcheck = false;
 
-    // Auto-expand textarea to fit content up to max-height
-    const autoResize = () => {
-        textarea.style.height = "auto";
-        textarea.style.height = Math.min(260, Math.max(54, textarea.scrollHeight + 2)) + "px";
-    };
-    setTimeout(autoResize, 0);
-
     let originalVal = contentVal;
-    textarea.addEventListener("input", autoResize);
     textarea.addEventListener("blur", () => {
+        const curIdx = parseInt(card.dataset.index, 10);
         if (textarea.value !== originalVal) {
             pushUndoState();
-            // Try parsing if original was object/array, else treat as string
             if (typeof msg.content === "object" && msg.content !== null) {
                 try {
-                    _currentMessages[index].content = JSON.parse(textarea.value);
+                    _currentMessages[curIdx].content = JSON.parse(textarea.value);
                 } catch (_) {
-                    _currentMessages[index].content = textarea.value;
+                    _currentMessages[curIdx].content = textarea.value;
                 }
             } else {
-                _currentMessages[index].content = textarea.value;
+                _currentMessages[curIdx].content = textarea.value;
             }
             originalVal = textarea.value;
             updateMessageCountBadge();
@@ -497,15 +579,16 @@ function createMessageCard(msg, index) {
         const toolJsonArea = document.createElement("textarea");
         toolJsonArea.className = "he-msg-textarea";
         toolJsonArea.style.marginTop = "6px";
-        toolJsonArea.style.fontSize = "11.5px";
+        toolJsonArea.style.fontSize = "12px";
         const toolPayload = msg.tool_calls || msg.function_call || { tool_call_id: msg.tool_call_id, name: msg.name };
         toolJsonArea.value = JSON.stringify(toolPayload, null, 2);
         toolJsonArea.addEventListener("blur", () => {
+            const curIdx = parseInt(card.dataset.index, 10);
             try {
                 const parsed = JSON.parse(toolJsonArea.value);
                 pushUndoState();
-                if (msg.tool_calls) _currentMessages[index].tool_calls = parsed;
-                else if (msg.function_call) _currentMessages[index].function_call = parsed;
+                if (msg.tool_calls) _currentMessages[curIdx].tool_calls = parsed;
+                else if (msg.function_call) _currentMessages[curIdx].function_call = parsed;
                 showToast("Tool details updated");
             } catch (err) {
                 showToast(`Invalid tool JSON: ${err.message}`);
@@ -517,36 +600,6 @@ function createMessageCard(msg, index) {
     }
 
     return card;
-}
-
-function updateFilterPillCounts(u, a, t, s) {
-    const total = _currentMessages.length;
-    const elAll = document.getElementById("hePillAllCount");
-    const elUser = document.getElementById("hePillUserCount");
-    const elAsst = document.getElementById("hePillAsstCount");
-    const elTool = document.getElementById("hePillToolCount");
-    const elSys = document.getElementById("hePillSysCount");
-
-    if (elAll) elAll.textContent = `(${total})`;
-    if (elUser) elUser.textContent = `(${u})`;
-    if (elAsst) elAsst.textContent = `(${a})`;
-    if (elTool) elTool.textContent = `(${t})`;
-    if (elSys) elSys.textContent = `(${s})`;
-}
-
-function updateMessageCountBadge() {
-    const badge = document.getElementById("heMsgCountBadge");
-    if (badge) {
-        badge.textContent = `${_currentMessages.length} turns`;
-    }
-}
-
-function updateSnapshotCountBadge() {
-    const badge = document.getElementById("heSnapshotCountBadge");
-    if (badge && _activeChatId) {
-        const snaps = loadSnapshots(_activeChatId);
-        badge.textContent = snaps.length;
-    }
 }
 
 /* ── Snapshots Drawer UI ─────────────────────────────────── */
@@ -593,7 +646,7 @@ function renderSnapshotsDrawer() {
         const delBtn = document.createElement("button");
         delBtn.className = "he-snapshot-delete-btn";
         delBtn.title = "Delete snapshot";
-        delBtn.innerHTML = '<i data-lucide="trash-2" style="width: 12px; height: 12px;"></i>';
+        delBtn.innerHTML = ICON_DEL_SVG;
         delBtn.addEventListener("click", () => deleteSnapshot(_activeChatId, snap.id));
 
         actions.appendChild(restoreBtn);
@@ -605,8 +658,6 @@ function renderSnapshotsDrawer() {
 
         listEl.appendChild(card);
     });
-
-    renderIcons(listEl);
 }
 
 function toggleSnapshotsDrawer() {
@@ -648,8 +699,7 @@ async function saveHistory() {
     const saveBtn = document.getElementById("heSaveBtn");
     if (saveBtn) {
         saveBtn.disabled = true;
-        saveBtn.innerHTML = '<i data-lucide="loader" class="spin"></i><span>Saving…</span>';
-        renderIcons(saveBtn);
+        saveBtn.innerHTML = '<span>Saving…</span>';
     }
 
     try {
@@ -714,8 +764,7 @@ async function saveHistory() {
         _isSaving = false;
         if (saveBtn) {
             saveBtn.disabled = false;
-            saveBtn.innerHTML = '<i data-lucide="check"></i><span>Save Changes</span>';
-            renderIcons(saveBtn);
+            saveBtn.innerHTML = '<span>Save Changes</span>';
         }
     }
 }
@@ -736,7 +785,6 @@ function buildModalDOM() {
             <div class="he-header">
                 <div class="he-header-left">
                     <div class="he-title-group">
-                        <i data-lucide="history" style="width: 16px; height: 16px; color: var(--text-secondary);"></i>
                         <h2 id="heModalTitle" class="he-title">Edit History</h2>
                         <span id="heChatTitleBadge" class="he-chat-badge"></span>
                         <span id="heMsgCountBadge" class="he-count-badge">0 turns</span>
@@ -746,11 +794,9 @@ function buildModalDOM() {
                 <!-- Tabs: Visual vs JSON -->
                 <div class="he-tabs" role="tablist">
                     <button type="button" class="he-tab-btn active" id="heTabVisualBtn" role="tab" aria-selected="true">
-                        <i data-lucide="list" style="width: 13px; height: 13px;"></i>
                         <span>Visual Timeline</span>
                     </button>
                     <button type="button" class="he-tab-btn" id="heTabJsonBtn" role="tab" aria-selected="false">
-                        <i data-lucide="code" style="width: 13px; height: 13px;"></i>
                         <span>Raw JSON (Ace)</span>
                     </button>
                 </div>
@@ -758,22 +804,20 @@ function buildModalDOM() {
                 <!-- Controls & Actions -->
                 <div class="he-header-right">
                     <button type="button" class="he-icon-btn" id="heUndoBtn" title="Undo (Ctrl+Z)" disabled aria-label="Undo">
-                        <i data-lucide="undo-2" style="width: 14px; height: 14px;"></i>
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5v0a5.5 5.5 0 0 1-5.5 5.5H11"/></svg>
                     </button>
                     <button type="button" class="he-icon-btn" id="heRedoBtn" title="Redo (Ctrl+Y)" disabled aria-label="Redo">
-                        <i data-lucide="redo-2" style="width: 14px; height: 14px;"></i>
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5A5.5 5.5 0 0 0 4 14.5v0A5.5 5.5 0 0 0 9.5 20H13"/></svg>
                     </button>
                     <button type="button" class="he-action-btn" id="heSnapshotsToggleBtn">
-                        <i data-lucide="camera" style="width: 13px; height: 13px;"></i>
                         <span>Snapshots</span>
                         <span class="he-count-badge" id="heSnapshotCountBadge">0</span>
                     </button>
                     <button type="button" class="he-save-btn" id="heSaveBtn">
-                        <i data-lucide="check" style="width: 13px; height: 13px;"></i>
                         <span>Save Changes</span>
                     </button>
                     <button type="button" class="he-close-btn" id="heCloseBtn" aria-label="Close editor">
-                        <i data-lucide="x" style="width: 16px; height: 16px;"></i>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
                     </button>
                 </div>
             </div>
@@ -783,8 +827,7 @@ function buildModalDOM() {
                 <div class="he-snapshots-header">
                     <span class="he-snapshots-title">Conversation Snapshots</span>
                     <button type="button" class="he-action-btn" id="heTakeSnapshotBtn">
-                        <i data-lucide="plus" style="width: 12px; height: 12px;"></i>
-                        <span>Take Snapshot</span>
+                        <span>+ Take Snapshot</span>
                     </button>
                 </div>
                 <div id="heSnapshotsList" class="he-snapshots-list"></div>
@@ -815,8 +858,7 @@ function buildModalDOM() {
                         <div class="he-visual-toolbar-right">
                             <input type="text" id="heSearchInput" class="he-search-input" placeholder="Search turns…" aria-label="Search turns" />
                             <button type="button" class="he-add-msg-btn" id="heAddMsgBtn">
-                                <i data-lucide="plus" style="width: 13px; height: 13px;"></i>
-                                <span>Add Turn</span>
+                                <span>+ Add Turn</span>
                             </button>
                         </div>
                     </div>
@@ -844,7 +886,7 @@ function buildModalDOM() {
                     <span><kbd>Ctrl</kbd>+<kbd>S</kbd> Save</span>
                     <span><kbd>Esc</kbd> Close</span>
                 </div>
-                <span>MultiAI History Editor</span>
+                <span>History Editor Workspace</span>
             </div>
         </div>
     `;
@@ -853,19 +895,11 @@ function buildModalDOM() {
     _modalBackdrop = backdrop;
 
     bindModalEvents();
-    renderIcons(backdrop);
     return backdrop;
 }
 
 function bindModalEvents() {
     if (!_modalBackdrop) return;
-
-    // Backdrop click dismiss
-    _modalBackdrop.addEventListener("click", (e) => {
-        if (e.target === _modalBackdrop) {
-            closeHistoryEditor();
-        }
-    });
 
     // Close button
     const closeBtn = document.getElementById("heCloseBtn");
@@ -919,12 +953,15 @@ function bindModalEvents() {
         });
     });
 
-    // Search input
+    // Search input with 120ms debounce to prevent layout thrashing
     const searchInput = document.getElementById("heSearchInput");
     if (searchInput) {
         searchInput.addEventListener("input", (e) => {
-            _searchQuery = e.target.value;
-            renderVisualTimeline();
+            clearTimeout(_searchDebounceTimer);
+            _searchDebounceTimer = setTimeout(() => {
+                _searchQuery = e.target.value;
+                renderVisualTimeline();
+            }, 120);
         });
     }
 
@@ -938,7 +975,6 @@ function bindModalEvents() {
                 content: ""
             });
             renderVisualTimeline();
-            // Scroll to bottom of message list
             const listEl = document.getElementById("heMessageList");
             if (listEl) {
                 setTimeout(() => {
@@ -976,7 +1012,7 @@ function handleKeydown(e) {
 
         // Redo: Ctrl+Y or Ctrl+Shift+Z
         if (e.key.toLowerCase() === "y" || (e.shiftKey && e.key.toLowerCase() === "z")) {
-            // If active in Ace Editor, let Ace handle its internal undo/redo or sync
+            // If active in Ace Editor, let Ace handle its internal undo/redo
             if (document.activeElement?.closest("#heAceEditorMount")) return;
             e.preventDefault();
             e.stopPropagation();
@@ -1055,7 +1091,6 @@ export async function openHistoryEditor(chatId) {
     // Reset tab to Visual
     switchTab("visual");
     renderVisualTimeline();
-    renderIcons(backdrop);
 }
 
 /**
@@ -1076,6 +1111,5 @@ export function closeHistoryEditor() {
  * Initialize history editor listeners on startup.
  */
 export function initHistoryEditor() {
-    // Expose openHistoryEditor on window for convenience and debugging
     window.openHistoryEditor = openHistoryEditor;
 }
