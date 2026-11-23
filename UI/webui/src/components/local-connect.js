@@ -185,13 +185,25 @@ function _renderModal() {
 
             <!-- Context Compactor (Use different model for compaction) -->
             <div class="lc-field-group">
-                <label class="lc-label" for="lcCompactorSelect">
+                <label class="lc-label" for="lcCompactorTrigger">
                     Context Compactor <span class="lc-label-tag">Optional</span>
                 </label>
-                <div class="kobold-input-row">
-                    <select id="lcCompactorSelect" class="kobold-input lc-compactor-select">
-                        <option value="">Default (Active Local Model)</option>
-                    </select>
+                <div class="lc-compactor-picker" id="lcCompactorPicker">
+                    <button type="button" class="lc-compactor-trigger" id="lcCompactorTrigger" aria-haspopup="listbox" aria-expanded="false">
+                        <span class="lc-compactor-text" id="lcCompactorCurrentLabel">Default (Active Local Model)</span>
+                        <div class="lc-compactor-actions">
+                            <button type="button" class="lc-compactor-clear-btn" id="lcCompactorClearBtn" title="Reset to default compactor" aria-label="Reset to default compactor">&times;</button>
+                            <i data-lucide="chevron-down" class="lc-compactor-arrow"></i>
+                        </div>
+                    </button>
+                    <input type="hidden" id="lcCompactorSelect" value="" />
+
+                    <div class="lc-compactor-menu" id="lcCompactorMenu" role="listbox">
+                        <div class="lc-compactor-search-wrap">
+                            <input type="text" class="lc-compactor-search" id="lcCompactorSearch" placeholder="Search model or provider…" autocomplete="off" spellcheck="false" />
+                        </div>
+                        <div class="lc-compactor-options" id="lcCompactorOptionsList"></div>
+                    </div>
                 </div>
                 <span class="lc-format-hint">
                     Select any configured model to run context compaction instead of this local model.
@@ -336,80 +348,8 @@ function _renderModal() {
         });
     });
 
-    // Populate Compactor dropdown
-    const compactorSelect = modal.querySelector("#lcCompactorSelect");
-    const savedCompactor = lastOpts.compactor_model || (typeof localStorage !== "undefined" ? localStorage.getItem("multiai_compactor_model") : "") || "";
-
-    if (compactorSelect) {
-        const modelSelect = typeof document !== "undefined" ? document.getElementById("modelSelect") : null;
-        if (modelSelect && modelSelect.options.length > 0) {
-            Array.from(modelSelect.children).forEach(child => {
-                if (child.tagName === "OPTGROUP") {
-                    const groupProvider = child.dataset.provider;
-                    if (groupProvider === "local" || groupProvider === "koboldcpp") return;
-
-                    const group = document.createElement("optgroup");
-                    group.label = child.label;
-                    let count = 0;
-                    Array.from(child.children).forEach(opt => {
-                        if (opt.dataset.rolling === "true" || opt.value.startsWith("__rolling_connect__")) return;
-                        const newOpt = document.createElement("option");
-                        newOpt.value = opt.value;
-                        newOpt.textContent = opt.textContent;
-                        if (opt.value === savedCompactor) newOpt.selected = true;
-                        group.appendChild(newOpt);
-                        count++;
-                    });
-                    if (count > 0) {
-                        compactorSelect.appendChild(group);
-                    }
-                } else if (child.tagName === "OPTION") {
-                    if (!child.value.startsWith("__rolling_connect__") && child.value !== "local" && child.value !== "koboldcpp") {
-                        const newOpt = document.createElement("option");
-                        newOpt.value = child.value;
-                        newOpt.textContent = child.textContent;
-                        if (child.value === savedCompactor) newOpt.selected = true;
-                        compactorSelect.appendChild(newOpt);
-                    }
-                }
-            });
-        } else if (Array.isArray(availableModels) && availableModels.length > 0) {
-            const groups = {};
-            availableModels.forEach(m => {
-                if (!m.id || m.provider === "local" || m.provider === "koboldcpp") return;
-                const prov = m.provider || "Other";
-                if (!groups[prov]) groups[prov] = [];
-                groups[prov].push(m);
-            });
-            Object.entries(groups).forEach(([prov, models]) => {
-                const group = document.createElement("optgroup");
-                group.label = prov.charAt(0).toUpperCase() + prov.slice(1);
-                models.forEach(m => {
-                    const opt = document.createElement("option");
-                    opt.value = m.id;
-                    opt.textContent = m.name || m.id;
-                    if (m.id === savedCompactor) opt.selected = true;
-                    group.appendChild(opt);
-                });
-                compactorSelect.appendChild(group);
-            });
-        }
-
-        if (savedCompactor) {
-            compactorSelect.value = savedCompactor;
-        }
-
-        compactorSelect.addEventListener("change", (e) => {
-            const val = e.target.value.trim();
-            try {
-                if (val) {
-                    localStorage.setItem("multiai_compactor_model", val);
-                } else {
-                    localStorage.removeItem("multiai_compactor_model");
-                }
-            } catch (_) {}
-        });
-    }
+    // Setup Custom Compactor Picker
+    const resetCompactorPicker = _setupCompactorPicker(modal, lastOpts);
 
     // Reset gen settings
     document.getElementById("lcResetGenBtn")?.addEventListener("click", () => {
@@ -427,8 +367,7 @@ function _renderModal() {
         });
         const sysPrompt = document.getElementById("localSystemPromptInput");
         if (sysPrompt) sysPrompt.value = "";
-        const compactorSel = document.getElementById("lcCompactorSelect");
-        if (compactorSel) compactorSel.value = "";
+        if (typeof resetCompactorPicker === "function") resetCompactorPicker();
         try { localStorage.removeItem("multiai_compactor_model"); } catch (_) {}
     });
 
@@ -443,6 +382,222 @@ function _renderModal() {
         backdrop.classList.add("is-visible");
         modal.classList.add("is-visible");
     });
+}
+
+/* ── Custom Compactor Picker ─────────────────────────────────────────────── */
+
+function _setupCompactorPicker(modal, lastOpts) {
+    const pickerWrap   = modal.querySelector(".lc-compactor-picker");
+    const triggerBtn   = modal.querySelector("#lcCompactorTrigger");
+    const hiddenInput  = modal.querySelector("#lcCompactorSelect");
+    const currentLabel = modal.querySelector("#lcCompactorCurrentLabel");
+    const clearBtn     = modal.querySelector("#lcCompactorClearBtn");
+    const searchInput  = modal.querySelector("#lcCompactorSearch");
+    const optionsList  = modal.querySelector("#lcCompactorOptionsList");
+
+    if (!pickerWrap || !triggerBtn || !hiddenInput || !optionsList) return () => {};
+
+    // Collect available models grouped by provider
+    const modelSelect = typeof document !== "undefined" ? document.getElementById("modelSelect") : null;
+    const groups = []; // [{ label: string, models: [{ id, name }] }]
+
+    if (modelSelect && modelSelect.options.length > 0) {
+        Array.from(modelSelect.children).forEach(child => {
+            if (child.tagName === "OPTGROUP") {
+                const groupProvider = child.dataset.provider;
+                if (groupProvider === "local" || groupProvider === "koboldcpp") return;
+
+                const groupModels = [];
+                Array.from(child.children).forEach(opt => {
+                    if (opt.dataset.rolling === "true" || opt.value.startsWith("__rolling_connect__")) return;
+                    groupModels.push({
+                        id: opt.value,
+                        name: opt.textContent.replace(/\s*\[Vision\]/i, "").trim()
+                    });
+                });
+                if (groupModels.length > 0) {
+                    groups.push({
+                        label: child.label.replace(/\s*\(No Key\)/i, "").trim(),
+                        models: groupModels
+                    });
+                }
+            } else if (child.tagName === "OPTION") {
+                if (!child.value.startsWith("__rolling_connect__") && child.value !== "local" && child.value !== "koboldcpp") {
+                    groups.push({
+                        label: "General",
+                        models: [{ id: child.value, name: child.textContent }]
+                    });
+                }
+            }
+        });
+    } else if (Array.isArray(availableModels) && availableModels.length > 0) {
+        const provMap = {};
+        availableModels.forEach(m => {
+            if (!m.id || m.provider === "local" || m.provider === "koboldcpp") return;
+            const p = m.provider || "Other";
+            if (!provMap[p]) provMap[p] = [];
+            provMap[p].push({
+                id: m.id,
+                name: (m.name || m.id).replace(/\s*\[Vision\]/i, "").trim()
+            });
+        });
+        Object.entries(provMap).forEach(([prov, models]) => {
+            groups.push({
+                label: prov.charAt(0).toUpperCase() + prov.slice(1),
+                models
+            });
+        });
+    }
+
+    const savedCompactor = lastOpts.compactor_model || (typeof localStorage !== "undefined" ? localStorage.getItem("multiai_compactor_model") : "") || "";
+
+    function updateSelection(val) {
+        hiddenInput.value = val || "";
+        hiddenInput.dispatchEvent(new Event("change", { bubbles: true }));
+
+        if (!val) {
+            currentLabel.textContent = "Default (Active Local Model)";
+            currentLabel.title = "Default (Active Local Model)";
+            if (clearBtn) clearBtn.style.display = "none";
+        } else {
+            let matchedName = val;
+            for (const g of groups) {
+                const found = g.models.find(m => m.id === val);
+                if (found) { matchedName = found.name; break; }
+            }
+            currentLabel.textContent = matchedName;
+            currentLabel.title = `${matchedName} (${val})`;
+            if (clearBtn) clearBtn.style.display = "inline-flex";
+        }
+
+        optionsList.querySelectorAll(".lc-compactor-item").forEach(item => {
+            const isMatch = item.dataset.value === (val || "");
+            item.classList.toggle("is-selected", isMatch);
+        });
+
+        try {
+            if (val) {
+                localStorage.setItem("multiai_compactor_model", val);
+            } else {
+                localStorage.removeItem("multiai_compactor_model");
+            }
+        } catch (_) {}
+    }
+
+    function renderOptions(filter = "") {
+        const q = filter.trim().toLowerCase();
+        optionsList.innerHTML = "";
+
+        const defaultMatches = !q || "default active local model".includes(q);
+        if (defaultMatches) {
+            const defItem = document.createElement("div");
+            defItem.className = `lc-compactor-item ${!hiddenInput.value ? "is-selected" : ""}`;
+            defItem.dataset.value = "";
+            defItem.innerHTML = `
+                <span class="lc-compactor-item-name">Default (Active Local Model)</span>
+                <span class="lc-compactor-badge-tag">Local</span>
+            `;
+            defItem.addEventListener("click", () => {
+                updateSelection("");
+                closeMenu();
+            });
+            optionsList.appendChild(defItem);
+        }
+
+        let totalVisible = defaultMatches ? 1 : 0;
+
+        groups.forEach(g => {
+            const filteredModels = g.models.filter(m => {
+                if (!q) return true;
+                return m.name.toLowerCase().includes(q) || m.id.toLowerCase().includes(q) || g.label.toLowerCase().includes(q);
+            });
+
+            if (filteredModels.length > 0) {
+                const header = document.createElement("div");
+                header.className = "lc-compactor-group-title";
+                header.textContent = g.label;
+                optionsList.appendChild(header);
+
+                filteredModels.forEach(m => {
+                    const item = document.createElement("div");
+                    const isSelected = hiddenInput.value === m.id;
+                    item.className = `lc-compactor-item ${isSelected ? "is-selected" : ""}`;
+                    item.dataset.value = m.id;
+                    item.innerHTML = `
+                        <span class="lc-compactor-item-name" title="${m.id}">${m.name}</span>
+                    `;
+                    item.addEventListener("click", () => {
+                        updateSelection(m.id);
+                        closeMenu();
+                    });
+                    optionsList.appendChild(item);
+                    totalVisible++;
+                });
+            }
+        });
+
+        if (totalVisible === 0) {
+            const empty = document.createElement("div");
+            empty.className = "lc-compactor-empty";
+            empty.textContent = "No models match your search";
+            optionsList.appendChild(empty);
+        }
+
+        renderIcons(optionsList);
+    }
+
+    function openMenu() {
+        pickerWrap.classList.add("is-open");
+        triggerBtn.setAttribute("aria-expanded", "true");
+        if (searchInput) {
+            searchInput.value = "";
+            renderOptions("");
+            setTimeout(() => searchInput.focus(), 40);
+        }
+    }
+
+    function closeMenu() {
+        pickerWrap.classList.remove("is-open");
+        triggerBtn.setAttribute("aria-expanded", "false");
+    }
+
+    triggerBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (pickerWrap.classList.contains("is-open")) {
+            closeMenu();
+        } else {
+            openMenu();
+        }
+    });
+
+    if (clearBtn) {
+        clearBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            updateSelection("");
+        });
+    }
+
+    searchInput?.addEventListener("input", (e) => {
+        renderOptions(e.target.value);
+    });
+
+    searchInput?.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") {
+            closeMenu();
+            triggerBtn.focus();
+        }
+    });
+
+    modal.addEventListener("click", (e) => {
+        if (!pickerWrap.contains(e.target)) {
+            closeMenu();
+        }
+    });
+
+    updateSelection(savedCompactor);
+    renderOptions("");
+
+    return () => updateSelection("");
 }
 
 /* ── Close ──────────────────────────────────────────────────────────────── */
