@@ -1389,14 +1389,19 @@
     color: var(--text-primary);
 }
 .lc-compactor-arrow {
-    width: 14px;
-    height: 14px;
-    color: var(--text-secondary);
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-right: 1.5px solid var(--text-secondary);
+    border-bottom: 1.5px solid var(--text-secondary);
+    transform: rotate(45deg);
+    transition: transform 0.18s ease;
+    margin-right: 2px;
+    pointer-events: none;
     flex-shrink: 0;
-    transition: transform 0.15s ease;
 }
 .lc-compactor-picker.is-open .lc-compactor-arrow {
-    transform: rotate(180deg);
+    transform: rotate(-135deg);
 }
 
 .lc-compactor-menu {
@@ -1404,18 +1409,18 @@
     top: calc(100% + 4px);
     left: 0;
     right: 0;
-    background: var(--bg-alt);
+    background: var(--surface, #1e1e20);
     border: 1px solid var(--border);
     border-radius: 8px;
-    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
-    z-index: 60;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+    z-index: 100;
     display: none;
     flex-direction: column;
     overflow: hidden;
     animation: lcMenuFadeIn 0.15s ease;
 }
 .lc-compactor-picker.is-open .lc-compactor-menu {
-    display: flex;
+    display: flex !important;
 }
 @keyframes lcMenuFadeIn {
     from { opacity: 0; transform: translateY(-3px); }

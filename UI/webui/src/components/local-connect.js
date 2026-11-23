@@ -189,13 +189,13 @@ function _renderModal() {
                     Context Compactor <span class="lc-label-tag">Optional</span>
                 </label>
                 <div class="lc-compactor-picker" id="lcCompactorPicker">
-                    <button type="button" class="lc-compactor-trigger" id="lcCompactorTrigger" aria-haspopup="listbox" aria-expanded="false">
+                    <div class="lc-compactor-trigger" id="lcCompactorTrigger" role="combobox" tabindex="0" aria-haspopup="listbox" aria-expanded="false">
                         <span class="lc-compactor-text" id="lcCompactorCurrentLabel">Default (Active Local Model)</span>
                         <div class="lc-compactor-actions">
-                            <button type="button" class="lc-compactor-clear-btn" id="lcCompactorClearBtn" title="Reset to default compactor" aria-label="Reset to default compactor">&times;</button>
-                            <i data-lucide="chevron-down" class="lc-compactor-arrow"></i>
+                            <span class="lc-compactor-clear-btn" id="lcCompactorClearBtn" role="button" tabindex="0" title="Reset to default compactor" aria-label="Reset to default compactor">&times;</span>
+                            <span class="lc-compactor-arrow" aria-hidden="true"></span>
                         </div>
-                    </button>
+                    </div>
                     <input type="hidden" id="lcCompactorSelect" value="" />
 
                     <div class="lc-compactor-menu" id="lcCompactorMenu" role="listbox">
@@ -552,7 +552,13 @@ function _setupCompactorPicker(modal, lastOpts) {
         if (searchInput) {
             searchInput.value = "";
             renderOptions("");
-            setTimeout(() => searchInput.focus(), 40);
+            setTimeout(() => searchInput.focus(), 30);
+        }
+        const menu = modal.querySelector("#lcCompactorMenu");
+        if (menu) {
+            requestAnimationFrame(() => {
+                menu.scrollIntoView({ block: "nearest", behavior: "smooth" });
+            });
         }
     }
 
@@ -562,6 +568,9 @@ function _setupCompactorPicker(modal, lastOpts) {
     }
 
     triggerBtn.addEventListener("click", (e) => {
+        if (e.target.closest("#lcCompactorClearBtn")) {
+            return;
+        }
         e.stopPropagation();
         if (pickerWrap.classList.contains("is-open")) {
             closeMenu();
@@ -570,10 +579,25 @@ function _setupCompactorPicker(modal, lastOpts) {
         }
     });
 
+    triggerBtn.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " " || e.key === "ArrowDown") {
+            e.preventDefault();
+            e.stopPropagation();
+            openMenu();
+        }
+    });
+
     if (clearBtn) {
         clearBtn.addEventListener("click", (e) => {
             e.stopPropagation();
             updateSelection("");
+        });
+        clearBtn.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                e.stopPropagation();
+                updateSelection("");
+            }
         });
     }
 
