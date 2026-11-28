@@ -97,12 +97,6 @@ class ChatBoxComponent {
 
                     <!-- Mode Pills / Tags Strip (Deep Search, etc.) -->
                     <div id="composerModePills" class="composer-mode-pills" style="display: none;"></div>
-
-                    <!-- Generation Timer (visible while AI is actively working/streaming) -->
-                    <div id="composerGenTimer" class="composer-gen-timer" style="display: none;">
-                        <span class="dock-running-pulse"></span>
-                        <span id="composerGenTimerText">Generating (0s)</span>
-                    </div>
                 </div>
 
                 <div class="composer-toolbar-right">
@@ -504,8 +498,6 @@ class ChatBoxComponent {
     setGenerating(active) {
         if (!this.sendBtn || !this.inputEl) return;
         const modelSelect = document.getElementById("modelSelect");
-        const genTimer = this.container ? this.container.querySelector("#composerGenTimer") : document.getElementById("composerGenTimer");
-        const genTimerText = this.container ? this.container.querySelector("#composerGenTimerText") : document.getElementById("composerGenTimerText");
 
         if (active) {
             this.sendBtn.classList.add("generating");
@@ -516,26 +508,7 @@ class ChatBoxComponent {
             this.inputEl.disabled = true;
             if (modelSelect) modelSelect.disabled = true;
             if (this.attachBtn) this.attachBtn.disabled = true;
-
-            if (genTimer && genTimerText) {
-                genTimer.style.display = "inline-flex";
-                genTimerText.textContent = "Generating (0s)";
-                const startTime = Date.now();
-                if (this._genTimerTicker) clearInterval(this._genTimerTicker);
-                this._genTimerTicker = setInterval(() => {
-                    const sec = Math.round((Date.now() - startTime) / 1000);
-                    const durStr = sec >= 60 ? `${Math.floor(sec / 60)}m ${sec % 60}s` : `${sec}s`;
-                    genTimerText.textContent = `Generating (${durStr})`;
-                }, 1000);
-            }
         } else {
-            if (this._genTimerTicker) {
-                clearInterval(this._genTimerTicker);
-                this._genTimerTicker = null;
-            }
-            if (genTimer) {
-                genTimer.style.display = "none";
-            }
             this.sendBtn.classList.remove("generating");
             this.sendBtn.title = "Send message";
             this.sendBtn.setAttribute("aria-label", "Send message");

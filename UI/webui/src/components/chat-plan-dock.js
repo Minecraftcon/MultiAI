@@ -445,7 +445,11 @@ function updateRunningTasksInPlace(card) {
         let dirEl = row.querySelector(".dock-file-dir");
         const durText = t.elapsed ? `(${formatDuration(t.elapsed)})` : "";
         if (dirEl) {
-            if (dirEl.textContent !== durText) dirEl.textContent = durText;
+            if (durText) {
+                if (dirEl.textContent !== durText) dirEl.textContent = durText;
+            } else {
+                dirEl.remove();
+            }
         } else if (durText) {
             const span = document.createElement("span");
             span.className = "dock-file-dir";
@@ -482,8 +486,12 @@ function updateRunningTasksInPlace(card) {
         if (titleEl) titleEl.appendChild(headerTimerEl);
     }
     if (headerTimerEl) {
-        const text = durStr ? `· (${durStr})` : "";
-        if (headerTimerEl.textContent !== text) headerTimerEl.textContent = text;
+        if (durStr) {
+            const text = `· (${durStr})`;
+            if (headerTimerEl.textContent !== text) headerTimerEl.textContent = text;
+        } else {
+            headerTimerEl.remove();
+        }
     }
 
     const killAllBtn = windowView.querySelector(".dock-kill-all-btn");
@@ -529,8 +537,12 @@ function updateToolbarInPlace(card, { hasChanges, unacceptedChanges, hasTodos, h
             existingRunningBtn.appendChild(timerEl);
         }
         if (timerEl) {
-            const text = durStr ? `(${durStr})` : "";
-            if (timerEl.textContent !== text) timerEl.textContent = text;
+            if (durStr) {
+                const text = `(${durStr})`;
+                if (timerEl.textContent !== text) timerEl.textContent = text;
+            } else {
+                timerEl.remove();
+            }
         }
         existingRunningBtn.title = durStr
             ? `Running Tasks (${runningTasks.length}) · ${durStr}`

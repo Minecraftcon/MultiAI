@@ -587,33 +587,6 @@
     stroke-width: 2.5;
 }
 
-/* ── Live Generation Timer in Composer Toolbar ── */
-.composer-gen-timer {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    font-family: 'JetBrains Mono', var(--font-mono, monospace);
-    font-size: 11px;
-    color: var(--text-secondary);
-    padding: 2px 8px;
-    background: var(--surface-2, rgba(255, 255, 255, 0.04));
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    user-select: none;
-    letter-spacing: -0.01em;
-    transition: opacity 0.15s ease;
-}
-
-.composer-gen-timer .dock-running-pulse {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--text-secondary);
-    box-shadow: 0 0 4px var(--border);
-    flex-shrink: 0;
-    animation: runningTaskPulse 2s infinite ease-in-out;
-}
-
 
 
 
