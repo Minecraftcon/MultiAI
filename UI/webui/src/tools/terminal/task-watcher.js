@@ -208,6 +208,10 @@ async function checkWatchesTick() {
 
     for (const watch of watches) {
         const { chatId, taskId, time, startedAt, endResponse, reason } = watch;
+
+        // Chat was deleted or is no longer loaded: drop the watch instead of firing it
+        if (!state.chatSessions || !state.chatSessions[chatId]) continue;
+
         const elapsedSec = (Date.now() - startedAt) / 1000;
 
         // 1. Cron Expression Evaluation
@@ -238,6 +242,10 @@ async function checkWatchesTick() {
         if (taskId) {
             try {
                 const res = await fetch(`/api/task/stdout/${encodeURIComponent(taskId)}`);
+                if (res.status === 404) {
+                    // Task no longer exists (e.g. terminal daemon restarted) — drop the stale watch
+                    continue;
+                }
                 if (res.ok) {
                     const data = await res.json();
                     if (data && data.running === false) {
@@ -325,11 +333,76 @@ function ensureWatcherRunning() {
 }
 
 /**
+ * Drops watches left over from earlier sessions that must never fire on startup:
+ * watches for chats that no longer exist, one-shot timers that already elapsed while
+ * the page was closed, and exhausted recurring schedules.
+ */
+function pruneRestoredWatches(watches) {
+    const now = Date.now();
+    const knownChats = Object.keys(state.chatSessions || {});
+    const chatSet = new Set(knownChats);
+
+    return watches.filter((w) => {
+        if (!w || !w.chatId) return false;
+        // Only drop for unknown chats when sessions actually loaded, so a loading
+        // race can never wipe every watch.
+        if (chatSet.size > 0 && !chatSet.has(w.chatId)) return false;
+
+        if (w.cronExpression) {
+            if (w.maxIterations && (w.iterationCount || 0) >= w.maxIterations) return false;
+            return true;
+        }
+
+        const time = Number(w.time) || 0;
+        const startedAt = Number(w.startedAt) || 0;
+
+        // Task watches are verified against the server below
+        if (w.taskId) return true;
+
+        // One-shot timer already expired before this page loaded: stale, do not fire
+        if (time > 0 && now - startedAt >= time * 1000) return false;
+
+        return true;
+    });
+}
+
+/**
  * Initializes the task watcher on application startup.
+ * Restored watches are validated before monitoring resumes so stale timers and
+ * schedules from previous sessions never fire a burst of notifications on load.
  */
 export function initTaskWatcher() {
     const watches = getActiveWatches();
-    if (watches.length > 0) {
+    if (watches.length === 0) return;
+
+    const restored = pruneRestoredWatches(watches);
+
+    // Restored task watches are trusted only while their task is still running on the
+    // server; finished or vanished tasks must never produce a stale notification turn.
+    const taskWatches = restored.filter((w) => w.taskId && !w.cronExpression);
+    if (taskWatches.length === 0) {
+        saveActiveWatches(restored);
         ensureWatcherRunning();
+        return;
     }
+
+    Promise.all(taskWatches.map(async (w) => {
+        try {
+            const res = await fetch(`/api/task/stdout/${encodeURIComponent(w.taskId)}`);
+            if (!res.ok) return { id: w.id, keep: false };
+            const data = await res.json();
+            return { id: w.id, keep: Boolean(data && data.running === true) };
+        } catch (_) {
+            // Transient network failure: keep the watch rather than lose a live task
+            return { id: w.id, keep: true };
+        }
+    })).then((results) => {
+        const keepIds = new Set(results.filter((r) => r.keep).map((r) => r.id));
+        const keep = restored.filter((w) => !w.taskId || w.cronExpression || keepIds.has(w.id));
+        saveActiveWatches(keep);
+        if (keep.length > 0) ensureWatcherRunning();
+        try {
+            document.dispatchEvent(new CustomEvent("runningTasksUpdated"));
+        } catch (_) {}
+    });
 }

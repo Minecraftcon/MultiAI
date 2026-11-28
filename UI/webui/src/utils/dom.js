@@ -96,6 +96,18 @@ export function formatToolResult(data) {
             return data.output;
         }
 
+        // Text file read: return the file contents, never just path metadata
+        if (data.type === "text" && typeof data.content === "string") {
+            const header = [];
+            if (data.path) header.push(`path: ${data.path}`);
+            if (data.total_lines !== undefined) {
+                const from = data.start_line ?? 1;
+                const to = data.end_line ?? data.total_lines;
+                header.push(`lines: ${from}-${to} of ${data.total_lines}${data.is_truncated ? " (truncated)" : ""}`);
+            }
+            return header.length > 0 ? `${header.join("\n")}\n\n${data.content}` : data.content;
+        }
+
         // Clean, structured format for task / terminal / command results
         if (data.stdout !== undefined || data.stderr !== undefined || data.exit_code !== undefined || data.task_id || data.running !== undefined) {
             const parts = [];
