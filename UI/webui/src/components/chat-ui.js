@@ -122,6 +122,11 @@ export function renderTurn(turn, session, compactionRef, isLastTurn) {
         const userDiv = document.createElement("div");
         userDiv.className = isAgent ? "message agent-inter-message" : "message user";
 
+        // Tag the bubble with its index in session.messages so inline edits always target
+        // the right historical turn, even when the DOM is a partial window of the history
+        const sessionMsgIndex = Array.isArray(session?.messages) ? session.messages.indexOf(userMsg) : -1;
+        if (sessionMsgIndex >= 0) userDiv.dataset.msgIndex = String(sessionMsgIndex);
+
         let rawText = "";
         let imgsHtml = "";
 

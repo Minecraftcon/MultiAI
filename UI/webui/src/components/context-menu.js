@@ -496,6 +496,59 @@ export async function regenerateFromMessage(target) {
 }
 
 /**
+ * True when a stored user turn is rendered as a regular .message.user bubble.
+ * System notices, wake-up notifications and inter-agent messages are stored with the
+ * "user" role but are rendered differently (or not at all), so they must never be
+ * counted when mapping a bubble back to its history entry.
+ */
+function isEditableUserMessage(m) {
+    if (!m || m.role !== "user") return false;
+    if (m.isNotification) return false;
+    if (m.isAgentMessage === true || m.sender === "agent") return false;
+    const text = typeof m.content === "string" ? m.content : "";
+    if (text.startsWith("[System Notice]:")) return false;
+    if (text.startsWith("[Background Task Notification]:")) return false;
+    if (text.startsWith("[Timer Notification]:")) return false;
+    if (text.startsWith("[Background Task Timeout]:")) return false;
+    if (text.startsWith("[Agent Message]:") || text.startsWith("[Message from Agent")) return false;
+    return true;
+}
+
+/**
+ * Resolves which session.messages entry a rendered user bubble belongs to.
+ * Prefers the index tagged during rendering; otherwise maps by position over the
+ * editable user turns only, aligning from the end when the DOM holds a partial
+ * window of the conversation (mobile turn limit, trimmed cache).
+ */
+export function resolveUserMessageIndex(session, chat, userEl) {
+    if (!session || !Array.isArray(session.messages) || !userEl) return -1;
+
+    const tagged = parseInt(userEl.dataset?.msgIndex, 10);
+    if (Number.isInteger(tagged) && session.messages[tagged] && isEditableUserMessage(session.messages[tagged])) {
+        return tagged;
+    }
+
+    const domEls = chat ? Array.from(chat.querySelectorAll(".message.user")) : [];
+    const domPos = domEls.indexOf(userEl);
+    if (domPos === -1) return -1;
+
+    const indices = [];
+    for (let i = 0; i < session.messages.length; i++) {
+        if (isEditableUserMessage(session.messages[i])) indices.push(i);
+    }
+    if (indices.length === 0) return -1;
+
+    if (indices.length === domEls.length) return indices[domPos];
+
+    // DOM is a trailing window of the history: align the indices from the end
+    const offset = indices.length - domEls.length;
+    if (offset >= 0) return indices[offset + domPos];
+
+    // DOM holds more bubbles than known turns (heavily trimmed cache): best effort from the start
+    return indices[Math.min(domPos, indices.length - 1)];
+}
+
+/**
  * Ensures session.messages is fully populated, reconstructing from DOM if missing
  */
 export function ensureSessionMessages(session, chat = document.getElementById("chat")) {
@@ -511,6 +564,7 @@ export function ensureSessionMessages(session, chat = document.getElementById("c
             if (el.classList.contains("user")) {
                 const text = el.querySelector(".msg-bubble-text")?.textContent || el.dataset.rawText || el.textContent.trim();
                 msgs.push({ role: "user", content: text });
+                el.dataset.msgIndex = String(msgs.length - 1);
             } else if (el.classList.contains("ai")) {
                 const text = el.querySelector(".final-content")?.textContent || el.dataset.rawText || el.textContent.trim();
                 msgs.push({ role: "assistant", content: text });
@@ -650,21 +704,8 @@ export async function submitEditUserMessage(userEl) {
 
     ensureSessionMessages(session, chat);
 
-    const allUserEls = Array.from(chat.querySelectorAll(".message.user"));
-    const userIndex = allUserEls.indexOf(userEl);
-    if (userIndex === -1) return;
-
-    let count = -1;
-    let msgIndex = -1;
-    for (let i = 0; i < session.messages.length; i++) {
-        if (session.messages[i].role === "user") {
-            count++;
-            if (count === userIndex) {
-                msgIndex = i;
-                break;
-            }
-        }
-    }
+    const msgIndex = resolveUserMessageIndex(session, chat, userEl);
+    if (msgIndex === -1) return;
 
     let images = [];
     if (msgIndex !== -1 && session.messages[msgIndex]) {
@@ -704,9 +745,16 @@ export async function submitEditUserMessage(userEl) {
         userEl.nextElementSibling.remove();
     }
 
+    userEl.dataset.msgIndex = String(msgIndex);
+
     // Slice session messages up to the user message turn (runAgent will re-push the new user message)
-    if (msgIndex !== -1) {
-        session.messages = session.messages.slice(0, msgIndex);
+    session.messages = session.messages.slice(0, msgIndex);
+
+    // The compaction briefing may summarize turns we just removed; keeping it would make the
+    // model "remember" discarded history that the edited chat no longer contains.
+    const compactedThrough = session.compactionState?.compactedThroughIndex;
+    if (typeof compactedThrough === "number" && compactedThrough > msgIndex) {
+        delete session.compactionState;
     }
 
     // Create new AI message shell directly under the updated user bubble
